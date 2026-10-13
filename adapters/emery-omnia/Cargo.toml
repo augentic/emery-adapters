@@ -1,5 +1,5 @@
 [package]
-name = "tgt-omnia"
+name = "emery-omnia"
 description = "Omnia target-adapter"
 
 version.workspace = true

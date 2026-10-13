@@ -104,44 +104,44 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
 }
 
 #[test]
-fn src_documentation() {
-    corpus(src_documentation::PROSE, "src-documentation", &["extract.md", "survey.md"]);
-    surveying(src_documentation::PROSE);
+fn emery_documentation() {
+    corpus(emery_documentation::PROSE, "emery-documentation", &["extract.md", "survey.md"]);
+    surveying(emery_documentation::PROSE);
 }
 
 #[test]
-fn src_intent() {
-    corpus(src_intent::PROSE, "src-intent", &["extract.md"]);
+fn emery_intent() {
+    corpus(emery_intent::PROSE, "emery-intent", &["extract.md"]);
 }
 
 // `survey.md` is the prompt of the one survey turn a workspace opens, so its
 // worked example is held to the SDK's survey answer the same way
 // `extract.md`'s is held to its Evidence.
 #[test]
-fn src_typescript() {
-    corpus(src_typescript::PROSE, "src-typescript", &["extract.md", "survey.md"]);
-    surveying(src_typescript::PROSE);
+fn emery_typescript() {
+    corpus(emery_typescript::PROSE, "emery-typescript", &["extract.md", "survey.md"]);
+    surveying(emery_typescript::PROSE);
 }
 
 #[test]
-fn src_python() {
-    corpus(src_python::PROSE, "src-python", &["extract.md", "survey.md"]);
-    surveying(src_python::PROSE);
+fn emery_python() {
+    corpus(emery_python::PROSE, "emery-python", &["extract.md", "survey.md"]);
+    surveying(emery_python::PROSE);
 }
 
 #[test]
-fn tgt_node() {
-    target_corpus(tgt_node::PROSE, "tgt-node");
+fn emery_node() {
+    target_corpus(emery_node::PROSE, "emery-node");
 }
 
 // The layout pins omnia once: every `omnia` crate the root manifest it spells
 // names is at one version, so a bump is one edit and the tree it lays
 // resolves.
 #[test]
-fn tgt_omnia() {
-    target_corpus(tgt_omnia::PROSE, "tgt-omnia");
+fn emery_omnia() {
+    target_corpus(emery_omnia::PROSE, "emery-omnia");
 
-    let layout = body(tgt_omnia::PROSE, "references/layout.md").expect("the layout is listed");
+    let layout = body(emery_omnia::PROSE, "references/layout.md").expect("the layout is listed");
     let pins: Vec<(&str, &str)> = layout
         .lines()
         .filter(|line| line.starts_with("omnia"))
@@ -159,7 +159,7 @@ fn tgt_omnia() {
 
     // the seed is the layout's nine root files, each fenced in it byte for byte
     let paths: std::collections::BTreeSet<&str> =
-        tgt_omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
+        emery_omnia::SEED.iter().map(|seed| seed.path.as_ref()).collect();
     assert_eq!(
         paths,
         [
@@ -176,8 +176,8 @@ fn tgt_omnia() {
         .into_iter()
         .collect()
     );
-    assert_eq!(paths.len(), tgt_omnia::SEED.len(), "a seed path is declared once");
-    for seed in tgt_omnia::SEED {
+    assert_eq!(paths.len(), emery_omnia::SEED.len(), "a seed path is declared once");
+    for seed in emery_omnia::SEED {
         assert!(
             layout.contains(&format!("`{}`", seed.path)),
             "the layout names the seed `{}`",

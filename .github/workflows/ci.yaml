@@ -16,4 +16,4 @@ jobs:
     secrets: inherit
     with:
       targets: wasm32-wasip2
-      wasm-packages: src-documentation src-intent src-python src-typescript tgt-node tgt-omnia test-programs
+      wasm-packages: emery-documentation emery-intent emery-python emery-typescript emery-node emery-omnia test-programs

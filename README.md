@@ -17,15 +17,15 @@ A source adapter is one Rust crate that ships as one Wasm component exporting th
 
 | Adapter                 | Kind          | Extracts                                                                                                                                |
 | ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapters/src-documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
-| `adapters/src-intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
-| `adapters/src-typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
-| `adapters/src-python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
+| `adapters/emery-documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
+| `adapters/emery-intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
+| `adapters/emery-typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
+| `adapters/emery-python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
 
 | Target                      | Builds                                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapters/tgt-node` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
-| `adapters/tgt-omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
+| `adapters/emery-node` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
+| `adapters/emery-omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
 
 ## Rust-only loop
 
@@ -46,7 +46,7 @@ cargo nextest run -p emery-adapters --test component  # the shipped components a
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release   # every component
 mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/src_documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
+cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
 emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
 emery show spec
 ```

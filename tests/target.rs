@@ -68,9 +68,9 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
-const NODE: Shipped<tgt_node::Adapter> = Shipped::new("node", tgt_node::PROSE);
+const NODE: Shipped<emery_node::Adapter> = Shipped::new("node", emery_node::PROSE);
 
-const OMNIA: Shipped<tgt_omnia::Adapter> = Shipped::new("omnia", tgt_omnia::PROSE);
+const OMNIA: Shipped<emery_omnia::Adapter> = Shipped::new("omnia", emery_omnia::PROSE);
 
 impl<A: TargetAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
@@ -319,7 +319,7 @@ async fn node() {
 // manifest under none.
 #[test]
 fn node_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = tgt_node::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::MERGE_RULES
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();
@@ -353,7 +353,7 @@ async fn omnia() {
     ];
     let project = OMNIA.built(&OMNIA_WRITTEN, &edits, OMNIA_REPORT).await;
 
-    for seed in tgt_omnia::SEED {
+    for seed in emery_omnia::SEED {
         let held = project.read(&seed.path);
         if seed.path == "app/src/routes.rs" || seed.path == "app/Cargo.toml" {
             assert!(held.is_some(), "the tree holds the seeded list `{}`", seed.path);
@@ -390,7 +390,7 @@ async fn omnia() {
 #[tokio::test]
 async fn omnia_seeded() {
     let project = scratch();
-    for seed in tgt_omnia::SEED {
+    for seed in emery_omnia::SEED {
         project.write(&seed.path, "# held\n");
     }
     let model = Scripted::answering([OMNIA_STEM_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
@@ -398,7 +398,7 @@ async fn omnia_seeded() {
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
 
-    for seed in tgt_omnia::SEED {
+    for seed in emery_omnia::SEED {
         assert_eq!(
             project.read(&seed.path).as_deref(),
             Some(b"# held\n".as_slice()),
@@ -420,7 +420,7 @@ async fn omnia_seeded() {
 // and the application's `lib.rs` among them.
 #[test]
 fn omnia_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = tgt_omnia::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::MERGE_RULES
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();

@@ -40,27 +40,14 @@ const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
 
-// Wasm package names in cases and configs; Cargo crate names under `adapters/`.
-fn adapter_crate(adapter: &str) -> &str {
-    match adapter {
-        "documentation" => "src-documentation",
-        "intent" => "src-intent",
-        "typescript" => "src-typescript",
-        "python" => "src-python",
-        "node" => "tgt-node",
-        "omnia" => "tgt-omnia",
-        _ => adapter,
-    }
-}
-
 // The run's log filter unless the caller sets one: every adapter the case
 // runs under at trace beside the SDK's, and the backend's tool-call
-// arguments whole, which it logs under a target of their own.
+// arguments whole, which it logs under a target of their own. The crate is
+// `emery-<kind>`, so the tracing target is `emery_<kind>`.
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_sdk=trace".to_owned();
     for adapter in adapters {
-        let crate_name = adapter_crate(adapter).replace('-', "_");
-        let _ = write!(filter, ",{crate_name}=trace");
+        let _ = write!(filter, ",emery_{adapter}=trace");
     }
     filter + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_core=off"
 }
@@ -317,8 +304,8 @@ impl Settings {
             .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
         let mut wasm = BTreeMap::new();
         for component in adapters.iter().copied().chain(target.map(Target::name)) {
-            // cargo spells a hyphenated crate's artifact with underscores
-            let artifact = adapter_crate(component).replace('-', "_");
+            // the crate is `emery-<kind>`; cargo spells the hyphen as an underscore
+            let artifact = format!("emery_{component}");
             let name = format!("{}_WASM", artifact.to_uppercase());
             let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
             if !path.is_file() {
@@ -5052,9 +5039,9 @@ mod tests {
         let filter = rust_log(["documentation", "typescript", "node"]);
         let targets: Vec<_> =
             filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
-        assert!(targets.contains(&"src_documentation"));
-        assert!(targets.contains(&"src_typescript"));
-        assert!(targets.contains(&"tgt_node"));
+        assert!(targets.contains(&"emery_documentation"));
+        assert!(targets.contains(&"emery_typescript"));
+        assert!(targets.contains(&"emery_node"));
         assert!(!targets.contains(&"documentation"));
     }
 

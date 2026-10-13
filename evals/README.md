@@ -10,7 +10,7 @@ The prerequisites are the live examples' ([examples/README.md](../examples/READM
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release
-cargo build -p typescript -p python --target wasm32-wasip2 --release
+cargo build -p emery-typescript -p emery-python --target wasm32-wasip2 --release
 set -a; source .env; set +a
 
 cargo run -p evals -- orders express-orders    # two cases
@@ -26,8 +26,8 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 | Variable | Default | Role |
 | --- | --- | --- |
 | `EMERY_BIN` | `../emery/target/release/emery` | The binary under test |
-| `TYPESCRIPT_WASM`, `PYTHON_WASM`, `DOCUMENTATION_WASM`, `INTENT_WASM` | `target/wasm32-wasip2/release/<adapter>.wasm` | One per adapter a selected case uses |
-| `NODE_WASM`, `OMNIA_WASM` | `target/wasm32-wasip2/release/<target>.wasm` | The target `--build` builds through, the one `--target` names alone (`node.wasm`, `omnia.wasm`) |
+| `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
+| `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | The target `--build` builds through, the one `--target` names alone |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default, which the backend's agent pool (`CURSOR_MAX_AGENTS`, 8) bounds in practice |
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS` |
@@ -63,12 +63,12 @@ This is how an expectation is written, since the facts say which modules locate 
 
 ### Building the plan
 
-`--build [--target <name>] [case|adapter..]` builds each plan a run commits, through a target adapter's component into a greenfield repository, and reads what landed. `--target` names the adapter by its crate: [`tgt-node`](../adapters/tgt-node/) unless told otherwise, or [`tgt-omnia`](../adapters/tgt-omnia/) (Wasm package names remain `node` and `omnia`). Staging lays `target.git` beside the case's sources — a bare repository whose `main` is one root commit holding a `.gitignore` for what the target's build leaves (`node_modules/`, `dist/`, `.emery/`; or `target/`, `.emery/`) and a README naming the case, sealed through a seed clone the host's `git` pushes and the runner removes — and the project's `emery.toml` gains a `[target]` table naming the component as `eval:<target>@<version>`, the repository by its `file://` URL, `branch = "main"`, and `remote = "origin"`. After a specify that landed and its `show`s, `emery build --config emery.toml` runs over the project (`--jobs` from `EVAL_JOBS` when set), so the engine clones `target.git` under `.emery/vcs/repos/`, builds the waves in working copies there, and pushes the label `emery/<revision>` back; the build's log and envelope are kept as `run-N.build.stderr` and `run-N.build.stdout`. A specify that failed builds nothing, and the build cells read `—`.
+`--build [--target <name>] [case|adapter..]` builds each plan a run commits, through a target adapter's component into a greenfield repository, and reads what landed. `--target` names the wasm package (`node` unless told otherwise, `omnia` the other); the crates are [`emery-node`](../adapters/emery-node/) and [`emery-omnia`](../adapters/emery-omnia/). Staging lays `target.git` beside the case's sources — a bare repository whose `main` is one root commit holding a `.gitignore` for what the target's build leaves (`node_modules/`, `dist/`, `.emery/`; or `target/`, `.emery/`) and a README naming the case, sealed through a seed clone the host's `git` pushes and the runner removes — and the project's `emery.toml` gains a `[target]` table naming the component as `eval:<target>@<version>`, the repository by its `file://` URL, `branch = "main"`, and `remote = "origin"`. After a specify that landed and its `show`s, `emery build --config emery.toml` runs over the project (`--jobs` from `EVAL_JOBS` when set), so the engine clones `target.git` under `.emery/vcs/repos/`, builds the waves in working copies there, and pushes the label `emery/<revision>` back; the build's log and envelope are kept as `run-N.build.stderr` and `run-N.build.stdout`. A specify that failed builds nothing, and the build cells read `—`.
 
 The build needs what the target's prompts run, on `PATH` where `emery` runs, and the release `emery` at `EMERY_BIN`. For `node`: `node` and `npm` of Node 22.18 or later (native type stripping; the layout's `@types/node` is `^24`). For `omnia`: a stable Rust toolchain with `clippy` and the `wasm32-wasip2` target installed (`rustup target add wasm32-wasip2`), since the worker cannot install one. Every build and verify turn runs inside the worker boundary the `emery` binary compiles in ([Deployment profiles](https://github.com/augentic/emery/blob/main/docs/reference/deployment-profiles.md#what-a-builds-worker-may-reach)): the worker reads the system, the working copy, and a private `HOME`, carries nothing of the caller's environment but `PATH`, and reaches the network through the backend alone — its relay for Cursor's API, its proxy for everything else — so the registry the install fetches from is named in `CURSOR_EGRESS`, a toolchain under `$HOME` in `CURSOR_READ_ROOTS`, the variable it is found by in `CURSOR_WORKER_ENV`, and the runner inherits the three from its environment and names them in the card's header. Build the component first:
 
 ```bash
-cargo build -p node --target wasm32-wasip2 --release
+cargo build -p emery-node --target wasm32-wasip2 --release
 CURSOR_EGRESS=registry.npmjs.org EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
 ```
 
@@ -77,7 +77,7 @@ A tree whose install compiles a native module asks `nodejs.org` for Node's heade
 For `omnia`, rustup's `cargo` reads the toolchain through `RUSTUP_HOME`, which must be exported and carried, since the private `HOME` hides `~/.rustup`; `CARGO_HOME` is left unset, so each worker fetches the crates it needs into its scratch through the proxy. The two hosts below are every host `cargo` fetches from; `crates.io` is `cargo search` alone, a lookup a turn makes by hand and goes on without:
 
 ```bash
-cargo build -p omnia --target wasm32-wasip2 --release
+cargo build -p emery-omnia --target wasm32-wasip2 --release
 export RUSTUP_HOME="$HOME/.rustup"
 CURSOR_EGRESS=index.crates.io,static.crates.io CURSOR_READ_ROOTS="$HOME/.rustup:$HOME/.cargo/bin" CURSOR_WORKER_ENV=RUSTUP_HOME \
   EVAL_RUNS=1 cargo run -p evals -- --build --target omnia express-orders
@@ -97,14 +97,14 @@ An arm — a rule switched off in one function, or new code — is a local edit,
 
 ```bash
 mkdir -p target/eval/arms/{control,subjects}
-cargo build -p documentation --target wasm32-wasip2 --release
-cp target/wasm32-wasip2/release/documentation.wasm target/eval/arms/control/
+cargo build -p emery-documentation --target wasm32-wasip2 --release
+cp target/wasm32-wasip2/release/emery_documentation.wasm target/eval/arms/control/
 git worktree add --detach ../emery-adapters-arm HEAD
 # edit the arm in ../emery-adapters-arm, then
-cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p documentation --target wasm32-wasip2 --release \
+cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p emery-documentation --target wasm32-wasip2 --release \
   --target-dir /tmp/emery-adapters-arm-target
-cp /tmp/emery-adapters-arm-target/wasm32-wasip2/release/documentation.wasm target/eval/arms/subjects/
-DOCUMENTATION_WASM=target/eval/arms/subjects/documentation.wasm cargo run -p evals -- orders-doc cross-cut
+cp /tmp/emery-adapters-arm-target/wasm32-wasip2/release/emery_documentation.wasm target/eval/arms/subjects/
+EMERY_DOCUMENTATION_WASM=target/eval/arms/subjects/emery_documentation.wasm cargo run -p evals -- orders-doc cross-cut
 git worktree remove --force ../emery-adapters-arm
 ```
 
@@ -212,7 +212,7 @@ curl -sL https://github.com/HackSoftware/Django-Styleguide-Example/archive/a70ef
 
 The scorecard is printed and written to `target/eval/<card>.md`, every run's files under `target/eval/<card>/<case>/`. Compare two by hand.
 
-In a `typescript` or `python` run the model names each source's surfaces, anchors, and stems in one survey turn, from the facts the parser read, under the adapter's `survey.md` ([src-typescript](../adapters/src-typescript/prose/survey.md), [src-python](../adapters/src-python/prose/survey.md)); code derives the stems it spells, the ids, the closures, and the seams from the anchors it accepts. The adapter's `surveyed` line reports those surfaces, and the `surfaces` column grades them.
+In a `typescript` or `python` run the model names each source's surfaces, anchors, and stems in one survey turn, from the facts the parser read, under the adapter's `survey.md` ([emery-typescript](../adapters/emery-typescript/prose/survey.md), [emery-python](../adapters/emery-python/prose/survey.md)); code derives the stems it spells, the ids, the closures, and the seams from the anchors it accepts. The adapter's `surveyed` line reports those surfaces, and the `surfaces` column grades them.
 
 Each figure points at one place in the adapter:
 

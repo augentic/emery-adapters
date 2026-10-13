@@ -1,7 +1,6 @@
 [package]
-name = "tgt-node"
-description = "Node target-adapter"
-
+name = "emery-intent"
+description = "Intent source-adapter"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

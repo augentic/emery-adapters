@@ -1,5 +1,5 @@
 [package]
-name = "src-typescript"
+name = "emery-typescript"
 description = "TypeScript and JavaScript source-adapter"
 
 version.workspace = true

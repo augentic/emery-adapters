@@ -1,6 +1,7 @@
 [package]
-name = "src-documentation"
-description = "Documentation source-adapter"
+name = "emery-node"
+description = "Node target-adapter"
+
 version.workspace = true
 edition.workspace = true
 license.workspace = true

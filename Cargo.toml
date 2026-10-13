@@ -17,12 +17,12 @@ omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
 serde_json.workspace = true
-src-documentation = { path = "adapters/src-documentation" }
-src-intent = { path = "adapters/src-intent" }
-src-python = { path = "adapters/src-python" }
-src-typescript = { path = "adapters/src-typescript" }
-tgt-node = { path = "adapters/tgt-node" }
-tgt-omnia = { path = "adapters/tgt-omnia" }
+emery-documentation = { path = "adapters/emery-documentation" }
+emery-intent = { path = "adapters/emery-intent" }
+emery-python = { path = "adapters/emery-python" }
+emery-typescript = { path = "adapters/emery-typescript" }
+emery-node = { path = "adapters/emery-node" }
+emery-omnia = { path = "adapters/emery-omnia" }
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -116,12 +116,12 @@ strip = true
 # Optimise Cranelift debug builds — the unoptimised codegen is ~10x slower.
 [profile.dev.package]
 "*" = { debug = "line-tables-only" }
-src-documentation = { opt-level = 2 }
-src-intent = { opt-level = 2 }
-src-python = { opt-level = 2 }
-src-typescript = { opt-level = 2 }
-tgt-node = { opt-level = 2 }
-tgt-omnia = { opt-level = 2 }
+emery-documentation = { opt-level = 2 }
+emery-intent = { opt-level = 2 }
+emery-python = { opt-level = 2 }
+emery-typescript = { opt-level = 2 }
+emery-node = { opt-level = 2 }
+emery-omnia = { opt-level = 2 }
 test-programs = { opt-level = 2 }
 
 cranelift-assembler-x64 = { opt-level = 2 }

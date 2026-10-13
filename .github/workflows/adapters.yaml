@@ -56,13 +56,10 @@ jobs:
           set -euo pipefail
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
           publish() {
-            local crate="$1" package="$2"
-            wkg oci push "ghcr.io/augentic/emery/${package}:${version}" \
-              "target/wasm32-wasip2/release/${crate//-/_}.wasm"
+            local kind="$1"
+            wkg oci push "ghcr.io/augentic/emery/${kind}:${version}" \
+              "target/wasm32-wasip2/release/emery_${kind}.wasm"
           }
-          publish src-documentation documentation
-          publish src-intent intent
-          publish src-typescript typescript
-          publish src-python python
-          publish tgt-node node
-          publish tgt-omnia omnia
+          for kind in documentation intent typescript python node omnia; do
+            publish "$kind"
+          done

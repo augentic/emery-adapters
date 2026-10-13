@@ -1113,7 +1113,13 @@ dependencies = [
 name = "emery-adapters"
 version = "0.13.0"
 dependencies = [
+ "emery-documentation",
+ "emery-intent",
+ "emery-node",
+ "emery-omnia",
+ "emery-python",
  "emery-sdk",
+ "emery-typescript",
  "omnia",
  "omnia-sdk",
  "omnia-test",
@@ -1121,21 +1127,53 @@ dependencies = [
  "omnia-wasi-otel",
  "opentelemetry-proto",
  "serde_json",
- "src-documentation",
- "src-intent",
- "src-python",
- "src-typescript",
  "test-programs",
- "tgt-node",
- "tgt-omnia",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "emery-documentation"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+]
+
+[[package]]
+name = "emery-intent"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+]
+
+[[package]]
+name = "emery-node"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+]
+
+[[package]]
+name = "emery-omnia"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
 ]
 
 [[package]]
 name = "emery-prose"
 version = "0.38.0"
 source = "git+https://github.com/augentic/emery#c05c7b65141d3f730e4faa309ac0521950e3f8af"
+
+[[package]]
+name = "emery-python"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+ "ruff_python_ast",
+ "ruff_python_parser",
+ "ruff_text_size",
+]
 
 [[package]]
 name = "emery-sdk"
@@ -1152,6 +1190,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tracing",
+]
+
+[[package]]
+name = "emery-typescript"
+version = "0.13.0"
+dependencies = [
+ "emery-sdk",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_parser",
+ "oxc_span",
 ]
 
 [[package]]
@@ -4403,42 +4453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "src-documentation"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
-]
-
-[[package]]
-name = "src-intent"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
-]
-
-[[package]]
-name = "src-python"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
- "ruff_python_ast",
- "ruff_python_parser",
- "ruff_text_size",
-]
-
-[[package]]
-name = "src-typescript"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
- "oxc_allocator",
- "oxc_ast",
- "oxc_ast_visit",
- "oxc_parser",
- "oxc_span",
-]
-
-[[package]]
 name = "stable_deref_trait"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4634,20 +4648,6 @@ dependencies = [
  "icu_segmenter",
  "smawk",
  "unicode-width",
-]
-
-[[package]]
-name = "tgt-node"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
-]
-
-[[package]]
-name = "tgt-omnia"
-version = "0.13.0"
-dependencies = [
- "emery-sdk",
 ]
 
 [[package]]

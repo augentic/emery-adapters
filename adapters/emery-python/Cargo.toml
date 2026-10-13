@@ -1,6 +1,7 @@
 [package]
-name = "src-intent"
-description = "Intent source-adapter"
+name = "emery-python"
+description = "Python source-adapter"
+
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -16,3 +17,6 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
+ruff_python_ast = { version = "0.0.17", default-features = false }
+ruff_python_parser = { version = "0.0.17", default-features = false }
+ruff_text_size = { version = "0.0.17", default-features = false }
