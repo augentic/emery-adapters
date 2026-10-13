@@ -5050,7 +5050,8 @@ mod tests {
     #[test]
     fn rust_log_traces_adapter_crates() {
         let filter = rust_log(["documentation", "typescript", "node"]);
-        let targets: Vec<_> = filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
+        let targets: Vec<_> =
+            filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
         assert!(targets.iter().any(|&target| target == "src_documentation"));
         assert!(targets.iter().any(|&target| target == "src_typescript"));
         assert!(targets.iter().any(|&target| target == "tgt_node"));
