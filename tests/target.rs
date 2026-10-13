@@ -36,24 +36,37 @@ const TYPESCRIPT_WRITTEN: [(&str, &str); 5] = [
     ("test/orders/reading.test.ts", "import { test } from \"node:test\";\n"),
 ];
 
-const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "app/Cargo.toml", "app/src/routes.rs"]}"#;
-// The same slice's report over a tree that held the root files already, so
-// it names its stem's files alone.
+const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "crates/common/src/routes/http.rs", "Cargo.toml", "src/routes.rs", "tests/routes.rs"]}"#;
+// The same slice's report over a tree that held the seed already, so it
+// names its stem's files alone.
 const OMNIA_STEM_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-// The lines the omnia slice adds to the root crate's two lists, each after
-// the anchor the seeded file holds.
-const OMNIA_STEM_LINE: &str = "app-orders = { path = \"../crates/orders\" }\n";
-const OMNIA_ROUTE_LINE: &str = "    let router = app_orders::reading::mount(router);\n";
-const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected 400, got 201"]}"#;
+// The lines the omnia slice adds to the seed's lists, each after the anchor
+// the seeded file holds: the path table's constant, the route list's
+// statement, the route rung's entry, and the stem in the root manifest's two
+// lists.
+const OMNIA_PATH_ANCHOR: &str =
+    "//! HTTP ingress paths served by the guest: one constant per route, each added at the end.\n";
+const OMNIA_PATH_LINE: &str =
+    "\n/// Read an order by its id.\npub const ORDER: &str = \"/orders/{id}\";\n";
+const OMNIA_ROUTE_ANCHOR: &str = "    let router = axum::Router::new();\n";
+const OMNIA_ROUTE_LINE: &str = "    let router = router.route(\n        common::routes::http::ORDER,\n        \
+                                omnia_sdk::api::http::get(orders::reading::get_order),\n    );\n";
+const OMNIA_RUNG_ANCHOR: &str = "    // one entry per route, each added at the end\n";
+const OMNIA_RUNG_LINE: &str = "    (Method::GET, common::routes::http::ORDER),\n";
+const OMNIA_PATH_CRATE_ANCHOR: &str = "common = { path = \"crates/common\" }\n";
+const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
+const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
+const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
+const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 4 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 
 // The files the one scripted `write_files` call lays for the omnia target: a
 // part of the `orders` stem as a module of the stem's crate, with the stem's
 // manifest, its line in the stem's list, and its test in the stem's
-// `tests/`; the root crate's two lists are the seed's, edited in place.
+// `tests/`; the seed's lists are edited in place.
 const OMNIA_WRITTEN: [(&str, &str); 4] = [
-    ("crates/orders/Cargo.toml", "[package]\nname = \"app-orders\"\n"),
-    ("crates/orders/src/lib.rs", "pub mod reading;\n"),
-    ("crates/orders/src/reading.rs", "pub fn mount() {}\n"),
+    ("crates/orders/Cargo.toml", "[package]\nname = \"orders\"\n"),
+    ("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n"),
+    ("crates/orders/src/reading.rs", "pub async fn get_order() {}\n"),
     (
         "crates/orders/tests/reading.rs",
         "#[tokio::test]\nasync fn an_order_is_returned_by_its_id() {}\n",
@@ -340,22 +353,33 @@ async fn node_verify() {
     NODE.failed(("package.json", "{}"), TYPESCRIPT_FAILED).await;
 }
 
-// The root files are the adapter's seed, laid before the slice's turn where
-// the tree lacks them and counted as the slice's: the slice lays its stem's
-// files and adds its lines to the two seeded lists in place.
+// The seed is laid before the slice's turn where the tree lacks it and
+// counted as the slice's: the slice lays its stem's files and adds its lines
+// to the seeded lists in place, the path table, the route list, the route
+// rung, and the root manifest's two lists among them.
 #[tokio::test]
 async fn omnia() {
-    let router_anchor = "    let router = axum::Router::new();\n";
-    let stem_anchor = "omnia-sdk.workspace = true\n";
     let edits = [
-        ("app/src/routes.rs", router_anchor, &*format!("{router_anchor}{OMNIA_ROUTE_LINE}")),
-        ("app/Cargo.toml", stem_anchor, &*format!("{stem_anchor}{OMNIA_STEM_LINE}")),
+        (
+            "crates/common/src/routes/http.rs",
+            OMNIA_PATH_ANCHOR,
+            &*format!("{OMNIA_PATH_ANCHOR}{OMNIA_PATH_LINE}"),
+        ),
+        ("src/routes.rs", OMNIA_ROUTE_ANCHOR, &*format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}")),
+        ("tests/routes.rs", OMNIA_RUNG_ANCHOR, &*format!("{OMNIA_RUNG_ANCHOR}{OMNIA_RUNG_LINE}")),
+        (
+            "Cargo.toml",
+            OMNIA_PATH_CRATE_ANCHOR,
+            &*format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+        ),
+        ("Cargo.toml", OMNIA_STEM_ANCHOR, &*format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}")),
     ];
     let project = OMNIA.built(&OMNIA_WRITTEN, &edits, OMNIA_REPORT).await;
 
+    let edited: Vec<&str> = edits.iter().map(|(path, _, _)| *path).collect();
     for seed in emery_omnia::SEED {
         let held = project.read(&seed.path);
-        if seed.path == "app/src/routes.rs" || seed.path == "app/Cargo.toml" {
+        if edited.contains(&seed.path.as_ref()) {
             assert!(held.is_some(), "the tree holds the seeded list `{}`", seed.path);
         } else {
             assert_eq!(
@@ -368,25 +392,43 @@ async fn omnia() {
     }
     assert_eq!(
         project.read("crates/orders/src/lib.rs").as_deref(),
-        Some(b"pub mod reading;\n".as_slice()),
+        Some(b"//! The `orders` stem.\n\npub mod reading;\n".as_slice()),
         "the stem's list holds the part's one line"
     );
-    let routes = project.read("app/src/routes.rs").expect("the router list");
-    let routes = String::from_utf8(routes).expect("UTF-8");
-    assert!(
-        routes.contains(&format!("{router_anchor}{OMNIA_ROUTE_LINE}    router.with_state")),
-        "the router list holds the part's one line after the seed's anchor: {routes}"
+    let table = text(&project, "crates/common/src/routes/http.rs");
+    assert_eq!(
+        table,
+        format!("{OMNIA_PATH_ANCHOR}{OMNIA_PATH_LINE}"),
+        "the path table holds the route's constant after its doc"
     );
-    let manifest = project.read("app/Cargo.toml").expect("the root crate's manifest");
-    let manifest = String::from_utf8(manifest).expect("UTF-8");
+    let routes = text(&project, "src/routes.rs");
     assert!(
-        manifest.ends_with(&format!("{stem_anchor}{OMNIA_STEM_LINE}")),
-        "the root crate's manifest ends with the stem's one line: {manifest}"
+        routes.contains(&format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}    router.with_state")),
+        "the route list holds the route's one statement before the terminal line: {routes}"
+    );
+    let rung = text(&project, "tests/routes.rs");
+    assert!(
+        rung.contains(&format!("{OMNIA_RUNG_ANCHOR}{OMNIA_RUNG_LINE}];")),
+        "the route rung's table holds the route's one entry before its close: {rung}"
+    );
+    let manifest = text(&project, "Cargo.toml");
+    assert!(
+        manifest.contains(&format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}\n")),
+        "the root manifest's path list holds the stem after `common`: {manifest}"
+    );
+    assert!(
+        manifest.ends_with(&format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}")),
+        "the root manifest ends with the stem's one line: {manifest}"
     );
 }
 
-// A tree that already holds the root files keeps them: the seed lays none,
-// and the slice's brief is told of none.
+fn text(project: &Scratch, path: &str) -> String {
+    let bytes = project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`"));
+    String::from_utf8(bytes).expect("UTF-8")
+}
+
+// A tree that already holds the seed keeps it: the seed lays none, and the
+// slice's brief is told of none.
 #[tokio::test]
 async fn omnia_seeded() {
     let project = scratch();
@@ -414,10 +456,8 @@ async fn omnia_seeded() {
 }
 
 // The rules a wave's slices merge under: the lockfile kept from the
-// integrated side, the root crate's manifest and every stem's as a union over
-// their dependency lists, the router list and every stem's module list as a
-// union, and every other path under none, the root manifest holding the pins
-// and the application's `lib.rs` among them.
+// integrated side, every file holding a list as a union, and every other
+// path under none, the entry `src/lib.rs` among them.
 #[test]
 fn omnia_rules() {
     let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::MERGE_RULES
@@ -429,9 +469,15 @@ fn omnia_rules() {
         declared,
         [
             ("Cargo.lock", MergeStrategy::Ours),
-            ("app/Cargo.toml", MergeStrategy::Union),
+            ("Cargo.toml", MergeStrategy::Union),
+            ("clippy.toml", MergeStrategy::Union),
+            ("src/routes.rs", MergeStrategy::Union),
+            ("src/messaging.rs", MergeStrategy::Union),
+            ("tests/routes.rs", MergeStrategy::Union),
+            ("tests/messaging.rs", MergeStrategy::Union),
+            ("crates/common/src/routes/*.rs", MergeStrategy::Union),
+            ("crates/common/src/config.rs", MergeStrategy::Union),
             ("crates/*/Cargo.toml", MergeStrategy::Union),
-            ("app/src/routes.rs", MergeStrategy::Union),
             ("crates/*/src/lib.rs", MergeStrategy::Union),
         ],
         "the merge rules the adapter declares, in order"

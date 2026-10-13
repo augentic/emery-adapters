@@ -72,7 +72,51 @@ impl From<anyhow::Error> for HttpError   // 500, or the omnia_sdk::Error it wrap
 impl IntoResponse for HttpError
 ```
 
-The router is axum's over the client state: `axum::Router<Client<P>>`, built with `Router::new()`, `.route(path, method_router)`, `.merge(other_router)`, and finished once by `.with_state(Client::new(owner, provider))`. The crate re-exports `axum`, `http`, `bytes`, `http_body`, `anyhow`, and `tracing` at its root, so a module names them as `omnia_sdk::axum::..` or through its own stem's manifest.
+The router is axum's over the client state: `axum::Router<Client<P>>`, built with `Router::new()`, `.route(path, method_router)`, and finished once by `.with_state(Client::new(owner, provider))`, which the root's route list does; a module builds no router of its own. The crate re-exports `axum`, `http`, `bytes`, `http_body`, `anyhow`, and `tracing` at its root, so a module names them as `omnia_sdk::axum::..` or through its own stem's manifest.
+
+## Messaging — `omnia_sdk::api::messaging`
+
+An exact-topic router over the same handlers, which the root's topic list builds and the guest's messaging export dispatches each delivery through:
+
+```rust
+pub struct Router<P: Send + Sync + 'static> { .. }
+impl<P: Send + Sync + 'static> Router<P> {
+    pub fn new(client: Client<P>) -> Self
+    pub fn route<F, I, D>(self, topic: impl Into<String>, consume: Consume<F, I, D>) -> Self
+    where
+        F: Handler<P, I>,
+        I: Send + 'static,
+        D: Fn(&Delivery) -> Result<I, DecodeError> + Send + Sync + 'static,
+    // panics on an empty topic, or one already registered
+    pub async fn handle(&self, delivery: Delivery) -> Result<(), DeliveryError>
+}
+
+pub fn consume<F, I: DeserializeOwned>(handler: F) -> Consume<F, I, impl Fn(&Delivery) -> Result<I, DecodeError>>
+    // the payload decoded as JSON into `I`
+pub fn consume_with<F, I, D>(handler: F, decode: D) -> Consume<F, I, D>
+where
+    D: Fn(&Delivery) -> Result<I, DecodeError> + Send + Sync + 'static,
+
+pub struct Delivery {
+    pub topic: Option<String>,
+    pub payload: Vec<u8>,
+    pub content_type: Option<String>,
+    pub metadata: Vec<(String, String)>,
+}
+impl Default for Delivery
+
+pub enum DeliveryError {
+    MissingTopic,
+    UnhandledTopic(String),
+    Rejected(String),   // the decoder's or the handler's error, displayed
+}
+impl std::error::Error for DeliveryError
+```
+
+- The handler of a topic is a `Handler<P, I>` as a route's is: `pub async fn on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()>`, its output dropped once it answers `Ok`. A failure is `DeliveryError::Rejected` with the error displayed, which the host reads as a failed delivery.
+- `handle` matches the delivery's topic exactly, so the list registers each topic under its qualified name, `config::topic_for(&env, <suffix>)`, and a delivery from another environment is `UnhandledTopic`.
+- The delivery's `metadata` fills the handler's `Metadata`: `request-id`, `correlation-id`, and `causation-id`, matched case-insensitively, a request id minted where none arrived.
+- `omnia_sdk::api::messaging::handle(&router, message)` is the `wasm32` adapter from the WIT message to a `Delivery`, which the guest's export calls and nothing else does.
 
 ## The handler — `omnia_sdk::api`
 
@@ -109,6 +153,7 @@ pub struct Metadata {
 }
 impl Metadata {
     pub fn minted(request_id: String) -> Self
+    pub fn from_lookup(lookup: impl Fn(&str) -> Option<String>) -> Self
 }
 impl Default for Metadata
 
@@ -117,11 +162,14 @@ impl<P: Send + Sync + 'static> Client<P> {
     pub fn new(owner: impl Into<String>, provider: P) -> Self
     pub fn owner(&self) -> &str
     pub fn provider(&self) -> &P
+    pub async fn call<F, I>(&self, handler: F, input: I, metadata: &Metadata) -> Result<F::Output, F::Error>
+    where
+        F: Handler<P, I>,
 }
 impl<P: Send + Sync + 'static> Clone for Client<P>
 ```
 
-`Context::new(owner, provider, Metadata::default())` is how a test calls a handler directly, with no router.
+`Client::new(owner, provider).call(handler, input, &Metadata::default()).await` is how a test calls a handler with no router: the call builds the handler's `Context` over the client's provider and runs it under a `handler` span, as the two routers do.
 
 ## Errors — `omnia_sdk`
 

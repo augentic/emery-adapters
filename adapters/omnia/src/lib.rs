@@ -1,33 +1,32 @@
-//! Builds each slice of a plan as an omnia HTTP guest in Rust, and verifies the integrated tree.
+//! Builds each slice of a plan into an omnia guest in Rust, in the exemplar's shape, and verifies the integrated tree.
 //!
-//! The tree is one cargo workspace: a root manifest holding every shared pin,
-//! a root crate `app/` whose component serves every route over one provider,
-//! and one crate per stem under `crates/<stem>/`. The nine root files are
-//! the adapter's [`SEED`], laid in a tree that lacks them before any slice's
-//! turn, so no slice copies them from the layout. Every slice builds one
-//! module of its stem's crate, `src/<part>.rs` with its tests under
-//! `tests/<part>.rs`, so two slices never write one module. Each slice
-//! reaches the application through a `mount` fn and one line in the router
-//! list, and edits nothing outside `crates/` beyond that line and the stem's
-//! line in the root crate's manifest. A build writes through `write_files`
-//! and `edit_files`, runs `cargo clippy`, `cargo test`, and a `wasm32-wasip2`
-//! check through the shell, and reports once they pass; a wave is verified
-//! by the same checks over the integrated tree, with the files no slice
-//! edits held to the layout, repaired where they fail, and run again before
-//! the verdict.
+//! The tree is the root-package guest [`omnia-exemplar`](https://github.com/augentic/omnia-exemplar)
+//! teaches: the root package `guest` is the component, exporting WASI HTTP
+//! and WASI Messaging over one provider and building both routers from two
+//! lists, `src/routes.rs` and `src/messaging.rs`; `crates/common` holds the
+//! route and topic tables and the configuration catalog every stem shares;
+//! and each stem is a crate under `crates/<stem>/`, every slice a module of
+//! it with its tests beside it, so two slices never write one file. The
+//! exemplar's guest template, rendered for the package `guest`, is the
+//! adapter's [`SEED`], laid in a tree that lacks it before any slice's turn
+//! with the lists empty, so a slice appends its lines and copies nothing. A
+//! build writes through `write_files` and `edit_files`, runs `cargo clippy`,
+//! `cargo test`, and a `wasm32-wasip2` check through the shell, and reports
+//! once they pass; a wave is verified by the same checks over the integrated
+//! tree, with the files no slice edits held to the seed, repaired where they
+//! fail, and run again before the verdict.
 //!
 //! # Merge rules
 //!
 //! - `Cargo.lock` keeps the integrated side; the next check regenerates it.
-//! - `app/Cargo.toml` and every `crates/<stem>/Cargo.toml` keep both sides'
-//!   lines: each ends in one list slices add a line to.
-//! - `app/src/routes.rs`, the router list, and every `crates/<stem>/src/lib.rs`,
-//!   a stem's module list, keep both sides' lines for the same reason.
-//! - Every other path is unruled. The root `Cargo.toml` and `app/src/lib.rs`
-//!   hold the pins and the component's entry, which no slice edits, so two
-//!   slices changing one is a conflict and never a merge; a module and its
-//!   tests are one slice's alone, so a conflict there is a slice writing
-//!   outside its part, rebuilt over the merged tree.
+//! - The root `Cargo.toml`, the two router lists, the two root test tables,
+//!   `clippy.toml`, the tables and the catalog under `crates/common/`, every
+//!   `crates/<stem>/Cargo.toml`, and every `crates/<stem>/src/lib.rs` keep
+//!   both sides' lines: each holds a list slices add a line to.
+//! - Every other path is unruled. `src/lib.rs` and the rest of the seed no
+//!   slice edits, so two slices changing one is a conflict and never a
+//!   merge; a module and its tests are one slice's alone, so a conflict there
+//!   is a slice writing outside its part, rebuilt over the merged tree.
 
 use std::borrow::Cow;
 
@@ -46,15 +45,39 @@ impl TargetAdapter for Adapter {
             strategy: MergeStrategy::Ours,
         },
         MergeRule {
-            paths: Cow::Borrowed("app/Cargo.toml"),
+            paths: Cow::Borrowed("Cargo.toml"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("clippy.toml"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("src/routes.rs"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("src/messaging.rs"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("tests/routes.rs"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("tests/messaging.rs"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("crates/common/src/routes/*.rs"),
+            strategy: MergeStrategy::Union,
+        },
+        MergeRule {
+            paths: Cow::Borrowed("crates/common/src/config.rs"),
             strategy: MergeStrategy::Union,
         },
         MergeRule {
             paths: Cow::Borrowed("crates/*/Cargo.toml"),
-            strategy: MergeStrategy::Union,
-        },
-        MergeRule {
-            paths: Cow::Borrowed("app/src/routes.rs"),
             strategy: MergeStrategy::Union,
         },
         MergeRule {
@@ -77,28 +100,65 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/build.md",
     "../prose/verify.md",
     "../prose/references/layout.md",
+    "../prose/references/seed.md",
     "../prose/references/handlers.md",
     "../prose/references/omnia-api.md",
     "../prose/references/testing.md",
     "../prose/references/guardrails.md",
 ];
 
-/// The root files every tree of the layout starts from, laid where a working copy lacks them.
+/// The files every tree of the layout starts from, laid where a working copy lacks them.
 ///
-/// Byte for byte the files the layout's reference spells: the workspace
-/// manifest and its pins, the root crate's manifest, entry, router list,
-/// route test, and local host, the toolchain, the lint configuration, and
-/// the ignore rules. A slice finds them in place and copies none.
+/// Byte for byte the files `seed.md` fences: the exemplar's guest template
+/// rendered for the package `guest` — the root manifest and its pins, the
+/// component's entry, the toolchain, the formatter, lint, deny, and vet
+/// configuration, the task runner, and the workflows — with the two router
+/// lists, the two root test tables, the local host, and the `common` crate
+/// beside them. A slice finds them in place and copies none.
 pub static SEED: &[Seed] = &[
     Seed::new("Cargo.toml", include_str!("../seed/Cargo.toml")),
+    Seed::new("src/lib.rs", include_str!("../seed/src/lib.rs")),
+    Seed::new("src/routes.rs", include_str!("../seed/src/routes.rs")),
+    Seed::new("src/messaging.rs", include_str!("../seed/src/messaging.rs")),
+    Seed::new("tests/routes.rs", include_str!("../seed/tests/routes.rs")),
+    Seed::new("tests/messaging.rs", include_str!("../seed/tests/messaging.rs")),
+    Seed::new("examples/runtime.rs", include_str!("../seed/examples/runtime.rs")),
+    Seed::new("crates/common/Cargo.toml", include_str!("../seed/crates/common/Cargo.toml")),
+    Seed::new("crates/common/src/lib.rs", include_str!("../seed/crates/common/src/lib.rs")),
+    Seed::new("crates/common/src/routes.rs", include_str!("../seed/crates/common/src/routes.rs")),
+    Seed::new(
+        "crates/common/src/routes/http.rs",
+        include_str!("../seed/crates/common/src/routes/http.rs"),
+    ),
+    Seed::new(
+        "crates/common/src/routes/topic.rs",
+        include_str!("../seed/crates/common/src/routes/topic.rs"),
+    ),
+    Seed::new("crates/common/src/config.rs", include_str!("../seed/crates/common/src/config.rs")),
+    Seed::new("Makefile", include_str!("../seed/Makefile")),
+    Seed::new("mise.toml", include_str!("../seed/mise.toml")),
     Seed::new("rust-toolchain.toml", include_str!("../seed/rust-toolchain.toml")),
+    Seed::new("rustfmt.toml", include_str!("../seed/rustfmt.toml")),
+    Seed::new("taplo.toml", include_str!("../seed/taplo.toml")),
     Seed::new("clippy.toml", include_str!("../seed/clippy.toml")),
+    Seed::new("deny.toml", include_str!("../seed/deny.toml")),
     Seed::new(".gitignore", include_str!("../seed/.gitignore")),
-    Seed::new("app/Cargo.toml", include_str!("../seed/app/Cargo.toml")),
-    Seed::new("app/src/lib.rs", include_str!("../seed/app/src/lib.rs")),
-    Seed::new("app/src/routes.rs", include_str!("../seed/app/src/routes.rs")),
-    Seed::new("app/tests/routes.rs", include_str!("../seed/app/tests/routes.rs")),
-    Seed::new("app/examples/runtime.rs", include_str!("../seed/app/examples/runtime.rs")),
+    Seed::new(".vscode/settings.json", include_str!("../seed/.vscode/settings.json")),
+    Seed::new("supply-chain/README.md", include_str!("../seed/supply-chain/README.md")),
+    Seed::new("supply-chain/config.toml", include_str!("../seed/supply-chain/config.toml")),
+    Seed::new("supply-chain/audits.toml", include_str!("../seed/supply-chain/audits.toml")),
+    Seed::new(".github/dependabot.yml", include_str!("../seed/.github/dependabot.yml")),
+    Seed::new(".github/workflows/audit.yaml", include_str!("../seed/.github/workflows/audit.yaml")),
+    Seed::new(".github/workflows/ci.yaml", include_str!("../seed/.github/workflows/ci.yaml")),
+    Seed::new(".github/workflows/patch.yaml", include_str!("../seed/.github/workflows/patch.yaml")),
+    Seed::new(
+        ".github/workflows/release.yaml",
+        include_str!("../seed/.github/workflows/release.yaml"),
+    ),
+    Seed::new(
+        ".github/workflows/publish.yaml",
+        include_str!("../seed/.github/workflows/publish.yaml"),
+    ),
 ];
 
 #[cfg(target_arch = "wasm32")]
