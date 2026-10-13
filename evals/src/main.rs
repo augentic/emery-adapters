@@ -272,18 +272,9 @@ struct Settings {
     // the caller's `CURSOR_MAX_TOOL_CALLS`, when set; the runner inherits it,
     // the card names it
     max_tool_calls: Option<String>,
-    // what the caller opened to the confined worker — `CURSOR_EGRESS`,
-    // `CURSOR_READ_ROOTS`, `CURSOR_WORKER_ENV` — and the backend the
-    // relay forwards to, each named in the card when set, since a build's
-    // install and the bridge's calls depend on them
-    boundary: Vec<(&'static str, String)>,
     // the card whose committed plans this invocation builds again
     rebuild: Option<String>,
 }
-
-// The worker-boundary variables the card names when set.
-const BOUNDARY: [&str; 4] =
-    ["CURSOR_EGRESS", "CURSOR_READ_ROOTS", "CURSOR_WORKER_ENV", "CURSOR_BACKEND_URL"];
 
 impl Settings {
     fn from_env(
@@ -338,10 +329,6 @@ impl Settings {
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
             max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
-            boundary: BOUNDARY
-                .into_iter()
-                .filter_map(|name| Some((name, env::var(name).ok().filter(|v| !v.is_empty())?)))
-                .collect(),
             rebuild: None,
         })
     }
@@ -4029,10 +4016,6 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
         .max_tool_calls
         .as_deref()
         .map_or_else(String::new, |calls| format!(" · `CURSOR_MAX_TOOL_CALLS={calls}`"));
-    let boundary = settings.boundary.iter().fold(String::new(), |mut out, (name, value)| {
-        let _ = write!(out, " · `{name}={value}`");
-        out
-    });
     let rebuilt = settings.rebuild.as_deref().map_or_else(String::new, |card| {
         format!(
             " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
@@ -4042,7 +4025,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
          (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's){budget}{boundary}{built}{rebuilt} · runs \
+         completion; the columns are the first rung's){budget}{built}{rebuilt} · runs \
          under `target/eval/{name}/`\n",
         settings.model,
         settings.emery.display(),

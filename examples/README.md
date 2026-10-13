@@ -42,18 +42,12 @@ Swap the config for [intent](intent/emery.toml), [typescript](typescript/emery.t
 
 ### Combined `specify` -> `build`
 
-The combined [emery.toml](emery.toml) names the `typescript` source over the r9k tree, the `documentation` source over the orders specification, and `omnia` as the `[target]`, so it runs `specify` and then `build`. The build's checks run `cargo` inside the worker's boundary, which reaches nothing of yours until the [environment knobs](#what-to-expect) open the crates.io hosts and the rustup toolchain to it:
+The combined [emery.toml](emery.toml) names the `typescript` source over the r9k tree, the `documentation` source over the orders specification, and `omnia` as the `[target]`, so it runs `specify` and then `build`. The build's checks run `cargo` inside the worker's boundary, which reaches what the adapter's worker grant spells and nothing else of yours: the crates.io hosts through the backend's proxy, and the rustup toolchain under `~/.rustup` and `~/.cargo/bin` with `RUSTUP_HOME` set for it, so a toolchain installed there needs nothing exported (see [What to expect](#what-to-expect)):
 
 ```bash
 # copy the two further components the config names
 cp "target/wasm32-wasip2/release/emery_documentation.wasm" ~/.emery/adapters/emery_documentation@0.13.0.wasm
 cp "target/wasm32-wasip2/release/emery_omnia.wasm" ~/.emery/adapters/emery_omnia@0.13.0.wasm
-
-# let the build's worker reach crates.io and the rustup toolchain
-export CURSOR_EGRESS=index.crates.io,static.crates.io
-export CURSOR_READ_ROOTS=$HOME/.rustup:$HOME/.cargo/bin
-export CURSOR_WORKER_ENV=RUSTUP_HOME
-export RUSTUP_HOME=$HOME/.rustup
 
 # specify, then build the plan: one merge commit per slice, a verified wave at a time, labelled emery/<revision>
 cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/emery.toml
@@ -112,9 +106,8 @@ Environment knobs:
 - `CURSOR_INACTIVITY_SECS` (120) — cancels a stream gone silent while waiting on the bridge; not while the model composes.
 - `CURSOR_MAX_AGENTS` (4) — bridge agents live at once; further completions queue.
 - `CURSOR_MODEL` (`auto`) — the model every completion is put to; one that reasons less shortens synthesis most.
-- `CURSOR_EGRESS` (unset) — hosts a build's confined worker may reach beside Cursor's own, `,`-separated, `*.suffix` for a domain: `registry.npmjs.org` for `node`'s `npm install`, `index.crates.io,static.crates.io` for `omnia`'s `cargo`, which otherwise fail inside the boundary naming the host the proxy refused.
-- `CURSOR_READ_ROOTS` (unset) — directories the worker may read beside the system's own, `:`-separated: the root of a `node` installed under `$HOME` (nvm, volta, fnm), which the worker's private `HOME` hides; `$HOME/.rustup:$HOME/.cargo/bin` for a rustup toolchain.
-- `CURSOR_WORKER_ENV` (unset) — variable names the worker's environment carries from yours, `,`-separated, the environment being otherwise built from nothing but `PATH`; `npm_config_registry` points the install at a mirror; `RUSTUP_HOME`, exported as `$HOME/.rustup`, lets rustup's `cargo` find the toolchain the private `HOME` hides.
+
+What a build's confined worker reaches beyond the working copy is no knob: the target adapter spells it as its worker grant, put on every build and verify turn. `node`'s worker reaches `registry.npmjs.org` through the backend's proxy and a Node installed under `~/.nvm/versions/node`, `~/.volta`, or `~/.local/share/fnm`, with `VOLTA_HOME` set to `~/.volta`; `omnia`'s reaches `index.crates.io` and `static.crates.io`, and the toolchain under `~/.rustup` and `~/.cargo/bin`, with `RUSTUP_HOME` set to `~/.rustup`. A root your home lacks is logged and granted nothing, so an install elsewhere (a system Node, a toolchain under another prefix) is reached by neither until the adapter's grant names it, which is a `-dev` build of the adapter. The worker's environment is otherwise built from nothing but `PATH`, and the proxy refuses any other host by name in the backend's log.
 
 ## Host-to-guest tool calls
 

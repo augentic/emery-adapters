@@ -12,10 +12,11 @@
 use std::marker::PhantomData;
 
 use emery_sdk::target::{
-    Context, MergeStrategy, Report, Slice, TargetAdapter, Verdict, VerifyContext,
+    Context, MergeStrategy, Report, Slice, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
+use omnia_test::SeenWorker;
 use omnia_test::guest::Scripted;
 use omnia_test::host::{Scratch, scratch};
 
@@ -104,6 +105,7 @@ impl<A: TargetAdapter> Shipped<A> {
             adapter_id: self.name,
             slice: &slice,
             workspace: root(project),
+            worker: &A::WORKER,
             model,
         };
         A::build(&ctx).await
@@ -114,9 +116,15 @@ impl<A: TargetAdapter> Shipped<A> {
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
+            worker: &A::WORKER,
             model,
         };
         A::verify(&ctx).await
+    }
+
+    // The grant the adapter's `WORKER` puts on a turn, as the script records it.
+    fn granted() -> Option<SeenWorker> {
+        A::WORKER.grant().map(SeenWorker::from)
     }
 
     // The prompt at `path` as this build compiled it in.
@@ -131,8 +139,8 @@ impl<A: TargetAdapter> Shipped<A> {
     // tools beside the reference tools, its brief carrying the slice; what the
     // model wrote through the tools is what the tree holds and the report
     // names; the verify turn opens under `verify.md` over the same tree, both
-    // tools declared for its repairs. Answers the tree, for what the target's
-    // own lists must hold.
+    // tools declared for its repairs; each turn carries the adapter's worker
+    // grant. Answers the tree, for what the target's own lists must hold.
     async fn built(
         &self, written: &[(&str, &str)], edits: &[(&str, &str, &str)], report: &str,
     ) -> Scratch {
@@ -175,6 +183,7 @@ impl<A: TargetAdapter> Shipped<A> {
                 build.tools
             );
         }
+        assert_eq!(build.worker, Self::granted(), "the build's worker carries the adapter's grant");
         for carried in [
             "SLICE-001",
             "orders-reading",
@@ -209,6 +218,7 @@ impl<A: TargetAdapter> Shipped<A> {
                 verify.tools
             );
         }
+        assert_eq!(verify.worker, Self::granted(), "the verify's worker carries the same grant");
 
         let calls: Vec<_> = model
             .exchanges()
@@ -351,6 +361,22 @@ fn node_rules() {
     );
 }
 
+// What a build's or verify's worker reaches beyond the tree: the npm
+// registry, a Node installed beneath the home by nvm, Volta, or fnm, and
+// Volta's root named for it.
+#[test]
+fn node_worker() {
+    assert_eq!(
+        emery_node::Adapter::WORKER,
+        Worker {
+            egress: &["registry.npmjs.org"],
+            read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
+            env: &[("VOLTA_HOME", "~/.volta")],
+        },
+        "the worker grant the adapter declares"
+    );
+}
+
 #[tokio::test]
 async fn node_verify() {
     NODE.failed(("package.json", "{}"), TYPESCRIPT_FAILED).await;
@@ -489,6 +515,22 @@ fn omnia_rules() {
             ("crates/*/src/lib.rs", MergeStrategy::Union),
         ],
         "the merge rules the adapter declares, in order"
+    );
+}
+
+// What a build's or verify's worker reaches beyond the tree: the crates.io
+// index and its downloads, the toolchain and the binaries beneath the home,
+// and `RUSTUP_HOME` named for it.
+#[test]
+fn omnia_worker() {
+    assert_eq!(
+        emery_omnia::Adapter::WORKER,
+        Worker {
+            egress: &["index.crates.io", "static.crates.io"],
+            read: &["~/.rustup", "~/.cargo/bin"],
+            env: &[("RUSTUP_HOME", "~/.rustup")],
+        },
+        "the worker grant the adapter declares"
     );
 }
 
