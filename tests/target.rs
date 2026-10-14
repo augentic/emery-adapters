@@ -920,7 +920,8 @@ async fn omnia_handler_named_as_method() {
                       messaging::consume(orders::fulfilment::on_placed),\n    );\n";
     project.write(
         "src/messaging.rs",
-        omnia_seed("src/messaging.rs").replace(topic_anchor, &format!("{topic_anchor}{topic_line}")),
+        omnia_seed("src/messaging.rs")
+            .replace(topic_anchor, &format!("{topic_anchor}{topic_line}")),
     );
     project.write(
         "crates/orders/src/reading.rs",
@@ -968,7 +969,8 @@ async fn omnia_handler_behind_route_function() {
     let listing = "    let router = router.route(common::routes::http::ORDERS, orders::placing::place_order_route());\n";
     project.write(
         "src/routes.rs",
-        omnia_seed("src/routes.rs").replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{listing}")),
+        omnia_seed("src/routes.rs")
+            .replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{listing}")),
     );
     project.write(
         "crates/orders/src/placing.rs",
@@ -995,8 +997,9 @@ async fn omnia_handler_behind_route_function() {
     assert!(verdict.passed);
     let correction = correction(&model);
     assert!(
-        correction
-            .contains("crates/orders/src/placing.rs:36: handler `refund` is reached by no list statement"),
+        correction.contains(
+            "crates/orders/src/placing.rs:36: handler `refund` is reached by no list statement"
+        ),
         "the handler behind the uncalled route function is named at its line: {correction}"
     );
     assert!(!correction.contains("`place_order`"), "`place_order` is no finding: {correction}");
