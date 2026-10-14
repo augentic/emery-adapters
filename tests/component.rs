@@ -238,8 +238,9 @@ async fn emery_node() {
 // build lays the seed in the lent tree before its turn and writes a stem's
 // list through `write_files`, its turns carry the worker grant, and its
 // report and the verdict lift back to the driver. The ignore file is held
-// as the engine lays it in a repository of its own, so the verify's restore
-// rewrites a file through the guest, which a native call cannot show.
+// as the engine lays it in a repository of its own, so the build's one write
+// before its turn rewrites a file through the guest, which a native call
+// cannot show, and the verify's check then finds the static files standing.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
@@ -304,6 +305,7 @@ async fn emery_omnia() {
     assert_eq!(
         project.read(".gitignore").as_deref(),
         Some(seeded(".gitignore").content.as_bytes()),
-        "the verify put the held ignore file back as the template spells it"
+        "the build put the held ignore file back as the template spells it, and the verify \
+         accepted it standing"
     );
 }

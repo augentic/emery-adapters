@@ -68,13 +68,18 @@ class EventProcessor:
       "kind": "requirement",
       "id": "event-processing.process.authentication",
       "path": "services/event_processor/__init__.py#L31",
-      "statement": "Processing an event first acquires a Microsoft Graph token for the tenant named by AZURE_TENANT_ID."
+      "statement": "Processing an event first obtains a token from the identity provider for the upstream service, for the tenant its configuration names."
     },
     {
       "kind": "requirement",
       "id": "event-processing.process.tenant-config",
       "path": "services/event_processor/__init__.py#L22",
-      "statement": "The tenant id is read from AZURE_TENANT_ID once when the module loads, and a missing variable fails the import with KeyError."
+      "statement": "The tenant is read from configuration once when the module loads, and a missing setting fails the import with KeyError."
+    },
+    {
+      "kind": "excerpt",
+      "path": "services/event_processor/__init__.py#L22",
+      "excerpt": "TENANT_ID = os.environ[\"AZURE_TENANT_ID\"]: the one setting, read at import, a missing variable raising KeyError there."
     },
     {
       "kind": "requirement",
@@ -133,5 +138,6 @@ class EventProcessor:
 - One `try` covers the whole flow, so the two arms of the `except` are two requirements with different consequences, and the partial-publication consequence is stated because the code exhibits it.
 - `EventInput` is no claim of the answer: the caller copies the dataclass. The audit payload is an inline dict with no declaration, so nothing copies it; its shape lives in the statement and the excerpt.
 - Every id leads with `event-processing.process`, the id the surface line gives the one public method the behaviour sits in. `TENANT_ID` is the one Boundary and is no criterion: `tenant-config` states what the code does with it — reads once at import, fails without it — and no requirement rests on a value it spells.
+- The statements name the identity provider, the upstream service, and the tenant by their roles, as [claims.md](../../claims.md) has it; the product, the scope, and the key — `azure.identity.aio`, `https://graph.microsoft.com/.default`, `AZURE_TENANT_ID` — are the `call`'s and the excerpt's, where a target reads them.
 - The private method bodies are elided here. In a real tree the extract call follows them, and the outbound calls enrichment makes are this surface's `call` claims; nothing is claimed about what they do until it is read.
 - `DefaultAzureCredential` comes from a package, so its `callee` is `<package>:<Type>.<method>` as the Calls list spells it; `Publisher.send` is a method of the tree, so its `callee` is `<file>:<symbol>` — the list shows the call inside `publisher.py`, and the surface's site is where it is made from.

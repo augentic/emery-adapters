@@ -13,17 +13,34 @@
 //! copies nothing. A build writes through `write_files` and `edit_files`,
 //! runs `cargo clippy`, `cargo test`, and a `wasm32-wasip2` check through
 //! the shell, and reports once they pass; a wave is verified by the same
-//! checks over the integrated tree, with every file no slice edits put back
-//! as the template spells it before they run and held after.
+//! checks over the integrated tree.
 //!
-//! The static files are held by the adapter itself, not by the merge: a
-//! wave's verify restores every file of the template outside the lists
-//! before its checks run, and the root `Cargo.toml` outside its two stem
-//! lists, so a pin, a lint, the `host` feature, or a target table a slice
-//! changed is put back and the lines a slice added kept; a verify whose
-//! repairs changed one fails with the lines named. Once a slice's turn ends,
-//! its root `Cargo.toml` is restored the same way, so the change never
-//! reaches its commit.
+//! What the adapter holds a tree to beyond the checks, it holds as findings
+//! of the turn: a report or a verdict over a tree that breaks a rule is
+//! refused with the rule named, the turn repairs the tree and answers again,
+//! and nothing is written once a turn ends. The rules are:
+//!
+//! - the root `Cargo.toml` stands as the template spells it outside its two
+//!   stem lists, so a pin, a lint, the `host` feature, or a target table a
+//!   turn changed is a finding with the lines named;
+//! - at a wave's verify, every static file of the template stands byte for
+//!   byte, a file the tree lacks among them;
+//! - no module under `crates/*/src` simulates the host: one that silences
+//!   the workspace's lints for its crate, spawns a task, a timer, or a
+//!   thread, reaches the environment, the file system, a socket, or a
+//!   process, or keeps a flag machine — a step-done key, a stop request, an
+//!   exit delay — is named with its line, since each is a mechanism the host
+//!   owns and the translation lays nothing for;
+//! - every handler — a `pub async fn` under `crates/*/src` taking a
+//!   `Context` — is handed to its route function or consumer by a statement
+//!   of the route list or the topic list, or to `handle_with` by a route
+//!   function of its stem a statement calls, since one no list reaches is
+//!   code the host never runs.
+//!
+//! Before a slice's turn, the root `.gitignore` is put back as the template
+//! spells it: the repository the engine lays holds an ignore file of its
+//! own, which the seed never writes over, and the turn's build output would
+//! otherwise be sealed with the slice.
 //!
 //! The worker a turn's checks run in reaches the Rust toolchain beneath the
 //! operator's home, `~/.rustup` and `~/.cargo/bin`, with `RUSTUP_HOME` set
@@ -54,7 +71,9 @@
 //! `server_error`.
 
 use std::borrow::Cow;
-use std::path::Path;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 
 use emery_sdk::target::{
     Base, Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
@@ -62,6 +81,10 @@ use emery_sdk::target::{
 };
 use emery_sdk::{Error, Model, bad_request, server_error, tracing};
 use omnia_template::{ENTRIES, Manifest};
+
+// The root ignore file, which the engine lays a one-line copy of at a laid
+// repository's root commit.
+const IGNORE: &str = ".gitignore";
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -121,21 +144,19 @@ impl TargetAdapter for Adapter {
     };
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-        let mut report = emery_sdk::target::build(ctx, PROSE, &seed()).await?;
+        let root = Path::new(ctx.workspace);
 
-        // the slice's commit carries the template's pins whatever its turn did to them
-        let restored =
-            Manifest::new(Path::new(ctx.workspace)).restore().map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!(
-                slice = %ctx.slice.id,
-                "the root manifest changed outside its lists; restored"
-            );
-            tracing::debug!(slice = %ctx.slice.id, %restored, "the lines restored");
-            if !report.written.iter().any(|path| path == Manifest::PATH) {
-                report.written.push(Manifest::PATH.to_owned());
-                report.written.sort();
-            }
+        // the seed never writes over a held file, so the engine's one-line
+        // ignore file would let the turn's `target/` into the slice's commit
+        let ignored = restore_ignore(root)?;
+        if ignored {
+            tracing::debug!(slice = %ctx.slice.id, "the root ignore file put back as the template spells it");
+        }
+
+        let mut report =
+            emery_sdk::target::build(ctx, PROSE, &seed(), |_| Tree::new(root).held()).await?;
+        if ignored {
+            written(&mut report, IGNORE);
         }
 
         Ok(report)
@@ -143,42 +164,436 @@ impl TargetAdapter for Adapter {
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
         let root = Path::new(ctx.workspace);
-        let manifest = Manifest::new(root);
-
-        // the checks run over the template's static files and pins, so a
-        // drift inherited from the integrated tree is a repair the wave seals
-        let restored = omnia_template::restore(root).map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!(
-                files = restored.files().len(),
-                "static files of the template restored before the checks"
-            );
-            tracing::debug!(%restored, "the files restored");
-        }
-        let restored = manifest.restore().map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!("the root manifest restored before the checks");
-            tracing::debug!(%restored, "the lines restored");
-        }
-
-        let mut verdict = emery_sdk::target::verify(ctx, PROSE).await?;
-
-        // a repair that changed a static file or a pin voids the checks that ran over them
-        let drift = omnia_template::drift(root).map_err(|err| refusal(&err))?;
-        if !drift.is_empty() {
-            verdict.passed = false;
-            verdict.failures.push(format!("a static file of the template changed:\n{drift}"));
-        }
-        let drift = manifest.drift().map_err(|err| refusal(&err))?;
-        if !drift.is_empty() {
-            verdict.passed = false;
-            verdict
-                .failures
-                .push(format!("the root `Cargo.toml` changed outside its two lists:\n{drift}"));
-        }
-
-        Ok(verdict)
+        emery_sdk::target::verify(ctx, PROSE, |_| {
+            let tree = Tree::new(root);
+            let mut findings = tree.statics()?;
+            findings.extend(tree.held()?);
+            Ok(findings)
+        })
+        .await
     }
+}
+
+// The lent tree, read for what a turn must leave standing. Each rule answers
+// the findings the turn repairs, one per rule with every line named, so a
+// report or a verdict is refused once with everything the tree breaks.
+struct Tree<'a> {
+    root: &'a Path,
+}
+
+impl<'a> Tree<'a> {
+    const fn new(root: &'a Path) -> Self {
+        Self { root }
+    }
+
+    // The rules a build and a verify share: the root manifest outside its
+    // lists, no simulated host, every handler listed.
+    fn held(&self) -> Result<Vec<String>, Error> {
+        let mut findings = Vec::new();
+        findings.extend(self.manifest()?);
+        findings.extend(self.simulated()?);
+        findings.extend(self.unlisted()?);
+        Ok(findings)
+    }
+
+    // Every static file of the template that differs: the lines where an
+    // edit puts them back, the template's body whole for a file the tree
+    // lacks or rewrote past `LISTED` lines, since the lines alone cannot lay
+    // it.
+    fn statics(&self) -> Result<Vec<String>, Error> {
+        let drift = omnia_template::drift(self.root).map_err(|err| refusal(&err))?;
+        let mut findings = Vec::new();
+        for file in drift.files() {
+            let finding = if self.lacks(file.path) {
+                format!(
+                    "`{}` is a static file of the template the tree lacks; lay it whole through \
+                     `write_files`, as the template spells it:\n{}",
+                    file.path,
+                    template(file.path)?
+                )
+            } else if file.lines.len() > LISTED {
+                format!(
+                    "`{}` is a static file of the template and differs from it in {} lines; lay it \
+                     whole through `write_files`, as the template spells it:\n{}",
+                    file.path,
+                    file.lines.len(),
+                    template(file.path)?
+                )
+            } else {
+                format!(
+                    "`{}` is a static file of the template and differs from how the template \
+                     spells it; put the `-` lines back and drop the `+` lines through \
+                     `edit_files`:\n{}",
+                    file.path,
+                    file.lines.join("\n")
+                )
+            };
+            findings.push(finding);
+        }
+        Ok(findings)
+    }
+
+    // The root manifest outside its two stem lists, the template's whole for
+    // a tree that lacks it.
+    fn manifest(&self) -> Result<Vec<String>, Error> {
+        let drift = Manifest::new(self.root).drift().map_err(|err| refusal(&err))?;
+        if drift.is_empty() {
+            return Ok(Vec::new());
+        }
+        let finding = if self.lacks(Manifest::PATH) {
+            format!(
+                "the tree lacks the root `{}`; lay it whole through `write_files` as the template \
+                 spells it, then add each stem's line to its two lists:\n{}",
+                Manifest::PATH,
+                template(Manifest::PATH)?
+            )
+        } else {
+            format!(
+                "the root `{}` changed outside its two stem lists; the pins, the lints, the `host` \
+                 feature, and the target tables stand as the template spells them, so put the `-` \
+                 lines back and drop the `+` lines through `edit_files`:\n{drift}",
+                Manifest::PATH
+            )
+        };
+        Ok(vec![finding])
+    }
+
+    fn lacks(&self, path: &str) -> bool {
+        matches!(
+            fs::symlink_metadata(self.root.join(path)),
+            Err(err) if err.kind() == ErrorKind::NotFound
+        )
+    }
+
+    // One finding naming `<path>:<line>: <what>` for every line under a
+    // stem's `src/` that spells one of `SIMULATED`, sorted; a tree with no
+    // `crates/` answers none.
+    fn simulated(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let text = read(&file)?;
+            let path = self.relative(&file);
+            for (number, line) in text.lines().enumerate() {
+                for (needle, what) in SIMULATED {
+                    if line.contains(needle) {
+                        lines.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a module simulates the host, which the translation lays nothing for; remove each with \
+             its `pub mod` line and its test through `delete` rather than rename it:\n{}",
+            lines.join("\n")
+        )])
+    }
+
+    // One finding naming every handler under a stem's `src/` — a `pub async
+    // fn` whose signature takes a `Context` — that no `.route(..)` statement
+    // of the two lists reaches: handed to the route function or consumer the
+    // statement calls, or to `handle_with` by a route function of a stem the
+    // statement calls with no argument.
+    fn unlisted(&self) -> Result<Vec<String>, Error> {
+        let mut lists = Vec::new();
+        for list in LISTS {
+            let path = self.root.join(list);
+            if path.is_file() {
+                lists.push(read(&path)?);
+            }
+        }
+        let mut modules = Vec::new();
+        for file in self.modules()? {
+            let path = self.relative(&file);
+            if let Some(module) = module_path(&path) {
+                modules.push((path, module, read(&file)?));
+            }
+        }
+
+        // what the lists hand, then what a route function they call hands
+        let mut reached: Vec<String> = lists
+            .iter()
+            .flat_map(|text| calls(text, ".route("))
+            .filter_map(|(_, statement)| handed(statement).map(str::to_owned))
+            .collect();
+        for (_, module, text) in &modules {
+            for (route, handler) in constructed(module, text) {
+                if reached.contains(&route) && !reached.contains(&handler) {
+                    reached.push(handler);
+                }
+            }
+        }
+
+        let mut lines = Vec::new();
+        for (path, module, text) in &modules {
+            for (number, name) in handlers(text) {
+                let full = format!("{module}::{name}");
+                if !reached.contains(&full) {
+                    lines.push(format!(
+                        "{path}:{number}: handler `{name}` is reached by no list statement"
+                    ));
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a handler is reached by no `.route(..)` statement of `src/routes.rs` or \
+             `src/messaging.rs`, so the host never runs it; list it under the route or topic its \
+             requirement states, or, where it is a helper and no handler, hand it the provider \
+             rather than the `Context`:\n{}",
+            lines.join("\n")
+        )])
+    }
+
+    // Every `.rs` file under a stem's `src/`, its `tests/` unread.
+    fn modules(&self) -> Result<Vec<PathBuf>, Error> {
+        let mut files = Vec::new();
+        for stem in entries(&self.root.join("crates"))? {
+            files.extend(sources(&stem.join("src"))?);
+        }
+        Ok(files)
+    }
+
+    fn relative(&self, file: &Path) -> String {
+        file.strip_prefix(self.root).unwrap_or(file).display().to_string()
+    }
+}
+
+// What no module of a stem spells, each a mechanism the host owns: the
+// workspace's lints silenced for the crate, a task, a timer, a thread, a
+// reach past the component to the system, or a flag machine standing in for
+// a lifecycle.
+const SIMULATED: &[(&str, &str)] = &[
+    ("#![allow(", "the workspace's lints silenced"),
+    ("tokio::spawn", "a task of its own"),
+    ("tokio::time", "a timer of its own"),
+    ("std::thread", "a thread of its own"),
+    ("std::env", "the environment read past the host"),
+    ("std::fs", "the file system reached past the host"),
+    ("std::net", "a socket of its own"),
+    ("std::process", "a process of its own"),
+    ("_STARTED_KEY", "a start-up flag of its own"),
+    ("_INITIALIZED_KEY", "an initialisation flag of its own"),
+    ("_LOADED_KEY", "a load-done flag of its own"),
+    ("STOP_REQUESTED", "a stop request of its own"),
+    ("EXIT_DELAY", "an exit delay of its own"),
+    ("b\"1\"", "a step-done write of its own"),
+];
+
+// The two lists whose `.route(..)` statements reach a handler.
+const LISTS: &[&str] = &["src/routes.rs", "src/messaging.rs"];
+
+// The most differing lines a finding asks an edit to put back; past it the
+// file is laid whole.
+const LISTED: usize = 24;
+
+fn read(file: &Path) -> Result<String, Error> {
+    fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
+}
+
+// The body the template lays at `path`.
+fn template(path: &str) -> Result<&'static str, Error> {
+    omnia_template::entry(path)
+        .map(|entry| entry.body)
+        .ok_or_else(|| server_error!("the template lays no `{path}`"))
+}
+
+// Every call of `callee` in `text` — the spelling with its opening
+// parenthesis, `.route(` — as the offset it starts at and its argument text,
+// parentheses balanced, so a call spread over lines is one.
+fn calls<'t>(text: &'t str, callee: &str) -> Vec<(usize, &'t str)> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(at) = text[from..].find(callee) {
+        let start = from + at;
+        let open = start + callee.len();
+        let mut depth = 1usize;
+        let mut end = None;
+        for (offset, ch) in text[open..].char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + offset);
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        let Some(end) = end else { break };
+        found.push((start, &text[open..end]));
+        from = end;
+    }
+    found
+}
+
+// The path a `.route(..)` statement hands, read from the call its second
+// argument makes: the call's first argument where it has one,
+// `get(<handler>)`, `consume(<handler>)`, `consume_with(<handler>,
+// <decode>)`; the callee itself where it has none, a route function of a
+// stem, `orders::placing::place_order_route()`. A statement in another
+// shape hands none.
+fn handed(statement: &str) -> Option<&str> {
+    let call = arguments(statement).get(1)?.trim();
+    let open = call.find('(')?;
+    let close = call.rfind(')')?;
+    let inner = call.get(open + 1..close)?;
+    match arguments(inner).first().map(|argument| argument.trim()) {
+        Some("") | None => qualified(&call[..open]),
+        Some(handler) => qualified(handler),
+    }
+}
+
+// Every route function `text` declares in `module` with the handler it
+// hands `handle_with` as the call's second argument, each qualified as
+// `(<fn>, <handler>)`.
+fn constructed(module: &str, text: &str) -> Vec<(String, String)> {
+    calls(text, "handle_with(")
+        .into_iter()
+        .filter_map(|(at, inner)| {
+            let route = declared(&text[..at])?;
+            let handler = qualify(module, arguments(inner).get(1)?)?;
+            Some((format!("{module}::{route}"), handler))
+        })
+        .collect()
+}
+
+// The name of the last `pub fn` declared in `head`, the one a call there
+// sits in.
+fn declared(head: &str) -> Option<&str> {
+    head.lines().rev().find_map(|line| {
+        let rest = line.trim_start().strip_prefix("pub fn ")?;
+        let name = rest.split(|ch: char| !identifier(ch)).next()?;
+        (!name.is_empty()).then_some(name)
+    })
+}
+
+// `text` split at the commas no parenthesis, bracket, or brace encloses.
+fn arguments(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0;
+    for (at, ch) in text.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&text[start..at]);
+                start = at + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&text[start..]);
+    parts
+}
+
+// The Rust module path of a `.rs` file under `crates/<stem>/src/`,
+// `orders::reading` for `crates/orders/src/reading.rs`.
+fn module_path(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("crates/")?.strip_suffix(".rs")?;
+    let (stem, module) = rest.split_once("/src/")?;
+    let stem = stem.replace('-', "_");
+    let module = module.strip_suffix("/mod").unwrap_or(module);
+    if module == "lib" {
+        Some(stem)
+    } else {
+        Some(format!("{stem}::{}", module.replace('/', "::")))
+    }
+}
+
+// A `::`-separated path of two or more identifiers,
+// `orders::placing::place_order`; a text in another shape is none.
+fn qualified(path: &str) -> Option<&str> {
+    let path = path.trim();
+    let mut segments = path.split("::");
+    let first = segments.next()?;
+    let second = segments.next()?;
+    (ident(first) && ident(second) && segments.all(ident)).then_some(path)
+}
+
+// `path` qualified under `module` (`orders::placing`): a bare identifier
+// sits in `module`, a `crate::` path in its stem, and a qualified path
+// stands as it is.
+fn qualify(module: &str, path: &str) -> Option<String> {
+    let path = path.trim();
+    if ident(path) {
+        return Some(format!("{module}::{path}"));
+    }
+    if let Some(rest) = path.strip_prefix("crate::") {
+        let stem = module.split("::").next()?;
+        let full = format!("{stem}::{rest}");
+        return qualified(&full).map(str::to_owned);
+    }
+    qualified(path).map(str::to_owned)
+}
+
+fn ident(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(identifier)
+}
+
+fn identifier(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+// Every handler `text` declares, each its 1-based line and name: a `pub
+// async fn` whose signature, read to its body, takes a `Context<`.
+fn handlers(text: &str) -> Vec<(usize, &str)> {
+    let mut found = Vec::new();
+    let mut offset = 0;
+    for (index, raw) in text.split_inclusive('\n').enumerate() {
+        if let Some(rest) = raw.trim_start().strip_prefix("pub async fn ") {
+            let name = rest.split(|ch: char| !identifier(ch)).next().unwrap_or_default();
+            let head = &text[offset..];
+            let signature = head.find('{').map_or(head, |body| &head[..body]);
+            if !name.is_empty() && signature.contains("Context<") {
+                found.push((index + 1, name));
+            }
+        }
+        offset += raw.len();
+    }
+    found
+}
+
+// The entries of `dir`, sorted; an absent `dir` has none.
+fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let listing = match fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(server_error!("listing `{}`: {err}", dir.display())),
+    };
+    let mut paths = listing
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
+    paths.sort();
+    Ok(paths)
+}
+
+// Every `.rs` file beneath `dir`, symbolic links left unfollowed.
+fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut files = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_dir() {
+                pending.push(path);
+            } else if meta.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    Ok(files)
 }
 
 /// The prompts and the references embedded in the adapter.
@@ -190,6 +605,7 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/references/omnia-api.md",
     "../prose/references/testing.md",
     "../prose/references/guardrails.md",
+    "../prose/references/translation.md",
 ];
 
 /// Returns the files every tree of the layout starts from, laid where a working copy lacks them.
@@ -203,6 +619,35 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
 #[must_use]
 pub fn seed() -> Vec<Seed> {
     ENTRIES.iter().map(|entry| Seed::new(entry.path, entry.body)).collect()
+}
+
+// Puts the template's ignore file over the one the tree holds and answers
+// whether it did; a tree holding none is left for the seed to lay.
+fn restore_ignore(root: &Path) -> Result<bool, Error> {
+    let entry = omnia_template::entry(IGNORE)
+        .ok_or_else(|| server_error!("the template lays no `{IGNORE}`"))?;
+    let path = root.join(entry.path);
+    let held = match fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() => {
+            fs::read(&path).map_err(|err| server_error!("reading `{IGNORE}`: {err}"))?
+        }
+        Ok(_) => return Err(bad_request!("a directory or symbolic link stands at `{IGNORE}`")),
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(server_error!("reading `{IGNORE}`: {err}")),
+    };
+    if held == entry.body.as_bytes() {
+        return Ok(false);
+    }
+    fs::write(&path, entry.body).map_err(|err| server_error!("writing `{IGNORE}`: {err}"))?;
+    Ok(true)
+}
+
+// Names `path` in the report once, the list kept sorted.
+fn written(report: &mut Report, path: &str) {
+    if !report.written.iter().any(|named| named == path) {
+        report.written.push(path.to_owned());
+        report.written.sort();
+    }
 }
 
 fn refusal(err: &omnia_template::Error) -> Error {

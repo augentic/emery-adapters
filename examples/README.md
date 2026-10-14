@@ -14,17 +14,30 @@ Run from the repository root. `emery` mounts that directory as the project, and 
 
 
 
-## Specify
+### Build adapters and copy to cache
 
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release
 
-mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/emery_typescript.wasm ~/.emery/adapters/emery_typescript@0.13.0.wasm
+version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
+dst=~/.emery/adapters
+
+for wasm in target/wasm32-wasip2/release/emery_*.wasm; do
+  base=$(basename "$wasm" .wasm)
+  cp "$wasm" "$dst/${base}@${version}.wasm"
+done
 
 set -a; source .env; set +a
-cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/typescript/emery.toml
+```
 
+
+
+## Specify
+
+```bash
+cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/emery.toml
+
+# show (project) outputs
 cargo run --manifest-path ../emery/Cargo.toml -- show spec
 cargo run --manifest-path ../emery/Cargo.toml -- show design
 cargo run --manifest-path ../emery/Cargo.toml -- show plan
@@ -37,11 +50,12 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 [emery.toml](emery.toml) names `emery:omnia` as its target. After `specify`, copy the adapter and build the current plan:
 
 ```bash
-cp target/wasm32-wasip2/release/emery_omnia.wasm ~/.emery/adapters/emery_omnia@0.13.0.wasm
-
-set -a; source .env; set +a
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
+# OR (to prevent laptop sleeping)
+caffeinate -i cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
+
+# produce build in `.emery/vcs/repos/omnia`
 git -C .emery/vcs/repos/omnia log --oneline --first-parent emery/<revision>
 git clone --branch emery/<revision> .emery/vcs/repos/omnia /tmp/emery-build
 ```
