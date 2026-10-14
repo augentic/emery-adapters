@@ -24,7 +24,7 @@ A crate compiles for `wasm32-wasip2` when it is pure Rust and reaches nothing in
 
 ## The host is not simulated
 
-The source a specification was read from may have been a process: a server that listened, a worker that polled a queue, a scheduler that ticked, a client that connected at start-up and reconnected on loss, a shutdown that drained. The component is none of these, and the host does each for it, so a requirement that states one is satisfied by the host or by nothing in the tree, never by code that imitates the mechanism:
+The source a specification was read from may have been a process: a server that listened, a worker that polled a queue, a scheduler that ticked, a client that connected at start-up and reconnected on loss, a shutdown that drained. The component is none of these, and the host does each for it, so a requirement that states one is satisfied by the host or by nothing in the tree, never by code that imitates the mechanism. What each mechanism the source named becomes here, row by row, is the [translation](translation.md):
 
 - No `main`, no `start`, `run`, `listen`, `serve`, `bootstrap`, or `shutdown` function, and no struct holding a `started`, `running`, `connected`, or `ready` flag: there is no process to be in a state, and the host instantiates the component for each request.
 - No loop that polls, no subscription set up in a handler, no reconnection, no heartbeat, no graceful stop: a topic is consumed through the topic list, and a connection is the host's to keep.

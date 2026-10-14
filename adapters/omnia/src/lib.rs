@@ -23,7 +23,17 @@
 //! changed is put back and the lines a slice added kept; a verify whose
 //! repairs changed one fails with the lines named. Once a slice's turn ends,
 //! its root `Cargo.toml` is restored the same way, so the change never
-//! reaches its commit.
+//! reaches its commit. Before a slice's turn, the root `.gitignore` is put
+//! back as the template spells it: the repository the engine lays holds an
+//! ignore file of its own, which the seed never writes over, and the turn's
+//! build output would otherwise be sealed with the slice.
+//!
+//! A verify also fails a wave whose stems simulate the host: a module under
+//! `crates/*/src` that silences the workspace's lints for its crate, spawns
+//! a task, a timer, or a thread, or reaches the environment, the file
+//! system, a socket, or a process is named in the verdict with its line,
+//! whatever the turn's checks said, since each is a mechanism the host owns
+//! and the translation lays nothing for.
 //!
 //! The worker a turn's checks run in reaches the Rust toolchain beneath the
 //! operator's home, `~/.rustup` and `~/.cargo/bin`, with `RUSTUP_HOME` set
@@ -54,7 +64,9 @@
 //! `server_error`.
 
 use std::borrow::Cow;
-use std::path::Path;
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 
 use emery_sdk::target::{
     Base, Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
@@ -62,6 +74,10 @@ use emery_sdk::target::{
 };
 use emery_sdk::{Error, Model, bad_request, server_error, tracing};
 use omnia_template::{ENTRIES, Manifest};
+
+// The root ignore file, which the engine lays a one-line copy of at a laid
+// repository's root commit.
+const IGNORE: &str = ".gitignore";
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -121,21 +137,29 @@ impl TargetAdapter for Adapter {
     };
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
+        let root = Path::new(ctx.workspace);
+
+        // the seed never writes over a held file, so the engine's one-line
+        // ignore file would let the turn's `target/` into the slice's commit
+        let ignored = restore_ignore(root)?;
+        if ignored {
+            tracing::debug!(slice = %ctx.slice.id, "the root ignore file put back as the template spells it");
+        }
+
         let mut report = emery_sdk::target::build(ctx, PROSE, &seed()).await?;
 
         // the slice's commit carries the template's pins whatever its turn did to them
-        let restored =
-            Manifest::new(Path::new(ctx.workspace)).restore().map_err(|err| refusal(&err))?;
+        let restored = Manifest::new(root).restore().map_err(|err| refusal(&err))?;
         if !restored.is_empty() {
             tracing::warn!(
                 slice = %ctx.slice.id,
                 "the root manifest changed outside its lists; restored"
             );
             tracing::debug!(slice = %ctx.slice.id, %restored, "the lines restored");
-            if !report.written.iter().any(|path| path == Manifest::PATH) {
-                report.written.push(Manifest::PATH.to_owned());
-                report.written.sort();
-            }
+            written(&mut report, Manifest::PATH);
+        }
+        if ignored {
+            written(&mut report, IGNORE);
         }
 
         Ok(report)
@@ -177,8 +201,87 @@ impl TargetAdapter for Adapter {
                 .push(format!("the root `Cargo.toml` changed outside its two lists:\n{drift}"));
         }
 
+        // a module that simulates the host passes every check the turn ran
+        let simulated = simulated(root)?;
+        if !simulated.is_empty() {
+            verdict.passed = false;
+            verdict.failures.push(format!(
+                "a module simulates the host, which the translation lays nothing for:\n{}",
+                simulated.join("\n")
+            ));
+        }
+
         Ok(verdict)
     }
+}
+
+// What no module of a stem spells, each a mechanism the host owns: the
+// workspace's lints silenced for the crate, a task, a timer, a thread, or a
+// reach past the component to the system.
+const SIMULATED: &[(&str, &str)] = &[
+    ("#![allow(", "the workspace's lints silenced"),
+    ("tokio::spawn", "a task of its own"),
+    ("tokio::time::", "a timer of its own"),
+    ("std::thread::", "a thread of its own"),
+    ("std::env::", "the environment read past the host"),
+    ("std::fs::", "the file system reached past the host"),
+    ("std::net::", "a socket of its own"),
+    ("std::process::", "a process of its own"),
+];
+
+// Answers `<path>:<line>: <what>` for every line under a stem's `src/` that
+// spells one of `SIMULATED`, sorted; a tree with no `crates/` answers none.
+fn simulated(root: &Path) -> Result<Vec<String>, Error> {
+    let mut findings = Vec::new();
+    for stem in entries(&root.join("crates"))? {
+        for file in sources(&stem.join("src"))? {
+            let text = fs::read_to_string(&file)
+                .map_err(|err| server_error!("reading `{}`: {err}", file.display()))?;
+            let path = file.strip_prefix(root).unwrap_or(&file).display().to_string();
+            for (number, line) in text.lines().enumerate() {
+                for (needle, what) in SIMULATED {
+                    if line.contains(needle) {
+                        findings.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
+                    }
+                }
+            }
+        }
+    }
+    findings.sort();
+    Ok(findings)
+}
+
+// The entries of `dir`, sorted; an absent `dir` has none.
+fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let listing = match fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(server_error!("listing `{}`: {err}", dir.display())),
+    };
+    let mut paths = listing
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
+    paths.sort();
+    Ok(paths)
+}
+
+// Every `.rs` file beneath `dir`, symbolic links left unfollowed.
+fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut files = Vec::new();
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_dir() {
+                pending.push(path);
+            } else if meta.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                files.push(path);
+            }
+        }
+    }
+    Ok(files)
 }
 
 /// The prompts and the references embedded in the adapter.
@@ -190,6 +293,7 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/references/omnia-api.md",
     "../prose/references/testing.md",
     "../prose/references/guardrails.md",
+    "../prose/references/translation.md",
 ];
 
 /// Returns the files every tree of the layout starts from, laid where a working copy lacks them.
@@ -203,6 +307,35 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
 #[must_use]
 pub fn seed() -> Vec<Seed> {
     ENTRIES.iter().map(|entry| Seed::new(entry.path, entry.body)).collect()
+}
+
+// Puts the template's ignore file over the one the tree holds and answers
+// whether it did; a tree holding none is left for the seed to lay.
+fn restore_ignore(root: &Path) -> Result<bool, Error> {
+    let entry = omnia_template::entry(IGNORE)
+        .ok_or_else(|| server_error!("the template lays no `{IGNORE}`"))?;
+    let path = root.join(entry.path);
+    let held = match fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() => {
+            fs::read(&path).map_err(|err| server_error!("reading `{IGNORE}`: {err}"))?
+        }
+        Ok(_) => return Err(bad_request!("a directory or symbolic link stands at `{IGNORE}`")),
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(server_error!("reading `{IGNORE}`: {err}")),
+    };
+    if held == entry.body.as_bytes() {
+        return Ok(false);
+    }
+    fs::write(&path, entry.body).map_err(|err| server_error!("writing `{IGNORE}`: {err}"))?;
+    Ok(true)
+}
+
+// Names `path` in the report once, the list kept sorted.
+fn written(report: &mut Report, path: &str) {
+    if !report.written.iter().any(|named| named == path) {
+        report.written.push(path.to_owned());
+        report.written.sort();
+    }
 }
 
 fn refusal(err: &omnia_template::Error) -> Error {

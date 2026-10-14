@@ -464,9 +464,9 @@ fn text(project: &Scratch, path: &str) -> String {
 }
 
 // A tree that already holds the seed keeps it: the seed lays none, and the
-// slice's brief is told of none. The root manifest is the one exception,
-// since the adapter holds its static text to the seed whatever the tree
-// held, and reports the file it put back.
+// slice's brief is told of none. The root manifest and the root ignore file
+// are the two exceptions, since the adapter holds them to the seed whatever
+// the tree held, and reports the files it put back.
 #[tokio::test]
 async fn omnia_seeded() {
     let project = scratch();
@@ -479,20 +479,56 @@ async fn omnia_seeded() {
     model.assert_exhausted();
 
     for seed in emery_omnia::seed() {
-        let expected =
-            if seed.path == "Cargo.toml" { seed.content.as_bytes() } else { b"# held\n" };
+        let expected = if seed.path == "Cargo.toml" || seed.path == ".gitignore" {
+            seed.content.as_bytes()
+        } else {
+            b"# held\n"
+        };
         assert_eq!(
             project.read(&seed.path).as_deref(),
             Some(expected),
-            "`{}` stands as the tree held it, the root manifest as the seed spells it",
+            "`{}` stands as the tree held it, the root manifest and ignore file as the seed \
+             spells them",
             seed.path
         );
     }
     let mut written = OMNIA_WRITTEN.map(|(path, _)| path.to_owned()).to_vec();
     written.insert(0, "Cargo.toml".to_owned());
+    written.insert(0, ".gitignore".to_owned());
     assert_eq!(
         report.written, written,
-        "the report names the stem's files, the manifest put back, and no seed the tree held"
+        "the report names the stem's files, the two files put back, and no seed the tree held"
+    );
+}
+
+// The repository the engine lays holds a one-line ignore file at its root
+// commit, which the seed never writes over: the template's is put in its
+// place before the turn, so the build output the checks write is kept out
+// of the slice's commit, and the file is reported as the slice's.
+#[tokio::test]
+async fn omnia_ignore_restored() {
+    let project = scratch();
+    project.write(".gitignore", ".emery/\n");
+    let model = Scripted::answering([OMNIA_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
+
+    let report = OMNIA.build(&project, &model).await.expect("build over the laid repository");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, ".gitignore"), omnia_seed(".gitignore"), "the template's stands");
+    assert!(
+        omnia_seed(".gitignore").lines().any(|line| line == "target/"),
+        "the template's ignore file keeps the build output out of the tree"
+    );
+    assert!(
+        report.written.iter().any(|path| path == ".gitignore"),
+        "the file put back is reported: {:?}",
+        report.written
+    );
+    let seen = model.seen();
+    assert!(
+        !seen[0].messages[0].contains(".gitignore"),
+        "the brief names no ignore file laid, since the tree held one: {}",
+        seen[0].messages[0]
     );
 }
 
@@ -777,6 +813,68 @@ async fn omnia_manifest_edited_by_verify() {
         omnia_seed("Cargo.toml").replace(OMNIA_PIN, OMNIA_PIN_EDITED),
         "the tree is left as the repair wrote it"
     );
+}
+
+// A stem's module that silences the lints, spawns a task, or reaches the
+// system is a simulated host, which the adapter names line by line whatever
+// the turn's checks answered; a stem's tests are not modules and are not read.
+#[tokio::test]
+async fn omnia_verify_simulated_host() {
+    let project = scratch();
+    project.write("Cargo.toml", omnia_seed("Cargo.toml"));
+    project.write(
+        "crates/orders/src/consuming.rs",
+        "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\npub fn consume() {\n    tokio::spawn(async {});\n}\n",
+    );
+    project.write(
+        "crates/start/src/main_loop.rs",
+        "//! The loop.\n\npub fn run() {\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
+    );
+    project.write(
+        "crates/orders/tests/consuming.rs",
+        "#[tokio::test]\nasync fn waits() {\n    tokio::time::sleep(std::time::Duration::from_secs(1)).await;\n}\n",
+    );
+    let model = Scripted::answering([PASSED]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("a simulated host is an answer");
+    model.assert_exhausted();
+
+    assert!(!verdict.passed, "the wave fails");
+    let findings = verdict.findings();
+    assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
+    let [failure] = verdict.failures.as_slice() else {
+        panic!("one failure names the modules: {:?}", verdict.failures);
+    };
+    for line in [
+        "crates/orders/src/consuming.rs:1: the workspace's lints silenced",
+        "crates/orders/src/consuming.rs:5: a task of its own",
+        "crates/start/src/main_loop.rs:4: a thread of its own",
+    ] {
+        assert!(failure.contains(line), "the failure names `{line}`: {failure}");
+    }
+    assert!(!failure.contains("tests/"), "a stem's tests are not read: {failure}");
+}
+
+// A stem whose modules reach the host through the provider alone passes,
+// whatever its tests spell.
+#[tokio::test]
+async fn omnia_verify_stem_clean() {
+    let project = scratch();
+    project.write("Cargo.toml", omnia_seed("Cargo.toml"));
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Reads orders.\n\n/// The key of an order.\n#[must_use]\npub fn key(id: &str) -> String {\n    format!(\"orders/{id}\")\n}\n",
+    );
+    project.write(
+        "crates/orders/tests/reading.rs",
+        "#[tokio::test]\nasync fn waits() {\n    tokio::time::sleep(std::time::Duration::from_secs(1)).await;\n}\n",
+    );
+    let model = Scripted::answering([PASSED]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("verify over the clean stem");
+    model.assert_exhausted();
+
+    assert!(verdict.passed, "the modules simulate nothing: {:?}", verdict.failures);
 }
 
 fn omnia_seed(path: &str) -> String {

@@ -72,13 +72,18 @@ export class EventProcessor {
       "kind": "requirement",
       "id": "event-processing.process.authentication",
       "path": "services/event-processor/index.ts#L25",
-      "statement": "Processing an event first acquires an Azure AD token for the tenant named by AZURE_TENANT_ID."
+      "statement": "Processing an event first obtains a token from the identity provider for the tenant its configuration names."
     },
     {
       "kind": "requirement",
       "id": "event-processing.process.tenant-config",
       "path": "services/event-processor/index.ts#L18",
-      "statement": "The tenant id is read from AZURE_TENANT_ID once when the module loads and is asserted present rather than checked."
+      "statement": "The tenant is read from configuration once when the module loads and is asserted present rather than checked."
+    },
+    {
+      "kind": "excerpt",
+      "path": "services/event-processor/index.ts#L18",
+      "excerpt": "config = { tenantId: process.env.AZURE_TENANT_ID! }: the one setting, read at load, with the non-null assertion in place of a check."
     },
     {
       "kind": "requirement",
@@ -137,5 +142,6 @@ export class EventProcessor {
 - One `try` covers the whole flow, so the two arms of the `catch` are two requirements with different consequences, and the partial-publication consequence is stated because the code exhibits it.
 - `EventInput` and `EnrichedEvent` are no claims of the answer: the caller copies both exported declarations. The audit payload is an inline literal with no declaration, so nothing copies it; its shape lives in the statement and the excerpt.
 - Every id leads with `event-processing.process`, the id the surface line gives the one public method the behaviour sits in. `config` is the one Boundary and is no criterion: `tenant-config` states what the code does with it — reads once, asserts present — and no requirement rests on a value it spells.
+- The statements name the identity provider and the tenant by their roles, as [claims.md](../../claims.md) has it; the product and the key — `@azure/identity`, `AZURE_TENANT_ID` — are the `call`'s and the excerpt's, where a target reads them.
 - The private method bodies are elided here. In a real tree the extract call follows them, and the outbound calls enrichment makes are this surface's `call` claims; nothing is claimed about what they do until it is read.
 - `getAzureToken` comes from a package, so its `callee` is `<package>:<symbol>` as the Calls list spells it; `Publish.send` is a method of the tree, so its `callee` is `<file>:<symbol>` — the list shows the call inside `publisher.ts`, and the surface's site is where it is made from.

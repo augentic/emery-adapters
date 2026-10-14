@@ -19,7 +19,6 @@ Run from the repository root. `emery` mounts that directory as the project, and 
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release
 
-mkdir -p ~/.emery/adapters
 cp target/wasm32-wasip2/release/emery_typescript.wasm ~/.emery/adapters/emery_typescript@0.13.0.wasm
 
 set -a; source .env; set +a
