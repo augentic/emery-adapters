@@ -35,7 +35,7 @@ set -a; source .env; set +a
 ## Specify
 
 ```bash
-cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/typescript/emery.toml
+cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/emery.toml
 
 # show (project) outputs
 cargo run --manifest-path ../emery/Cargo.toml -- show spec
