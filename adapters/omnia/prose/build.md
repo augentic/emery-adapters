@@ -46,7 +46,7 @@ Answer with one JSON object:
 - `covered` — each requirement id the specification above holds that your module now implements and its test confirms, once each. Leave an id out rather than claim what the tree does not hold or a test does not pass.
 - `written` — the files the two tools wrote, and the seed files your brief names as laid for this slice, once each, as a `/`-separated path relative to `$WORKSPACE`. A file a check wrote, `Cargo.lock`, is the tree's whether or not you list it.
 
-The report is held to the tree before it is accepted. A finding under `## Findings` names a rule the tree breaks: the root `Cargo.toml` changed outside its two lists, with the `-` lines to put back and the `+` lines to drop; a module simulating the host, each line named; a handler — a `pub async fn` taking a `Context` — that no `.route(..)` statement of the two root lists reaches. Repair it through `edit_files` where it is a change within a file, `delete` where a module goes, then answer again; the report is yours once the tree stands.
+The report is held to the tree before it is accepted. A finding under `## Findings` names a rule the tree breaks: the root `Cargo.toml` changed outside its two lists, with the `-` lines to put back and the `+` lines to drop; a module simulating the host, each line named; a handler — a `pub async fn` taking a `Context` — that no `.route(..)` statement of the two root lists reaches, handed to its route function or consumer by the statement, or to `handle_with` by a route function of its stem the statement calls. Repair it through `edit_files` where it is a change within a file, `delete` where a module goes, then answer again; the report is yours once the tree stands.
 
 ## Worked example
 

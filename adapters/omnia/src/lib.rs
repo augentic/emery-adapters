@@ -32,8 +32,10 @@
 //!   exit delay — is named with its line, since each is a mechanism the host
 //!   owns and the translation lays nothing for;
 //! - every handler — a `pub async fn` under `crates/*/src` taking a
-//!   `Context` — is named by a statement of the route list or the topic
-//!   list, since one no list reaches is code the host never runs.
+//!   `Context` — is handed to its route function or consumer by a statement
+//!   of the route list or the topic list, or to `handle_with` by a route
+//!   function of its stem a statement calls, since one no list reaches is
+//!   code the host never runs.
 //!
 //! Before a slice's turn, the root `.gitignore` is put back as the template
 //! spells it: the repository the engine lays holds an ignore file of its
@@ -291,7 +293,9 @@ impl<'a> Tree<'a> {
 
     // One finding naming every handler under a stem's `src/` — a `pub async
     // fn` whose signature takes a `Context` — that no `.route(..)` statement
-    // of the two lists names, as `<stem>::<module>::<fn>` or bare.
+    // of the two lists reaches: handed to the route function or consumer the
+    // statement calls, or to `handle_with` by a route function of a stem the
+    // statement calls with no argument.
     fn unlisted(&self) -> Result<Vec<String>, Error> {
         let mut lists = Vec::new();
         for list in LISTS {
@@ -300,13 +304,29 @@ impl<'a> Tree<'a> {
                 lists.push(read(&path)?);
             }
         }
-        let statements: Vec<&str> = lists.iter().flat_map(|text| routed(text)).collect();
-        let mut lines = Vec::new();
+        let mut modules = Vec::new();
         for file in self.modules()? {
-            let text = read(&file)?;
-            let path = self.relative(&file);
-            for (number, name) in handlers(&text) {
-                if !statements.iter().any(|statement| names(statement, name)) {
+            modules.push((self.relative(&file), read(&file)?));
+        }
+
+        // what the lists hand, then what a route function they call hands
+        let mut reached: Vec<&str> = lists
+            .iter()
+            .flat_map(|text| calls(text, ".route("))
+            .filter_map(|(_, statement)| handed(statement))
+            .collect();
+        for (_, text) in &modules {
+            for (route, handler) in constructed(text) {
+                if reached.contains(&route) && !reached.contains(&handler) {
+                    reached.push(handler);
+                }
+            }
+        }
+
+        let mut lines = Vec::new();
+        for (path, text) in &modules {
+            for (number, name) in handlers(text) {
+                if !reached.contains(&name) {
                     lines.push(format!(
                         "{path}:{number}: handler `{name}` is reached by no list statement"
                     ));
@@ -379,16 +399,18 @@ fn template(path: &str) -> Result<&'static str, Error> {
         .ok_or_else(|| server_error!("the template lays no `{path}`"))
 }
 
-// The argument text of every `.route(` statement in `text`, parentheses
-// balanced, so a statement spread over lines is one.
-fn routed(text: &str) -> Vec<&str> {
-    let mut statements = Vec::new();
-    let mut rest = text;
-    while let Some(at) = rest.find(".route(") {
-        let open = at + ".route(".len();
+// Every call of `callee` in `text` — the spelling with its opening
+// parenthesis, `.route(` — as the offset it starts at and its argument text,
+// parentheses balanced, so a call spread over lines is one.
+fn calls<'t>(text: &'t str, callee: &str) -> Vec<(usize, &'t str)> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(at) = text[from..].find(callee) {
+        let start = from + at;
+        let open = start + callee.len();
         let mut depth = 1usize;
         let mut end = None;
-        for (offset, ch) in rest[open..].char_indices() {
+        for (offset, ch) in text[open..].char_indices() {
             match ch {
                 '(' => depth += 1,
                 ')' => {
@@ -402,20 +424,80 @@ fn routed(text: &str) -> Vec<&str> {
             }
         }
         let Some(end) = end else { break };
-        statements.push(&rest[open..end]);
-        rest = &rest[end..];
+        found.push((start, &text[open..end]));
+        from = end;
     }
-    statements
+    found
 }
 
-// Whether `statement` spells `name` as a path segment or bare: an identifier
-// bounded by what no identifier holds.
-fn names(statement: &str, name: &str) -> bool {
-    statement.match_indices(name).any(|(at, _)| {
-        let before = statement[..at].chars().next_back();
-        let after = statement[at + name.len()..].chars().next();
-        !before.is_some_and(identifier) && !after.is_some_and(identifier)
+// The name a `.route(..)` statement hands, read from the call its second
+// argument makes: the last segment of the call's first argument where it
+// has one, `get(<handler>)`, `consume(<handler>)`, `consume_with(<handler>,
+// <decode>)`; the callee's own last segment where it has none, a route
+// function of a stem, `orders::placing::place_order_route()`. A statement
+// in another shape hands none.
+fn handed(statement: &str) -> Option<&str> {
+    let call = arguments(statement).get(1)?.trim();
+    let open = call.find('(')?;
+    let close = call.rfind(')')?;
+    let inner = call.get(open + 1..close)?;
+    match arguments(inner).first().map(|argument| argument.trim()) {
+        Some("") | None => segment(&call[..open]),
+        Some(handler) => segment(handler),
+    }
+}
+
+// Every route function `text` declares with the handler it hands
+// `handle_with` as the call's second argument, each `(<fn>, <handler>)`.
+fn constructed(text: &str) -> Vec<(&str, &str)> {
+    calls(text, "handle_with(")
+        .into_iter()
+        .filter_map(|(at, inner)| {
+            let route = declared(&text[..at])?;
+            let handler = segment(arguments(inner).get(1)?)?;
+            Some((route, handler))
+        })
+        .collect()
+}
+
+// The name of the last `fn` declared in `head`, the one a call there sits
+// in.
+fn declared(head: &str) -> Option<&str> {
+    head.rmatch_indices("fn ").find_map(|(at, _)| {
+        let before = head[..at].chars().next_back();
+        if before.is_some_and(identifier) {
+            return None;
+        }
+        let name = head[at + "fn ".len()..].split(|ch: char| !identifier(ch)).next()?;
+        (!name.is_empty()).then_some(name)
     })
+}
+
+// `text` split at the commas no parenthesis, bracket, or brace encloses.
+fn arguments(text: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0;
+    for (at, ch) in text.char_indices() {
+        match ch {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                parts.push(&text[start..at]);
+                start = at + ch.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    parts.push(&text[start..]);
+    parts
+}
+
+// The last segment of a path, `place_order` of `orders::placing::place_order`
+// or bare; a text that is no path has none.
+fn segment(path: &str) -> Option<&str> {
+    let name = path.trim().rsplit("::").next()?;
+    (!name.is_empty() && name.chars().all(identifier)).then_some(name)
 }
 
 fn identifier(ch: char) -> bool {

@@ -901,6 +901,107 @@ async fn omnia_handler_unlisted() {
     );
 }
 
+// A statement reaches the one handler it hands, never the method, the
+// crate, the module, or the constant it spells beside it: a handler named
+// `get`, `http`, `orders`, or `consume` is listed by no statement that
+// merely uses the word, and is refused at its line until a statement hands
+// it.
+#[tokio::test]
+async fn omnia_handler_named_as_method() {
+    let project = omnia_tree();
+    project.write(
+        "src/routes.rs",
+        omnia_seed("src/routes.rs")
+            .replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}")),
+    );
+    let topic_anchor = "    let router = messaging::Router::new(Client::new(OWNER, provider));\n";
+    let topic_line = "    let router = router.route(\n        \
+                      config::topic_for(&env, common::routes::topic::ORDER_PLACED),\n        \
+                      messaging::consume(orders::fulfilment::on_placed),\n    );\n";
+    project.write(
+        "src/messaging.rs",
+        omnia_seed("src/messaging.rs").replace(topic_anchor, &format!("{topic_anchor}{topic_line}")),
+    );
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Reads orders.\n\nuse omnia_sdk::api::Context;\n\n\
+         /// Read one order.\npub async fn get_order<P>(input: GetOrder, context: Context<P>) -> omnia_sdk::Result<Order> {\n    todo!()\n}\n\n\
+         /// Read the orders.\npub async fn get<P>(input: ListOrders, context: Context<P>) -> omnia_sdk::Result<Vec<Order>> {\n    todo!()\n}\n\n\
+         /// Read over HTTP.\npub async fn http<P>(input: ListOrders, context: Context<P>) -> omnia_sdk::Result<Vec<Order>> {\n    todo!()\n}\n\n\
+         /// Read every order.\npub async fn orders<P>(input: ListOrders, context: Context<P>) -> omnia_sdk::Result<Vec<Order>> {\n    todo!()\n}\n",
+    );
+    project.write(
+        "crates/orders/src/fulfilment.rs",
+        "//! Fulfils orders.\n\nuse omnia_sdk::api::Context;\n\n\
+         /// Fulfil a placed order.\npub async fn on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()> {\n    todo!()\n}\n\n\
+         /// Consume an order.\npub async fn consume<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()> {\n    todo!()\n}\n",
+    );
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [delete_files(&["crates/orders/src/reading.rs", "crates/orders/src/fulfilment.rs"])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    for line in [
+        "crates/orders/src/fulfilment.rs:11: handler `consume` is reached by no list statement",
+        "crates/orders/src/reading.rs:11: handler `get` is reached by no list statement",
+        "crates/orders/src/reading.rs:16: handler `http` is reached by no list statement",
+        "crates/orders/src/reading.rs:21: handler `orders` is reached by no list statement",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["`get_order`", "`on_placed`"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+}
+
+// A statement that calls a route function of the stem with no argument
+// reaches the handler that function hands `handle_with`; a handler handed
+// by a route function no statement calls is still reached by nothing.
+#[tokio::test]
+async fn omnia_handler_behind_route_function() {
+    let project = omnia_tree();
+    let listing = "    let router = router.route(common::routes::http::ORDERS, orders::placing::place_order_route());\n";
+    project.write(
+        "src/routes.rs",
+        omnia_seed("src/routes.rs").replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{listing}")),
+    );
+    project.write(
+        "crates/orders/src/placing.rs",
+        "//! Places orders.\n\nuse axum::routing::{MethodFilter, MethodRouter};\n\
+         use omnia_sdk::api::http::{DecodeError, RawRequest, handle_with};\nuse omnia_sdk::api::{Client, Context};\n\n\
+         /// The `POST /orders` route: a placed order is answered `201`.\n#[must_use]\n\
+         pub fn place_order_route<P>() -> MethodRouter<Client<P>>\nwhere\n    P: Send + Sync + 'static,\n{\n    \
+         handle_with(\n        MethodFilter::POST,\n        place_order,\n        \
+         |raw: RawRequest<'_>| -> Result<PlaceOrder, DecodeError> { todo!() },\n        \
+         |order: Order| todo!(),\n    )\n}\n\n\
+         /// Place an order.\npub async fn place_order<P>(input: PlaceOrder, context: Context<P>) -> omnia_sdk::Result<Order> {\n    todo!()\n}\n\n\
+         /// The `POST /orders/{id}/refund` route.\n#[must_use]\n\
+         pub fn refund_route<P>() -> MethodRouter<Client<P>>\nwhere\n    P: Send + Sync + 'static,\n{\n    \
+         handle_with(MethodFilter::POST, refund, |raw: RawRequest<'_>| -> Result<Refund, DecodeError> { todo!() }, |(): ()| todo!())\n}\n\n\
+         /// Refund an order.\npub async fn refund<P>(input: Refund, context: Context<P>) -> omnia_sdk::Result<()> {\n    todo!()\n}\n",
+    );
+    let refund = "    let router = router.route(common::routes::http::REFUND, orders::placing::refund_route());\n";
+    let model = Scripted::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("src/routes.rs", listing, &format!("{listing}{refund}"))])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the listed tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    assert!(
+        correction
+            .contains("crates/orders/src/placing.rs:36: handler `refund` is reached by no list statement"),
+        "the handler behind the uncalled route function is named at its line: {correction}"
+    );
+    assert!(!correction.contains("`place_order`"), "`place_order` is no finding: {correction}");
+}
+
 // A tree holding every file of the seed, as an integrated tree does once a
 // slice has built, since the adapter holds the static files to the template
 // at every verify.
