@@ -785,7 +785,7 @@ async fn omnia_verify_simulated_host() {
     );
     project.write(
         "crates/start/src/main_loop.rs",
-        "//! The loop.\n\npub fn run() {\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
+        "//! The loop.\n\nuse std::env;\n\npub fn run() {\n    let _ = env::var(\"PORT\");\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
     );
     project.write(
         "crates/start/src/lifecycle.rs",
@@ -815,7 +815,8 @@ async fn omnia_verify_simulated_host() {
         "a module simulates the host",
         "crates/orders/src/consuming.rs:1: the workspace's lints silenced",
         "crates/orders/src/consuming.rs:5: a task of its own",
-        "crates/start/src/main_loop.rs:4: a thread of its own",
+        "crates/start/src/main_loop.rs:3: the environment read past the host",
+        "crates/start/src/main_loop.rs:7: a thread of its own",
         "crates/start/src/lifecycle.rs:4: a start-up flag of its own",
         "crates/start/src/lifecycle.rs:6: a stop request of its own",
         "crates/start/src/lifecycle.rs:8: an exit delay of its own",
