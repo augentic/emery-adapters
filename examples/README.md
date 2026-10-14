@@ -34,31 +34,18 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 
 ### Build
 
-[emery.toml](emery.toml) names `emery:omnia` as the `[target]`. The adapter lays a whole tree, so it builds into a fresh repository: one whose root holds files alone, a `README.md` and a `.gitignore`. Lay a bare one with a root commit at the path the `[target]` table names:
-
-```bash
-git init --bare --initial-branch=main /tmp/emery-build.git
-git init --initial-branch=main /tmp/emery-build.seed
-cd /tmp/emery-build.seed
-printf '.emery/\ntarget/\n' > .gitignore
-printf '# shop\n' > README.md
-git add --all && git commit --message "Greenfield"
-git push -- /tmp/emery-build.git HEAD:refs/heads/main
-cd - && rm -rf /tmp/emery-build.seed
-```
-
-After the `specify` above, build the current plan into it:
+[emery.toml](emery.toml) names `emery:omnia` as the `[target]` and nothing else. The adapter lays a whole tree, so the engine builds it into a repository of its own, `.emery/vcs/repos/omnia` (the `[target] name`, the adapter's by default): laid on the first build with one root commit, `Initialise`, holding a `.gitignore` of `.emery/`, and kept for every build after. After the `specify` above, build the current plan into it:
 
 ```bash
 cp target/wasm32-wasip2/release/emery_omnia.wasm ~/.emery/adapters/emery_omnia@0.13.0.wasm
 
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-git -C /tmp/emery-build.git log --oneline --first-parent main..emery/<revision>
-git clone --branch emery/<revision> /tmp/emery-build.git /tmp/emery-build
+git -C .emery/vcs/repos/omnia log --oneline --first-parent emery/<revision>
+git clone --branch emery/<revision> .emery/vcs/repos/omnia /tmp/emery-build
 ```
 
-The result is the branch `emery/<revision>`, pushed to the bare repository as the `remote`. This checkout stays as it is. A `[target]` naming no `repository` builds from the checkout's own head, which the adapter refuses as `base-not-fresh` with the directories named, as it refuses any repository whose root holds a directory. A checkout with changes outside `.emery/` and `.git/` is refused as `base-not-sealed`, with the paths named.
+The result is the branch `emery/<revision>` in that repository, and nothing is pushed: clone it out, or push the label where it should go. This checkout stays as it is. The first wave's verify replaces the engine's one-line `.gitignore` with the exemplar template's, so the first wave is listed as `repaired`. A `[target] repository` names a URL to clone the repository from instead, built from its default branch; the adapter refuses one whose root holds a directory as `base-not-fresh`, with the directories named.
 
 The checks run `cargo` inside the worker boundary: `index.crates.io` and `static.crates.io` through the proxy, and the toolchain under `~/.rustup` and `~/.cargo/bin` with `RUSTUP_HOME` set. A rustup install in those paths is enough.
 

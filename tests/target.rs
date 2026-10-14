@@ -413,7 +413,7 @@ async fn omnia() {
     let project = OMNIA.built(&OMNIA_WRITTEN, &edits, OMNIA_REPORT).await;
 
     let edited: Vec<&str> = edits.iter().map(|(path, _, _)| *path).collect();
-    for seed in emery_omnia::SEED {
+    for seed in emery_omnia::seed() {
         let held = project.read(&seed.path);
         if edited.contains(&seed.path.as_ref()) {
             assert!(held.is_some(), "the tree holds the seeded list `{}`", seed.path);
@@ -470,7 +470,7 @@ fn text(project: &Scratch, path: &str) -> String {
 #[tokio::test]
 async fn omnia_seeded() {
     let project = scratch();
-    for seed in emery_omnia::SEED {
+    for seed in emery_omnia::seed() {
         project.write(&seed.path, "# held\n");
     }
     let model = Scripted::answering([OMNIA_STEM_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
@@ -478,7 +478,7 @@ async fn omnia_seeded() {
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
 
-    for seed in emery_omnia::SEED {
+    for seed in emery_omnia::seed() {
         let expected =
             if seed.path == "Cargo.toml" { seed.content.as_bytes() } else { b"# held\n" };
         assert_eq!(
@@ -494,6 +494,79 @@ async fn omnia_seeded() {
         report.written, written,
         "the report names the stem's files, the manifest put back, and no seed the tree held"
     );
+}
+
+// The seed is every file of the layout outside `crates/<stem>/`, each at a
+// path the SDK lays, declared once, the root manifest pinning omnia at one
+// version so a bump is one edit.
+#[test]
+fn omnia_seed_files() {
+    let seed = emery_omnia::seed();
+    let paths: std::collections::BTreeSet<&str> =
+        seed.iter().map(|seed| seed.path.as_ref()).collect();
+    assert_eq!(
+        paths,
+        [
+            ".github/dependabot.yml",
+            ".github/workflows/audit.yaml",
+            ".github/workflows/ci.yaml",
+            ".github/workflows/patch.yaml",
+            ".github/workflows/publish.yaml",
+            ".github/workflows/release.yaml",
+            ".gitignore",
+            ".vscode/settings.json",
+            "Cargo.toml",
+            "Makefile",
+            "clippy.toml",
+            "crates/common/Cargo.toml",
+            "crates/common/src/config.rs",
+            "crates/common/src/lib.rs",
+            "crates/common/src/routes.rs",
+            "crates/common/src/routes/http.rs",
+            "crates/common/src/routes/topic.rs",
+            "deny.toml",
+            "examples/runtime.rs",
+            "mise.toml",
+            "rust-toolchain.toml",
+            "rustfmt.toml",
+            "src/lib.rs",
+            "src/messaging.rs",
+            "src/routes.rs",
+            "supply-chain/README.md",
+            "supply-chain/audits.toml",
+            "supply-chain/config.toml",
+            "taplo.toml",
+            "tests/messaging.rs",
+            "tests/routes.rs",
+        ]
+        .into_iter()
+        .collect()
+    );
+    assert_eq!(paths.len(), seed.len(), "a seed path is declared once");
+    for seed in &seed {
+        emery_sdk::beneath(&seed.path)
+            .unwrap_or_else(|bad| panic!("the seed path `{}` {bad}", seed.path));
+    }
+
+    let manifest = omnia_seed("Cargo.toml");
+    let pins: Vec<(&str, &str)> = manifest
+        .lines()
+        .filter(|line| line.starts_with("omnia"))
+        .filter_map(|line| {
+            let (name, rest) = line.split_once(" = ")?;
+            let version = rest
+                .split_once("version = \"")
+                .map(|(_, version)| version)
+                .or_else(|| rest.strip_prefix('"'))?;
+            let (version, _) = version.split_once('"')?;
+            Some((name.trim(), version))
+        })
+        .collect();
+    assert!(pins.len() >= 2, "the seed pins the sdk and the host crates: {pins:?}");
+    let versions: std::collections::BTreeSet<&str> =
+        pins.iter().map(|(_, version)| *version).collect();
+    assert_eq!(versions.len(), 1, "every omnia pin in the seed is one version: {pins:?}");
+    assert!(manifest.contains(OMNIA_PIN), "the scenarios edit the pin the seed holds");
 }
 
 // The rules a wave's slices merge under: the lockfile kept from the
@@ -550,7 +623,64 @@ fn omnia_worker() {
 
 #[tokio::test]
 async fn omnia_verify() {
-    OMNIA.failed(("Cargo.toml", omnia_seed("Cargo.toml")), OMNIA_FAILED).await;
+    OMNIA.failed(("Cargo.toml", &omnia_seed("Cargo.toml")), OMNIA_FAILED).await;
+}
+
+// A verify puts every static file back as the template spells it before
+// its checks run: the engine's one-line ignore file, which a laid
+// repository holds before the first slice, and an entry a slice edited are
+// the template's again, a static file the tree lacks is laid, and the
+// verdict stands, the restoration left in the tree for the wave to seal.
+#[tokio::test]
+async fn omnia_verify_restored() {
+    let project = scratch();
+    for seed in emery_omnia::seed().iter().filter(|seed| seed.path != "examples/runtime.rs") {
+        project.write(&seed.path, seed.content.as_bytes());
+    }
+    project.write(".gitignore", ".emery/\n");
+    project.write("src/lib.rs", "//! Edited by a slice.\n");
+    let model = Scripted::answering([PASSED]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("verify over the drifted tree");
+    model.assert_exhausted();
+
+    assert!(verdict.passed, "the checks ran over the restored tree");
+    for path in [".gitignore", "src/lib.rs", "examples/runtime.rs"] {
+        assert_eq!(text(&project, path), omnia_seed(path), "`{path}` is the template's again");
+    }
+}
+
+// A verify whose repair changed a static file fails the wave with the lines
+// named, since the checks ran over a tree the wave may not keep; the tree
+// is left as the repair wrote it, for inspection.
+#[tokio::test]
+async fn omnia_verify_static_drift() {
+    let project = scratch();
+    for seed in emery_omnia::seed() {
+        project.write(&seed.path, seed.content.as_bytes());
+    }
+    let entry = omnia_seed("src/lib.rs");
+    let first = entry.lines().next().expect("the entry opens with a line");
+    let model = Scripted::answering([PASSED])
+        .calling(0, [edit_files(&[("src/lib.rs", first, "//! Edited by a repair.")])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("a drifted static file is an answer");
+    model.assert_exhausted();
+
+    assert!(!verdict.passed, "the wave fails");
+    let findings = verdict.findings();
+    assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
+    let [failure] = verdict.failures.as_slice() else {
+        panic!("one failure names the drift: {:?}", verdict.failures);
+    };
+    for line in ["`src/lib.rs`:", &format!("- {first}"), "+ //! Edited by a repair."] {
+        assert!(failure.contains(line), "the failure names `{line}`: {failure}");
+    }
+    assert_eq!(
+        text(&project, "src/lib.rs"),
+        entry.replacen(first, "//! Edited by a repair.", 1),
+        "the tree is left as the repair wrote it"
+    );
 }
 
 // The root manifest is held to the seed outside its two lists by the
@@ -649,12 +779,13 @@ async fn omnia_manifest_edited_by_verify() {
     );
 }
 
-fn omnia_seed(path: &str) -> &'static str {
-    &emery_omnia::SEED
-        .iter()
+fn omnia_seed(path: &str) -> String {
+    emery_omnia::seed()
+        .into_iter()
         .find(|seed| seed.path == path)
         .unwrap_or_else(|| panic!("the seed lays `{path}`"))
         .content
+        .into_owned()
 }
 
 // The seed's root manifest with the `orders` stem's line in each list.

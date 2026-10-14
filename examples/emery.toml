@@ -8,6 +8,3 @@ path = "documentation/docs/"
 
 [target]
 adapter = "emery:omnia@0.13.0"
-repository = "file:///tmp/emery-build.git"
-branch = "main"
-remote = "origin"
