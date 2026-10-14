@@ -13,27 +13,32 @@
 //! copies nothing. A build writes through `write_files` and `edit_files`,
 //! runs `cargo clippy`, `cargo test`, and a `wasm32-wasip2` check through
 //! the shell, and reports once they pass; a wave is verified by the same
-//! checks over the integrated tree, with every file no slice edits put back
-//! as the template spells it before they run and held after.
+//! checks over the integrated tree.
 //!
-//! The static files are held by the adapter itself, not by the merge: a
-//! wave's verify restores every file of the template outside the lists
-//! before its checks run, and the root `Cargo.toml` outside its two stem
-//! lists, so a pin, a lint, the `host` feature, or a target table a slice
-//! changed is put back and the lines a slice added kept; a verify whose
-//! repairs changed one fails with the lines named. Once a slice's turn ends,
-//! its root `Cargo.toml` is restored the same way, so the change never
-//! reaches its commit. Before a slice's turn, the root `.gitignore` is put
-//! back as the template spells it: the repository the engine lays holds an
-//! ignore file of its own, which the seed never writes over, and the turn's
-//! build output would otherwise be sealed with the slice.
+//! What the adapter holds a tree to beyond the checks, it holds as findings
+//! of the turn: a report or a verdict over a tree that breaks a rule is
+//! refused with the rule named, the turn repairs the tree and answers again,
+//! and nothing is written once a turn ends. The rules are:
 //!
-//! A verify also fails a wave whose stems simulate the host: a module under
-//! `crates/*/src` that silences the workspace's lints for its crate, spawns
-//! a task, a timer, or a thread, or reaches the environment, the file
-//! system, a socket, or a process is named in the verdict with its line,
-//! whatever the turn's checks said, since each is a mechanism the host owns
-//! and the translation lays nothing for.
+//! - the root `Cargo.toml` stands as the template spells it outside its two
+//!   stem lists, so a pin, a lint, the `host` feature, or a target table a
+//!   turn changed is a finding with the lines named;
+//! - at a wave's verify, every static file of the template stands byte for
+//!   byte, a file the tree lacks among them;
+//! - no module under `crates/*/src` simulates the host: one that silences
+//!   the workspace's lints for its crate, spawns a task, a timer, or a
+//!   thread, reaches the environment, the file system, a socket, or a
+//!   process, or keeps a flag machine — a step-done key, a stop request, an
+//!   exit delay — is named with its line, since each is a mechanism the host
+//!   owns and the translation lays nothing for;
+//! - every handler — a `pub async fn` under `crates/*/src` taking a
+//!   `Context` — is named by a statement of the route list or the topic
+//!   list, since one no list reaches is code the host never runs.
+//!
+//! Before a slice's turn, the root `.gitignore` is put back as the template
+//! spells it: the repository the engine lays holds an ignore file of its
+//! own, which the seed never writes over, and the turn's build output would
+//! otherwise be sealed with the slice.
 //!
 //! The worker a turn's checks run in reaches the Rust toolchain beneath the
 //! operator's home, `~/.rustup` and `~/.cargo/bin`, with `RUSTUP_HOME` set
@@ -146,18 +151,8 @@ impl TargetAdapter for Adapter {
             tracing::debug!(slice = %ctx.slice.id, "the root ignore file put back as the template spells it");
         }
 
-        let mut report = emery_sdk::target::build(ctx, PROSE, &seed()).await?;
-
-        // the slice's commit carries the template's pins whatever its turn did to them
-        let restored = Manifest::new(root).restore().map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!(
-                slice = %ctx.slice.id,
-                "the root manifest changed outside its lists; restored"
-            );
-            tracing::debug!(slice = %ctx.slice.id, %restored, "the lines restored");
-            written(&mut report, Manifest::PATH);
-        }
+        let mut report =
+            emery_sdk::target::build(ctx, PROSE, &seed(), |_| Tree::new(root).held()).await?;
         if ignored {
             written(&mut report, IGNORE);
         }
@@ -167,57 +162,188 @@ impl TargetAdapter for Adapter {
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
         let root = Path::new(ctx.workspace);
-        let manifest = Manifest::new(root);
+        emery_sdk::target::verify(ctx, PROSE, |_| {
+            let tree = Tree::new(root);
+            let mut findings = tree.statics()?;
+            findings.extend(tree.held()?);
+            Ok(findings)
+        })
+        .await
+    }
+}
 
-        // the checks run over the template's static files and pins, so a
-        // drift inherited from the integrated tree is a repair the wave seals
-        let restored = omnia_template::restore(root).map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!(
-                files = restored.files().len(),
-                "static files of the template restored before the checks"
-            );
-            tracing::debug!(%restored, "the files restored");
-        }
-        let restored = manifest.restore().map_err(|err| refusal(&err))?;
-        if !restored.is_empty() {
-            tracing::warn!("the root manifest restored before the checks");
-            tracing::debug!(%restored, "the lines restored");
-        }
+// The lent tree, read for what a turn must leave standing. Each rule answers
+// the findings the turn repairs, one per rule with every line named, so a
+// report or a verdict is refused once with everything the tree breaks.
+struct Tree<'a> {
+    root: &'a Path,
+}
 
-        let mut verdict = emery_sdk::target::verify(ctx, PROSE).await?;
+impl<'a> Tree<'a> {
+    const fn new(root: &'a Path) -> Self {
+        Self { root }
+    }
 
-        // a repair that changed a static file or a pin voids the checks that ran over them
-        let drift = omnia_template::drift(root).map_err(|err| refusal(&err))?;
-        if !drift.is_empty() {
-            verdict.passed = false;
-            verdict.failures.push(format!("a static file of the template changed:\n{drift}"));
-        }
-        let drift = manifest.drift().map_err(|err| refusal(&err))?;
-        if !drift.is_empty() {
-            verdict.passed = false;
-            verdict
-                .failures
-                .push(format!("the root `Cargo.toml` changed outside its two lists:\n{drift}"));
-        }
+    // The rules a build and a verify share: the root manifest outside its
+    // lists, no simulated host, every handler listed.
+    fn held(&self) -> Result<Vec<String>, Error> {
+        let mut findings = Vec::new();
+        findings.extend(self.manifest()?);
+        findings.extend(self.simulated()?);
+        findings.extend(self.unlisted()?);
+        Ok(findings)
+    }
 
-        // a module that simulates the host passes every check the turn ran
-        let simulated = simulated(root)?;
-        if !simulated.is_empty() {
-            verdict.passed = false;
-            verdict.failures.push(format!(
-                "a module simulates the host, which the translation lays nothing for:\n{}",
-                simulated.join("\n")
-            ));
+    // Every static file of the template that differs: the lines where an
+    // edit puts them back, the template's body whole for a file the tree
+    // lacks or rewrote past `LISTED` lines, since the lines alone cannot lay
+    // it.
+    fn statics(&self) -> Result<Vec<String>, Error> {
+        let drift = omnia_template::drift(self.root).map_err(|err| refusal(&err))?;
+        let mut findings = Vec::new();
+        for file in drift.files() {
+            let finding = if self.lacks(file.path) {
+                format!(
+                    "`{}` is a static file of the template the tree lacks; lay it whole through \
+                     `write_files`, as the template spells it:\n{}",
+                    file.path,
+                    template(file.path)?
+                )
+            } else if file.lines.len() > LISTED {
+                format!(
+                    "`{}` is a static file of the template and differs from it in {} lines; lay it \
+                     whole through `write_files`, as the template spells it:\n{}",
+                    file.path,
+                    file.lines.len(),
+                    template(file.path)?
+                )
+            } else {
+                format!(
+                    "`{}` is a static file of the template and stands as the template spells it; \
+                     put the `-` lines back and drop the `+` lines through `edit_files`:\n{}",
+                    file.path,
+                    file.lines.join("\n")
+                )
+            };
+            findings.push(finding);
         }
+        Ok(findings)
+    }
 
-        Ok(verdict)
+    // The root manifest outside its two stem lists, the template's whole for
+    // a tree that lacks it.
+    fn manifest(&self) -> Result<Vec<String>, Error> {
+        let drift = Manifest::new(self.root).drift().map_err(|err| refusal(&err))?;
+        if drift.is_empty() {
+            return Ok(Vec::new());
+        }
+        let finding = if self.lacks(Manifest::PATH) {
+            format!(
+                "the tree lacks the root `{}`; lay it whole through `write_files` as the template \
+                 spells it, then add each stem's line to its two lists:\n{}",
+                Manifest::PATH,
+                template(Manifest::PATH)?
+            )
+        } else {
+            format!(
+                "the root `{}` changed outside its two stem lists; the pins, the lints, the `host` \
+                 feature, and the target tables stand as the template spells them, so put the `-` \
+                 lines back and drop the `+` lines through `edit_files`:\n{drift}",
+                Manifest::PATH
+            )
+        };
+        Ok(vec![finding])
+    }
+
+    fn lacks(&self, path: &str) -> bool {
+        matches!(
+            fs::symlink_metadata(self.root.join(path)),
+            Err(err) if err.kind() == ErrorKind::NotFound
+        )
+    }
+
+    // One finding naming `<path>:<line>: <what>` for every line under a
+    // stem's `src/` that spells one of `SIMULATED`, sorted; a tree with no
+    // `crates/` answers none.
+    fn simulated(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let text = read(&file)?;
+            let path = self.relative(&file);
+            for (number, line) in text.lines().enumerate() {
+                for (needle, what) in SIMULATED {
+                    if line.contains(needle) {
+                        lines.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a module simulates the host, which the translation lays nothing for; remove each with \
+             its `pub mod` line and its test through `delete` rather than rename it:\n{}",
+            lines.join("\n")
+        )])
+    }
+
+    // One finding naming every handler under a stem's `src/` — a `pub async
+    // fn` whose signature takes a `Context` — that no `.route(..)` statement
+    // of the two lists names, as `<stem>::<module>::<fn>` or bare.
+    fn unlisted(&self) -> Result<Vec<String>, Error> {
+        let mut lists = Vec::new();
+        for list in LISTS {
+            let path = self.root.join(list);
+            if path.is_file() {
+                lists.push(read(&path)?);
+            }
+        }
+        let statements: Vec<&str> = lists.iter().flat_map(|text| routed(text)).collect();
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let text = read(&file)?;
+            let path = self.relative(&file);
+            for (number, name) in handlers(&text) {
+                if !statements.iter().any(|statement| names(statement, name)) {
+                    lines.push(format!(
+                        "{path}:{number}: handler `{name}` is reached by no list statement"
+                    ));
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a handler is reached by no `.route(..)` statement of `src/routes.rs` or \
+             `src/messaging.rs`, so the host never runs it; list it under the route or topic its \
+             requirement states, or, where it is a helper and no handler, hand it the provider \
+             rather than the `Context`:\n{}",
+            lines.join("\n")
+        )])
+    }
+
+    // Every `.rs` file under a stem's `src/`, its `tests/` unread.
+    fn modules(&self) -> Result<Vec<PathBuf>, Error> {
+        let mut files = Vec::new();
+        for stem in entries(&self.root.join("crates"))? {
+            files.extend(sources(&stem.join("src"))?);
+        }
+        Ok(files)
+    }
+
+    fn relative(&self, file: &Path) -> String {
+        file.strip_prefix(self.root).unwrap_or(file).display().to_string()
     }
 }
 
 // What no module of a stem spells, each a mechanism the host owns: the
-// workspace's lints silenced for the crate, a task, a timer, a thread, or a
-// reach past the component to the system.
+// workspace's lints silenced for the crate, a task, a timer, a thread, a
+// reach past the component to the system, or a flag machine standing in for
+// a lifecycle.
 const SIMULATED: &[(&str, &str)] = &[
     ("#![allow(", "the workspace's lints silenced"),
     ("tokio::spawn", "a task of its own"),
@@ -227,28 +353,92 @@ const SIMULATED: &[(&str, &str)] = &[
     ("std::fs::", "the file system reached past the host"),
     ("std::net::", "a socket of its own"),
     ("std::process::", "a process of its own"),
+    ("_STARTED_KEY", "a start-up flag of its own"),
+    ("_INITIALIZED_KEY", "an initialisation flag of its own"),
+    ("_LOADED_KEY", "a load-done flag of its own"),
+    ("STOP_REQUESTED", "a stop request of its own"),
+    ("EXIT_DELAY", "an exit delay of its own"),
+    ("b\"1\"", "a step-done write of its own"),
 ];
 
-// Answers `<path>:<line>: <what>` for every line under a stem's `src/` that
-// spells one of `SIMULATED`, sorted; a tree with no `crates/` answers none.
-fn simulated(root: &Path) -> Result<Vec<String>, Error> {
-    let mut findings = Vec::new();
-    for stem in entries(&root.join("crates"))? {
-        for file in sources(&stem.join("src"))? {
-            let text = fs::read_to_string(&file)
-                .map_err(|err| server_error!("reading `{}`: {err}", file.display()))?;
-            let path = file.strip_prefix(root).unwrap_or(&file).display().to_string();
-            for (number, line) in text.lines().enumerate() {
-                for (needle, what) in SIMULATED {
-                    if line.contains(needle) {
-                        findings.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
+// The two lists whose `.route(..)` statements reach a handler.
+const LISTS: &[&str] = &["src/routes.rs", "src/messaging.rs"];
+
+// The most differing lines a finding asks an edit to put back; past it the
+// file is laid whole.
+const LISTED: usize = 24;
+
+fn read(file: &Path) -> Result<String, Error> {
+    fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
+}
+
+// The body the template lays at `path`.
+fn template(path: &str) -> Result<&'static str, Error> {
+    omnia_template::entry(path)
+        .map(|entry| entry.body)
+        .ok_or_else(|| server_error!("the template lays no `{path}`"))
+}
+
+// The argument text of every `.route(` statement in `text`, parentheses
+// balanced, so a statement spread over lines is one.
+fn routed(text: &str) -> Vec<&str> {
+    let mut statements = Vec::new();
+    let mut rest = text;
+    while let Some(at) = rest.find(".route(") {
+        let open = at + ".route(".len();
+        let mut depth = 1usize;
+        let mut end = None;
+        for (offset, ch) in rest[open..].char_indices() {
+            match ch {
+                '(' => depth += 1,
+                ')' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = Some(open + offset);
+                        break;
                     }
                 }
+                _ => {}
             }
         }
+        let Some(end) = end else { break };
+        statements.push(&rest[open..end]);
+        rest = &rest[end..];
     }
-    findings.sort();
-    Ok(findings)
+    statements
+}
+
+// Whether `statement` spells `name` as a path segment or bare: an identifier
+// bounded by what no identifier holds.
+fn names(statement: &str, name: &str) -> bool {
+    statement.match_indices(name).any(|(at, _)| {
+        let before = statement[..at].chars().next_back();
+        let after = statement[at + name.len()..].chars().next();
+        !before.is_some_and(identifier) && !after.is_some_and(identifier)
+    })
+}
+
+fn identifier(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
+// Every handler `text` declares, each its 1-based line and name: a `pub
+// async fn` whose signature, read to its body, takes a `Context<`.
+fn handlers(text: &str) -> Vec<(usize, &str)> {
+    let mut found = Vec::new();
+    let mut offset = 0;
+    for (index, raw) in text.split_inclusive('\n').enumerate() {
+        if let Some(rest) = raw.trim_start().strip_prefix("pub async fn ") {
+            let name = rest.split(|ch: char| !identifier(ch)).next().unwrap_or_default();
+            let head = &text[offset..];
+            let signature = head.find('{').map_or(head, |body| &head[..body]);
+            if !name.is_empty() && signature.contains("Context<") {
+                found.push((index + 1, name));
+            }
+        }
+        offset += raw.len();
+    }
+    found
 }
 
 // The entries of `dir`, sorted; an absent `dir` has none.

@@ -68,11 +68,11 @@ impl TargetAdapter for Adapter {
     };
 
     async fn build<P: Model>(ctx: &Context<'_, P>) -> Result<Report, Error> {
-        emery_sdk::target::build(ctx, PROSE, &[]).await
+        emery_sdk::target::build(ctx, PROSE, &[], |_| Ok(Vec::new())).await
     }
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
-        emery_sdk::target::verify(ctx, PROSE).await
+        emery_sdk::target::verify(ctx, PROSE, |_| Ok(Vec::new())).await
     }
 }
 
