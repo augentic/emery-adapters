@@ -32,9 +32,9 @@ cargo run --manifest-path ../emery/Cargo.toml -- show plan
 
 Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.13.0.wasm`). Replacing the file is how a rebuild takes effect.
 
-### Build
+## Build
 
-[emery.toml](emery.toml) names `emery:omnia` as the `[target]` and nothing else. The adapter lays a whole tree, so the engine builds it into a repository of its own, `.emery/vcs/repos/omnia` (the `[target] name`, the adapter's by default): laid on the first build with one root commit, `Initialise`, holding a `.gitignore` of `.emery/`, and kept for every build after. After the `specify` above, build the current plan into it:
+[emery.toml](emery.toml) names `emery:omnia` as its target. After `specify`, copy the adapter and build the current plan:
 
 ```bash
 cp target/wasm32-wasip2/release/emery_omnia.wasm ~/.emery/adapters/emery_omnia@0.13.0.wasm
@@ -45,11 +45,11 @@ git -C .emery/vcs/repos/omnia log --oneline --first-parent emery/<revision>
 git clone --branch emery/<revision> .emery/vcs/repos/omnia /tmp/emery-build
 ```
 
-The result is the branch `emery/<revision>` in that repository, and nothing is pushed: clone it out, or push the label where it should go. This checkout stays as it is. The first wave's verify replaces the engine's one-line `.gitignore` with the exemplar template's, so the first wave is listed as `repaired`. A `[target] repository` names a URL to clone the repository from instead, built from its default branch; the adapter refuses one whose root holds a directory as `base-not-fresh`, with the directories named.
+The adapter builds into `.emery/vcs/repos/omnia` and labels the result `emery/<revision>`. It leaves this checkout unchanged and pushes nothing. Clone the branch, or push it from that repository.
 
-The checks run `cargo` inside the worker boundary: `index.crates.io` and `static.crates.io` through the proxy, and the toolchain under `~/.rustup` and `~/.cargo/bin` with `RUSTUP_HOME` set. A rustup install in those paths is enough.
+A `[target] repository` builds from a remote repository's default branch instead. The omnia adapter requires a fresh base and returns `base-not-fresh` when its root contains a directory.
 
-A build turn runs the toolchain as well as composing, so one can outlast `CURSOR_TIMEOUT_SECS`. Smaller slices are the fix — the engine floors a stem past twelve requirements at its sub-stems — and raising the variable for a build run is the fallback; it is process-wide, so it raises every turn's cap.
+Build and verify run `cargo` with access to crates.io, `~/.rustup`, and `~/.cargo/bin`. If a turn exceeds `CURSOR_TIMEOUT_SECS`, use smaller slices or raise the limit for that run.
 
 ## Logging
 
