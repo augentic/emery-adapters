@@ -108,10 +108,6 @@ omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia-wasi-model = { path = "../omnia/crates/wasi-model" }
 # omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
 
-[patch."https://github.com/augentic/omnia-exemplar"]
-# the sibling checkout, until its `replace` without a process id is on `main`
-omnia-template = { path = "../omnia-exemplar/templates/guest" }
-
 [profile.release]
 lto = true
 opt-level = 2
