@@ -39,6 +39,7 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 ```bash
 cp target/wasm32-wasip2/release/emery_omnia.wasm ~/.emery/adapters/emery_omnia@0.13.0.wasm
 
+set -a; source .env; set +a
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
 git -C .emery/vcs/repos/omnia log --oneline --first-parent emery/<revision>
@@ -87,12 +88,12 @@ Completions are quiet between log lines. An `in progress` line every 15s means t
 Wall time varies. Pin `CURSOR_MODEL` when comparing prompts. Current numbers are in the [eval](../evals/README.md).
 
 
-| Variable                 | Default | Effect                                                       |
-| ------------------------ | ------- | ------------------------------------------------------------ |
+| Variable                 | Default | Effect                                                                                                           |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------- |
 | `CURSOR_TIMEOUT_SECS`    | 600     | Cap per completion, build turns included. A seam that hits it should be cut finer; a build turn, sliced smaller. |
-| `CURSOR_INACTIVITY_SECS` | 120     | Cancels a stream silent while waiting on the bridge.         |
-| `CURSOR_MAX_AGENTS`      | 4       | Live bridge agents. Further completions queue.               |
-| `CURSOR_MODEL`           | `auto`  | Model for every completion.                                  |
+| `CURSOR_INACTIVITY_SECS` | 120     | Cancels a stream silent while waiting on the bridge.                                                             |
+| `CURSOR_MAX_AGENTS`      | 4       | Live bridge agents. Further completions queue.                                                                   |
+| `CURSOR_MODEL`           | `auto`  | Model for every completion.                                                                                      |
 
 
 What a build's worker can reach is the target adapter's grant. A `~/` root the home lacks is skipped. The proxy admits only the hosts that grant names.
