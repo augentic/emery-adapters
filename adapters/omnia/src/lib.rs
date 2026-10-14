@@ -221,8 +221,9 @@ impl<'a> Tree<'a> {
                 )
             } else {
                 format!(
-                    "`{}` is a static file of the template and stands as the template spells it; \
-                     put the `-` lines back and drop the `+` lines through `edit_files`:\n{}",
+                    "`{}` is a static file of the template and differs from how the template \
+                     spells it; put the `-` lines back and drop the `+` lines through \
+                     `edit_files`:\n{}",
                     file.path,
                     file.lines.join("\n")
                 )

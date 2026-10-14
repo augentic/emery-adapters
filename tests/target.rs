@@ -716,7 +716,7 @@ async fn omnia_static_drift_refused() {
     assert!(verdict.passed);
     let correction = correction(&model);
     for line in [
-        "`src/lib.rs` is a static file of the template and stands as the template spells it",
+        "`src/lib.rs` is a static file of the template and differs from how the template spells it",
         &format!("- {first}"),
         "+ //! Edited by a repair.",
         "`examples/runtime.rs` is a static file of the template the tree lacks",
