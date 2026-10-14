@@ -1,14 +1,3 @@
-# Documentation example. Run from the repository root:
-#
-#   emery specify --config examples/documentation/emery.toml
-#
-# `adapter` is the package reference emery reads from `~/.emery/adapters`
-# before it fetches anything — the component this tree builds, copied there
-# as `emery_documentation@0.13.0.wasm` (examples/README.md). `path`
-# resolves relative to this file and must land inside the invocation
-# directory, which emery mounts as the project.
-
-# The built component over the orders service specification it reads.
 [[source]]
 name = "docs"
 adapter = "emery:documentation@0.13.0"

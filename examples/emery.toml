@@ -1,38 +1,11 @@
-# Two sources and a target: the TypeScript and documentation adapters under
-# `specify`, the omnia target under `build`. Run from the repository root:
-#
-#   emery specify --config examples/emery.toml
-#   emery build --config examples/emery.toml
-#
-# Each `adapter` is a package reference, which emery reads from
-# `~/.emery/adapters` before it fetches anything: the components this tree
-# builds, copied there as `emery_typescript@0.13.0.wasm`,
-# `emery_documentation@0.13.0.wasm`, and `emery_omnia@0.13.0.wasm`
-# (examples/README.md). `path` resolves relative to this file and must land
-# inside the invocation directory, which emery mounts as the project.
-
-# The r9k position adapter: a multi-module Node service, gitignored under
-# examples/typescript/, so the run opens one `survey-<source>` turn over the
-# facts the parser read and cuts the seams from the anchors it accepts.
 [[source]]
 adapter = "emery:typescript@0.13.0"
 path = "typescript/at_r9k_position_adapter/"
 
-# The orders service specification: one document, surveyed for its subjects
-# and the stem each one's ids lead with.
 [[source]]
 adapter = "emery:documentation@0.13.0"
 path = "documentation/docs/"
 
-# The target `emery build` builds every slice of the plan through: an omnia
-# HTTP guest in Rust, one crate per stem. The adapter lays a whole tree, so it
-# builds into a fresh repository — one whose root holds files alone — and a
-# build pointed at this checkout is refused as `base-not-fresh`. `repository`
-# and `branch` name that repository, and `remote` is where the label
-# `emery/<revision>` is pushed once every slice is merged; the bare repository
-# below is the one examples/README.md lays before the build. Its checks run
-# `cargo` inside the worker's boundary, which the adapter's worker grant opens
-# to the crates.io hosts and the rustup toolchain under `~/` (examples/README.md).
 [target]
 adapter = "emery:omnia@0.13.0"
 repository = "file:///tmp/emery-build.git"

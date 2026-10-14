@@ -1,13 +1,3 @@
-# Intent example. Run from the repository root:
-#
-#   emery specify --config examples/intent/emery.toml
-#
-# `adapter` is the package reference emery reads from `~/.emery/adapters`
-# before it fetches anything — the component this tree builds, copied there
-# as `emery_intent@0.13.0.wasm` (examples/README.md). Nothing is lent: the
-# brief rides inline, the file form of `--description`.
-
-# The built component over the operator's brief.
 [[source]]
 name = "intent"
 adapter = "emery:intent@0.13.0"
