@@ -200,15 +200,15 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the merge rules; the build writes the mount through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the fresh base and the merge rules; the build writes
+// the mount through `write_files`, its turns carry the worker grant, and its
+// report and the verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["rules", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &["metadata", "fresh", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
     )
     .await;
@@ -234,17 +234,20 @@ async fn emery_node() {
     }
 }
 
-// The metadata lowers the eleven rules in order; the build lays the seed in
-// the lent tree before its turn and writes a stem's list through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the fresh base and the eleven rules in order; the
+// build lays the seed in the lent tree before its turn and writes a stem's
+// list through `write_files`, its turns carry the worker grant, and its
+// report and the verdict lift back to the driver. The ignore file is held
+// as the engine lays it in a repository of its own, so the verify's restore
+// rewrites a file through the guest, which a native call cannot show.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
         test_programs::TARGET_EMERY_OMNIA,
         &scratch(),
         &[
-            "rules",
+            "metadata",
+            "fresh",
             "Cargo.lock=ours",
             "Cargo.toml=union",
             "clippy.toml=union",
@@ -262,6 +265,7 @@ async fn emery_omnia() {
     .await;
 
     let project = scratch();
+    project.write(".gitignore", ".emery/\n");
     let written = serde_json::json!({ "files": [
         { "path": "crates/orders/src/lib.rs", "content": "//! The `orders` stem.\n\npub mod reading;\n" },
     ]})
@@ -281,17 +285,25 @@ async fn emery_omnia() {
         project.read("crates/orders/src/lib.rs").is_some(),
         "the tree holds the stem's list written through the lend"
     );
-    let routes = emery_omnia::SEED
-        .iter()
-        .find(|seed| seed.path == "src/routes.rs")
-        .expect("the route list is a seed");
+    let template = emery_omnia::seed();
+    let seeded = |path: &str| {
+        template
+            .iter()
+            .find(|seed| seed.path == path)
+            .unwrap_or_else(|| panic!("`{path}` is a seed"))
+    };
     assert_eq!(
         project.read("src/routes.rs").as_deref(),
-        Some(routes.content.as_bytes()),
+        Some(seeded("src/routes.rs").content.as_bytes()),
         "the seed reached the host's tree through the lend before the turn"
     );
     assert!(
         project.read(".github/workflows/ci.yaml").is_some(),
         "a seed under a hidden directory reached the host's tree"
+    );
+    assert_eq!(
+        project.read(".gitignore").as_deref(),
+        Some(seeded(".gitignore").content.as_bytes()),
+        "the verify put the held ignore file back as the template spells it"
     );
 }

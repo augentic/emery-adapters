@@ -2,7 +2,6 @@
 
 [graph]
 all-features = true
-exclude-dev = true
 
 targets = [
   "aarch64-apple-darwin",
@@ -24,11 +23,9 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "BSL-1.0",
-  "CC0-1.0",
   "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
-  "MIT-0",
   "Unicode-3.0",
   "Unicode-DFS-2016",
   "Zlib",
@@ -52,5 +49,6 @@ unused = "warn"
 [sources]
 allow-git = [
   "https://github.com/augentic/emery.git",
+  "https://github.com/augentic/omnia-exemplar.git",
   "https://github.com/augentic/omnia.git",
 ]

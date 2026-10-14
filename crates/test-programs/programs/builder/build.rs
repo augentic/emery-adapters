@@ -1,11 +1,12 @@
 //! Drives one target adapter through the `target-adapter` world under the
-//! omnia runtime and asserts what the host sees: the metadata's merge rules,
-//! or the report of one build over the lent workspace held to the report
-//! gate and to the tree, and the verdict of one verification held to its gate.
+//! omnia runtime and asserts what the host sees: the metadata's base and
+//! merge rules, or the report of one build over the lent workspace held to
+//! the report gate and to the tree, and the verdict of one verification held
+//! to its gate.
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::target::{MergeStrategy, Target};
+use emery_sdk::target::{Base, MergeStrategy, Target};
 use test_programs::{ADAPTER, Caller, arguments, check_version, slice};
 
 omnia_sdk::command!(scenario);
@@ -35,7 +36,12 @@ async fn scenario() {
             assert!(findings.is_empty(), "verdict gate findings:\n{}", findings.join("\n"));
             assert!(verdict.passed, "the scripted verdict passes");
         }
-        ["rules", rules @ ..] => {
+        ["metadata", base, rules @ ..] => {
+            let declared = match metadata.base {
+                Base::Any => "any",
+                Base::Fresh => "fresh",
+            };
+            assert_eq!(declared, *base, "the base the metadata declares");
             let declared: Vec<String> = metadata
                 .merge_rules
                 .iter()
@@ -50,6 +56,6 @@ async fn scenario() {
                 .collect();
             assert_eq!(declared, rules, "the merge rules the metadata declares, in order");
         }
-        other => panic!("no argument or `rules <glob>=<strategy>..`; got {other:?}"),
+        other => panic!("no argument or `metadata <base> <glob>=<strategy>..`; got {other:?}"),
     }
 }

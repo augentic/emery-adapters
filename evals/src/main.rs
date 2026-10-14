@@ -11,8 +11,8 @@
 //! - `--facts [case|adapter..]` lays each adapter's survey facts with no
 //!   turn spent.
 //! - `--build [--target <name>] [case|adapter..]` builds each committed plan
-//!   into a greenfield repository through a target adapter and reads what
-//!   landed, the host's own checks beside the build's claims.
+//!   into a repository the engine lays through a target adapter and reads
+//!   what landed, the host's own checks beside the build's claims.
 //! - `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan an
 //!   earlier card committed again under this invocation's binary, target,
 //!   model, and width.
@@ -750,59 +750,29 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
         config.push('\n');
     }
     if let Some(target) = settings.target {
-        config.push_str(&target_table(&project, case, settings, target)?);
+        config.push_str(&target_table(settings, target)?);
     }
     fs::write(project.join("emery.toml"), config)?;
 
     Ok(project)
 }
 
+// The `[target] name` every staged project builds under, so the repository
+// the engine lays sits at `TARGET_REPO` whichever target the run names.
+const TARGET_NAME: &str = "target";
+const TARGET_REPO: &str = ".emery/vcs/repos/target";
+
 // The `[target]` table of a staged project: the target's component staged
-// in the store, and a greenfield repository laid for it beneath the project.
-fn target_table(
-    project: &Path, case: &Case, settings: &Settings, target: Target,
-) -> io::Result<String> {
+// in the store, under the one name. Both targets lay a whole tree, so the
+// engine lays the repository beneath the project itself, one root commit
+// holding its ignore rule, and no URL is named.
+fn target_table(settings: &Settings, target: Target) -> io::Result<String> {
     let reference = settings.stage_component(target.name())?;
-    let url = greenfield(project, &case.name, target)?;
-    Ok(format!(
-        "[target]\nadapter = \"{reference}\"\nrepository = \"{url}\"\nbranch = \"main\"\n\
-         remote = \"origin\"\n"
-    ))
+    Ok(format!("[target]\nname = \"{TARGET_NAME}\"\nadapter = \"{reference}\"\n"))
 }
 
 fn toml_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
-}
-
-// The repository a `--build` run builds into, and the URL the project names
-// it by: `target.git` beneath the project, bare, so the engine clones it
-// and pushes the label back, its `main` one root commit holding an ignore
-// rule for what the target's build leaves and a README naming the case. The
-// engine never initialises a repository, so the commit is sealed here,
-// through a seed clone the host's git pushes and the runner removes.
-fn greenfield(project: &Path, case: &str, target: Target) -> io::Result<String> {
-    let bare = project.join("target.git");
-    if bare.exists() {
-        fs::remove_dir_all(&bare)?;
-    }
-    fs::create_dir_all(&bare)?;
-    git(&bare, &["init", "--quiet", "--bare", "--initial-branch=main"])?;
-    let url = format!("file://{}", bare.display());
-
-    let seed = project.join("target.seed");
-    fs::create_dir_all(&seed)?;
-    fs::write(seed.join(".gitignore"), target.ignore())?;
-    fs::write(
-        seed.join("README.md"),
-        format!("# {case}\n\nThe tree the eval's `--build` run builds the `{case}` plan into.\n"),
-    )?;
-    git(&seed, &["init", "--quiet", "--initial-branch=main"])?;
-    git(&seed, &["add", "--all"])?;
-    git(&seed, &["commit", "--quiet", "--message", "Greenfield"])?;
-    git(&seed, &["push", "--quiet", "--", &url, "HEAD:refs/heads/main"])?;
-    fs::remove_dir_all(&seed)?;
-
-    Ok(url)
 }
 
 // One host git over a repository the runner laid or reads, under an
@@ -1424,8 +1394,8 @@ fn run(
 
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 
-// One `emery build` of the revision the run committed, into the case's
-// greenfield repository, then the host's own pass over the tree it left; the
+// One `emery build` of the revision the run committed, into the repository
+// the engine lays for the case, then the host's own pass over the tree it left; the
 // build's log and envelope are kept as `<tag>.build.stderr` /
 // `<tag>.build.stdout`, the pass as `<tag>.fidelity.md`.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
@@ -1479,10 +1449,10 @@ fn build(
 
 // Builds the plan `run-1` of `case` committed under `card` again. The staged
 // project is copied whole under the new card, less the engine's clones and
-// working copies and the earlier build's repository, and its `emery.toml`
-// gains a `[target]` table over a greenfield laid afresh for this
-// invocation's target, so the engine clones a repository with no label and
-// builds every slice over its root; the run's specify is read back from the
+// working copies and the repository the earlier build laid, and its
+// `emery.toml` gains a `[target]` table for this invocation's target, so the
+// engine lays a repository with no label afresh and builds every slice over
+// its root; the run's specify is read back from the
 // files the earlier run kept, exactly as `run` read them, so the card's
 // specify columns repeat the source card's.
 fn rebuilt(
@@ -1508,7 +1478,7 @@ fn rebuilt(
         })?
         .to_owned();
 
-    // the project copied, the engine's clones and the earlier build's files left behind
+    // the project copied, the engine's repositories and the earlier build's files left behind
     if project.exists() {
         fs::remove_dir_all(&project)?;
     }
@@ -1517,7 +1487,7 @@ fn rebuilt(
         let entry = entry?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.contains(".build") || name_str.contains(".fidelity") || name == "target.git" {
+        if name_str.contains(".build") || name_str.contains(".fidelity") {
             continue;
         }
         let target = project.join(&name);
@@ -1532,15 +1502,15 @@ fn rebuilt(
         }
     }
 
-    // the config's `[target]` table rewritten over a greenfield laid afresh
-    // for this invocation's target, its component staged
+    // the config's `[target]` table rewritten for this invocation's target,
+    // its component staged
     let config = fs::read_to_string(source.join("emery.toml"))?;
     let (sources, _) = config.split_once("[target]").ok_or_else(|| {
         io::Error::other(format!("`{TAG}` of `{}` was staged with no `[target]`", case.name))
     })?;
     let target =
         settings.target.ok_or_else(|| io::Error::other("a rebuild builds through a target"))?;
-    let table = target_table(&project, case, settings, target)?;
+    let table = target_table(settings, target)?;
     fs::write(project.join("emery.toml"), format!("{sources}{table}"))?;
 
     // the run as the earlier specify left it, then this invocation's build
@@ -1581,7 +1551,7 @@ fn rebuilt(
 }
 
 // A copy of a directory tree skipping nothing, for a staged project's
-// sources, `target.git`, and `.emery/storage`.
+// sources and `.emery/storage`.
 fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
@@ -1608,7 +1578,7 @@ struct Build {
     failure: Option<Failure>,
     completions: Vec<Completion>,
     // the first-parent chain the build left, newest first: the label the
-    // run pushed, or the integration copy a failed run left behind
+    // run set, or the integration copy a failed run left behind
     history: Vec<Landed>,
     tail: String,
     // the host's own pass over the tree the chain stands at; none where the
@@ -1623,7 +1593,7 @@ struct Failure {
 }
 
 // One commit on the build's first-parent chain: a slice's merge, read
-// from its trailers, a `Wave <k> verified` seal, or the greenfield root.
+// from its trailers, a `Wave <k> verified` seal, or the root the engine laid.
 #[derive(Debug, PartialEq, Eq)]
 struct Landed {
     commit: String,
@@ -1963,12 +1933,12 @@ fn failure(stderr: &str) -> Option<Failure> {
 }
 
 // The chain the build left, read where it stands: the integration copy a
-// failed run leaves for inspection, else the label a landed run pushed to
-// `target.git`. The project is staged once for every run of a case, so the
-// copy standing may be an earlier run's, left by a build that failed after
-// cutting it, when this run's failed before it cut one: the copy is this
-// run's only where its chain holds a commit under this run's revision. A
-// chain nowhere, a run that ended before any was cut, is empty.
+// failed run leaves for inspection, else the label a landed run set in the
+// repository the engine laid. The project is staged once for every run of a
+// case, so the copy standing may be an earlier run's, left by a build that
+// failed after cutting it, when this run's failed before it cut one: the
+// copy is this run's only where its chain holds a commit under this run's
+// revision. A chain nowhere, a run that ended before any was cut, is empty.
 fn history(project: &Path, revision: &str) -> Vec<Landed> {
     let integration = project.join(".emery/vcs/integration");
     if integration.is_dir() {
@@ -1977,11 +1947,11 @@ fn history(project: &Path, revision: &str) -> Vec<Landed> {
             return left;
         }
     }
-    let bare = project.join("target.git");
-    if !bare.is_dir() {
+    let repository = project.join(TARGET_REPO);
+    if !repository.is_dir() {
         return Vec::new();
     }
-    log(&bare, &format!("refs/heads/emery/{revision}"))
+    log(&repository, &format!("refs/heads/emery/{revision}"))
 }
 
 // The first-parent chain from `tip`, newest first; empty where `tip` is
@@ -2031,11 +2001,11 @@ fn chain(text: &str) -> Vec<Landed> {
 
 // --- the host's pass over the tree a build left ---
 
-// Where a build left its tree: the label in `target.git` once the run
-// landed, else the integration copy's head a failed run leaves, read only
-// where its chain is this run's.
+// Where a build left its tree: the label in the repository the engine laid
+// once the run landed, else the integration copy's head a failed run
+// leaves, read only where its chain is this run's.
 enum Tree {
-    Label { bare: PathBuf, label: String },
+    Label { repository: PathBuf, label: String },
     Integration(PathBuf),
 }
 
@@ -2043,7 +2013,7 @@ impl Tree {
     fn left(project: &Path, revision: &str, build: &Build) -> Option<Self> {
         if build.landed() {
             return Some(Self::Label {
-                bare: project.join("target.git"),
+                repository: project.join(TARGET_REPO),
                 label: format!("emery/{revision}"),
             });
         }
@@ -2055,7 +2025,7 @@ impl Tree {
     // The repository to read and the tip within it.
     fn at(&self) -> (&Path, &str) {
         match self {
-            Self::Label { bare, label } => (bare, label),
+            Self::Label { repository, label } => (repository, label),
             Self::Integration(copy) => (copy, "HEAD"),
         }
     }
@@ -2071,9 +2041,8 @@ impl Display for Tree {
 }
 
 // A target adapter a `--build` run builds through, and what the host reads
-// of the tree it leaves: the ignore rule its greenfield root carries, the
-// files its layout admits, the checks its toolchain runs, and how its tests
-// are counted and named.
+// of the tree it leaves: the files its layout admits, the checks its
+// toolchain runs, and how its tests are counted and named.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 enum Target {
     #[default]
@@ -2096,15 +2065,6 @@ impl Target {
         match self {
             Self::Node => "node",
             Self::Omnia => "omnia",
-        }
-    }
-
-    // The ignore rule the greenfield root carries for what a build leaves:
-    // the omnia seed's own, since its verify holds the file to the seed.
-    const fn ignore(self) -> &'static str {
-        match self {
-            Self::Node => "node_modules/\ndist/\n.emery/\n",
-            Self::Omnia => include_str!("../../adapters/omnia/seed/.gitignore"),
         }
     }
 
@@ -2145,8 +2105,8 @@ impl Target {
         }
     }
 
-    // The root files the layout admits: for `omnia`, the adapter's seed and
-    // the lockfile.
+    // The root files the layout admits: for `omnia`, the template the adapter
+    // lays and the lockfile.
     const fn root_files(self) -> &'static [&'static str] {
         match self {
             Self::Node => &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"],
@@ -2191,7 +2151,7 @@ impl Target {
     // or the runner, a file under a stem's directory, or a stem's test file
     // or directory.
     fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
-        if self.root_files().contains(&path) || path == "README.md" {
+        if self.root_files().contains(&path) {
             return true;
         }
         match self {
@@ -4008,7 +3968,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             .jobs
             .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
         format!(
-            " · each landed plan built through `{}` into a greenfield `target.git` under {jobs}",
+            " · each landed plan built through `{}` into a repository the engine laid under {jobs}",
             target.name()
         )
     });
@@ -4507,8 +4467,8 @@ fn build_findings(
     Ok(())
 }
 
-// How the build ended: where the label stands and whether it was pushed,
-// or the failure's code, exit, and first line.
+// How the build ended: where the label stands, or the failure's code, exit,
+// and first line.
 fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) -> fmt::Result {
     let exit = build.exit.map_or_else(|| "killed".to_owned(), |code| format!("exit {code}"));
     match (&build.failure, build.exit) {
@@ -4516,17 +4476,13 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
             let envelope = build.envelope.as_ref();
             let label = envelope.and_then(|out| out["label"].as_str()).unwrap_or("");
             let head = envelope.and_then(|out| out["head"].as_str()).unwrap_or("");
-            let pushed = envelope
-                .and_then(|out| out["pushed"].as_str())
-                .map_or_else(String::new, |remote| format!(", pushed to `{remote}`"));
             let resumed = envelope
                 .and_then(|out| out["resumed"].as_array())
                 .filter(|resumed| !resumed.is_empty())
                 .map_or_else(String::new, |resumed| format!(", {} resumed", resumed.len()));
             writeln!(
                 f,
-                "\nBuild: {merged}/{} slices merged in {} waves in {}s{resumed}; `{label}` at \
-                 `{}`{pushed}",
+                "\nBuild: {merged}/{} slices merged in {} waves in {}s{resumed}; `{label}` at `{}`",
                 run.slices(),
                 build.waves(),
                 build.wall.as_secs(),
@@ -5024,7 +4980,7 @@ mod tests {
   "repaired": [2],
   "head": "cccccccc",
   "label": "emery/feb4bd36",
-  "pushed": "origin"
+  "repository": "./.emery/vcs/repos/target"
 }"#;
 
     fn accepted_line(source: &str, claims: &str) -> String {
@@ -5282,12 +5238,6 @@ mod tests {
         Target::parse("typescript-target").unwrap_err();
         assert_eq!(Target::parse("omnia"), Ok(Target::Omnia));
         Target::parse("omnia-target").unwrap_err();
-        for rule in ["target/", ".emery/"] {
-            assert!(
-                Target::Omnia.ignore().lines().any(|line| line == rule),
-                "the omnia root ignores `{rule}`"
-            );
-        }
         assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
         assert_eq!(Target::Node.runner(), "node --test");
         assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));
@@ -5568,13 +5518,13 @@ mod tests {
     // repairs names them, and a wave sealing nothing has no line.
     #[test]
     fn wave_seals_read_from_the_chain() {
-        let root = scratch("wave-seals", &[(".gitignore", "target/\n"), ("Cargo.lock", "v1\n")]);
+        let root = scratch("wave-seals", &[(".gitignore", ".emery/\n"), ("Cargo.lock", "v1\n")]);
         let commit = |message: &str| {
             git(&root, &["add", "--all"]).unwrap();
             git(&root, &["commit", "--quiet", "--message", message]).unwrap();
         };
         git(&root, &["init", "--quiet", "--initial-branch=main"]).unwrap();
-        commit("Greenfield");
+        commit("Initialise");
         fs::create_dir_all(root.join("crates/start/src")).unwrap();
         fs::write(root.join("crates/start/src/lib.rs"), "pub mod api;\n").unwrap();
         commit("SLICE-001 start\n\nSlice: SLICE-001\nRevision: feb4bd36\nWave: 1");
@@ -5741,7 +5691,6 @@ mod tests {
         let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
         for path in [
             "package.json",
-            "README.md",
             "src/index.ts",
             "src/main.ts",
             "src/orders/index.ts",
@@ -5751,9 +5700,13 @@ mod tests {
         ] {
             assert!(Target::Node.within_layout(path, &stems), "`{path}` is within the layout");
         }
-        for path in
-            ["scripts/check.mjs", "src/orders-reading/index.ts", "test/helpers.ts", "src/x.ts"]
-        {
+        for path in [
+            "README.md",
+            "scripts/check.mjs",
+            "src/orders-reading/index.ts",
+            "test/helpers.ts",
+            "src/x.ts",
+        ] {
             assert!(!Target::Node.within_layout(path, &stems), "`{path}` is outside the layout");
         }
     }
@@ -5768,7 +5721,6 @@ mod tests {
             "clippy.toml",
             "deny.toml",
             ".gitignore",
-            "README.md",
             "src/lib.rs",
             "src/routes.rs",
             "src/messaging.rs",
@@ -5787,6 +5739,7 @@ mod tests {
             assert!(Target::Omnia.within_layout(path, &stems), "`{path}` is within the layout");
         }
         for path in [
+            "README.md",
             "src/main.rs",
             "app/src/lib.rs",
             "tests/orders.rs",
@@ -5873,13 +5826,13 @@ mod tests {
             },
             Landed {
                 commit: "000000000000".to_owned(),
-                subject: "Greenfield".to_owned(),
+                subject: "Initialise".to_owned(),
                 revision: None,
                 slice: None,
                 wave: None,
                 requirements: Vec::new(),
                 covered: Vec::new(),
-                files: vec![".gitignore".to_owned(), "README.md".to_owned()],
+                files: vec![".gitignore".to_owned()],
             },
         ];
         let build = build_from(1, "", &stderr, history);
@@ -5896,7 +5849,7 @@ mod tests {
             ]
         );
         let integrated = build.integrated();
-        assert_eq!(integrated.len(), 2, "the greenfield root is no slice");
+        assert_eq!(integrated.len(), 2, "the root the engine laid is no slice");
         assert_eq!(integrated[0].id, "SLICE-001");
         assert_eq!(integrated[1].name, "orders");
         assert_eq!(integrated[1].uncovered(), ["REQ-003"]);
@@ -5929,30 +5882,13 @@ mod tests {
         assert_eq!(build.verified(), 2);
     }
 
-    // The push fails once every wave is verified, and its message names none.
-    #[test]
-    fn build_push_refused() {
-        let stderr = completion("build-SLICE-001", "ok")
-            + &completion("verify", "ok")
-            + &completion("build-SLICE-002", "ok")
-            + &completion("verify", "ok")
-            + "{\n  \"error\": \"label-diverged\",\n  \"message\": \"pushing `emery/feb4` to \
-               `origin` failed; `emery/feb4` stays at `bbbb` and nothing was forced: the remote's \
-               `emery/feb4` holds commits this build does not\",\n  \"exit-code\": 1\n}\n";
-        let build = build_from(1, "", &stderr, Vec::new());
-        assert_eq!(build.code(), Some("label-diverged"));
-        assert_eq!(build.wave_failed(), None);
-        assert_eq!(build.waves(), 2);
-        assert_eq!(build.verified(), 2);
-    }
-
     #[test]
     fn build_chain() {
         let text = "\x1ecccc\x1fWave 2 verified\x1ffeb4bd36\n\x1f\x1f\x1f\x1f\x1f\n\n\
                     package-lock.json\n\
                     \x1ebbbb\x1fSLICE-002 orders\x1ffeb4bd36\n\x1fSLICE-002\n\x1f2\n\
                     \x1fREQ-002, REQ-003\n\x1fREQ-002\n\x1f\n\nsrc/index.ts\nsrc/orders/index.ts\n\
-                    \x1eaaaa\x1fGreenfield\x1f\x1f\x1f\x1f\x1f\x1f\n\n.gitignore\nREADME.md\n";
+                    \x1eaaaa\x1fInitialise\x1f\x1f\x1f\x1f\x1f\x1f\n\n.gitignore\n";
         let chain = chain(text);
         assert_eq!(chain.len(), 3);
         assert_eq!(chain[0].slice, None);
@@ -5964,9 +5900,9 @@ mod tests {
         assert_eq!(chain[1].requirements, ["REQ-002", "REQ-003"]);
         assert_eq!(chain[1].covered, ["REQ-002"]);
         assert_eq!(chain[1].files, ["src/index.ts", "src/orders/index.ts"]);
-        assert_eq!(chain[2].subject, "Greenfield");
+        assert_eq!(chain[2].subject, "Initialise");
         assert_eq!(chain[2].revision, None, "the root is under no revision");
-        assert_eq!(chain[2].files.len(), 2);
+        assert_eq!(chain[2].files, [".gitignore"]);
     }
 
     #[test]

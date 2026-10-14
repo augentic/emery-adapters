@@ -17,3 +17,5 @@ workspace = true
 
 [dependencies]
 emery-sdk.workspace = true
+omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
+# omnia-template = { path = "../omnia-exemplar/templates/guest" }
