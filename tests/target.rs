@@ -853,9 +853,10 @@ async fn omnia_verify_stem_clean() {
 
 // A handler no statement of the two root lists reaches is code the host
 // never runs: the verdict is refused with the handler named at its line,
-// whatever its tests pass, while a handler a `.route(..)` statement names,
-// and a helper handed the provider rather than the `Context`, pass. The
-// statement added is the repair.
+// whatever its tests pass, including one sharing a function name with a
+// handler another module lists, while the listed handler, and a helper
+// handed the provider rather than the `Context`, pass. The statement added
+// is the repair.
 #[tokio::test]
 async fn omnia_handler_unlisted() {
     let project = omnia_tree();
@@ -871,15 +872,23 @@ async fn omnia_handler_unlisted() {
          /// List the orders.\npub async fn list_orders<P>(\n    input: ListOrders,\n    context: Context<P>,\n) -> omnia_sdk::Result<Vec<Order>> {\n    todo!()\n}\n\n\
          /// The key of an order.\npub async fn key<P: omnia_sdk::StateStore>(provider: &P, id: &str) -> String {\n    format!(\"orders/{id}\")\n}\n",
     );
+    project.write(
+        "crates/payments/src/reading.rs",
+        "//! Reads payments.\n\nuse omnia_sdk::api::Context;\n\n\
+         /// Read one order's payment.\npub async fn get_order<P>(input: GetOrder, context: Context<P>) -> omnia_sdk::Result<Order> {\n    todo!()\n}\n",
+    );
     let listing = "    let router = router.route(\n        common::routes::http::ORDERS,\n        \
                    omnia_sdk::api::http::get(orders::reading::list_orders),\n    );\n";
     let model = Scripted::answering([PASSED, PASSED]).calling(
         1,
-        [edit_files(&[(
-            "src/routes.rs",
-            OMNIA_ROUTE_LINE,
-            &format!("{OMNIA_ROUTE_LINE}{listing}"),
-        )])],
+        [
+            edit_files(&[(
+                "src/routes.rs",
+                OMNIA_ROUTE_LINE,
+                &format!("{OMNIA_ROUTE_LINE}{listing}"),
+            )]),
+            delete_files(&["crates/payments/src/reading.rs"]),
+        ],
     );
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the listed tree is accepted");
@@ -887,13 +896,13 @@ async fn omnia_handler_unlisted() {
 
     assert!(verdict.passed);
     let correction = correction(&model);
-    assert!(
-        correction.contains(
-            "crates/orders/src/reading.rs:11: handler `list_orders` is reached by no list statement"
-        ),
-        "the unlisted handler is named at its line: {correction}"
-    );
-    for named in ["`get_order`", "`key`"] {
+    for line in [
+        "crates/orders/src/reading.rs:11: handler `list_orders` is reached by no list statement",
+        "crates/payments/src/reading.rs:6: handler `get_order` is reached by no list statement",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["crates/orders/src/reading.rs:6", "`key`"] {
         assert!(!correction.contains(named), "{named} is no finding: {correction}");
     }
     assert!(

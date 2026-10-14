@@ -307,17 +307,20 @@ impl<'a> Tree<'a> {
         }
         let mut modules = Vec::new();
         for file in self.modules()? {
-            modules.push((self.relative(&file), read(&file)?));
+            let path = self.relative(&file);
+            if let Some(module) = module_path(&path) {
+                modules.push((path, module, read(&file)?));
+            }
         }
 
         // what the lists hand, then what a route function they call hands
-        let mut reached: Vec<&str> = lists
+        let mut reached: Vec<String> = lists
             .iter()
             .flat_map(|text| calls(text, ".route("))
-            .filter_map(|(_, statement)| handed(statement))
+            .filter_map(|(_, statement)| handed(statement).map(str::to_owned))
             .collect();
-        for (_, text) in &modules {
-            for (route, handler) in constructed(text) {
+        for (_, module, text) in &modules {
+            for (route, handler) in constructed(module, text) {
                 if reached.contains(&route) && !reached.contains(&handler) {
                     reached.push(handler);
                 }
@@ -325,9 +328,10 @@ impl<'a> Tree<'a> {
         }
 
         let mut lines = Vec::new();
-        for (path, text) in &modules {
+        for (path, module, text) in &modules {
             for (number, name) in handlers(text) {
-                if !reached.contains(&name) {
+                let full = format!("{module}::{name}");
+                if !reached.contains(&full) {
                     lines.push(format!(
                         "{path}:{number}: handler `{name}` is reached by no list statement"
                     ));
@@ -431,45 +435,43 @@ fn calls<'t>(text: &'t str, callee: &str) -> Vec<(usize, &'t str)> {
     found
 }
 
-// The name a `.route(..)` statement hands, read from the call its second
-// argument makes: the last segment of the call's first argument where it
-// has one, `get(<handler>)`, `consume(<handler>)`, `consume_with(<handler>,
-// <decode>)`; the callee's own last segment where it has none, a route
-// function of a stem, `orders::placing::place_order_route()`. A statement
-// in another shape hands none.
+// The path a `.route(..)` statement hands, read from the call its second
+// argument makes: the call's first argument where it has one,
+// `get(<handler>)`, `consume(<handler>)`, `consume_with(<handler>,
+// <decode>)`; the callee itself where it has none, a route function of a
+// stem, `orders::placing::place_order_route()`. A statement in another
+// shape hands none.
 fn handed(statement: &str) -> Option<&str> {
     let call = arguments(statement).get(1)?.trim();
     let open = call.find('(')?;
     let close = call.rfind(')')?;
     let inner = call.get(open + 1..close)?;
     match arguments(inner).first().map(|argument| argument.trim()) {
-        Some("") | None => segment(&call[..open]),
-        Some(handler) => segment(handler),
+        Some("") | None => qualified(&call[..open]),
+        Some(handler) => qualified(handler),
     }
 }
 
-// Every route function `text` declares with the handler it hands
-// `handle_with` as the call's second argument, each `(<fn>, <handler>)`.
-fn constructed(text: &str) -> Vec<(&str, &str)> {
+// Every route function `text` declares in `module` with the handler it
+// hands `handle_with` as the call's second argument, each qualified as
+// `(<fn>, <handler>)`.
+fn constructed(module: &str, text: &str) -> Vec<(String, String)> {
     calls(text, "handle_with(")
         .into_iter()
         .filter_map(|(at, inner)| {
             let route = declared(&text[..at])?;
-            let handler = segment(arguments(inner).get(1)?)?;
-            Some((route, handler))
+            let handler = qualify(module, arguments(inner).get(1)?)?;
+            Some((format!("{module}::{route}"), handler))
         })
         .collect()
 }
 
-// The name of the last `fn` declared in `head`, the one a call there sits
-// in.
+// The name of the last `pub fn` declared in `head`, the one a call there
+// sits in.
 fn declared(head: &str) -> Option<&str> {
-    head.rmatch_indices("fn ").find_map(|(at, _)| {
-        let before = head[..at].chars().next_back();
-        if before.is_some_and(identifier) {
-            return None;
-        }
-        let name = head[at + "fn ".len()..].split(|ch: char| !identifier(ch)).next()?;
+    head.lines().rev().find_map(|line| {
+        let rest = line.trim_start().strip_prefix("pub fn ")?;
+        let name = rest.split(|ch: char| !identifier(ch)).next()?;
         (!name.is_empty()).then_some(name)
     })
 }
@@ -494,11 +496,48 @@ fn arguments(text: &str) -> Vec<&str> {
     parts
 }
 
-// The last segment of a path, `place_order` of `orders::placing::place_order`
-// or bare; a text that is no path has none.
-fn segment(path: &str) -> Option<&str> {
-    let name = path.trim().rsplit("::").next()?;
-    (!name.is_empty() && name.chars().all(identifier)).then_some(name)
+// The Rust module path of a `.rs` file under `crates/<stem>/src/`,
+// `orders::reading` for `crates/orders/src/reading.rs`.
+fn module_path(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("crates/")?.strip_suffix(".rs")?;
+    let (stem, module) = rest.split_once("/src/")?;
+    let stem = stem.replace('-', "_");
+    let module = module.strip_suffix("/mod").unwrap_or(module);
+    if module == "lib" {
+        Some(stem)
+    } else {
+        Some(format!("{stem}::{}", module.replace('/', "::")))
+    }
+}
+
+// A `::`-separated path of two or more identifiers,
+// `orders::placing::place_order`; a text in another shape is none.
+fn qualified(path: &str) -> Option<&str> {
+    let path = path.trim();
+    let mut segments = path.split("::");
+    let first = segments.next()?;
+    let second = segments.next()?;
+    (ident(first) && ident(second) && segments.all(ident)).then_some(path)
+}
+
+// `path` qualified under `module` (`orders::placing`): a bare identifier
+// sits in `module`, a `crate::` path in its stem, and a qualified path
+// stands as it is.
+fn qualify(module: &str, path: &str) -> Option<String> {
+    let path = path.trim();
+    if ident(path) {
+        return Some(format!("{module}::{path}"));
+    }
+    if let Some(rest) = path.strip_prefix("crate::") {
+        let stem = module.split("::").next()?;
+        let full = format!("{stem}::{rest}");
+        return qualified(&full).map(str::to_owned);
+    }
+    qualified(path).map(str::to_owned)
+}
+
+fn ident(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(identifier)
 }
 
 fn identifier(ch: char) -> bool {
