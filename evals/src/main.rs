@@ -36,6 +36,10 @@ use emery_sdk::{Anchor, Claim, ClaimKind, Evidence};
 use serde::Deserialize;
 use serde_json::Value;
 
+mod reference;
+
+use reference::Reference;
+
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
 const BOOTSTRAP: &str = "start";
@@ -409,6 +413,10 @@ struct Expected {
     // the requirements the engine reconciles across the sources, exactly
     #[serde(default, rename = "behaviour")]
     behaviours: Vec<Behaviour>,
+    // a hand-written omnia guest of the same behaviour, relative to the
+    // repository root, which a build through `omnia` is compared with and
+    // whose recorded fixtures the built guest is driven through
+    reference: Option<String>,
 }
 
 // One source of the run: the adapter it runs under and what it is bound to,
@@ -575,6 +583,13 @@ impl Expected {
         self.sources.iter().map(|source| source.adapter.as_str())
     }
 
+    fn trees(&self) -> impl Iterator<Item = &str> {
+        self.sources
+            .iter()
+            .filter_map(|source| source.fixture.as_deref())
+            .chain(self.reference.as_deref())
+    }
+
     // The source an item names, or the case's one source when it names none.
     fn source(&self, named: Option<&str>) -> Result<&Source, String> {
         match named {
@@ -593,6 +608,14 @@ impl Expected {
     fn check(&self) -> Result<(), String> {
         if self.sources.is_empty() {
             return Err("names no `[[source]]`".to_owned());
+        }
+        if let Some(reference) = &self.reference
+            && (reference.is_empty() || Path::new(reference).is_absolute())
+        {
+            return Err(format!(
+                "names `reference = \"{reference}\"`, which is not a path relative to the \
+                 repository root"
+            ));
         }
         let mut names = BTreeSet::new();
         for source in &self.sources {
@@ -688,6 +711,12 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
             }
             eprintln!("eval: `{name}` skipped, no fixture at `{fixture}`");
             continue;
+        }
+        for tree in expected.trees() {
+            let path = root.join(tree);
+            if path.is_dir() {
+                check_tree(&path, tree).map_err(|error| format!("{name}: {error}"))?;
+            }
         }
         cases.push(Case {
             name: name.to_owned(),
@@ -825,9 +854,7 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     for entry in fs::read_dir(from)? {
         let entry = entry?;
         let name = entry.file_name();
-        let skipped = UNCOPIED.iter().any(|skip| name == *skip)
-            || name.to_str().is_some_and(|name| name.ends_with(".egg-info"));
-        if skipped {
+        if skipped_entry(&name) {
             continue;
         }
         let target = to.join(&name);
@@ -839,6 +866,363 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn skipped_entry(name: &std::ffi::OsStr) -> bool {
+    UNCOPIED.iter().any(|skip| name == *skip)
+        || name.to_str().is_some_and(|name| name.ends_with(".egg-info"))
+}
+
+// Holds every staged file of a fixture or reference tree at `dir` to the
+// credential gate before any case is accepted or run.
+fn check_tree(dir: &Path, label: &str) -> Result<(), String> {
+    let mut findings = Vec::new();
+    check_tree_files(dir, dir, label, &mut findings)
+        .map_err(|error| format!("{label}: {error}"))?;
+    if findings.is_empty() {
+        Ok(())
+    } else {
+        findings.sort();
+        Err(findings.join("; "))
+    }
+}
+
+fn check_tree_files(
+    root: &Path, dir: &Path, label: &str, findings: &mut Vec<String>,
+) -> io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if skipped_entry(&entry.file_name()) {
+            continue;
+        }
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            check_tree_files(root, &path, label, findings)?;
+            continue;
+        }
+        let Ok(relative) = path.strip_prefix(root) else { continue };
+        let parts: Vec<String> = relative
+            .components()
+            .map(|component| component.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        let rel = parts.join("/");
+        let what = match named_secret(&rel) {
+            Some(what) => Some(what.to_owned()),
+            None => carried_secret(&rel, &fs::read(&path)?),
+        };
+        if let Some(what) = what {
+            findings.push(format!("{label}/{rel}: {what}"));
+        }
+    }
+    Ok(())
+}
+
+// Files that carry a credential by name, matched on the final path segment;
+// `.npmrc` is read for `_authToken=` instead since a fixture may set
+// `legacy-peer-deps` there, and `.env.example` / `.sample` / `.template`
+// document variable names alone.
+const SECRET_CARRIERS: [&str; 9] = [
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    ".netrc",
+    ".git-credentials",
+    ".pgpass",
+    ".pypirc",
+    ".env",
+];
+
+fn named_secret(path: &str) -> Option<&'static str> {
+    let mut segments = path.rsplit('/');
+    let name = segments.next()?;
+    let env_file = name.starts_with(".env.")
+        && !matches!(name, ".env.example" | ".env.sample" | ".env.template");
+    if SECRET_CARRIERS.contains(&name)
+        || env_file
+        || (name == "credentials" && segments.next() == Some(".aws"))
+    {
+        return Some("a file that carries a credential by name");
+    }
+    None
+}
+
+#[derive(Clone, Copy)]
+enum SecretRun {
+    Upper,
+    Alnum,
+    Token,
+    Base64,
+}
+
+impl SecretRun {
+    const fn admits(self, byte: u8) -> bool {
+        match self {
+            Self::Upper => byte.is_ascii_uppercase() || byte.is_ascii_digit(),
+            Self::Alnum => byte.is_ascii_alphanumeric(),
+            Self::Token => byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-',
+            Self::Base64 => {
+                byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/' || byte == b'='
+            }
+        }
+    }
+}
+
+struct SecretShape {
+    prefix: &'static [u8],
+    run: SecretRun,
+    least: usize,
+    what: &'static str,
+}
+
+const SECRET_SHAPES: [SecretShape; 23] = [
+    SecretShape {
+        prefix: b"AKIA",
+        run: SecretRun::Upper,
+        least: 16,
+        what: "an AWS access key id",
+    },
+    SecretShape {
+        prefix: b"ASIA",
+        run: SecretRun::Upper,
+        least: 16,
+        what: "an AWS access key id",
+    },
+    SecretShape {
+        prefix: b"ghp_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"gho_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"ghu_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"ghs_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"ghr_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"github_pat_",
+        run: SecretRun::Token,
+        least: 22,
+        what: "a GitHub token",
+    },
+    SecretShape {
+        prefix: b"npm_",
+        run: SecretRun::Alnum,
+        least: 36,
+        what: "an npm token",
+    },
+    SecretShape {
+        prefix: b"_authToken=",
+        run: SecretRun::Token,
+        least: 20,
+        what: "an npm `_authToken` line",
+    },
+    SecretShape {
+        prefix: b"xoxa-",
+        run: SecretRun::Token,
+        least: 10,
+        what: "a Slack token",
+    },
+    SecretShape {
+        prefix: b"xoxb-",
+        run: SecretRun::Token,
+        least: 10,
+        what: "a Slack token",
+    },
+    SecretShape {
+        prefix: b"xoxp-",
+        run: SecretRun::Token,
+        least: 10,
+        what: "a Slack token",
+    },
+    SecretShape {
+        prefix: b"xoxr-",
+        run: SecretRun::Token,
+        least: 10,
+        what: "a Slack token",
+    },
+    SecretShape {
+        prefix: b"xoxs-",
+        run: SecretRun::Token,
+        least: 10,
+        what: "a Slack token",
+    },
+    SecretShape {
+        prefix: b"sk_live_",
+        run: SecretRun::Alnum,
+        least: 24,
+        what: "a Stripe live key",
+    },
+    SecretShape {
+        prefix: b"rk_live_",
+        run: SecretRun::Alnum,
+        least: 24,
+        what: "a Stripe live key",
+    },
+    SecretShape {
+        prefix: b"AIza",
+        run: SecretRun::Token,
+        least: 35,
+        what: "a Google API key",
+    },
+    SecretShape {
+        prefix: b"glpat-",
+        run: SecretRun::Token,
+        least: 20,
+        what: "a GitLab token",
+    },
+    SecretShape {
+        prefix: b"NRAK-",
+        run: SecretRun::Upper,
+        least: 27,
+        what: "a New Relic key",
+    },
+    SecretShape {
+        prefix: b"NRII-",
+        run: SecretRun::Token,
+        least: 27,
+        what: "a New Relic key",
+    },
+    SecretShape {
+        prefix: b"AccountKey=",
+        run: SecretRun::Base64,
+        least: 20,
+        what: "an Azure Storage account key",
+    },
+    SecretShape {
+        prefix: b"SharedAccessKey=",
+        run: SecretRun::Base64,
+        least: 20,
+        what: "an Azure shared access key",
+    },
+];
+
+fn carried_secret(path: &str, bytes: &[u8]) -> Option<String> {
+    if pem_private_key(bytes) {
+        return Some("a PEM private key block".to_owned());
+    }
+    if let Some(shape) = SECRET_SHAPES.iter().find(|shape| shape.matches(bytes)) {
+        return Some(shape.what.to_owned());
+    }
+    if azure_storage_key(bytes) {
+        return Some("an Azure Storage account key".to_owned());
+    }
+    parameter_secret(path, bytes)
+}
+
+fn pem_private_key(bytes: &[u8]) -> bool {
+    const HEAD: &[u8] = b"-----BEGIN ";
+    const DASHES: &[u8] = b"-----";
+    const PRIVATE: &[u8] = b"PRIVATE KEY";
+
+    byte_occurrences(bytes, HEAD).any(|start| {
+        let rest = &bytes[start + HEAD.len()..];
+        byte_occurrences(rest, DASHES).next().is_some_and(|end| {
+            let label = &rest[..end];
+            label.ends_with(PRIVATE) && !label.contains(&b'\n')
+        })
+    })
+}
+
+impl SecretShape {
+    fn matches(&self, bytes: &[u8]) -> bool {
+        byte_occurrences(bytes, self.prefix).any(|start| {
+            let rest = &bytes[start + self.prefix.len()..];
+            let run = rest.iter().take_while(|byte| self.run.admits(**byte)).count();
+            run >= self.least && rest.get(run) != Some(&b'/')
+        })
+    }
+}
+
+// A 512-bit Azure Storage account key literal: 86 base64 characters and
+// `==` bounded by a quote, `=`, or whitespace, never the `sha512-` prefix
+// of a lockfile's integrity hash.
+fn azure_storage_key(bytes: &[u8]) -> bool {
+    byte_occurrences(bytes, b"==").any(|end| {
+        if end < 86 {
+            return false;
+        }
+        let start = end - 86;
+        let bounded_before = start == 0
+            || matches!(bytes[start - 1], b'"' | b'\'' | b'=' | b' ' | b'\t' | b'\r' | b'\n');
+        let bounded_after = end + 2 == bytes.len()
+            || matches!(bytes[end + 2], b'"' | b'\'' | b',' | b' ' | b'\t' | b'\r' | b'\n');
+        let body = &bytes[start..end];
+        bounded_before
+            && bounded_after
+            && body
+                .iter()
+                .all(|byte| byte.is_ascii_alphanumeric() || *byte == b'+' || *byte == b'/')
+            && body.iter().any(|byte| *byte == b'+' || *byte == b'/')
+    })
+}
+
+// A cloud parameter file (`parameters.json` or `*.parameters.json`) whose
+// key, secret, token, password, or connection-string entry holds a
+// non-empty literal rather than an empty placeholder or expression.
+fn parameter_secret(path: &str, bytes: &[u8]) -> Option<String> {
+    let name = path.rsplit('/').next()?;
+    if name != "parameters.json" && !name.ends_with(".parameters.json") {
+        return None;
+    }
+    let root: Value = serde_json::from_slice(bytes).ok()?;
+    let object = root.get("parameters").and_then(Value::as_object).or_else(|| root.as_object())?;
+    for (key, entry) in object {
+        if secret_parameter_key(key) && has_credential_literal(entry) {
+            return Some(format!("parameter `{key}` carries a credential literal"));
+        }
+    }
+    None
+}
+
+fn secret_parameter_key(key: &str) -> bool {
+    let lower = key.to_ascii_lowercase();
+    if lower.contains("secret_name") || lower.contains("key_name") {
+        return false;
+    }
+    lower.ends_with("connection_string")
+        || lower.ends_with("connectionstring")
+        || lower
+            .rsplit(['_', '-'])
+            .next()
+            .is_some_and(|last| matches!(last, "key" | "secret" | "token" | "password" | "passwd"))
+}
+
+fn has_credential_literal(value: &Value) -> bool {
+    match value {
+        Value::String(text) => {
+            let trimmed = text.trim();
+            !trimmed.is_empty()
+                && !trimmed.starts_with('[')
+                && !trimmed.starts_with("${")
+                && !trimmed.starts_with("@Microsoft.KeyVault(")
+        }
+        Value::Object(map) => map.values().any(has_credential_literal),
+        _ => false,
+    }
+}
+
+fn byte_occurrences<'a>(bytes: &'a [u8], needle: &'a [u8]) -> impl Iterator<Item = usize> + 'a {
+    (0..bytes.len()).filter(move |start| bytes[*start..].starts_with(needle))
 }
 
 // --- one run ---
@@ -1385,7 +1769,7 @@ fn run(
         && run.passed()
     {
         eprintln!("eval: `{}` run {n} at {rung} building", case.name);
-        let built = build(project, settings, &rust_log, rung, tag, revision, run.spec.as_ref())?;
+        let built = build(project, settings, case, rung, tag, revision, run.spec.as_ref())?;
         run.build = Some(built);
     }
 
@@ -1400,16 +1784,18 @@ const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 // `<tag>.build.stdout`, the pass as `<tag>.fidelity.md`.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn build(
-    project: &Path, settings: &Settings, rust_log: &str, rung: Rung, tag: &str, revision: &str,
+    project: &Path, settings: &Settings, case: &Case, rung: Rung, tag: &str, revision: &str,
     spec: Option<&Value>,
 ) -> io::Result<Build> {
+    let rust_log = settings.rust_log(case);
+    let reference = Reference::locate(&settings.root, case.expected.reference.as_deref());
     let jobs = settings.jobs.map(|jobs| jobs.to_string());
     let mut args = vec!["build", "--config", "emery.toml"];
     if let Some(jobs) = &jobs {
         args.extend(["--jobs", jobs]);
     }
     let started = Instant::now();
-    let output = emery(project, settings, rust_log, rung, &args, Turns::Live)?;
+    let output = emery(project, settings, &rust_log, rung, &args, Turns::Live)?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1435,7 +1821,7 @@ fn build(
     // toolchain the host lacks leaves the cells empty and the card whole
     if let Some(tree) = Tree::left(project, revision, &build) {
         eprintln!("eval: `{tag}` host checks over {tree}");
-        match Fidelity::read(project, tag, &tree, &build, spec, target) {
+        match Fidelity::read(project, tag, &tree, &build, spec, target, reference.as_ref()) {
             Ok(fidelity) => {
                 fs::write(project.join(&fidelity.file), fidelity.to_string())?;
                 build.fidelity = Some(fidelity);
@@ -1542,10 +1928,8 @@ fn rebuilt(
         let text = fs::read_to_string(source.join(format!("{TAG}.{artifact}.json")))?;
         *slot = Some(serde_json::from_str(&text)?);
     }
-    let rust_log = settings.rust_log(case);
     eprintln!("eval: `{}` rebuilding revision `{revision}`", case.name);
-    run.build =
-        Some(build(&project, settings, &rust_log, rung, TAG, &revision, run.spec.as_ref())?);
+    run.build = Some(build(&project, settings, case, rung, TAG, &revision, run.spec.as_ref())?);
 
     Ok(run)
 }
@@ -2257,10 +2641,11 @@ impl Target {
 
     // Every module the layout's lists do not reach, sorted: a handler module
     // `crates/<stem>/src/<part>.rs` no statement of the route list or the
-    // topic list names as `<stem>::<part>::`, a constant of the path or the
-    // topic table no statement of its list names, or a stem's or a part's
-    // `index.ts` the list above it does not re-export. A module's own tests
-    // pass without the list, so the checks cannot see it.
+    // topic list names as `<stem>::<part>::`, a constant of the path table
+    // no statement of the route list names, a constant of the topic table
+    // neither a statement of the topic list nor a stem's module names, or a
+    // stem's or a part's `index.ts` the list above it does not re-export. A
+    // module's own tests pass without the list, so the checks cannot see it.
     fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
         let mut unreached = Vec::new();
         match self {
@@ -2286,21 +2671,12 @@ impl Target {
                 }
             }
             Self::Omnia => {
-                let lists = [
-                    (ROUTE_LIST, PATH_TABLE, "routes::http::"),
-                    (TOPIC_LIST, TOPIC_TABLE, "routes::topic::"),
-                ];
-                let mut statements = String::new();
-                for (list, table, prefix) in lists {
-                    let registered = fs::read_to_string(export.join(list)).unwrap_or_default();
-                    let declared = fs::read_to_string(export.join(table)).unwrap_or_default();
-                    for (name, _) in constants(&declared) {
-                        if !registered.contains(&format!("{prefix}{name}")) {
-                            unreached.push(format!("{table}#{name}"));
-                        }
-                    }
-                    statements.push_str(&registered);
-                }
+                let routes =
+                    code_lines(&fs::read_to_string(export.join(ROUTE_LIST)).unwrap_or_default());
+                let topics =
+                    code_lines(&fs::read_to_string(export.join(TOPIC_LIST)).unwrap_or_default());
+                let statements = format!("{routes}{topics}");
+                let mut modules = Vec::new();
                 let crates = export.join("crates");
                 for stem in directories(&crates)? {
                     if stem == "common" {
@@ -2315,16 +2691,31 @@ impl Target {
                         let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
                             continue;
                         };
-                        if part == "lib" || path.extension().is_none_or(|ext| ext != "rs") {
+                        if path.extension().is_none_or(|ext| ext != "rs") {
                             continue;
                         }
-                        if !fs::read_to_string(&path)?.contains("Context<") {
-                            continue;
+                        let text = code_lines(&fs::read_to_string(&path)?);
+                        if part != "lib" && text.contains("Context<") {
+                            let call = format!("{}::{part}::", stem.replace('-', "_"));
+                            if !statements.contains(&call) {
+                                unreached.push(format!("crates/{stem}/src/{part}.rs"));
+                            }
                         }
-                        let call = format!("{}::{part}::", stem.replace('-', "_"));
-                        if !statements.contains(&call) {
-                            unreached.push(format!("crates/{stem}/src/{part}.rs"));
-                        }
+                        modules.push(text);
+                    }
+                }
+                let http = fs::read_to_string(export.join(PATH_TABLE)).unwrap_or_default();
+                for (name, _) in constants(&http) {
+                    if !spells_word(&routes, &format!("routes::http::{name}")) {
+                        unreached.push(format!("{PATH_TABLE}#{name}"));
+                    }
+                }
+                let topic = fs::read_to_string(export.join(TOPIC_TABLE)).unwrap_or_default();
+                for (name, _) in constants(&topic) {
+                    if !spells_word(&topics, &format!("routes::topic::{name}"))
+                        && !modules.iter().any(|text| spells_word(text, &name))
+                    {
+                        unreached.push(format!("{TOPIC_TABLE}#{name}"));
                     }
                 }
             }
@@ -2386,6 +2777,31 @@ fn constants(table: &str) -> Vec<(String, String)> {
             Some((name.trim().to_owned(), text.to_owned()))
         })
         .collect()
+}
+
+fn code_lines(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| if line.trim_start().starts_with("//") { "\n" } else { line })
+        .collect()
+}
+
+fn spells_word(text: &str, word: &str) -> bool {
+    if word.is_empty() {
+        return false;
+    }
+    let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+    let mut from = 0;
+    while let Some(at) = text[from..].find(word) {
+        let start = from + at;
+        let end = start + word.len();
+        let before = text[..start].chars().next_back().is_none_or(|ch| !ident(ch));
+        let after = text[end..].chars().next().is_none_or(|ch| !ident(ch));
+        if before && after {
+            return true;
+        }
+        from = end;
+    }
+    false
 }
 
 // One `.route(<path>, <method>(<handler>))` statement of a root list: the
@@ -2569,8 +2985,10 @@ fn reexported(list: &str, name: &str) -> bool {
 // What the host's own checks say of the tree a build left: the layout's
 // three checks run in a fresh export of the tip, the tests they ran, the
 // scenarios of the merged slices a test is named by, the modules the
-// layout's lists do not reach, the tracked files outside the layout, and
-// what the checks wrote besides the lockfile.
+// layout's lists do not reach, the tracked files outside the layout, what
+// the checks wrote besides the lockfile, and, for an `omnia` build of a
+// case naming a reference guest, the tree measured against it and its
+// fixtures driven through the guest.
 struct Fidelity {
     // the file beside the run's log the pass is written to
     file: String,
@@ -2587,6 +3005,7 @@ struct Fidelity {
     routes: Vec<Route>,
     outside: Vec<String>,
     wrote: Vec<String>,
+    reference: Option<reference::Comparison>,
 }
 
 // One route a module of the tree mounts, as its source spells it; a probe
@@ -2657,7 +3076,8 @@ enum Named {
 impl Fidelity {
     #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
     fn read(
-        project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>, target: Target,
+        project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
+        target: Target, reference: Option<&Reference>,
     ) -> io::Result<Self> {
         let (repo, tip) = tree.at();
         let export = project.join(format!("{tag}.fidelity"));
@@ -2741,6 +3161,19 @@ impl Fidelity {
             .into_iter()
             .filter(|path| path != target.lockfile() && !tracked.contains(path))
             .collect();
+
+        // the reference guest the case names, measured against the tree and
+        // its fixtures driven through the guest, for an omnia build alone
+        let reference =
+            reference.filter(|_| matches!(target, Target::Omnia)).and_then(|reference| {
+                match reference.compare(&export) {
+                    Ok(comparison) => Some(comparison),
+                    Err(error) => {
+                        eprintln!("eval: `{tag}` reference not compared: {error}");
+                        None
+                    }
+                }
+            });
         fs::remove_dir_all(&export)?;
 
         Ok(Self {
@@ -2756,6 +3189,7 @@ impl Fidelity {
             routes,
             outside,
             wrote,
+            reference,
         })
     }
 
@@ -2961,7 +3395,13 @@ impl Display for Fidelity {
         listed(f, "## Modules the lists do not reach", "modules no list names", &self.unreached)?;
         self.routes_section(f)?;
         listed(f, "## Files outside the layout", "tracked files outside it", &self.outside)?;
-        listed(f, "## What the checks wrote", "paths besides the lockfile", &self.wrote)
+        listed(f, "## What the checks wrote", "paths besides the lockfile", &self.wrote)?;
+
+        // the reference
+        if let Some(comparison) = &self.reference {
+            write!(f, "{comparison}")?;
+        }
+        Ok(())
     }
 }
 
@@ -4463,6 +4903,9 @@ fn build_findings(
             fidelity.scenarios_cell(),
             fidelity.file,
         )?;
+        if let Some(comparison) = &fidelity.reference {
+            writeln!(f, "- {} (`{}`)", comparison.finding(), fidelity.file)?;
+        }
     }
     Ok(())
 }
@@ -5178,6 +5621,7 @@ mod tests {
             ],
             outside: vec!["scripts/check.mjs".to_owned()],
             wrote: Vec::new(),
+            reference: None,
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 12/12");
@@ -5219,6 +5663,7 @@ mod tests {
             routes: Vec::new(),
             outside: Vec::new(),
             wrote: Vec::new(),
+            reference: None,
         };
         assert!(fidelity.clean());
         assert_eq!(fidelity.host_cell(), "ok 7/7");
@@ -5349,6 +5794,7 @@ mod tests {
                 (
                     "crates/common/src/routes/topic.rs",
                     "//! Topics.\n\n/// Placed.\npub const ITEM_PLACED: &str = \"items-placed.v1\";\n\
+                     /// Shipped.\npub const ITEM_SHIPPED: &str = \"items-shipped.v1\";\n\
                      /// Unwired.\npub const ITEM_LOST: &str = \"items-lost.v1\";\n",
                 ),
                 ("crates/common/src/config.rs", "pub async fn env(provider: &impl Config) {}\n"),
@@ -5367,7 +5813,8 @@ mod tests {
                 ),
                 (
                     "crates/order-items/src/fulfilment.rs",
-                    "pub async fn on_placed<P>(input: Item, context: Context<P>) -> Result<()> {}\n",
+                    "pub async fn on_placed<P>(input: Item, context: Context<P>) -> Result<()> {\n    \
+                     let _ = common::routes::topic::ITEM_SHIPPED;\n}\n",
                 ),
                 (
                     "crates/order-items/src/placing.rs",
@@ -6036,19 +6483,72 @@ mod tests {
         .expect("a loser among the claims' sources under a disagreement");
     }
 
+    #[test]
+    fn reference_path() {
+        let one = "[[source]]\nadapter = \"typescript\"\nfixture = \"f\"\n";
+        let named = case(&format!("reference = \"evals/cases/train/reference\"\n{one}"))
+            .expect("a reference relative to the root");
+        assert_eq!(named.reference.as_deref(), Some("evals/cases/train/reference"));
+        assert_eq!(case(one).unwrap().reference, None, "a case need name no reference");
+
+        let absolute = refused(&format!("reference = \"/tmp/reference\"\n{one}"));
+        assert!(absolute.contains("not a path relative to the repository root"), "{absolute}");
+        let empty = refused(&format!("reference = \"\"\n{one}"));
+        assert!(empty.contains("not a path relative"), "{empty}");
+    }
+
     // Every committed case parses under the shape, with every item at a
-    // source of its case.
+    // source of its case, and every committed fixture and reference tree
+    // passes the credential gate.
     #[test]
     fn committed_cases_parse() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let mut seen = 0;
+        let mut checked = BTreeSet::new();
         for entry in fs::read_dir(root.join(CASES)).unwrap() {
             let dir = entry.unwrap().path();
             let Ok(text) = fs::read_to_string(dir.join("expected.toml")) else { continue };
-            case(&text).unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
+            let expected = case(&text).unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
+            for tree in expected.trees() {
+                let path = root.join(tree);
+                if path.is_dir() && checked.insert(tree.to_owned()) {
+                    check_tree(&path, tree)
+                        .unwrap_or_else(|error| panic!("{}: {error}", dir.display()));
+                }
+            }
             seen += 1;
         }
         assert!(seen > 0, "the cases are beside the runner");
+        check_tree(&root.join("examples"), "examples")
+            .unwrap_or_else(|error| panic!("examples: {error}"));
+    }
+
+    #[test]
+    fn fixture_credentials() {
+        assert_eq!(named_secret(".env"), Some("a file that carries a credential by name"));
+        assert_eq!(
+            named_secret("config/.env.production"),
+            Some("a file that carries a credential by name")
+        );
+        assert_eq!(named_secret(".env.example"), None);
+        assert_eq!(named_secret(".npmrc"), None);
+
+        let nr_populated =
+            br#"{"new_relic_license_key":{"all":"0123456789abcdef0123456789abcdef01234567"}}"#;
+        assert_eq!(
+            carried_secret("azure/parameters.json", nr_populated).as_deref(),
+            Some("parameter `new_relic_license_key` carries a credential literal")
+        );
+        let nr_empty = br#"{"new_relic_license_key":{"all":"","vnet-prod":""},"key_vault_secret_name_confluent_key":{"all":"realtime-confluent-key"}}"#;
+        assert_eq!(carried_secret("azure/parameters.json", nr_empty), None);
+
+        let storage_key = format!("\"{}a+b/==\"", "A".repeat(82));
+        assert_eq!(
+            carried_secret("config.json", storage_key.as_bytes()).as_deref(),
+            Some("an Azure Storage account key")
+        );
+        let lockfile_hash = format!("\"integrity\": \"sha512-{}a+b/==\"", "A".repeat(82));
+        assert_eq!(carried_secret("package-lock.json", lockfile_hash.as_bytes()), None);
     }
 
     fn spec(requirements: &Value) -> Value {

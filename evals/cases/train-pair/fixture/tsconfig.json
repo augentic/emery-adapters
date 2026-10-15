@@ -1,0 +1,14 @@
+{
+    "extends": "build-common/base/tsconfig",
+    "compilerOptions": {
+        "rootDir": "./",
+        "outDir": "dist"
+    },
+    "include": [
+        "src/**/*.ts",
+        "test/**/*.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}

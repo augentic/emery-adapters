@@ -1,0 +1,41 @@
+[package]
+name = "position-adapter"
+description = "Train position adapter"
+readme = "README.md"
+publish = false
+authors.workspace = true
+categories.workspace = true
+edition.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+common.workspace = true
+http.workspace = true
+http-body-util.workspace = true
+omnia-sdk.workspace = true
+quick-xml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_repr.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+omnia-test = { workspace = true, features = ["guest"] }
