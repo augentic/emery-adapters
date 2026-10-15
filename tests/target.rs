@@ -1145,6 +1145,86 @@ async fn omnia_build_crate_private_miss_refused() {
     );
 }
 
+// A miss answered empty with no `return` — an `Ok(HashMap::new())` standing
+// as the function's tail once the hit has returned above it, and a `None`
+// arm answering `Ok(BTreeMap::new())` — is named at its line as the
+// returning spellings are, while the fetch helper's own empty tail, in a
+// function of its own, is none. The slice's own turn lays the fetch into
+// both reads, and the accepted report names the module.
+#[tokio::test]
+async fn omnia_build_tail_miss_refused() {
+    let project = scratch();
+    let tail = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        return \
+                Ok(serde_json::from_slice(&bytes)?);\n    }\n    Ok(HashMap::new())\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
+                   fetch_fees(provider).await?;\n    StateStore::set(provider, FEES_KEY, &bytes, \
+                   Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
+    let arm = "        None => Ok(BTreeMap::new()),\n";
+    let loaded = "        None => {\n            let bytes = fetch_fees(provider).await?;\n            \
+                  StateStore::set(provider, SURCHARGES_KEY, &bytes, Some(3600)).await?;\n            \
+                  Ok(serde_json::from_slice(&bytes)?)\n        }\n";
+    let module = |fees: &str, none: &str| {
+        format!(
+            "//! Fees by region.\n\nuse std::collections::{{BTreeMap, HashMap}};\n\nuse \
+             omnia_sdk::{{HttpRequest, StateStore}};\n\n/// The store key the fee table sits \
+             under.\npub const FEES_KEY: &str = \"fees/table\";\n\n/// The store key the surcharge \
+             table sits under.\npub const SURCHARGES_KEY: &str = \"fees/surcharges\";\n\n/// The fee \
+             table, fetched when the store holds none.\n///\n/// # Errors\n///\n/// `bad_gateway` \
+             when the upstream refuses.\npub async fn fees<P: HttpRequest + StateStore>(provider: \
+             &P) -> omnia_sdk::Result<HashMap<String, u32>> {{\n{fees}}}\n\n/// The surcharge \
+             table, fetched when the store holds none.\n///\n/// # Errors\n///\n/// `bad_gateway` \
+             when the upstream refuses.\npub async fn surcharges<P: HttpRequest + \
+             StateStore>(provider: &P) -> omnia_sdk::Result<BTreeMap<String, u32>> {{\n    match \
+             StateStore::get(provider, SURCHARGES_KEY).await? {{\n        Some(bytes) => \
+             Ok(serde_json::from_slice(&bytes)?),\n{none}    }}\n}}\n\nasync fn fetch_fees<P: \
+             HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    Ok(Vec::new())\n}}\n"
+        )
+    };
+    let first_tree = module(tail, arm);
+    let written = [
+        ("crates/fees/Cargo.toml", "[package]\nname = \"fees\"\n"),
+        ("crates/fees/src/lib.rs", "//! The `fees` stem.\n\npub mod table;\n"),
+        ("crates/fees/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/fees/Cargo.toml", "crates/fees/src/lib.rs", "crates/fees/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report]).calling(0, [write_files(&written)]).calling(
+        1,
+        [edit_files(&[
+            ("crates/fees/src/table.rs", tail, fetched),
+            ("crates/fees/src/table.rs", arm, loaded),
+        ])],
+    );
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "crates/fees/src/table.rs:22: a miss answered as no entries (`Ok(HashMap::new())`) after \
+         the read at line 19",
+        "crates/fees/src/table.rs:33: a miss answered as no entries (`None => Ok(BTreeMap::new())`) \
+         after the read at line 31",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/fees/src/table.rs:").count(),
+        2,
+        "the fetch helper's own empty tail is no finding: {correction}"
+    );
+    assert_eq!(
+        text(&project, "crates/fees/src/table.rs").matches("StateStore::set(provider, ").count(),
+        2,
+        "both misses fetch and store the table"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/fees/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
 // A stem is one word, so a crate the turn lays under the head of a
 // hyphenated stem of the slice, `crates/order/` holding the rest as a part
 // of `order-items`, is refused at the build with the directory named, while

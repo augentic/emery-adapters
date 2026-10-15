@@ -255,14 +255,12 @@ impl<'a> Tree<'a> {
                 }
                 let end = function_end(&all, index);
                 for at in answering(&all, index, end) {
-                    for (spelling, what) in EMPTY {
-                        if all[at].contains(spelling) {
-                            lines.push(format!(
-                                "{path}:{}: {what} (`{spelling}`) after the read at line {}",
-                                at + 1,
-                                index + 1
-                            ));
-                        }
+                    if let Some((spelling, what)) = empty(all[at]) {
+                        lines.push(format!(
+                            "{path}:{}: {what} (`{spelling}`) after the read at line {}",
+                            at + 1,
+                            index + 1
+                        ));
                     }
                 }
             }
@@ -820,31 +818,54 @@ const LOADER: &[(&str, &str)] = &[
     ("provider().access_token", "a token warmed before use"),
 ];
 
-// How a miss is answered empty in the function that reads the store under a
-// constant key: an empty collection returned, the miss defaulted, or the
-// `None` arm answered as nothing.
-const EMPTY: &[(&str, &str)] = &[
-    ("return Ok(Vec::new())", "a miss answered as no entries"),
-    ("return Ok(HashMap::new())", "a miss answered as no entries"),
-    ("return Ok(BTreeMap::new())", "a miss answered as no entries"),
-    ("return Ok(HashSet::new())", "a miss answered as no entries"),
-    ("return Ok(BTreeSet::new())", "a miss answered as no entries"),
-    ("return Ok(vec![])", "a miss answered as no entries"),
-    ("return Ok(Default::default())", "a miss answered as no entries"),
-    (".unwrap_or_default()", "a miss defaulted"),
-    (".unwrap_or_else(Vec::new)", "a miss defaulted"),
-    (".unwrap_or_else(HashMap::new)", "a miss defaulted"),
-    (".unwrap_or_else(Default::default)", "a miss defaulted"),
-    (".unwrap_or(Vec::new())", "a miss defaulted"),
-    ("None => Vec::new()", "a miss answered as no entries"),
-    ("None => HashMap::new()", "a miss answered as no entries"),
-    ("None => BTreeMap::new()", "a miss answered as no entries"),
-    ("None => vec![]", "a miss answered as no entries"),
-    ("None => Default::default()", "a miss answered as no entries"),
-    ("None => Ok(Vec::new())", "a miss answered as no entries"),
-    ("None => Ok(HashMap::new())", "a miss answered as no entries"),
-    ("None => return Ok(Vec::new())", "a miss answered as no entries"),
+// The empty collections a miss is answered as, each spelled whole: behind a
+// `return Ok(..)`, on the `None` arm bare or in `Ok(..)`, or as the tail
+// expression once the hit has returned above it.
+const NOTHING: &[&str] = &[
+    "Vec::new()",
+    "HashMap::new()",
+    "BTreeMap::new()",
+    "HashSet::new()",
+    "BTreeSet::new()",
+    "vec![]",
+    "Default::default()",
 ];
+
+// How a miss is defaulted on its way to the answer, anywhere in a line.
+const DEFAULTED: &[&str] = &[
+    ".unwrap_or_default()",
+    ".unwrap_or_else(Vec::new)",
+    ".unwrap_or_else(HashMap::new)",
+    ".unwrap_or_else(Default::default)",
+    ".unwrap_or(Vec::new())",
+];
+
+// The spelling by which `line` answers a miss empty, and what it is: one of
+// `NOTHING` returned or on the `None` arm anywhere in the line, or standing
+// as the line whole, bare or in `Ok(..)`, since `Ok(Vec::new())` inside a
+// longer line is an argument rather than the answer; else one of
+// `DEFAULTED`.
+fn empty(line: &str) -> Option<(String, &'static str)> {
+    let text = line.trim();
+    let nothing = NOTHING.iter().find_map(|nothing| {
+        let spelt = [
+            format!("return Ok({nothing})"),
+            format!("None => Ok({nothing})"),
+            format!("None => {nothing}"),
+        ];
+        let tail = format!("Ok({nothing})");
+        spelt
+            .into_iter()
+            .find(|spelling| line.contains(spelling.as_str()))
+            .or_else(|| (text == tail || text == *nothing).then(|| text.to_owned()))
+    });
+    nothing.map(|spelling| (spelling, "a miss answered as no entries")).or_else(|| {
+        DEFAULTED
+            .iter()
+            .find(|defaulted| line.contains(*defaulted))
+            .map(|defaulted| ((*defaulted).to_owned(), "a miss defaulted"))
+    })
+}
 
 // The lines a constant-keyed `StateStore::get` is read with where the
 // function it sits in cannot be found: the `let .. else` block, or the
