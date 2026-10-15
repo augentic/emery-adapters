@@ -1333,6 +1333,23 @@ test reference_fixtures ... ok
     }
 
     #[test]
+    fn oracle_shared_reads() {
+        let output = "\
+oracle-inbound dev-orders.v1
+oracle static/0001 | 2 events | fail: published 0 events, 2 recorded; logged: WARN orders::inbound: rates missing route=12
+oracle replay/4247 | 0 events | pass
+oracle-outbound dev-order-positions.v1
+oracle-shared /stops, /routes?all=true
+";
+        let oracle = Oracle::parse(output);
+        assert_eq!(oracle.shared, ["/stops", "/routes?all=true"]);
+        assert_eq!(oracle.outcomes[0].reasons[1], "logged: WARN orders::inbound: rates missing route=12");
+        let text = oracle.to_string();
+        assert!(text.contains("- `/stops`, `/routes?all=true` answered from another fixture's"), "{text}");
+        assert!(Oracle::parse("oracle-outbound \n").shared.is_empty());
+    }
+
+    #[test]
     fn oracle_without_a_topic() {
         let oracle = Oracle::parse("oracle-none no inbound topic consumed among: dev-a, a\n");
         assert_eq!(oracle.cell(), "not run");
@@ -1431,10 +1448,26 @@ serde_json.workspace = true
             additions.contains(".dev-dependencies.chrono-tz]\nversion = \"0.10\""),
             "{additions}"
         );
+        assert!(additions.contains(".dev-dependencies.tracing]\nversion = \"0.1\""), "{additions}");
         assert!(!additions.contains("serde_json"), "{additions}");
         let appended: toml::Table =
             format!("{}\n{additions}", toml::to_string(&manifest).unwrap()).parse().unwrap();
-        assert_eq!(dev_dependency_names(&appended).len(), 7);
+        assert_eq!(package_dependency_names(&appended).len(), 8);
+        assert!(dev_dependency_additions(&appended).unwrap().is_empty(), "added once");
+
+        // a crate the package depends on already serves its tests
+        let depending: toml::Table = "\
+[package]
+name = \"guest\"
+[dependencies]
+tracing = \"0.1\"
+[dev-dependencies]
+omnia-test = \"0.36\"
+tokio = \"1\"
+"
+        .parse()
+        .unwrap();
+        assert!(!dev_dependency_additions(&depending).unwrap().contains("tracing"));
 
         let bare: toml::Table = "[package]\nname = \"guest\"\n".parse().unwrap();
         assert_eq!(
@@ -1457,6 +1490,7 @@ serde_json.workspace = true
                 Measure::names("dependencies", &built, &built),
             ],
             oracle: Oracle::parse("oracle static/0001 | 2 events | pass\n"),
+            log: String::new(),
         };
         assert_eq!(
             comparison.finding(),

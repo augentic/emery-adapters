@@ -45,6 +45,10 @@ use reference::Reference;
 
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
+// A build's turn lays a slice and repairs its findings, so it runs at the
+// ladder's second rung from the start rather than losing a slice to the
+// first.
+const BUILD_RUNG: &str = "1200/240";
 const BOOTSTRAP: &str = "start";
 
 // The run's log filter unless the caller sets one: every adapter the case
@@ -309,6 +313,9 @@ struct Settings {
     jobs: Option<NonZeroUsize>,
     runs: usize,
     ladder: Vec<Rung>,
+    // the one rung every `emery build` runs at, since a slice's turn writes
+    // a tree and repairs its findings where a specify turn answers claims
+    build_rung: Rung,
     model: String,
     // the caller's `RUST_LOG`, when set, over the per-case default
     rust_log: Option<String>,
@@ -358,7 +365,15 @@ impl Settings {
             Err(_) => None,
         };
         let ladder = env::var("EVAL_LADDER").unwrap_or_else(|_| LADDER.to_owned());
-        let ladder: Vec<Rung> = ladder.split(',').map(Rung::parse).collect::<Result<_, _>>()?;
+        let ladder: Vec<Rung> =
+            ladder.split(',').map(|rung| Rung::parse(rung, "EVAL_LADDER")).collect::<Result<
+                _,
+                _,
+            >>()?;
+        let build_rung = Rung::parse(
+            &env::var("EVAL_BUILD_RUNG").unwrap_or_else(|_| BUILD_RUNG.to_owned()),
+            "EVAL_BUILD_RUNG",
+        )?;
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -369,6 +384,7 @@ impl Settings {
             jobs,
             runs,
             ladder,
+            build_rung,
             model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
             max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
@@ -404,14 +420,15 @@ impl Settings {
 
 // One rung of the budget ladder: the backend's cap per completion and its
 // inactivity cut-off, in seconds.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Rung {
     timeout: u64,
     inactivity: u64,
 }
 
 impl Rung {
-    fn parse(text: &str) -> Result<Self, String> {
+    // `text` read as a rung, `variable` the setting it came from.
+    fn parse(text: &str, variable: &str) -> Result<Self, String> {
         let parsed = text.trim().split_once('/').and_then(|(timeout, inactivity)| {
             Some(Self {
                 timeout: timeout.parse().ok()?,
@@ -419,7 +436,7 @@ impl Rung {
             })
         });
         parsed.ok_or_else(|| {
-            format!("EVAL_LADDER: `{text}`: a rung is `<timeout>/<inactivity>` in seconds")
+            format!("{variable}: `{text}`: a rung is `<timeout>/<inactivity>` in seconds")
         })
     }
 }
@@ -1824,8 +1841,8 @@ fn run(
         && settings.target.is_some()
         && run.passed()
     {
-        eprintln!("eval: `{}` run {n} at {rung} building", case.name);
-        let built = build(project, settings, case, rung, tag, revision, run.spec.as_ref())?;
+        eprintln!("eval: `{}` run {n} building at {}", case.name, settings.build_rung);
+        let built = build(project, settings, case, tag, revision, run.spec.as_ref())?;
         run.build = Some(built);
     }
 
@@ -1834,13 +1851,14 @@ fn run(
 
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 
-// One `emery build` of the revision the run committed, into the repository
-// the engine lays for the case, then the host's own pass over the tree it left; the
-// build's log and envelope are kept as `<tag>.build.stderr` /
-// `<tag>.build.stdout`, the pass as `<tag>.fidelity.md`.
+// One `emery build` of the revision the run committed, at the build rung,
+// into the repository the engine lays for the case, then the host's own
+// pass over the tree it left; the build's log and envelope are kept as
+// `<tag>.build.stderr` / `<tag>.build.stdout`, the pass as
+// `<tag>.fidelity.md`.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn build(
-    project: &Path, settings: &Settings, case: &Case, rung: Rung, tag: &str, revision: &str,
+    project: &Path, settings: &Settings, case: &Case, tag: &str, revision: &str,
     spec: Option<&Value>,
 ) -> io::Result<Build> {
     let rust_log = settings.rust_log(case);
@@ -1851,7 +1869,7 @@ fn build(
         args.extend(["--jobs", jobs]);
     }
     let started = Instant::now();
-    let output = emery(project, settings, &rust_log, rung, &args, Turns::Live)?;
+    let output = emery(project, settings, &rust_log, settings.build_rung, &args, Turns::Live)?;
     let wall = started.elapsed();
     let stderr = String::from_utf8_lossy(&output.stderr);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -1984,8 +2002,11 @@ fn rebuilt(
         let text = fs::read_to_string(source.join(format!("{TAG}.{artifact}.json")))?;
         *slot = Some(serde_json::from_str(&text)?);
     }
-    eprintln!("eval: `{}` rebuilding revision `{revision}`", case.name);
-    run.build = Some(build(&project, settings, case, rung, TAG, &revision, run.spec.as_ref())?);
+    eprintln!(
+        "eval: `{}` rebuilding revision `{revision}` at {}",
+        case.name, settings.build_rung
+    );
+    run.build = Some(build(&project, settings, case, TAG, &revision, run.spec.as_ref())?);
 
     Ok(run)
 }
@@ -2803,11 +2824,13 @@ impl Target {
 
     // Every module the layout's lists do not reach, sorted: a handler module
     // `crates/<stem>/src/<part>.rs` no statement of the route list or the
-    // topic list names as `<stem>::<part>::`, a constant of the path table
-    // no statement of the route list names, a constant of the topic table
-    // neither a statement of the topic list nor a stem's module names, or a
-    // stem's or a part's `index.ts` the list above it does not re-export. A
-    // module's own tests pass without the list, so the checks cannot see it.
+    // topic list names as `<stem>::<part>::`, a stem crate `crates/<stem>/`
+    // no Rust file outside it names as `<stem>::`, a constant of the path
+    // table no statement of the route list names, a constant of the topic
+    // table neither a statement of the topic list nor a stem's module names,
+    // or a stem's or a part's `index.ts` the list above it does not
+    // re-export. A module's own tests pass without the list, so the checks
+    // cannot see it.
     fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
         let mut unreached = Vec::new();
         match self {
@@ -2866,6 +2889,28 @@ impl Target {
                         modules.push(text);
                     }
                 }
+
+                // a stem crate nothing outside it names
+                let mut paths = Vec::new();
+                files_under(export, export, "target", &mut paths)?;
+                let mut sources = Vec::new();
+                for path in paths.iter().filter(|path| path.ends_with(".rs")) {
+                    sources.push((path.as_str(), code_lines(&fs::read_to_string(export.join(path))?)));
+                }
+                for stem in directories(&crates)? {
+                    if stem == "common" || !crates.join(&stem).join("Cargo.toml").is_file() {
+                        continue;
+                    }
+                    let own = format!("crates/{stem}/");
+                    let name = stem.replace('-', "_");
+                    if !sources
+                        .iter()
+                        .any(|(path, text)| !path.starts_with(&own) && names_crate(text, &name))
+                    {
+                        unreached.push(own);
+                    }
+                }
+
                 let http = fs::read_to_string(export.join(PATH_TABLE)).unwrap_or_default();
                 for (name, _) in constants(&http) {
                     if !spells_word(&routes, &format!("routes::http::{name}")) {
@@ -2945,6 +2990,22 @@ fn code_lines(text: &str) -> String {
     text.split_inclusive('\n')
         .map(|line| if line.trim_start().starts_with("//") { "\n" } else { line })
         .collect()
+}
+
+// Whether `text` reaches into the crate `name`: `name::` spelled at the
+// head of a path, `use name::..` or `name::module::item`.
+fn names_crate(text: &str, name: &str) -> bool {
+    let path = format!("{name}::");
+    let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
+    let mut from = 0;
+    while let Some(at) = text[from..].find(&path) {
+        let start = from + at;
+        if text[..start].chars().next_back().is_none_or(|ch| !ident(ch) && ch != ':') {
+            return true;
+        }
+        from = start + path.len();
+    }
+    false
 }
 
 fn spells_word(text: &str, word: &str) -> bool {
@@ -4194,7 +4255,8 @@ fn absent(items: &[Item], expected: &Expected, run: &Run) -> Absent {
             (None, 1) => String::new(),
             (None, _) => "?:".to_owned(),
         };
-        let (Ok(of), Ok(span)) = (expected.source(item.source.as_deref()), Anchor::parse(&item.anchor))
+        let (Ok(of), Ok(span)) =
+            (expected.source(item.source.as_deref()), Anchor::parse(&item.anchor))
         else {
             continue;
         };
@@ -4595,8 +4657,10 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             .jobs
             .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
         format!(
-            " · each landed plan built through `{}` into a repository the engine laid under {jobs}",
-            target.name()
+            " · each landed plan built through `{}` into a repository the engine laid under \
+             {jobs} at {} (`EVAL_BUILD_RUNG`)",
+            target.name(),
+            settings.build_rung
         )
     });
     let budget = settings
@@ -5313,7 +5377,8 @@ fn stability(f: &mut Formatter<'_>, label: &str, attempts: &[&Attempt]) -> fmt::
 
     // the band the absent hits fell in, where the case expects any
     if attempts.iter().any(|attempt| attempt.grade.absent.expected > 0) {
-        let hits: Vec<usize> = attempts.iter().map(|attempt| attempt.grade.absent.hits.len()).collect();
+        let hits: Vec<usize> =
+            attempts.iter().map(|attempt| attempt.grade.absent.hits.len()).collect();
         let (low, high) = (hits.iter().min().copied(), hits.iter().max().copied());
         let per_run: Vec<String> = attempts
             .iter()
@@ -5683,12 +5748,39 @@ mod tests {
 
     #[test]
     fn ladder_rungs() {
-        let ladder: Vec<Rung> =
-            LADDER.split(',').map(Rung::parse).collect::<Result<_, _>>().unwrap();
+        let ladder: Vec<Rung> = LADDER
+            .split(',')
+            .map(|rung| Rung::parse(rung, "EVAL_LADDER"))
+            .collect::<Result<_, _>>()
+            .unwrap();
         assert_eq!(ladder.len(), 3);
         assert_eq!(ladder[1].to_string(), "1200/240");
-        assert!(Rung::parse("1200").is_err());
-        assert!(Rung::parse("a/b").is_err());
+        assert_eq!(Rung::parse(BUILD_RUNG, "EVAL_BUILD_RUNG").unwrap(), ladder[1]);
+        assert!(Rung::parse("1200", "EVAL_LADDER").is_err());
+        assert!(
+            Rung::parse("a/b", "EVAL_BUILD_RUNG").unwrap_err().starts_with("EVAL_BUILD_RUNG:")
+        );
+    }
+
+    #[test]
+    fn oracle_args() {
+        let args = Args::parse(["--oracle", "card", "train"].map(String::from).into_iter()).unwrap();
+        assert_eq!(args.oracle.as_deref(), Some("card"));
+        assert!(args.filter.contains("train"));
+        assert!(args.target.is_none(), "the oracle builds nothing");
+        for argv in [
+            &["--oracle", "card"][..],
+            &["--oracle", "card", "--build", "train"][..],
+            &["--oracle", "card", "--facts", "train"][..],
+            &["--oracle", "card", "--target", "node", "train"][..],
+            &["--oracle"][..],
+        ] {
+            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
+        }
+        let omnia = Args::parse(
+            ["--oracle", "card", "--target", "omnia", "train"].map(String::from).into_iter(),
+        );
+        assert!(omnia.is_ok(), "the oracle reads an omnia build");
     }
 
     #[test]
@@ -6005,14 +6097,26 @@ mod tests {
                      /// Unwired.\npub const ITEM_LOST: &str = \"items-lost.v1\";\n",
                 ),
                 ("crates/common/src/config.rs", "pub async fn env(provider: &impl Config) {}\n"),
+                ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
                 ("crates/start/src/lib.rs", "pub mod health_api;\n"),
                 (
                     "crates/start/src/health_api.rs",
                     "pub async fn ready<P>(input: Q, context: Context<P>) -> Result<()> {}\n",
                 ),
+                ("crates/order-items/Cargo.toml", "[package]\nname = \"order-items\"\n"),
                 (
                     "crates/order-items/src/lib.rs",
                     "pub mod fulfilment;\npub mod placing;\npub mod reading;\n",
+                ),
+                ("crates/key-vault/Cargo.toml", "[package]\nname = \"key-vault\"\n"),
+                ("crates/key-vault/src/lib.rs", "pub mod secrets;\n"),
+                (
+                    "crates/key-vault/src/secrets.rs",
+                    "pub async fn fetch<P: Config>(provider: &P) -> Result<String> {}\n",
+                ),
+                (
+                    "crates/key-vault/tests/secrets.rs",
+                    "use key_vault::secrets::fetch;\n#[tokio::test]\nasync fn fetches() {}\n",
                 ),
                 (
                     "crates/order-items/src/reading.rs",
@@ -6042,8 +6146,10 @@ mod tests {
                 "crates/common/src/routes/http.rs#ORPHAN",
                 "crates/common/src/routes/topic.rs#ITEM_LOST",
                 "crates/health/src/health.rs",
+                "crates/key-vault/",
                 "crates/order-items/src/placing.rs",
-            ]
+            ],
+            "a crate its own tests alone name is unreached"
         );
     }
 

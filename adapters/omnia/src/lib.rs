@@ -34,14 +34,17 @@
 //!   shuts it down, or a `Main`, `App`, `Server`, or `Application` type, is
 //!   named with its line, and the module is removed rather than renamed;
 //! - no module under `crates/start/src` loads for another stem: one that
-//!   writes a table to the store or warms an access token is named with its
-//!   line, since a stage reads its table cache-aside and a token is read
-//!   where it is sent, and the module is removed;
+//!   writes a table to the store or warms an access token, through the
+//!   trait or as a method of the provider, is named with its line, since a
+//!   stage reads its table cache-aside and a token is read where it is
+//!   sent, and the module is removed; a write that keeps a flag is the
+//!   simulation's below, not a loader's;
 //! - no read of the store under a constant key answers empty on a miss: a
 //!   table read under one key is fetched from its upstream and stored when
-//!   the store holds none, so a read returning an empty collection or
-//!   defaulting the miss is named with its line, while a read under a key
-//!   built from the input is a lookup and passes;
+//!   the store holds none, so a read whose function returns an empty
+//!   collection, defaults the miss, or answers the `None` arm as nothing is
+//!   named at the answering line, while a read under a key built from the
+//!   input is a lookup and passes;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
@@ -58,7 +61,10 @@
 //!   `Context` — is handed to its route function or consumer by a statement
 //!   of the route list or the topic list, or to `handle_with` by a route
 //!   function of its stem a statement calls, since one no list reaches is
-//!   code the host never runs.
+//!   code the host never runs;
+//! - every setting of the configuration catalog beyond the template's own
+//!   is read by a module outside `common` or a root source, since a key
+//!   nothing reads is a value the deployment supplies for nothing.
 //!
 //! Before a slice's turn, the root `.gitignore` is put back as the template
 //! spells it: the repository the engine lays holds an ignore file of its
@@ -217,8 +223,8 @@ impl<'a> Tree<'a> {
     }
 
     // The rules a build and a verify share: the root manifest outside its
-    // lists, no simulated host, the tables spelled into their lists, every
-    // handler listed.
+    // lists, no simulated host, no miss answered empty, the tables spelled
+    // into their lists, every handler listed, every setting read.
     fn held(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.manifest()?);
@@ -226,11 +232,13 @@ impl<'a> Tree<'a> {
         findings.extend(self.misses()?);
         findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
+        findings.extend(self.settings()?);
         Ok(findings)
     }
 
     // One finding naming every `StateStore::get` under a constant key whose
-    // miss is answered empty, each `<path>:<line>: <what>`: a table read
+    // miss is answered empty within the function that reads, each
+    // `<path>:<line>: <what>` at the line that answers it: a table read
     // under one key is loaded on a miss, so a read answering an empty
     // collection there has laid the cache and lost the table. A read under
     // a key built from the input is a lookup, whose miss is its own, and no
@@ -245,11 +253,17 @@ impl<'a> Tree<'a> {
                 if !constant_keyed(line) {
                     continue;
                 }
-                let window = all[index..all.len().min(index + MISS_WINDOW)].join("\n");
-                if let Some((spelling, what)) =
-                    EMPTY.iter().find(|(spelling, _)| window.contains(spelling))
-                {
-                    lines.push(format!("{path}:{}: {what} (`{spelling}`)", index + 1));
+                let end = function_end(&all, index);
+                for (offset, later) in all[index..end].iter().enumerate() {
+                    for (spelling, what) in EMPTY {
+                        if later.contains(spelling) {
+                            lines.push(format!(
+                                "{path}:{}: {what} (`{spelling}`) after the read at line {}",
+                                index + offset + 1,
+                                index + 1
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -257,6 +271,7 @@ impl<'a> Tree<'a> {
             return Ok(Vec::new());
         }
         lines.sort();
+        lines.dedup();
         Ok(vec![format!(
             "a table read from the store under one key answers empty on a miss, so the table is \
              never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
@@ -393,6 +408,11 @@ impl<'a> Tree<'a> {
                         if spells(line, word) {
                             process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
                         }
+                    }
+                    // a write that is a flag machine's is the simulation's,
+                    // not a loader's
+                    if SIMULATED.iter().any(|(needle, _)| line.contains(needle)) {
+                        continue;
                     }
                     for (word, what) in LOADER {
                         if spells(line, word) {
@@ -634,6 +654,54 @@ impl<'a> Tree<'a> {
         )])
     }
 
+    // One finding naming every `pub const` of the catalog beyond the
+    // template's own that no module outside `common` and no root source
+    // spells, each `<path>:<line>: <what>`: a key nothing reads is a setting
+    // the deployment supplies and the program never consults.
+    fn settings(&self) -> Result<Vec<String>, Error> {
+        let declared = self.constants(CATALOG)?;
+        if declared.is_empty() {
+            return Ok(Vec::new());
+        }
+        let layout: Vec<String> = template(CATALOG)?
+            .lines()
+            .filter_map(|line| {
+                let rest = line.trim_start().strip_prefix("pub const ")?;
+                let name = rest.split(|ch: char| !identifier(ch)).next()?;
+                (!name.is_empty()).then(|| name.to_owned())
+            })
+            .collect();
+        let mut readers = Vec::new();
+        for file in self.modules()? {
+            if !self.relative(&file).starts_with(COMMON) {
+                readers.push(code(&read(&file)?));
+            }
+        }
+        for file in sources(&self.root.join("src"))? {
+            readers.push(code(&read(&file)?));
+        }
+        let mut lines = Vec::new();
+        for (number, name) in declared {
+            if layout.contains(&name) || readers.iter().any(|text| spells(text, &name)) {
+                continue;
+            }
+            lines.push(format!("{CATALOG}:{number}: setting `{name}` is read by no module"));
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![format!(
+            "a setting of the catalog is read by no module, so a value the deployment supplies \
+             under it changes nothing: a key is declared by the slice whose handler reads it \
+             through `Config::get` where the behaviour runs, so read each setting named where \
+             the requirement that states it is implemented, or, where the setting configured the \
+             source's broker, vault, or agent alone and the translation lays nothing for it, \
+             remove its constant and its doc comment from the catalog through \
+             `edit_files`:\n{}",
+            lines.join("\n")
+        )])
+    }
+
     // Every `.rs` file under a stem's `src/`, its `tests/` unread.
     fn modules(&self) -> Result<Vec<PathBuf>, Error> {
         let mut files = Vec::new();
@@ -712,6 +780,9 @@ const START: &str = "crates/start/src/";
 // The shared crate, whose tables declare a constant and publish to none.
 const COMMON: &str = "crates/common/src/";
 
+// The configuration catalog, one `pub const` per key the deployment supplies.
+const CATALOG: &str = "crates/common/src/config.rs";
+
 // What no module under `START` spells, each the process the source was: a
 // function that starts, stops, runs, listens, serves, bootstraps, or shuts
 // it down, or a type that is it. Each is matched as a word, so
@@ -733,14 +804,20 @@ const LIFECYCLE: &[(&str, &str)] = &[
 // What no module under `START` spells once `LIFECYCLE` is clear, each a
 // start-up step that loads for another stem: a table written to the store
 // for a stage to read, or a token warmed before the stem that sends it
-// asks. Each is matched as a word, so `provider.set(` is none.
+// asks, spelled through the trait or as a method of the provider. Each is
+// matched as a word, so `headers.set(` and `access_token_for` are none.
 const LOADER: &[(&str, &str)] = &[
     ("StateStore::set", "a table loaded for another stem"),
-    ("Identity::access_token", "a token warmed before use"),
+    ("StateStore>::set", "a table loaded for another stem"),
+    ("provider.set", "a table loaded for another stem"),
+    ("provider().set", "a table loaded for another stem"),
+    ("store.set", "a table loaded for another stem"),
+    ("access_token", "a token warmed before use"),
 ];
 
-// How a miss is answered empty within `MISS_WINDOW` lines of a constant-keyed
-// `StateStore::get`: an empty collection returned, or the miss defaulted.
+// How a miss is answered empty in the function that reads the store under a
+// constant key: an empty collection returned, the miss defaulted, or the
+// `None` arm answered as nothing.
 const EMPTY: &[(&str, &str)] = &[
     ("return Ok(Vec::new())", "a miss answered as no entries"),
     ("return Ok(HashMap::new())", "a miss answered as no entries"),
@@ -754,11 +831,41 @@ const EMPTY: &[(&str, &str)] = &[
     (".unwrap_or_else(HashMap::new)", "a miss defaulted"),
     (".unwrap_or_else(Default::default)", "a miss defaulted"),
     (".unwrap_or(Vec::new())", "a miss defaulted"),
+    ("None => Vec::new()", "a miss answered as no entries"),
+    ("None => HashMap::new()", "a miss answered as no entries"),
+    ("None => BTreeMap::new()", "a miss answered as no entries"),
+    ("None => vec![]", "a miss answered as no entries"),
+    ("None => Default::default()", "a miss answered as no entries"),
+    ("None => Ok(Vec::new())", "a miss answered as no entries"),
+    ("None => Ok(HashMap::new())", "a miss answered as no entries"),
+    ("None => return Ok(Vec::new())", "a miss answered as no entries"),
 ];
 
-// The lines after a constant-keyed `StateStore::get` read for how its miss
-// is answered: the `let .. else` block, or the chain the read ends in.
+// The lines a constant-keyed `StateStore::get` is read with where the
+// function it sits in cannot be found: the `let .. else` block, or the
+// chain the read ends in.
 const MISS_WINDOW: usize = 6;
+
+// The index past the last line of the function `lines[index]` sits in: the
+// closing brace at the indentation of the nearest `fn` head above, as
+// `rustfmt` lays it; `MISS_WINDOW` lines where no head is above it.
+fn function_end(lines: &[&str], index: usize) -> usize {
+    let head = lines[..=index].iter().rposition(|line| {
+        let rest = line.trim_start();
+        let rest = rest.strip_prefix("pub ").unwrap_or(rest);
+        let rest = rest.strip_prefix("(crate) ").unwrap_or(rest);
+        let rest = rest.strip_prefix("async ").unwrap_or(rest);
+        rest.starts_with("fn ")
+    });
+    let Some(head) = head else {
+        return lines.len().min(index + MISS_WINDOW);
+    };
+    let indent = lines[head].len() - lines[head].trim_start().len();
+    lines[index + 1..]
+        .iter()
+        .position(|line| line.len() - line.trim_start().len() == indent && line.trim() == "}")
+        .map_or(lines.len(), |offset| index + 1 + offset)
+}
 
 // Whether `line` reads the store under a constant key: `StateStore::get(`
 // whose second argument is a constant name, `KEY` or `config::KEY`, rather

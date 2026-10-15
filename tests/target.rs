@@ -938,12 +938,12 @@ async fn omnia_build_process_refused() {
 }
 
 // A module under `crates/start/src` that loads a table into the store for
-// another stem, or warms a token before that stem asks, is refused at the
-// build under a finding of its own, apart from the lifecycle's, with each
-// call named at its line; a `start` module holding neither, a
-// cross-cutting rule, passes. The slice's own turn deletes the loader with
-// its `pub mod` line, and the accepted report names what the tree still
-// holds.
+// another stem, or warms a token before that stem asks, through the trait
+// or as a method of the provider, is refused at the build under a finding
+// of its own, apart from the lifecycle's, with each call named at its line;
+// a `start` module holding neither, a cross-cutting rule, passes. The
+// slice's own turn deletes the loader with its `pub mod` line, and the
+// accepted report names what the tree still holds.
 #[tokio::test]
 async fn omnia_build_loader_refused() {
     let project = scratch();
@@ -951,7 +951,7 @@ async fn omnia_build_loader_refused() {
                   StateStore};\n\n/// Load the stops into the store.\n///\n/// # Errors\n///\n/// \
                   `server_error` when the store refuses.\npub async fn load_stops<P: \
                   StateStore>(provider: &P, stops: &[u8]) -> omnia_sdk::Result<()> {\n    \
-                  StateStore::set(provider, \"orders/stops\", stops, None).await\n}\n\n/// Warm \
+                  provider.set(\"orders/stops\", stops, None).await\n}\n\n/// Warm \
                   the token.\n///\n/// # Errors\n///\n/// `bad_gateway` when the issuer \
                   refuses.\npub async fn warm_token<P: Identity>(provider: &P) -> \
                   omnia_sdk::Result<String> {\n    Identity::access_token(provider, \
@@ -982,8 +982,8 @@ async fn omnia_build_loader_refused() {
     let correction = correction(&model);
     for line in [
         "a module under `crates/start/src/` loads for another stem",
-        "crates/start/src/stops.rs:11: a table loaded for another stem (`StateStore::set`)",
-        "crates/start/src/stops.rs:20: a token warmed before use (`Identity::access_token`)",
+        "crates/start/src/stops.rs:11: a table loaded for another stem (`provider.set`)",
+        "crates/start/src/stops.rs:20: a token warmed before use (`access_token`)",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
@@ -1003,17 +1003,21 @@ async fn omnia_build_loader_refused() {
     );
 }
 
-// A read of the store under a constant key whose miss is answered empty — an
-// empty map returned from a `let .. else`, or the read defaulted — is
-// refused at the build with each read named at its line, while a read under
-// a key built from the input, and one whose miss fetches and stores the
-// table, pass. The slice's own turn lays the fetch into the read, and the
-// accepted report names the module.
+// A read of the store under a constant key whose miss is answered empty
+// anywhere in the function that reads — a `None` arm answered as an empty
+// map seven lines below it — is refused at the build with the answer named
+// at its line and the read's beside it, while a read under a key built from
+// the input, and one whose miss fetches and stores the table, pass. The
+// slice's own turn lays the fetch into the read, and the accepted report
+// names the module.
 #[tokio::test]
 async fn omnia_build_empty_miss_refused() {
     let project = scratch();
-    let empty = "    let Some(bytes) = StateStore::get(provider, RATES_KEY).await? else {\n        \
-                 return Ok(HashMap::new());\n    };\n    decode(&bytes)\n";
+    let empty = "    let cached = StateStore::get(provider, RATES_KEY).await?;\n    let table = \
+                 match cached {\n        Some(bytes) => {\n            let decoded = \
+                 decode(&bytes)?;\n            tracing::debug!(entries = decoded.len(), \"rates \
+                 read from the store\");\n            decoded\n        }\n        None => \
+                 HashMap::new(),\n    };\n    Ok(table)\n";
     let fetched = "    if let Some(bytes) = StateStore::get(provider, RATES_KEY).await? {\n        \
                    return decode(&bytes);\n    }\n    let bytes = fetch_rates(provider).await?;\n    \
                    StateStore::set(provider, RATES_KEY, &bytes, Some(3600)).await?;\n    \
@@ -1053,13 +1057,16 @@ async fn omnia_build_empty_miss_refused() {
     let correction = correction(&model);
     for line in [
         "a table read from the store under one key answers empty on a miss",
-        "crates/rates/src/table.rs:16: a miss answered as no entries (`return Ok(HashMap::new())`)",
+        "crates/rates/src/table.rs:23: a miss answered as no entries (`None => HashMap::new()`) \
+         after the read at line 16",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
-    assert!(
-        !correction.contains("table.rs:29"),
-        "a read under a key built from the input is no finding: {correction}"
+    assert_eq!(
+        correction.matches("crates/rates/src/table.rs:").count(),
+        1,
+        "a read under a key built from the input, and a default outside the reading function, \
+         are no finding: {correction}"
     );
     assert!(
         text(&project, "crates/rates/src/table.rs").contains("StateStore::set(provider, RATES_KEY"),
@@ -1253,6 +1260,56 @@ async fn omnia_tables_held() {
     assert!(routes.contains(orders_statement) && !routes.contains(LITERAL_ROUTE), "{routes}");
     let topics = text(&project, "crates/common/src/routes/topic.rs");
     assert!(topics.contains("ORDER_SHIPPED") && !topics.contains("ORDER_RETURNED"), "{topics}");
+}
+
+// A `pub const` of the configuration catalog no module outside `common`
+// reads is named at its line, a mention in a doc comment counting for
+// nothing, while a key a module reads and the template's own `ENV` pass.
+// Removing the constant is the repair.
+#[tokio::test]
+async fn omnia_setting_unread() {
+    let project = omnia_tree();
+    let env_line = "pub const ENV: &str = \"ENV\";\n";
+    let unread = "\n/// Minutes between refreshes of the rate table.\npub const \
+                  RATES_REFRESH_MINUTES: &str = \"RATES_REFRESH_MINUTES\";\n";
+    let catalog = omnia_seed("crates/common/src/config.rs").replace(
+        env_line,
+        &format!(
+            "{env_line}\n/// Base URL of the rates upstream.\npub const RATES_URL: &str = \
+             \"RATES_URL\";\n{unread}"
+        ),
+    );
+    project.write("crates/common/src/config.rs", &catalog);
+    project.write(
+        "crates/rates/src/table.rs",
+        "//! The rate table, refreshed every `RATES_REFRESH_MINUTES`.\n\nuse common::config;\nuse \
+         omnia_sdk::Config;\n\n/// The upstream the rates come from.\n///\n/// # Errors\n///\n/// \
+         `bad_request` when the deployment sets none.\npub async fn upstream<P: \
+         Config>(provider: &P) -> omnia_sdk::Result<String> {\n    Config::get(provider, \
+         config::RATES_URL).await\n}\n",
+    );
+    let model = Scripted::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/common/src/config.rs", unread, "")])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let unread_at = line_of(&catalog, "pub const RATES_REFRESH_MINUTES");
+    for line in [
+        "a setting of the catalog is read by no module".to_owned(),
+        format!(
+            "crates/common/src/config.rs:{unread_at}: setting `RATES_REFRESH_MINUTES` is read by \
+             no module"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["`RATES_URL`", "`ENV`"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+    assert!(!text(&project, "crates/common/src/config.rs").contains("RATES_REFRESH_MINUTES"));
 }
 
 // A route list statement over a literal path rather than a table constant.
