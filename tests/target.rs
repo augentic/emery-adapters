@@ -100,10 +100,16 @@ impl<A: TargetAdapter> Shipped<A> {
 
     // One build of the slice into `project`, as the component's export puts it.
     async fn build(&self, project: &Scratch, model: &Scripted) -> Result<Report, Error> {
-        let slice = slice();
+        self.build_slice(project, model, &slice()).await
+    }
+
+    // One build of `slice` into `project`, for a scenario over a slice of its own.
+    async fn build_slice(
+        &self, project: &Scratch, model: &Scripted, slice: &Slice,
+    ) -> Result<Report, Error> {
         let ctx = Context {
             adapter_id: self.name,
-            slice: &slice,
+            slice,
             workspace: root(project),
             worker: &A::WORKER,
             model,
@@ -274,18 +280,34 @@ impl<A: TargetAdapter> Shipped<A> {
 // The slice every build is handed: one requirement under the `orders` stem,
 // in a slice named for a part of it.
 fn slice() -> Slice {
+    slice_for("orders-reading", &["orders.get-id.return-order"])
+}
+
+// A slice named `name` over one requirement per subject, `REQ-001` on, its
+// specification cut rendering each under its heading as the engine does.
+fn slice_for(name: &str, subjects: &[&str]) -> Slice {
+    let requirements: Vec<String> =
+        (1..=subjects.len()).map(|number| format!("REQ-{number:03}")).collect();
+    let spec = subjects
+        .iter()
+        .zip(&requirements)
+        .map(|(subject, id)| {
+            format!(
+                "\n### Requirement: {subject}\n\nID: {id}\n\nThe behaviour `{subject}` states.\n"
+            )
+        })
+        .fold("# Specification\n".to_owned(), |spec, block| spec + &block);
     Slice {
         id: "SLICE-001".to_owned(),
-        name: "orders-reading".to_owned(),
+        name: name.to_owned(),
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-        requirements: vec!["REQ-001".to_owned()],
-        spec: "# Specification\n\n## Requirement: orders.get-id.return-order\n\nID: REQ-001\n\nAn \
-               order is returned by its id.\n"
-            .to_owned(),
+        spec,
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders-reading\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: \
-               Order\nDepends on: none\n"
-            .to_owned(),
+        plan: format!(
+            "## Slice: {name}\n\nID: SLICE-001\nRequirements: [{}]\nTypes: [Order]\n",
+            requirements.join(", ")
+        ),
+        requirements,
     }
 }
 
@@ -911,6 +933,112 @@ async fn omnia_build_process_refused() {
     assert!(
         !report.written.iter().any(|path| path == "crates/start/src/runner.rs"),
         "a removed module is not reported: {:?}",
+        report.written
+    );
+}
+
+// A stem is one word, so a crate the turn lays under the head of a
+// hyphenated stem of the slice, `crates/order/` holding the rest as a part
+// of `order-items`, is refused at the build with the directory named, while
+// `common` and a crate the tree held before the turn pass, the head of
+// another of the slice's stems among them. The slice's own turn lays the
+// stem's crate whole, empties the split one, and puts the stem's lines in
+// the root manifest, and the accepted report names what the tree holds.
+#[tokio::test]
+async fn omnia_build_stem_split() {
+    let project = scratch();
+    project.write("crates/shipment/Cargo.toml", "[package]\nname = \"shipment\"\n");
+    project.write("crates/shipment/src/lib.rs", "//! The `shipment` stem.\n");
+    let slice = slice_for(
+        "order-items",
+        &["order-items.add.reject-unknown-sku", "shipment-notes.record.keep-latest"],
+    );
+    let module = "//! Order items.\n\n/// How many lines an order holds.\n#[must_use]\npub fn \
+                  count(items: &[u32]) -> usize {\n    items.len()\n}\n";
+    let split = [
+        ("crates/order/Cargo.toml", "[package]\nname = \"order\"\n"),
+        ("crates/order/src/lib.rs", "//! The `order` stem.\n\npub mod items;\n"),
+        ("crates/order/src/items.rs", module),
+    ];
+    let whole = [
+        ("crates/order-items/Cargo.toml", "[package]\nname = \"order-items\"\n"),
+        ("crates/order-items/src/lib.rs", "//! The `order-items` stem.\n\npub mod order_items;\n"),
+        ("crates/order-items/src/order_items.rs", module),
+    ];
+    let head_path = "order = { path = \"crates/order\" }\n";
+    let head_crate = "order.workspace = true\n";
+    let stem_path = "order-items = { path = \"crates/order-items\" }\n";
+    let stem_crate = "order-items.workspace = true\n";
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/order/Cargo.toml", "crates/order/src/lib.rs", "crates/order/src/items.rs", "Cargo.toml"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/order-items/Cargo.toml", "crates/order-items/src/lib.rs", "crates/order-items/src/order_items.rs", "Cargo.toml"]}"#;
+    let model = Scripted::answering([first, repaired])
+        .calling(
+            0,
+            [
+                write_files(&split),
+                edit_files(&[
+                    (
+                        "Cargo.toml",
+                        OMNIA_PATH_CRATE_ANCHOR,
+                        &format!("{OMNIA_PATH_CRATE_ANCHOR}{head_path}"),
+                    ),
+                    ("Cargo.toml", OMNIA_STEM_ANCHOR, &format!("{OMNIA_STEM_ANCHOR}{head_crate}")),
+                ]),
+            ],
+        )
+        .calling(
+            1,
+            [
+                write_files(&whole),
+                edit_files(&[
+                    ("Cargo.toml", head_path, stem_path),
+                    ("Cargo.toml", head_crate, stem_crate),
+                ]),
+                delete_files(&[
+                    "crates/order/Cargo.toml",
+                    "crates/order/src/lib.rs",
+                    "crates/order/src/items.rs",
+                ]),
+            ],
+        );
+
+    let report =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a stem is one word and is never split at its hyphen",
+        "`crates/order/` is laid for `order`, the head of the stem `order-items`, whose crate is \
+         `crates/order-items/` (package `order-items`, path `order_items`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["`crates/shipment/`", "`crates/common/`"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+    assert!(
+        project.read("crates/order-items/src/order_items.rs").is_some(),
+        "the stem's crate holds the module"
+    );
+    assert!(project.read("crates/order/src/items.rs").is_none(), "the split crate is emptied");
+    let manifest = text(&project, "Cargo.toml");
+    assert!(
+        manifest.contains(stem_path) && manifest.contains(stem_crate),
+        "the root manifest names the stem: {manifest}"
+    );
+    assert!(
+        !manifest.contains(head_path) && !manifest.contains(head_crate),
+        "the root manifest no longer names the head: {manifest}"
+    );
+    assert!(
+        report.written.iter().any(|path| path == "crates/order-items/src/order_items.rs"),
+        "the module is reported: {:?}",
+        report.written
+    );
+    assert!(
+        !report.written.iter().any(|path| path.starts_with("crates/order/")),
+        "a removed file is not reported: {:?}",
         report.written
     );
 }

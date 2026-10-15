@@ -23,6 +23,10 @@
 //! - the root `Cargo.toml` stands as the template spells it outside its two
 //!   stem lists, so a pin, a lint, the `host` feature, or a target table a
 //!   turn changed is a finding with the lines named;
+//! - at a slice's build, a stem is one word: a crate the turn laid under
+//!   the head of a hyphenated stem of the slice, `crates/order/` for
+//!   `order-items`, is named, since the stem's crate is `crates/<stem>/`
+//!   whole, and a crate the tree held before the turn is an earlier slice's;
 //! - at a wave's verify, every static file of the template stands byte for
 //!   byte, a file the tree lacks among them;
 //! - no module under `crates/start/src` is the process the source was: a
@@ -163,8 +167,15 @@ impl TargetAdapter for Adapter {
             tracing::debug!(slice = %ctx.slice.id, "the root ignore file put back as the template spells it");
         }
 
-        let mut report =
-            emery_sdk::target::build(ctx, PROSE, &seed(), |_| Tree::new(root).held()).await?;
+        // the crates the tree holds before the turn are earlier slices'
+        let stems = Stems::read(&ctx.slice.spec, root)?;
+        let mut report = emery_sdk::target::build(ctx, PROSE, &seed(), |_| {
+            let tree = Tree::new(root);
+            let mut findings = tree.stems(&stems)?;
+            findings.extend(tree.held()?);
+            Ok(findings)
+        })
+        .await?;
         if ignored {
             written(&mut report, IGNORE);
         }
@@ -206,6 +217,41 @@ impl<'a> Tree<'a> {
         findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
         Ok(findings)
+    }
+
+    // One finding naming every crate the turn laid under the head of a
+    // hyphenated stem of the slice, `crates/order/` for `order-items`: a
+    // stem is one word, so its crate is `crates/<stem>/` whole. A crate the
+    // tree held before the turn is an earlier slice's, and one emptied of
+    // its files is repaired, since `delete` leaves the directory.
+    fn stems(&self, stems: &Stems) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for dir in crates(self.root)? {
+            if dir == "common" || stems.held.contains(&dir) || stems.named.contains(&dir) {
+                continue;
+            }
+            let split = stems.named.iter().find(|stem| {
+                stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
+            });
+            if let Some(stem) = split {
+                lines.push(format!(
+                    "`crates/{dir}/` is laid for `{dir}`, the head of the stem `{stem}`, whose \
+                     crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
+                    stem.replace('-', "_")
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![format!(
+            "a stem is one word and is never split at its hyphen into a crate and a part: lay \
+             each module under the stem's own crate, `crates/<stem>/src/<part>.rs`, with the \
+             stem's manifest and module list beside it, remove every file under the split \
+             directory through `delete`, and put the stem's two lines in the root `Cargo.toml` \
+             in place of the head's through `edit_files`:\n{}",
+            lines.join("\n")
+        )])
     }
 
     // Every static file of the template that differs: the lines where an
@@ -332,7 +378,10 @@ impl<'a> Tree<'a> {
             findings.push(format!(
                 "a module simulates the host, which the translation lays nothing for; remove each \
                  spelling from its module through `edit_files`, never by renaming it: a loop's \
-                 actions run once, back to back, a failure carried as the classified error; a \
+                 actions run once, back to back, a failure carried as the classified error, and \
+                 never as a function that calls itself in the loop's place; a payload of \
+                 repeated elements, XML among them, is read through `serde` into a type deriving \
+                 `Deserialize` (`quick_xml::de::from_str`), never walked by an event loop; a \
                  flag's step is read at the moment of use; a task's, a timer's, or a reach past \
                  the host's work is laid as the translation says or left out:\n{}",
                 simulated.join("\n")
@@ -523,6 +572,42 @@ impl<'a> Tree<'a> {
 
     fn relative(&self, file: &Path) -> String {
         file.strip_prefix(self.root).unwrap_or(file).display().to_string()
+    }
+}
+
+// The stems a slice builds and the crates the tree held before its turn, so
+// a crate the turn laid is told from one an earlier slice laid.
+struct Stems {
+    named: Vec<String>,
+    held: Vec<String>,
+}
+
+impl Stems {
+    // The stem of every requirement heading in `spec`, the first segment of
+    // the subject's dotted id, beside the crates `root` holds now.
+    fn read(spec: &str, root: &Path) -> Result<Self, Error> {
+        let mut named: Vec<String> = Vec::new();
+        for line in spec.lines() {
+            let line = line.trim_start();
+            if !line.starts_with('#') {
+                continue;
+            }
+            let heading = line.trim_start_matches('#').trim_start();
+            let Some(subject) = heading.strip_prefix("Requirement:") else {
+                continue;
+            };
+            let Some(subject) = subject.split_whitespace().next() else {
+                continue;
+            };
+            let stem = subject.split('.').next().unwrap_or(subject);
+            if !stem.is_empty() && !named.iter().any(|named| named == stem) {
+                named.push(stem.to_owned());
+            }
+        }
+        Ok(Self {
+            named,
+            held: crates(root)?,
+        })
     }
 }
 
@@ -817,6 +902,41 @@ fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
         .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
     paths.sort();
     Ok(paths)
+}
+
+// The name of every directory under `crates/` that holds a file, sorted; a
+// tree with no `crates/` holds none.
+fn crates(root: &Path) -> Result<Vec<String>, Error> {
+    let mut names = Vec::new();
+    for path in entries(&root.join("crates"))? {
+        let meta = fs::symlink_metadata(&path)
+            .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+        if !meta.is_dir() || !occupied(&path)? {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+            names.push(name.to_owned());
+        }
+    }
+    Ok(names)
+}
+
+// Whether a regular file lies beneath `dir`, symbolic links left unfollowed.
+fn occupied(dir: &Path) -> Result<bool, Error> {
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_file() {
+                return Ok(true);
+            }
+            if meta.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+    Ok(false)
 }
 
 // Every `.rs` file beneath `dir`, symbolic links left unfollowed.
