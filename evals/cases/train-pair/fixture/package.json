@@ -1,0 +1,41 @@
+{
+  "name": "train-connector",
+  "version": "3.1.0",
+  "private": true,
+  "description": "Train SOAP Connector",
+  "license": "UNLICENSED",
+  "main": "src/start.ts",
+  "scripts": {
+    "build": "rimraf ./dist && tsc && npm run build-resource",
+    "build-resource": "copyfiles ./.env \"./resource/**/*\" ./dist",
+    "dev": "ts-node -r dotenv/config ./src/start.ts",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --no-error-on-unmatched-pattern",
+    "lint:fix": "eslint \"{src,test}/**/*.{ts,tsx}\" --no-error-on-unmatched-pattern --fix",
+    "start": "cd dist || true && node -r dotenv/config src/start.js",
+    "test": "jest --config node_modules/build-common/base/jest.json"
+  },
+  "eslintConfig": {
+    "extends": [
+      "./node_modules/build-common/base/eslint.json"
+    ]
+  },
+  "dependencies": {
+    "@azure/identity": "^3.3.0",
+    "@azure/keyvault-secrets": "^4.7.0",
+    "connector-common": "15.1.1",
+    "realtime-common": "6.7.6-apm.4",
+    "moment-timezone": "^0.5.43",
+    "soap": "^1.0.0",
+    "x2js": "^3.4.4"
+  },
+  "devDependencies": {
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.5.1",
+    "@types/soap": "^0.21.0",
+    "build-common": "^10.3.2",
+    "dotenv": "^16.3.1",
+    "nyc": "^15.1.0",
+    "typescript": "^5.1.6"
+  }
+}

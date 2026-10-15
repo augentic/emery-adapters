@@ -1,6 +1,6 @@
 [[source]]
 adapter = "emery:typescript@0.13.0"
-path = "typescript/at_r9k_position_adapter/"
+path = "../evals/cases/train/fixture/"
 
 # [[source]]
 # adapter = "emery:documentation@0.13.0"

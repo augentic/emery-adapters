@@ -11,6 +11,7 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # `adapters/`.
 [env]
 WASM32_PACKAGES = "emery-documentation emery-intent emery-python emery-typescript emery-node emery-omnia test-programs"
+MISE_EXPERIMENTAL = "1"
 
 # -------------------------------------
 # Adapter overrides

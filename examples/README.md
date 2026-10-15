@@ -55,9 +55,8 @@ cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emer
 # OR (to prevent laptop sleeping)
 caffeinate -i cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-# produce build in `.emery/vcs/repos/omnia`
-git -C .emery/vcs/repos/omnia log --oneline --first-parent emery/<revision>
-git clone --branch emery/<revision> .emery/vcs/repos/omnia /tmp/emery-build
+# swith to HEAD to view the build in `.emery/vcs/repos/omnia`
+git -C .emery/vcs/repos/omnia checkout emery/<revision>
 ```
 
 The adapter builds into `.emery/vcs/repos/omnia` and labels the result `emery/<revision>`. It leaves this checkout unchanged and pushes nothing. Clone the branch, or push it from that repository.
