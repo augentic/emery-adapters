@@ -6,3 +6,4 @@ rustc-ice-*
 
 # Emery project state: the revision store the examples commit under
 .emery/
+.omnia/
