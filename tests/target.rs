@@ -937,6 +937,72 @@ async fn omnia_build_process_refused() {
     );
 }
 
+// A module under `crates/start/src` that loads a table into the store for
+// another stem, or warms a token before that stem asks, is refused at the
+// build under a finding of its own, apart from the lifecycle's, with each
+// call named at its line; a `start` module holding neither, a
+// cross-cutting rule, passes. The slice's own turn deletes the loader with
+// its `pub mod` line, and the accepted report names what the tree still
+// holds.
+#[tokio::test]
+async fn omnia_build_loader_refused() {
+    let project = scratch();
+    let loader = "//! Loads the stop table and warms the token.\n\nuse omnia_sdk::{Identity, \
+                  StateStore};\n\n/// Load the stops into the store.\n///\n/// # Errors\n///\n/// \
+                  `server_error` when the store refuses.\npub async fn load_stops<P: \
+                  StateStore>(provider: &P, stops: &[u8]) -> omnia_sdk::Result<()> {\n    \
+                  StateStore::set(provider, \"orders/stops\", stops, None).await\n}\n\n/// Warm \
+                  the token.\n///\n/// # Errors\n///\n/// `bad_gateway` when the issuer \
+                  refuses.\npub async fn warm_token<P: Identity>(provider: &P) -> \
+                  omnia_sdk::Result<String> {\n    Identity::access_token(provider, \
+                  \"orders\").await\n}\n";
+    let guard = "//! The bearer rule every handler calls first.\n\n/// Whether the request \
+                 carries the deployment's bearer token.\n#[must_use]\npub fn authorised(header: \
+                 Option<&str>, token: &str) -> bool {\n    header.and_then(|value| \
+                 value.strip_prefix(\"Bearer \")) == Some(token)\n}\n";
+    let written = [
+        ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
+        ("crates/start/src/lib.rs", "//! The `start` stem.\n\npub mod guard;\npub mod stops;\n"),
+        ("crates/start/src/guard.rs", guard),
+        ("crates/start/src/stops.rs", loader),
+    ];
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs", "crates/start/src/stops.rs"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs"]}"#;
+    let model = Scripted::answering([first, repaired]).calling(0, [write_files(&written)]).calling(
+        1,
+        [
+            edit_files(&[("crates/start/src/lib.rs", "pub mod stops;\n", "")]),
+            delete_files(&["crates/start/src/stops.rs"]),
+        ],
+    );
+
+    let report = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a module under `crates/start/src/` loads for another stem",
+        "crates/start/src/stops.rs:11: a table loaded for another stem (`StateStore::set`)",
+        "crates/start/src/stops.rs:20: a token warmed before use (`Identity::access_token`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["is the process the source was", "simulates the host", "guard.rs:"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    assert!(project.read("crates/start/src/stops.rs").is_none(), "the loader is removed");
+    assert!(
+        report.written.iter().any(|path| path == "crates/start/src/guard.rs"),
+        "the rule is reported: {:?}",
+        report.written
+    );
+    assert!(
+        !report.written.iter().any(|path| path == "crates/start/src/stops.rs"),
+        "a removed module is not reported: {:?}",
+        report.written
+    );
+}
+
 // A stem is one word, so a crate the turn lays under the head of a
 // hyphenated stem of the slice, `crates/order/` holding the rest as a part
 // of `order-items`, is refused at the build with the directory named, while

@@ -33,6 +33,10 @@
 //!   function that starts, stops, runs, listens, serves, bootstraps, or
 //!   shuts it down, or a `Main`, `App`, `Server`, or `Application` type, is
 //!   named with its line, and the module is removed rather than renamed;
+//! - no module under `crates/start/src` loads for another stem: one that
+//!   writes a table to the store or warms an access token is named with its
+//!   line, since a stage reads its table cache-aside and a token is read
+//!   where it is sent, and the module is removed;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
@@ -323,19 +327,22 @@ impl<'a> Tree<'a> {
         )
     }
 
-    // Two findings at most, each naming `<path>:<line>: <what>` for every
+    // Three findings at most, each naming `<path>:<line>: <what>` for every
     // line under a stem's `src/`, sorted: the words of `LIFECYCLE` under
-    // `crates/start/src`, whose repair removes the module, and, in the
-    // modules that remain, the spellings of `SIMULATED` under any stem,
-    // whose repair removes the spelling. A tree with no `crates/` answers
-    // none.
+    // `crates/start/src`, whose repair removes the module, the words of
+    // `LOADER` in the `start` modules that remain, whose repair removes the
+    // module too, and, in the modules that remain, the spellings of
+    // `SIMULATED` under any stem, whose repair removes the spelling. A tree
+    // with no `crates/` answers none.
     fn simulated(&self) -> Result<Vec<String>, Error> {
         let mut lifecycle = Vec::new();
+        let mut loaders = Vec::new();
         let mut simulated = Vec::new();
         for file in self.modules()? {
             let text = code(&read(&file)?);
             let path = self.relative(&file);
             let mut process = Vec::new();
+            let mut loading = Vec::new();
             if path.starts_with(START) {
                 for (number, line) in text.lines().enumerate() {
                     for (word, what) in LIFECYCLE {
@@ -343,10 +350,19 @@ impl<'a> Tree<'a> {
                             process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
                         }
                     }
+                    for (word, what) in LOADER {
+                        if spells(line, word) {
+                            loading.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
+                        }
+                    }
                 }
             }
             if !process.is_empty() {
                 lifecycle.extend(process);
+                continue;
+            }
+            if !loading.is_empty() {
+                loaders.extend(loading);
                 continue;
             }
             for (number, line) in text.lines().enumerate() {
@@ -371,6 +387,19 @@ impl<'a> Tree<'a> {
                  test, through `delete` rather than rename it, and leave what it stood for to the \
                  report:\n{}",
                 lifecycle.join("\n")
+            ));
+        }
+        if !loaders.is_empty() {
+            loaders.sort();
+            findings.push(format!(
+                "a module under `{START}` loads for another stem what that stem reads at use: a \
+                 table a stage reads is read cache-aside by the stage's own stem, fetched on a \
+                 miss and stored under one key there, and a token or a secret is read through \
+                 its capability where it is used, so `start` lays no loader and warms nothing; \
+                 remove each module named, with its `pub mod` line and its test, through \
+                 `delete`, and lay what else it held that the translation keeps, a stated health \
+                 route or a cross-cutting rule, in a module without it:\n{}",
+                loaders.join("\n")
             ));
         }
         if !simulated.is_empty() {
@@ -655,6 +684,15 @@ const LIFECYCLE: &[(&str, &str)] = &[
     ("struct App", "a lifecycle type of its own"),
     ("struct Server", "a lifecycle type of its own"),
     ("struct Application", "a lifecycle type of its own"),
+];
+
+// What no module under `START` spells once `LIFECYCLE` is clear, each a
+// start-up step that loads for another stem: a table written to the store
+// for a stage to read, or a token warmed before the stem that sends it
+// asks. Each is matched as a word, so `provider.set(` is none.
+const LOADER: &[(&str, &str)] = &[
+    ("StateStore::set", "a table loaded for another stem"),
+    ("Identity::access_token", "a token warmed before use"),
 ];
 
 // A table of `common` with the list and the rung its constants are spelled
