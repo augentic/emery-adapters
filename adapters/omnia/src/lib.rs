@@ -25,12 +25,22 @@
 //!   turn changed is a finding with the lines named;
 //! - at a wave's verify, every static file of the template stands byte for
 //!   byte, a file the tree lacks among them;
+//! - no module under `crates/start/src` is the process the source was: a
+//!   function that starts, stops, runs, listens, serves, bootstraps, or
+//!   shuts it down, or a `Main`, `App`, `Server`, or `Application` type, is
+//!   named with its line, and the module is removed rather than renamed;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
-//!   process, or keeps a flag machine — a step-done key, a stop request, an
-//!   exit delay — is named with its line, since each is a mechanism the host
-//!   owns and the translation lays nothing for;
+//!   process, loops to poll or retry, or keeps a flag machine — a step-done
+//!   key, a stop request, an exit delay — is named with its line, since
+//!   each is a mechanism the host owns and the translation lays nothing
+//!   for, and the spelling is removed from the module;
+//! - every constant of the two tables is spelled into its lists: a route's
+//!   by a statement of the route list and an entry of the route rung, a
+//!   consumed topic's by a statement of the topic list and an entry of the
+//!   messaging rung, and a topic a module alone publishes by that module
+//!   and neither list, so an outbound topic is no finding;
 //! - every handler — a `pub async fn` under `crates/*/src` taking a
 //!   `Context` — is handed to its route function or consumer by a statement
 //!   of the route list or the topic list, or to `handle_with` by a route
@@ -187,11 +197,13 @@ impl<'a> Tree<'a> {
     }
 
     // The rules a build and a verify share: the root manifest outside its
-    // lists, no simulated host, every handler listed.
+    // lists, no simulated host, the tables spelled into their lists, every
+    // handler listed.
     fn held(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.manifest()?);
         findings.extend(self.simulated()?);
+        findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
         Ok(findings)
     }
@@ -265,31 +277,180 @@ impl<'a> Tree<'a> {
         )
     }
 
-    // One finding naming `<path>:<line>: <what>` for every line under a
-    // stem's `src/` that spells one of `SIMULATED`, sorted; a tree with no
-    // `crates/` answers none.
+    // Two findings at most, each naming `<path>:<line>: <what>` for every
+    // line under a stem's `src/`, sorted: the words of `LIFECYCLE` under
+    // `crates/start/src`, whose repair removes the module, and, in the
+    // modules that remain, the spellings of `SIMULATED` under any stem,
+    // whose repair removes the spelling. A tree with no `crates/` answers
+    // none.
     fn simulated(&self) -> Result<Vec<String>, Error> {
-        let mut lines = Vec::new();
+        let mut lifecycle = Vec::new();
+        let mut simulated = Vec::new();
         for file in self.modules()? {
-            let text = read(&file)?;
+            let text = code(&read(&file)?);
             let path = self.relative(&file);
+            let mut process = Vec::new();
+            if path.starts_with(START) {
+                for (number, line) in text.lines().enumerate() {
+                    for (word, what) in LIFECYCLE {
+                        if spells(line, word) {
+                            process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
+                        }
+                    }
+                }
+            }
+            if !process.is_empty() {
+                lifecycle.extend(process);
+                continue;
+            }
             for (number, line) in text.lines().enumerate() {
                 for (needle, what) in SIMULATED {
-                    if line.contains(needle) {
-                        lines.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
+                    let found = if *needle == "loop {" {
+                        spells(line, needle)
+                    } else {
+                        line.contains(needle)
+                    };
+                    if found {
+                        simulated.push(format!("{path}:{}: {what} (`{needle}`)", number + 1));
                     }
                 }
             }
         }
+        let mut findings = Vec::new();
+        if !lifecycle.is_empty() {
+            lifecycle.sort();
+            findings.push(format!(
+                "a module under `{START}` is the process the source was, which the host is and the \
+                 tree never simulates; remove each module named, with its `pub mod` line and its \
+                 test, through `delete` rather than rename it, and leave what it stood for to the \
+                 report:\n{}",
+                lifecycle.join("\n")
+            ));
+        }
+        if !simulated.is_empty() {
+            simulated.sort();
+            findings.push(format!(
+                "a module simulates the host, which the translation lays nothing for; remove each \
+                 spelling from its module through `edit_files`, never by renaming it: a loop's \
+                 actions run once, back to back, a failure carried as the classified error; a \
+                 flag's step is read at the moment of use; a task's, a timer's, or a reach past \
+                 the host's work is laid as the translation says or left out:\n{}",
+                simulated.join("\n")
+            ));
+        }
+        Ok(findings)
+    }
+
+    // One finding naming every constant of the two tables its lists
+    // disagree with, and every list statement naming no constant: a route's
+    // constant stands in the route list and the route rung; a consumed
+    // topic's in the topic list and the messaging rung; a topic a module
+    // alone names is published and stands in neither.
+    fn tables(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+
+        // the path table: every constant in the route list and the route rung
+        let routes = code(&self.text(HTTP.list)?);
+        let rung = code(&self.text(HTTP.rung)?);
+        for (number, name) in self.constants(HTTP.path)? {
+            let qualified = format!("{}{name}", HTTP.prefix);
+            if !spells(&routes, &qualified) {
+                lines.push(format!(
+                    "{}:{number}: route `{name}` is named by no statement of `{}`",
+                    HTTP.path, HTTP.list
+                ));
+            }
+            if !spells(&rung, &qualified) {
+                lines.push(format!(
+                    "{}:{number}: route `{name}` is named by no entry of `{}` in `{}`",
+                    HTTP.path, HTTP.entries, HTTP.rung
+                ));
+            }
+        }
+
+        // the topic table: a consumed constant in the topic list and the
+        // messaging rung, a published one in a stem's module and neither
+        let topics = code(&self.text(TOPIC.list)?);
+        let rung = code(&self.text(TOPIC.rung)?);
+        let constants = self.constants(TOPIC.path)?;
+        let mut modules = Vec::new();
+        if !constants.is_empty() {
+            for file in self.modules()? {
+                if !self.relative(&file).starts_with(COMMON) {
+                    modules.push(code(&read(&file)?));
+                }
+            }
+        }
+        for (number, name) in constants {
+            let qualified = format!("{}{name}", TOPIC.prefix);
+            let finding = match (spells(&topics, &qualified), spells(&rung, &qualified)) {
+                (true, true) => continue,
+                (true, false) => format!(
+                    "topic `{name}` is consumed by `{}` and named by no entry of `{}` in `{}`",
+                    TOPIC.list, TOPIC.entries, TOPIC.rung
+                ),
+                (false, true) => format!(
+                    "topic `{name}` is named by an entry of `{}` in `{}` and consumed by no \
+                     statement of `{}`",
+                    TOPIC.entries, TOPIC.rung, TOPIC.list
+                ),
+                (false, false) if modules.iter().any(|text| spells(text, &name)) => continue,
+                (false, false) => format!(
+                    "topic `{name}` is consumed by no statement of `{}` and published by no module",
+                    TOPIC.list
+                ),
+            };
+            lines.push(format!("{}:{number}: {finding}", TOPIC.path));
+        }
+
+        // every statement of a list over a constant of its table
+        for (table, text) in [(&HTTP, &routes), (&TOPIC, &topics)] {
+            for (at, statement) in calls(text, ".route(") {
+                if !statement.contains(table.prefix) {
+                    let number = text[..at].matches('\n').count() + 1;
+                    lines.push(format!(
+                        "{}:{number}: a statement names no constant of `{}`",
+                        table.list, table.path
+                    ));
+                }
+            }
+        }
+
         if lines.is_empty() {
             return Ok(Vec::new());
         }
         lines.sort();
         Ok(vec![format!(
-            "a module simulates the host, which the translation lays nothing for; remove each with \
-             its `pub mod` line and its test through `delete` rather than rename it:\n{}",
+            "a table and its lists disagree: a route's constant is named by one statement of \
+             `src/routes.rs` and one entry of `ROUTES` in `tests/routes.rs`, a consumed topic's \
+             by one statement of `src/messaging.rs` and one entry of `TOPICS` in \
+             `tests/messaging.rs`, and a topic only published by the module that publishes it and \
+             neither list; add the missing line at the end of its list through `edit_files`, \
+             remove an entry nothing consumes, and rewrite no other line:\n{}",
             lines.join("\n")
         )])
+    }
+
+    // The text at `path`, empty where the tree holds no file there.
+    fn text(&self, path: &str) -> Result<String, Error> {
+        let file = self.root.join(path);
+        if file.is_file() { read(&file) } else { Ok(String::new()) }
+    }
+
+    // Every `pub const` the table at `path` declares, each its 1-based line
+    // and name; an absent table declares none.
+    fn constants(&self, path: &str) -> Result<Vec<(usize, String)>, Error> {
+        let text = self.text(path)?;
+        let constants = text
+            .lines()
+            .enumerate()
+            .filter_map(|(index, line)| {
+                let rest = line.trim_start().strip_prefix("pub const ")?;
+                let name = rest.split(|ch: char| !identifier(ch)).next()?;
+                (!name.is_empty()).then(|| (index + 1, name.to_owned()))
+            })
+            .collect();
+        Ok(constants)
     }
 
     // One finding naming every handler under a stem's `src/` — a `pub async
@@ -302,14 +463,14 @@ impl<'a> Tree<'a> {
         for list in LISTS {
             let path = self.root.join(list);
             if path.is_file() {
-                lists.push(read(&path)?);
+                lists.push(code(&read(&path)?));
             }
         }
         let mut modules = Vec::new();
         for file in self.modules()? {
             let path = self.relative(&file);
             if let Some(module) = module_path(&path) {
-                modules.push((path, module, read(&file)?));
+                modules.push((path, module, code(&read(&file)?)));
             }
         }
 
@@ -367,8 +528,8 @@ impl<'a> Tree<'a> {
 
 // What no module of a stem spells, each a mechanism the host owns: the
 // workspace's lints silenced for the crate, a task, a timer, a thread, a
-// reach past the component to the system, or a flag machine standing in for
-// a lifecycle.
+// reach past the component to the system, a loop that polls or retries, or
+// a flag machine standing in for a lifecycle.
 const SIMULATED: &[(&str, &str)] = &[
     ("#![allow(", "the workspace's lints silenced"),
     ("tokio::spawn", "a task of its own"),
@@ -378,6 +539,7 @@ const SIMULATED: &[(&str, &str)] = &[
     ("std::fs", "the file system reached past the host"),
     ("std::net", "a socket of its own"),
     ("std::process", "a process of its own"),
+    ("loop {", "a loop that polls or retries"),
     ("_STARTED_KEY", "a start-up flag of its own"),
     ("_INITIALIZED_KEY", "an initialisation flag of its own"),
     ("_LOADED_KEY", "a load-done flag of its own"),
@@ -385,6 +547,56 @@ const SIMULATED: &[(&str, &str)] = &[
     ("EXIT_DELAY", "an exit delay of its own"),
     ("b\"1\"", "a step-done write of its own"),
 ];
+
+// The modules of the `start` stem, where the source's process would be laid.
+const START: &str = "crates/start/src/";
+
+// The shared crate, whose tables declare a constant and publish to none.
+const COMMON: &str = "crates/common/src/";
+
+// What no module under `START` spells, each the process the source was: a
+// function that starts, stops, runs, listens, serves, bootstraps, or shuts
+// it down, or a type that is it. Each is matched as a word, so
+// `fn start_at` and `struct AppError` are none.
+const LIFECYCLE: &[(&str, &str)] = &[
+    ("fn start", "a start of its own"),
+    ("fn stop", "a stop of its own"),
+    ("fn run", "a run of its own"),
+    ("fn listen", "a listener of its own"),
+    ("fn serve", "a server of its own"),
+    ("fn bootstrap", "a bootstrap of its own"),
+    ("fn shutdown", "a shutdown of its own"),
+    ("struct Main", "a lifecycle type of its own"),
+    ("struct App", "a lifecycle type of its own"),
+    ("struct Server", "a lifecycle type of its own"),
+    ("struct Application", "a lifecycle type of its own"),
+];
+
+// A table of `common` with the list and the rung its constants are spelled
+// into, in full under `prefix`.
+struct Table {
+    path: &'static str,
+    prefix: &'static str,
+    list: &'static str,
+    rung: &'static str,
+    entries: &'static str,
+}
+
+const HTTP: Table = Table {
+    path: "crates/common/src/routes/http.rs",
+    prefix: "routes::http::",
+    list: "src/routes.rs",
+    rung: "tests/routes.rs",
+    entries: "ROUTES",
+};
+
+const TOPIC: Table = Table {
+    path: "crates/common/src/routes/topic.rs",
+    prefix: "routes::topic::",
+    list: "src/messaging.rs",
+    rung: "tests/messaging.rs",
+    entries: "TOPICS",
+};
 
 // The two lists whose `.route(..)` statements reach a handler.
 const LISTS: &[&str] = &["src/routes.rs", "src/messaging.rs"];
@@ -538,6 +750,35 @@ fn qualify(module: &str, path: &str) -> Option<String> {
 
 fn ident(name: &str) -> bool {
     !name.is_empty() && name.chars().all(identifier)
+}
+
+// `text` with every comment line blanked and its newlines kept, so a
+// statement a doc comment spells is none and line numbers hold.
+fn code(text: &str) -> String {
+    text.split_inclusive('\n')
+        .map(|line| if line.trim_start().starts_with("//") { "\n" } else { line })
+        .collect()
+}
+
+// Whether `text` spells `word` whole: no identifier character continues it
+// on either side, so `fn start` is spelled by `pub fn start<P>(` and not by
+// `fn start_at(`, and `routes::http::ORDER` not by `routes::http::ORDERS`.
+fn spells(text: &str, word: &str) -> bool {
+    if word.is_empty() {
+        return false;
+    }
+    let mut from = 0;
+    while let Some(at) = text[from..].find(word) {
+        let start = from + at;
+        let end = start + word.len();
+        let before = text[..start].chars().next_back().is_none_or(|ch| !identifier(ch));
+        let after = text[end..].chars().next().is_none_or(|ch| !identifier(ch));
+        if before && after {
+            return true;
+        }
+        from = end;
+    }
+    false
 }
 
 fn identifier(ch: char) -> bool {
