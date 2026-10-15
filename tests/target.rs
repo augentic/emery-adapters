@@ -1146,11 +1146,12 @@ async fn omnia_build_crate_private_miss_refused() {
 }
 
 // A miss answered empty with no `return` — an `Ok(HashMap::new())` standing
-// as the function's tail once the hit has returned above it, and a `None`
-// arm answering `Ok(BTreeMap::new())` — is named at its line as the
-// returning spellings are, while the fetch helper's own empty tail, in a
-// function of its own, is none. The slice's own turn lays the fetch into
-// both reads, and the accepted report names the module.
+// as the function's tail once the hit has returned above it, and an arm
+// naming `None` beside an error, `Ok(None) | Err(_)`, answering
+// `Ok(BTreeMap::new())` — is named at its line as the returning spellings
+// are, while the fetch helper's own empty tail, in a function of its own,
+// is none. The slice's own turn lays the fetch into both reads, and the
+// accepted report names the module.
 #[tokio::test]
 async fn omnia_build_tail_miss_refused() {
     let project = scratch();
@@ -1160,10 +1161,11 @@ async fn omnia_build_tail_miss_refused() {
                    return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
                    fetch_fees(provider).await?;\n    StateStore::set(provider, FEES_KEY, &bytes, \
                    Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
-    let arm = "        None => Ok(BTreeMap::new()),\n";
-    let loaded = "        None => {\n            let bytes = fetch_fees(provider).await?;\n            \
+    let arm = "        Ok(None) | Err(_) => Ok(BTreeMap::new()),\n";
+    let loaded = "        Ok(None) => {\n            let bytes = fetch_fees(provider).await?;\n            \
                   StateStore::set(provider, SURCHARGES_KEY, &bytes, Some(3600)).await?;\n            \
-                  Ok(serde_json::from_slice(&bytes)?)\n        }\n";
+                  Ok(serde_json::from_slice(&bytes)?)\n        }\n        Err(error) => \
+                  Err(error),\n";
     let module = |fees: &str, none: &str| {
         format!(
             "//! Fees by region.\n\nuse std::collections::{{BTreeMap, HashMap}};\n\nuse \
@@ -1176,7 +1178,7 @@ async fn omnia_build_tail_miss_refused() {
              table, fetched when the store holds none.\n///\n/// # Errors\n///\n/// `bad_gateway` \
              when the upstream refuses.\npub async fn surcharges<P: HttpRequest + \
              StateStore>(provider: &P) -> omnia_sdk::Result<BTreeMap<String, u32>> {{\n    match \
-             StateStore::get(provider, SURCHARGES_KEY).await? {{\n        Some(bytes) => \
+             StateStore::get(provider, SURCHARGES_KEY).await {{\n        Ok(Some(bytes)) => \
              Ok(serde_json::from_slice(&bytes)?),\n{none}    }}\n}}\n\nasync fn fetch_fees<P: \
              HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    Ok(Vec::new())\n}}\n"
         )
@@ -1203,8 +1205,8 @@ async fn omnia_build_tail_miss_refused() {
     for line in [
         "crates/fees/src/table.rs:22: a miss answered as no entries (`Ok(HashMap::new())`) after \
          the read at line 19",
-        "crates/fees/src/table.rs:33: a miss answered as no entries (`None => Ok(BTreeMap::new())`) \
-         after the read at line 31",
+        "crates/fees/src/table.rs:33: a miss answered as no entries (`Ok(None) | Err(_) => \
+         Ok(BTreeMap::new())`) after the read at line 31",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }

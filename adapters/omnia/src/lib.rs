@@ -819,8 +819,8 @@ const LOADER: &[(&str, &str)] = &[
 ];
 
 // The empty collections a miss is answered as, each spelled whole: behind a
-// `return Ok(..)`, on the `None` arm bare or in `Ok(..)`, or as the tail
-// expression once the hit has returned above it.
+// `return Ok(..)`, as the body of an arm naming `None`, bare or in `Ok(..)`,
+// or as the tail expression once the hit has returned above it.
 const NOTHING: &[&str] = &[
     "Vec::new()",
     "HashMap::new()",
@@ -841,23 +841,26 @@ const DEFAULTED: &[&str] = &[
 ];
 
 // The spelling by which `line` answers a miss empty, and what it is: one of
-// `NOTHING` returned or on the `None` arm anywhere in the line, or standing
-// as the line whole, bare or in `Ok(..)`, since `Ok(Vec::new())` inside a
-// longer line is an argument rather than the answer; else one of
-// `DEFAULTED`.
+// `NOTHING` behind a `return Ok(..)` anywhere in the line; one the line
+// answers with, bare or in `Ok(..)` — the body of an arm whose pattern
+// names `None`, `Ok(None) | Err(_)` among them, or the line whole as a tail,
+// since `Ok(Vec::new())` inside a longer line is an argument rather than
+// the answer; else one of `DEFAULTED`.
 fn empty(line: &str) -> Option<(String, &'static str)> {
     let text = line.trim();
+    let answer = match text.split_once("=>") {
+        Some((pattern, body)) => spells(pattern, "None").then(|| body.trim().trim_end_matches(',')),
+        None => Some(text),
+    };
     let nothing = NOTHING.iter().find_map(|nothing| {
-        let spelt = [
-            format!("return Ok({nothing})"),
-            format!("None => Ok({nothing})"),
-            format!("None => {nothing}"),
-        ];
-        let tail = format!("Ok({nothing})");
-        spelt
-            .into_iter()
-            .find(|spelling| line.contains(spelling.as_str()))
-            .or_else(|| (text == tail || text == *nothing).then(|| text.to_owned()))
+        let returned = format!("return Ok({nothing})");
+        if line.contains(&returned) {
+            return Some(returned);
+        }
+        let answered = answer?;
+        let bare = answered.strip_prefix("Ok(").and_then(|rest| rest.strip_suffix(')'));
+        (answered == *nothing || bare == Some(*nothing))
+            .then(|| text.trim_end_matches(',').to_owned())
     });
     nothing.map(|spelling| (spelling, "a miss answered as no entries")).or_else(|| {
         DEFAULTED
