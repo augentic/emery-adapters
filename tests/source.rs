@@ -199,6 +199,17 @@ fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
+// The signature of the `type` claim declaring `name`.
+fn signature<'e>(evidence: &'e Evidence, name: &str) -> &'e str {
+    evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Type)
+        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
+        .and_then(|claim| claim.extras.get("signature").and_then(|s| s.as_str()))
+        .unwrap_or_else(|| panic!("`{name}` is declared"))
+}
+
 // The `type` claims' declared names, sorted; every one carries a signature.
 fn declared(evidence: &Evidence) -> Vec<&str> {
     let mut names: Vec<&str> = evidence
@@ -855,9 +866,10 @@ async fn typescript() {
     );
     for note in [
         "- Surface `start` — entry `src/index.ts` — stem `start`: the process bootstrap, run at \
-         load: what runs before each handler is registered, what it awaits before serving, and \
-         at shutdown — `stop` and what a signal handler calls, wherever declared; id `start`; \
-         reaches `src/routes.ts`.",
+         load: claimed for what those the program serves observe of it as a whole — a rule \
+         applied to every request, a health or status answer, a setting it refuses to run \
+         without; how it readies itself, reaches other systems, and shuts down is the design's, \
+         in `excerpt` and `call` claims; id `start`; reaches `src/routes.ts`.",
         ": registered L6–L8 in `ordersRouter`; handler L6–L8; through `express`; id `orders.post`; \
          reaches `src/orders.ts`, `src/db.ts`.",
         ": registered L9 in `ordersRouter`; through `express`; id `orders.find-order`; reaches \
@@ -1400,109 +1412,98 @@ async fn typescript_survey_facts() {
     assert!(seen[2].workspace.is_none(), "the inline value lends nothing and is not surveyed");
 }
 
-// A module the bootstrap alone reaches that imports a package and registers
-// nothing — an upstream API client handed to the routes as a value, a
-// secret retriever — is laid among the facts as a service module with its
-// exports and packages, where a module importing no package and one a
-// registration locates are not; named at its export, it is a surface under
-// the survey's stem with an id per public method, so `start` no longer
-// carries it.
+// An upstream API client and a secret retriever the bootstrap alone
+// constructs and hands on are mechanisms, not surfaces: the facts lay no
+// section offering them, the survey names the route alone, and both modules
+// sit in `start`'s closure under the note that claims the bootstrap for what
+// those it serves observe and leaves its readiness to the design.
 #[tokio::test]
-async fn emery_typescript_service_modules() {
+async fn emery_typescript_bootstrap_clients() {
     let project = scratch();
     modules(
         &project,
         &[
-            ("package.json", "{\"name\":\"feed\",\"main\":\"src/index.ts\"}\n"),
+            ("package.json", "{\"name\":\"quotes\",\"main\":\"src/index.ts\"}\n"),
             (
                 "src/index.ts",
                 "import express from \"express\";\nimport { loadConfig } from \"./config\";\n\
-                 import { GtfsApi } from \"./gtfs\";\nimport { stopsRouter } from \"./routes\";\n\
+                 import { RatesApi } from \"./rates\";\nimport { ratesRouter } from \"./routes\";\n\
                  import { SecretRetriever } from \"./secrets\";\n\nconst config = \
-                 loadConfig();\nconst secrets = new SecretRetriever(config.vault);\nconst gtfs = \
-                 new GtfsApi(config.gtfsUrl, secrets);\nconst app = express();\napp.use(\"/api\", \
-                 stopsRouter(gtfs));\napp.listen(3000);\n",
+                 loadConfig();\nconst secrets = new SecretRetriever(config.vault);\nconst rates = \
+                 new RatesApi(config.ratesUrl, secrets);\nconst app = express();\napp.use(\"/api\", \
+                 ratesRouter(rates));\napp.listen(3000);\n",
             ),
             (
-                "src/gtfs.ts",
+                "src/rates.ts",
                 "import axios from \"axios\";\nimport type { SecretRetriever } from \
-                 \"./secrets\";\n\nexport class GtfsApi {\n  constructor(private readonly url: \
-                 string, private readonly secrets: SecretRetriever) {}\n\n  async stops(): \
+                 \"./secrets\";\n\nexport class RatesApi {\n  constructor(private readonly url: \
+                 string, private readonly secrets: SecretRetriever) {}\n\n  async latest(): \
                  Promise<string[]> {\n    const token = await this.secrets.token();\n    const \
                  response = await axios.get(this.url, { headers: { token } });\n    return \
                  response.data;\n  }\n}\n",
             ),
             (
                 "src/secrets.ts",
-                "import { SecretClient } from \"@azure/keyvault-secrets\";\n\nexport class \
-                 SecretRetriever {\n  private readonly client: SecretClient;\n\n  \
-                 constructor(url: string) {\n    this.client = new SecretClient(url);\n  }\n\n  \
-                 async token(): Promise<string> {\n    return (await \
-                 this.client.getSecret(\"token\")).value ?? \"\";\n  }\n}\n",
+                "import vault from \"node-vault\";\n\nexport class SecretRetriever {\n  private \
+                 readonly client: ReturnType<typeof vault>;\n\n  constructor(url: string) {\n    \
+                 this.client = vault({ endpoint: url });\n  }\n\n  async token(): \
+                 Promise<string> {\n    return (await \
+                 this.client.read(\"secret/token\")).data.value ?? \"\";\n  }\n}\n",
             ),
             (
                 "src/config.ts",
                 "export function loadConfig() {\n  return { vault: process.env.VAULT_URL ?? \
-                 \"\", gtfsUrl: process.env.GTFS_URL ?? \"\" };\n}\n",
+                 \"\", ratesUrl: process.env.RATES_URL ?? \"\" };\n}\n",
             ),
             (
                 "src/routes.ts",
-                "import { Router } from \"express\";\n\nexport function stopsRouter(gtfs: { \
-                 stops(): Promise<string[]> }) {\n  const router = Router();\n  \
-                 router.get(\"/stops\", async (req, res) => {\n    res.json(await \
-                 gtfs.stops());\n  });\n  return router;\n}\n",
+                "import { Router } from \"express\";\n\nexport function ratesRouter(rates: { \
+                 latest(): Promise<string[]> }) {\n  const router = Router();\n  \
+                 router.get(\"/rates\", async (req, res) => {\n    res.json(await \
+                 rates.latest());\n  });\n  return router;\n}\n",
             ),
         ],
     );
-    let survey = inventory(
-        &[
-            ("GET /api/stops", "src/routes.ts#L5-L7", "stops"),
-            ("GtfsApi", "src/gtfs.ts#L4-L12", "gtfs-api"),
-            ("SecretRetriever", "src/secrets.ts#L3-L13", "secret-retriever"),
-        ],
-        &[],
-    );
-    let answer = claim("gtfs-api.stops");
+    let survey = inventory(&[("GET /api/rates", "src/routes.ts#L5-L7", "rates")], &[]);
+    let answer = claim("rates.latest");
 
     let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
-    for fact in [
-        "The bootstrap — the entry that runs something — is `src/index.ts`",
-        "- `src/gtfs.ts` exports `GtfsApi` (class) L4–L12, through `axios`\n",
-        "- `src/secrets.ts` exports `SecretRetriever` (class) L3–L13, through \
-         `@azure/keyvault-secrets`\n",
+    assert!(
+        facts.contains("The bootstrap — the entry that runs something — is `src/index.ts`"),
+        "{facts}"
+    );
+    for absent in [
+        "Modules only the bootstrap reaches",
+        "- `src/rates.ts` exports",
+        "- `src/secrets.ts` exports",
     ] {
-        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
+        assert!(!facts.contains(absent), "{absent} is offered by no fact: {facts}");
     }
-    assert!(
-        !facts.contains("- `src/config.ts` exports"),
-        "a module importing no package is no service module: {facts}"
-    );
-    assert!(
-        !facts.contains("- `src/routes.ts` exports"),
-        "a module a registration locates is no service module: {facts}"
-    );
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
-        [
-            ("start", "src/index.ts", "start"),
-            ("GET /api/stops", "src/routes.ts", "stops"),
-            ("GtfsApi", "src/gtfs.ts", "gtfs-api"),
-            ("SecretRetriever", "src/secrets.ts", "secret-retriever"),
-        ]
+        [("start", "src/index.ts", "start"), ("GET /api/rates", "src/routes.ts", "rates")]
     );
     for note in [
-        ": exported class L4–L12; methods `stops` L7–L11; ids `gtfs-api`, `gtfs-api.stops`; \
-         reaches `src/secrets.ts`.",
-        ": exported class L3–L13; methods `token` L10–L12; ids `secret-retriever`, \
-         `secret-retriever.token`; reaches nothing beyond its entry.",
-        "; id `start`; reaches `src/config.ts`, `src/secrets.ts`, `src/gtfs.ts`, `src/routes.ts`.",
+        "- Surface `start` — entry `src/index.ts` — stem `start`: the process bootstrap, run at \
+         load: claimed for what those the program serves observe of it as a whole — a rule \
+         applied to every request, a health or status answer, a setting it refuses to run \
+         without; how it readies itself, reaches other systems, and shuts down is the design's, \
+         in `excerpt` and `call` claims; id `start`; reaches `src/config.ts`, `src/secrets.ts`, \
+         `src/rates.ts`, `src/routes.ts`.",
+        ": registered L5–L7 in `ratesRouter`; handler L5–L7; through `express`; id `rates`; \
+         reaches nothing beyond its entry.",
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
+    laid(
+        &turns[0],
+        &["src/index.ts", "src/config.ts", "src/secrets.ts", "src/rates.ts", "src/routes.ts"],
+        &[],
+    );
 }
 
 // The survey's stem stands where the code spells none at the anchor — a
@@ -2089,6 +2090,77 @@ async fn typescript_types() {
         .await;
 
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A class field initialised by a table — an object or array of literals,
+// names, and member paths — is spelled with it in the `type` claim, its
+// lines re-indented under the class; a scalar, a construction, a function,
+// an object holding a call, and an empty object stay spelled to their
+// initializer. An exported constant initialised by a table is a `type`
+// claim of its own, the declaration whole less its blank lines; an empty
+// one, a scalar, and one the module does not export are none.
+#[tokio::test]
+async fn typescript_type_tables() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"zones\",\"main\":\"dist/index.js\"}\n"),
+            ("src/index.ts", "export { Zones } from \"./zones\";\n"),
+            (
+                "src/zones.ts",
+                "import { Client } from \"client\";\n\nexport class Zones {\n  static readonly \
+                 BY_REGION: { [key: string]: number } = {\n    EU: 3,\n    US: 1,\n    APAC: \
+                 Zones.DEFAULT, // the rest\n  };\n  static DEFAULT = 7;\n  static origins = \
+                 [51.5, -0.12];\n  static client = new Client(\"zones\");\n  static parse = (text: \
+                 string) => Number(text);\n  static hosts = { primary: process.env.HOST ?? \
+                 \"localhost\" };\n  static cache: Record<string, number> = {};\n\n  static \
+                 zone(region: string): number {\n    return Zones.BY_REGION[region] ?? \
+                 Zones.DEFAULT;\n  }\n}\n\nexport const CODES = {\n  \
+                 EU: \"eu-west\",\n\n  US: \"us-east\",\n};\nexport const EMPTY: { [key: string]: \
+                 number } = {};\nexport const LIMIT = 5;\nconst LOCAL = [\"eu\", \"us\"];\n",
+            ),
+        ],
+    );
+    let survey = inventory(&[("Zones", "src/zones.ts#L3-L19", "zones")], &["src/index.ts"]);
+    let answered = serde_json::json!({
+        "claims": [
+            { "kind": "requirement", "id": "zones.zone", "statement": "Answers a region's zone." }
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&survey, &answered]);
+
+    let evidence = TYPESCRIPT.accepted(&workspace(&project), &model).await;
+    model.assert_exhausted();
+
+    assert_eq!(
+        signature(&evidence, "Zones"),
+        "class Zones {\n  static readonly BY_REGION: { [key: string]: number } = {\n    \
+         EU: 3,\n    US: 1,\n    APAC: Zones.DEFAULT, // the rest\n  };\n  static DEFAULT;\n  \
+         static origins = [51.5, -0.12];\n  static client;\n  static parse;\n  static hosts;\n  \
+         static cache: Record<string, number>;\n  static zone(region: string): number { .. }\n}"
+    );
+    assert_eq!(declared(&evidence), ["CODES", "Zones"]);
+    assert_eq!(
+        signature(&evidence, "CODES"),
+        "const CODES = {\n  EU: \"eu-west\",\n  US: \"us-east\",\n}"
+    );
+    assert_eq!(
+        table_claim(&evidence, "CODES"),
+        (Some("src/zones.ts#L21-L25"), Some("exported table"))
+    );
+}
+
+// The anchor and synopsis of the `type` claim declaring `name`.
+fn table_claim<'e>(evidence: &'e Evidence, name: &str) -> (Option<&'e str>, Option<&'e str>) {
+    let claim = evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Type)
+        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
+        .unwrap_or_else(|| panic!("`{name}` is declared"));
+    (claim.path.as_deref(), claim.synopsis.as_deref())
 }
 
 // The turn lists what the modules spell as values of their own — an
@@ -3072,9 +3144,11 @@ async fn python() {
     );
     for note in [
         "- Surface `start` — entry `app/main.py` — stem `start`: the process bootstrap, run at \
-         load: what runs before each handler is registered, what it awaits before serving, and \
-         at shutdown — `stop` and what a signal handler calls, wherever declared; id `start`; \
-         reaches `app/routers/orders.py`, `app/routers/health.py`.",
+         load: claimed for what those the program serves observe of it as a whole — a rule \
+         applied to every request, a health or status answer, a setting it refuses to run \
+         without; how it readies itself, reaches other systems, and shuts down is the design's, \
+         in `excerpt` and `call` claims; id `start`; reaches `app/routers/orders.py`, \
+         `app/routers/health.py`.",
         ": def `create` L8–L10; under `@router.post(\"\")`; through `fastapi`; id `orders.post`; \
          reaches `app/services/orders.py`, `app/db.py`.",
         ": def `get` L13–L15; under `@router.get(\"/{order_id}\")`; through `fastapi`; id \
@@ -3270,107 +3344,110 @@ async fn python_bootstrap() {
     );
 }
 
-// A module the bootstrap alone reaches that imports a package and registers
-// nothing — an upstream API client, a secret retriever, and a settings
-// reader over the standard library alike, since the parser tells no library
-// from another — is laid among the facts as a service module with its
-// exports and the packages as imported, where one a decorator locates is
-// not; named at its export, it is a surface under the survey's stem with an
-// id per public method, so `start` no longer carries it.
+// An upstream API client and a secret retriever the bootstrap alone
+// constructs and hands on are mechanisms, not surfaces: the facts lay no
+// section offering them, the survey names the route alone, and both modules
+// sit in `start`'s closure under the note that claims the bootstrap for what
+// those it serves observe and leaves its readiness to the design.
 #[tokio::test]
-async fn emery_python_service_modules() {
+async fn emery_python_bootstrap_clients() {
     let project = scratch();
     modules(
         &project,
         &[
             (
                 "pyproject.toml",
-                "[project]\nname = \"feed\"\n\n[project.scripts]\nfeed = \"feed.main:run\"\n",
+                "[project]\nname = \"quotes\"\n\n[project.scripts]\nquotes = \
+                 \"quotes.main:run\"\n",
             ),
-            ("feed/__init__.py", ""),
+            ("quotes/__init__.py", ""),
             (
-                "feed/main.py",
-                "from fastapi import FastAPI\n\nfrom .config import load_config\nfrom .gtfs \
-                 import GtfsApi\nfrom .routes import router\nfrom .secrets import \
+                "quotes/main.py",
+                "from fastapi import FastAPI\n\nfrom .config import load_config\nfrom .rates \
+                 import RatesApi\nfrom .routes import router\nfrom .secrets import \
                  SecretRetriever\n\nconfig = load_config()\nsecrets = \
-                 SecretRetriever(config[\"vault\"])\ngtfs = GtfsApi(config[\"gtfs_url\"], \
+                 SecretRetriever(config[\"vault\"])\nrates = RatesApi(config[\"rates_url\"], \
                  secrets)\napp = FastAPI()\napp.include_router(router)\n\n\ndef run() -> \
                  None:\n    app.run()\n",
             ),
             (
-                "feed/gtfs.py",
-                "import httpx\n\nfrom .secrets import SecretRetriever\n\n\nclass GtfsApi:\n    \
+                "quotes/rates.py",
+                "import httpx\n\nfrom .secrets import SecretRetriever\n\n\nclass RatesApi:\n    \
                  def __init__(self, url: str, secrets: SecretRetriever) -> None:\n        \
-                 self.url = url\n        self.secrets = secrets\n\n    def stops(self) -> \
+                 self.url = url\n        self.secrets = secrets\n\n    def latest(self) -> \
                  list[str]:\n        token = self.secrets.token()\n        response = \
                  httpx.get(self.url, headers={\"token\": token})\n        return \
                  response.json()\n",
             ),
             (
-                "feed/secrets.py",
-                "from azure.keyvault.secrets import SecretClient\n\n\nclass \
-                 SecretRetriever:\n    def __init__(self, url: str) -> None:\n        \
-                 self.client = SecretClient(url)\n\n    def token(self) -> str:\n        return \
-                 self.client.get_secret(\"token\").value or \"\"\n",
+                "quotes/secrets.py",
+                "import hvac\n\n\nclass SecretRetriever:\n    def __init__(self, url: str) -> \
+                 None:\n        self.client = hvac.Client(url=url)\n\n    def token(self) -> \
+                 str:\n        secret = \
+                 self.client.secrets.kv.read_secret_version(path=\"token\")\n        return \
+                 secret[\"data\"][\"data\"][\"value\"] or \"\"\n",
             ),
             (
-                "feed/config.py",
+                "quotes/config.py",
                 "import os\n\n\ndef load_config() -> dict[str, str]:\n    return {\"vault\": \
-                 os.environ.get(\"VAULT_URL\", \"\"), \"gtfs_url\": \
-                 os.environ.get(\"GTFS_URL\", \"\")}\n",
+                 os.environ.get(\"VAULT_URL\", \"\"), \"rates_url\": \
+                 os.environ.get(\"RATES_URL\", \"\")}\n",
             ),
             (
-                "feed/routes.py",
+                "quotes/routes.py",
                 "from fastapi import APIRouter\n\nrouter = APIRouter(prefix=\"/api\")\n\n\n\
-                 @router.get(\"/stops\")\ndef list_stops() -> list[str]:\n    return []\n",
+                 @router.get(\"/rates\")\ndef list_rates() -> list[str]:\n    return []\n",
             ),
         ],
     );
-    let survey = inventory(
-        &[
-            ("GET /api/stops", "feed/routes.py#L6-L8", "stops"),
-            ("GtfsApi", "feed/gtfs.py#L6-L14", "gtfs-api"),
-            ("SecretRetriever", "feed/secrets.py#L4-L9", "secret-retriever"),
-        ],
-        &[],
-    );
-    let answer = claim("gtfs-api.stops");
+    let survey = inventory(&[("GET /api/rates", "quotes/routes.py#L6-L8", "rates")], &[]);
+    let answer = claim("rates.latest");
 
     let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
-    for fact in [
-        "The bootstrap — the entry that runs something — is `feed/main.py`",
-        "- `feed/config.py` exports `load_config` (function) L4–L5, through `os`\n",
-        "- `feed/gtfs.py` exports `GtfsApi` (class) L6–L14, through `httpx`\n",
-        "- `feed/secrets.py` exports `SecretRetriever` (class) L4–L9, through \
-         `azure.keyvault.secrets`\n",
-    ] {
-        assert!(facts.contains(fact), "{fact} is among the facts: {facts}");
-    }
     assert!(
-        !facts.contains("- `feed/routes.py` exports"),
-        "a module a decorator locates is no service module: {facts}"
+        facts.contains("The bootstrap — the entry that runs something — is `quotes/main.py`"),
+        "{facts}"
     );
+    for absent in [
+        "Modules only the bootstrap reaches",
+        "- `quotes/rates.py` exports",
+        "- `quotes/secrets.py` exports",
+        "- `quotes/config.py` exports",
+    ] {
+        assert!(!facts.contains(absent), "{absent} is offered by no fact: {facts}");
+    }
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
         surfaces(&turns[0]),
-        [
-            ("start", "feed/main.py", "start"),
-            ("GET /api/stops", "feed/routes.py", "stops"),
-            ("GtfsApi", "feed/gtfs.py", "gtfs-api"),
-            ("SecretRetriever", "feed/secrets.py", "secret-retriever"),
-        ]
+        [("start", "quotes/main.py", "start"), ("GET /api/rates", "quotes/routes.py", "rates")]
     );
     for note in [
-        ": exported class L6–L14; methods `stops` L11–L14; ids `gtfs-api`, `gtfs-api.stops`; \
-         reaches `feed/secrets.py`.",
-        ": exported class L4–L9; methods `token` L8–L9; ids `secret-retriever`, \
-         `secret-retriever.token`; reaches nothing beyond its entry.",
+        "- Surface `start` — entry `quotes/main.py` — stem `start`: the process bootstrap, run \
+         by the console script `quotes`, which calls `run()`: claimed for what those the \
+         program serves observe of it as a whole — a rule applied to every request, a health or \
+         status answer, a setting it refuses to run without; how it readies itself, reaches \
+         other systems, and shuts down is the design's, in `excerpt` and `call` claims; id \
+         `start`; reaches `quotes/config.py`, `quotes/secrets.py`, `quotes/rates.py`, \
+         `quotes/routes.py`.",
+        ": def `list_rates` L6–L8; under `@router.get(\"/rates\")`; through `fastapi`; id \
+         `rates`; reaches nothing beyond its entry.",
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
+    laid(
+        &turns[0],
+        &[
+            "quotes/main.py",
+            "quotes/config.py",
+            "quotes/secrets.py",
+            "quotes/rates.py",
+            "quotes/routes.py",
+        ],
+        &[],
+    );
 }
 
 // A console script whose function the entry module imports from a module of
@@ -4629,6 +4706,66 @@ async fn python_types() {
         .await;
 
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A class attribute assigned a table — a dict, list, tuple, or set of
+// literals, names, and attribute paths — is spelled with it in the `type`
+// claim, its lines re-indented under the class; one assigned a call, a
+// dict holding one, or an empty dict stays spelled by its first line. A
+// public module-level
+// name assigned a table is a `type` claim of its own, the statement whole;
+// an empty one, a scalar, and a private one are none.
+#[tokio::test]
+async fn python_type_tables() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("pyproject.toml", "[project]\nname = \"zones\"\n"),
+            ("src/zones/__init__.py", "from .zones import Zones\n"),
+            (
+                "src/zones/zones.py",
+                "import os\n\nfrom client import Client\n\nDEFAULT = 7\n\n\nclass Zones:\n    \
+                 BY_REGION: dict[str, int] = {\n        \"EU\": 3,\n        \"US\": 1,\n        \
+                 \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    client = \
+                 Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
+                 \"localhost\")}\n    cache: dict[str, int] = {\n        # filled at first use\n    \
+                 }\n\n    @staticmethod\n    def zone(region: str) -> int:\n        \
+                 return Zones.BY_REGION.get(region, DEFAULT)\n\n\nCODES: dict[str, str] = {\n    \
+                 \"EU\": \"eu-west\",\n    \"US\": \"us-east\",\n}\nREGISTRY: dict[str, int] = \
+                 {}\n_LOCAL = [\"eu\", \"us\"]\n",
+            ),
+        ],
+    );
+    let survey =
+        inventory(&[("Zones", "src/zones/zones.py#L8-L23", "zones")], &["src/zones/__init__.py"]);
+    let answered = serde_json::json!({
+        "claims": [
+            { "kind": "requirement", "id": "zones.zone", "statement": "Answers a region's zone." }
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&survey, &answered]);
+
+    let evidence = PYTHON.accepted(&workspace(&project), &model).await;
+    model.assert_exhausted();
+
+    assert_eq!(
+        signature(&evidence, "Zones"),
+        "class Zones:\n    BY_REGION: dict[str, int] = {\n        \"EU\": 3,\n        \"US\": \
+         1,\n        \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    \
+         client = Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
+         \"localhost\")}\n    cache: dict[str, int] = {…\n    def zone(region: str) -> int: ..."
+    );
+    assert_eq!(declared(&evidence), ["CODES", "Zones"]);
+    assert_eq!(
+        signature(&evidence, "CODES"),
+        "CODES: dict[str, str] = {\n    \"EU\": \"eu-west\",\n    \"US\": \"us-east\",\n}"
+    );
+    assert_eq!(
+        table_claim(&evidence, "CODES"),
+        (Some("src/zones/zones.py#L26-L29"), Some("exported table"))
+    );
 }
 
 // An `__all__` declared with an annotation — `__all__: list[str] = [..]` —

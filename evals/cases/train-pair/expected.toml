@@ -5,23 +5,27 @@
 # train-update XML and publishes it raw to the `realtime-train.v1` topic.
 # `adapter` is the train position adapter, the `train` case's fixture read
 # again: the consumer of that topic, publishing vehicle location events.
-# Each is bootstrapped from its own `src/start.ts`, so both lead with `start`
-# — two bootstraps under one stem, where a byte-equal id pre-merges across
-# sources — and each reaches `KeyVault` through a secret retriever only its
-# bootstrap uses, so each has a `key-vault` surface, as the `train` case
-# expects of the adapter. The connector's one surface is the SOAP service
-# `soap.listen` serves on `/inbound/xml` in `SoapServer.start`: the route rule
-# gives it `inbound`, and the code spells no stem there, since the path is the
-# call's second argument. The facts locate neither it nor the service modules —
-# the service is handed as an object rather than a function, and the one
-# registration the facts list is the `on` hook inside the producer's options in
-# `start.ts`, which makes the bootstrap the one locating module and stops the
-# service walk at it — so both surfaces are the model's to find in the modules
-# laid whole, which is what the case measures of the survey. Beside the sources
-# sits `reference/`, a trimmed copy of the hand-written omnia guest the two
-# were ported into — one crate per service, the topic constant the one thing
-# they share — which a `--build --target omnia` run compares the built guest
-# with and drives the adapter's 22 recorded fixtures through.
+# Each is bootstrapped from its own `src/start.ts`, so each has a `start`
+# surface — and, under the one rule, neither bootstrap states a requirement:
+# the secret read from Key Vault and watched for rotation, the producer
+# constructed from its config, the status check, the stop, and the exit
+# timers are how each process readies itself and shuts down, the design's in
+# `excerpt` and `call` claims, and every such span is listed `[[absent]]` per
+# source. So the connector's specification is `inbound` alone and the
+# adapter's `train-update` alone, as the `train` case expects of it. The
+# connector's one surface is the SOAP service `soap.listen` serves on
+# `/inbound/xml` in `SoapServer.start`: the route rule gives it `inbound`,
+# and the code spells no stem there, since the path is the call's second
+# argument. The facts do not locate it — the service is handed as an object
+# rather than a function, and the one registration the facts list is the
+# `on` hook inside the producer's options in `start.ts`, which makes the
+# bootstrap the one locating module — so the surface is the model's to find
+# in the modules laid whole, which is what the case measures of the survey.
+# Beside the sources sits `reference/`, a trimmed copy of the hand-written
+# omnia guest the two were ported into — one crate per service, the topic
+# constant the one thing they share — which a `--build --target omnia` run
+# compares the built guest with and drives the adapter's 22 recorded
+# fixtures through.
 
 reference = "evals/cases/train-pair/reference"
 
@@ -29,11 +33,10 @@ reference = "evals/cases/train-pair/reference"
 name = "connector"
 adapter = "typescript"
 fixture = "evals/cases/train-pair/fixture"
-stems = ["start", "inbound", "key-vault"]
+stems = ["inbound"]
 
-# --- connector surfaces: the bootstrap, the SOAP service `SoapServer.start`
-# serves on `/inbound/xml`, and the Key Vault client only the bootstrap
-# reaches ---
+# --- connector surfaces: the bootstrap and the SOAP service
+# `SoapServer.start` serves on `/inbound/xml` ---
 
 [[source.surface]]
 entry = "src/start.ts"
@@ -43,15 +46,11 @@ stem = "start"
 entry = "src/soap-server.ts"
 stem = "inbound"
 
-[[source.surface]]
-entry = "src/key-vault.ts"
-stem = "key-vault"
-
 [[source]]
 name = "adapter"
 adapter = "typescript"
 fixture = "evals/cases/train/fixture"
-stems = ["start", "train-update", "key-vault"]
+stems = ["train-update"]
 
 # --- adapter surfaces: the `train` case's ---
 
@@ -63,89 +62,9 @@ stem = "start"
 entry = "src/main.ts"
 stem = "train-update"
 
-[[source.surface]]
-entry = "src/key-vault.ts"
-stem = "key-vault"
-
 # ===================================================================
 # connector
 # ===================================================================
-
-# --- start: the bootstrap and everything that runs before a request arrives ---
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L11-L13"
-gloss = "APM is initialised and the simple web server is created, logging the configured port"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L15-L22"
-gloss = "The Kafka producer is constructed from the producer config: brokers, the train topic, SSL and SASL under Confluent"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L23-L27"
-gloss = "Main is constructed over the web app and producer and started, the web app listens on Config.port, and `${appName}/startup` is incremented"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L29-L34"
-gloss = "Under Confluent, a secret watcher restarts the application through closeApp when the Kafka keys change"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L37-L41"
-gloss = "closeApp stops Main without awaiting and exits with 1 after 10 s"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/start.ts#L43-L50"
-gloss = "unhandledRejection and uncaughtException notice the error, log it, and call closeApp"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/main.ts#L12-L17"
-gloss = "Start starts the SOAP server, then the Kafka producer, and configures the status check over the producer"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/main.ts#L19-L23"
-gloss = "Stop stops the Kafka producer, then the SOAP server"
-
-[[requirement]]
-source = "connector"
-stem = ["start", "inbound"]
-anchor = "src/config.ts#L32-L51"
-gloss = "The producer config retrieves the Confluent secret under Confluent and names the topic `<env>-realtime-train.v1`, `.dormant` added when IS_DORMANT, over KAFKA_HOSTS with SSL and SASL plain from the secret"
-
-[[requirement]]
-source = "connector"
-stem = ["start", "inbound"]
-anchor = "src/confluent-secret-retriever.ts#L13-L27"
-gloss = "Retrieve reads the Confluent key from Key Vault once, parses key and secret, and throws `No valid kafka keys` when empty"
-
-[[requirement]]
-source = "connector"
-stem = "start"
-anchor = "src/confluent-secret-retriever.ts#L31-L38"
-gloss = "Watch re-reads the secret every SECRET_WATCHER_INTERVAL minutes and calls closeApp when it changed"
-
-# --- key-vault: the one client only the bootstrap reaches ---
-
-[[requirement]]
-source = "connector"
-stem = ["key-vault", "start", "inbound"]
-anchor = "src/key-vault.ts#L7-L14"
-gloss = "A Key Vault secret without a value is an error naming the secret"
 
 # --- inbound: one SOAP request in, one raw message published ---
 
@@ -159,13 +78,7 @@ gloss = "Login and UploadMessages are not implemented: each faults with 501 Meth
 source = "connector"
 stem = "inbound"
 anchor = "src/soap-server.ts#L40-L43"
-gloss = "The WSDL is read from Config.wsdlPath and the IwsTrainservice SOAP service is served on /inbound/xml over the web app's HTTP server"
-
-[[requirement]]
-source = "connector"
-stem = ["inbound", "start"]
-anchor = "src/soap-server.ts#L45-L47"
-gloss = "Stop closes the web app"
+gloss = "The train SOAP service is served on /inbound/xml under the configured WSDL"
 
 [[requirement]]
 source = "connector"
@@ -195,7 +108,7 @@ gloss = "The XML is deserialised with pasoTren always an array; a document whose
 source = "connector"
 stem = "inbound"
 anchor = "src/soap-server.ts#L73-L89"
-gloss = "For a message that is no MensajeVidaSIE heartbeat, the event time is horaSalidaReal when departed else horaEntradaReal when arrived, added to fechaCreacion (DD/MM/YYYY in Config.timezone), and the lag is recorded as `${appName}/message_delay`"
+gloss = "For a message that is no MensajeVidaSIE heartbeat, the event time is horaSalidaReal when departed else horaEntradaReal when arrived, added to fechaCreacion (DD/MM/YYYY in the configured timezone), and the lag is recorded as `${appName}/message_delay`"
 
 [[requirement]]
 source = "connector"
@@ -207,7 +120,7 @@ gloss = "A message that fails to parse notices the error, logs `Invalid request 
 source = "connector"
 stem = "inbound"
 anchor = "src/soap-server.ts#L97-L107"
-gloss = "The raw XML is published to the producer topic keyed by trenPar, a publish failure logged and noticed without failing the response, and the request is answered OK"
+gloss = "The raw XML is published to the train topic keyed by trenPar, a publish failure logged and noticed without failing the response, and the request is answered OK"
 
 # --- criteria: the boundaries the connector spells as values of their own ---
 
@@ -238,11 +151,6 @@ gloss = "Confluent config is used unless IS_LOCAL is `true`"
 
 [[criterion]]
 source = "connector"
-anchor = "src/config.ts#L36"
-gloss = "The topic is TRAIN, `.dormant` added when IS_DORMANT is `true`"
-
-[[criterion]]
-source = "connector"
 anchor = "src/types/response.ts#L5-L12"
 gloss = "The error fault is 500 Internal Server Error"
 
@@ -251,138 +159,44 @@ source = "connector"
 anchor = "src/types/response.ts#L14-L21"
 gloss = "The not-implemented fault is 501 Method Not Implemented"
 
-[[criterion]]
-source = "connector"
-anchor = "src/confluent-secret-retriever.ts#L4"
-gloss = "SECRET_WATCHER_INTERVAL defaults to 5 minutes"
+# --- absent: how the connector readies itself, reaches the broker, and
+# shuts down — the design's, and no requirement's ---
 
-[[criterion]]
+[[absent]]
 source = "connector"
-anchor = "src/confluent-secret-retriever.ts#L5"
-gloss = "KEY_VAULT_SECRET_NAME_CONFLUENT_KEY defaults to realtime-confluent-key"
+anchor = "src/start.ts"
+gloss = "The bootstrap: APM initialised, the web server created, the producer constructed, Main started, the rotation watcher, closeApp, the exit handlers"
 
-[[criterion]]
+[[absent]]
 source = "connector"
-anchor = "src/confluent-secret-retriever.ts#L6"
-gloss = "The Key Vault host is https://<KEY_VAULT>.vault.azure.net"
+anchor = "src/main.ts#L12-L23"
+gloss = "Start and stop: the SOAP server and producer started and stopped, the status check configured"
+
+[[absent]]
+source = "connector"
+anchor = "src/config.ts#L32-L51"
+gloss = "The producer config: the secret retrieved, the topic composed from the prefix and the dormant flag, the brokers, SSL and SASL"
+
+[[absent]]
+source = "connector"
+anchor = "src/confluent-secret-retriever.ts"
+gloss = "The Confluent secret read, parsed, and watched for rotation"
+
+[[absent]]
+source = "connector"
+anchor = "src/key-vault.ts"
+gloss = "The Key Vault client"
+
+[[absent]]
+source = "connector"
+anchor = "src/soap-server.ts#L45-L47"
+gloss = "Stop closes the web app"
 
 # ===================================================================
 # adapter: the `train` case's items, each at its source
 # ===================================================================
 
-# --- start: the bootstrap and everything that runs before a message arrives ---
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L11-L13"
-gloss = "Confluent secrets are retrieved before APM initialises when Config.useConfluentKafkaConfig is set"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L15-L17"
-gloss = "APM is initialised and the Express status web app is started on Config.port"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L19"
-gloss = "A startup metric `${apmPrefix}/startup` is incremented once the web app is up"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L21-L34"
-gloss = "The Kafka consumer is constructed from consumer endpoints, topics, and group, with SSL and SASL plain under Confluent"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L36-L48"
-gloss = "The Kafka producer is constructed for the VP topic with the same SSL and SASL settings"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L51-L58"
-gloss = "Under Confluent, a secret watcher stops Main and exits with 1 after 10 s when the Kafka key changes"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/start.ts#L65-L77"
-gloss = "unhandledRejection and uncaughtException notice the error, stop Main, and exit with 1 after 30 s"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/main.ts#L47-L53"
-gloss = "Start fetches the block-management auth token, GTFS stops, starts the producer, and starts the consumer unless Config.isSlot"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/main.ts#L55-L56"
-gloss = "The status check is configured over the consumer and producer and the status log is scheduled"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/main.ts#L60-L67"
-gloss = "Stop closes the web app, consumer, and producer and clears the status log timer"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/main.ts#L147-L161"
-gloss = "Every 60000 ms the sent, received, queue size, and partitions are logged and the counters reset"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/services/gtfs-api.ts#L17-L36"
-gloss = "Stops are fetched from `${staticCCUrl}/gtfs/stops` with retry; a status below 500 is not retried; a failure is logged and the previous stops kept"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/services/gtfs-api.ts#L38-L43"
-gloss = "Stops are refetched every 3600000 ms"
-
-[[requirement]]
-source = "adapter"
-stem = ["start", "train-update"]
-anchor = "src/services/block-mgt-api.ts#L34-L36"
-gloss = "The block-management token retriever is provided from the Azure access token config"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/confluent-secret-retriever.ts#L14-L29"
-gloss = "Retrieve reads the Confluent key from Key Vault, parses key and secret, and throws `No valid kafka keys` when empty"
-
-[[requirement]]
-source = "adapter"
-stem = "start"
-anchor = "src/confluent-secret-retriever.ts#L33-L41"
-gloss = "Watch re-reads the secret every SECRET_WATCHER_INTERVAL minutes and calls closeApp when it changed"
-
-# --- key-vault: the one client only the bootstrap reaches ---
-
-[[requirement]]
-source = "adapter"
-stem = ["key-vault", "start"]
-anchor = "src/key-vault.ts#L6-L14"
-gloss = "A Key Vault secret without a value is an error naming the secret"
-
 # --- train-update: one message in, zero or more vehicle events out ---
-
-[[requirement]]
-source = "adapter"
-stem = "train-update"
-anchor = "src/main.ts#L36-L45"
-gloss = "Each message is processed in an APM background transaction `onMessage`; a processing error is noticed and logged and the message acknowledged"
 
 [[requirement]]
 source = "adapter"
@@ -400,7 +214,7 @@ gloss = "Every converted event is published twice, each after a 5 s delay with t
 source = "adapter"
 stem = "train-update"
 anchor = "src/main.ts#L102-L106"
-gloss = "The XML is deserialised under Config.rootElement; a message without changes is rejected as `no_update`"
+gloss = "The XML is deserialised under the configured root element; a message without changes is rejected as `no_update`"
 
 [[requirement]]
 source = "adapter"
@@ -412,25 +226,25 @@ gloss = "The event time is the actual departure when departed, else the actual a
 source = "adapter"
 stem = "train-update"
 anchor = "src/main.ts#L119-L121"
-gloss = "The message delay is computed from createdDate plus the event seconds and recorded as `message_delay`"
+gloss = "The message delay is computed from the created date plus the event seconds and recorded as `message_delay`"
 
 [[requirement]]
 source = "adapter"
 stem = "train-update"
 anchor = "src/main.ts#L123-L125"
-gloss = "A delay above Config.maxMessageDelay is rejected as `outdated`"
+gloss = "A delay above the maximum message delay is rejected as `outdated`"
 
 [[requirement]]
 source = "adapter"
 stem = "train-update"
 anchor = "src/main.ts#L127-L129"
-gloss = "A delay below Config.minMessageDelay is rejected as `wrong_time`"
+gloss = "A delay below the minimum message delay is rejected as `wrong_time`"
 
 [[requirement]]
 source = "adapter"
 stem = "train-update"
 anchor = "src/main.ts#L138-L145"
-gloss = "Publish sends the event as JSON keyed by externalId or remoteName; a publish failure is noticed and logged"
+gloss = "Publish sends the event as JSON keyed by external id or remote name; a publish failure is noticed and logged"
 
 [[requirement]]
 source = "adapter"
@@ -442,7 +256,7 @@ gloss = "A single change of movement type OTHER yields no events and counts `not
 source = "adapter"
 stem = "train-update"
 anchor = "src/position-converter.ts#L21-L25"
-gloss = "A station not mapped or not in Config.filterStations yields no events and counts `not_relevant_station_message_counter`"
+gloss = "A station not mapped or not among the filtered stations yields no events and counts `not_relevant_station_message_counter`"
 
 [[requirement]]
 source = "adapter"
@@ -460,13 +274,13 @@ gloss = "Change types map to arrival, departure, prediction, or other"
 source = "adapter"
 stem = "train-update"
 anchor = "src/position-converter.ts#L56-L79"
-gloss = "A VehicleEvent Location event carries the vehicle label without spaces, the station coordinates, speed 0, and accuracy 0"
+gloss = "A Location event carries the vehicle label without spaces, the station coordinates, speed 0, and accuracy 0"
 
 [[requirement]]
 source = "adapter"
-stem = ["train-update", "start"]
+stem = "train-update"
 anchor = "src/services/block-mgt-api.ts#L10-L32"
-gloss = "Vehicle labels come from block management `allocations/trips` with a bearer token and retry; a failure yields none"
+gloss = "The vehicles allocated to a train's trip are looked up by its external reference; a lookup that fails yields none"
 
 # --- criteria: the boundaries the adapter spells as values of their own ---
 
@@ -500,12 +314,39 @@ source = "adapter"
 anchor = "src/main.ts#L86"
 gloss = "FIVE_SEC_DELAY is 5000 ms"
 
-[[criterion]]
-source = "adapter"
-anchor = "src/confluent-secret-retriever.ts#L6"
-gloss = "SECRET_WATCHER_INTERVAL defaults to 5 minutes"
+# --- absent: the `train` case's readiness spans ---
 
-[[criterion]]
+[[absent]]
 source = "adapter"
-anchor = "src/confluent-secret-retriever.ts#L4"
-gloss = "KEY_VAULT_SECRET_NAME_CONFLUENT_KEY defaults to realtime-confluent-key"
+anchor = "src/start.ts"
+gloss = "The bootstrap: the secret retrieved, APM and the status web app started, the consumer and producer constructed, the rotation watcher, the exit handlers"
+
+[[absent]]
+source = "adapter"
+anchor = "src/key-vault.ts"
+gloss = "The Key Vault client"
+
+[[absent]]
+source = "adapter"
+anchor = "src/confluent-secret-retriever.ts"
+gloss = "The Confluent secret read, parsed, and watched for rotation"
+
+[[absent]]
+source = "adapter"
+anchor = "src/services/gtfs-api.ts#L6-L43"
+gloss = "The stops prefetched with retry, refreshed hourly, and looked up by stop code"
+
+[[absent]]
+source = "adapter"
+anchor = "src/main.ts#L34-L67"
+gloss = "Start and stop: the handler registered in a transaction, the token and stops fetched, the producer and consumer started, the status check configured, the clients closed"
+
+[[absent]]
+source = "adapter"
+anchor = "src/main.ts#L147-L161"
+gloss = "The status log every 60 s and the counters reset"
+
+[[absent]]
+source = "adapter"
+anchor = "src/config.ts#L128-L132"
+gloss = "The topic prefix added from the environment"

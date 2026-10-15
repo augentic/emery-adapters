@@ -100,10 +100,16 @@ impl<A: TargetAdapter> Shipped<A> {
 
     // One build of the slice into `project`, as the component's export puts it.
     async fn build(&self, project: &Scratch, model: &Scripted) -> Result<Report, Error> {
-        let slice = slice();
+        self.build_slice(project, model, &slice()).await
+    }
+
+    // One build of `slice` into `project`, for a scenario over a slice of its own.
+    async fn build_slice(
+        &self, project: &Scratch, model: &Scripted, slice: &Slice,
+    ) -> Result<Report, Error> {
         let ctx = Context {
             adapter_id: self.name,
-            slice: &slice,
+            slice,
             workspace: root(project),
             worker: &A::WORKER,
             model,
@@ -274,18 +280,34 @@ impl<A: TargetAdapter> Shipped<A> {
 // The slice every build is handed: one requirement under the `orders` stem,
 // in a slice named for a part of it.
 fn slice() -> Slice {
+    slice_for("orders-reading", &["orders.get-id.return-order"])
+}
+
+// A slice named `name` over one requirement per subject, `REQ-001` on, its
+// specification cut rendering each under its heading as the engine does.
+fn slice_for(name: &str, subjects: &[&str]) -> Slice {
+    let requirements: Vec<String> =
+        (1..=subjects.len()).map(|number| format!("REQ-{number:03}")).collect();
+    let spec = subjects
+        .iter()
+        .zip(&requirements)
+        .map(|(subject, id)| {
+            format!(
+                "\n### Requirement: {subject}\n\nID: {id}\n\nThe behaviour `{subject}` states.\n"
+            )
+        })
+        .fold("# Specification\n".to_owned(), |spec, block| spec + &block);
     Slice {
         id: "SLICE-001".to_owned(),
-        name: "orders-reading".to_owned(),
+        name: name.to_owned(),
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-        requirements: vec!["REQ-001".to_owned()],
-        spec: "# Specification\n\n## Requirement: orders.get-id.return-order\n\nID: REQ-001\n\nAn \
-               order is returned by its id.\n"
-            .to_owned(),
+        spec,
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders-reading\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: \
-               Order\nDepends on: none\n"
-            .to_owned(),
+        plan: format!(
+            "## Slice: {name}\n\nID: SLICE-001\nRequirements: [{}]\nTypes: [Order]\n",
+            requirements.join(", ")
+        ),
+        requirements,
     }
 }
 
@@ -915,6 +937,402 @@ async fn omnia_build_process_refused() {
     );
 }
 
+// A module under `crates/start/src` that loads a table into the store for
+// another stem, or warms a token before that stem asks, through the trait
+// or as a method of the provider, is refused at the build under a finding
+// of its own, apart from the lifecycle's, with each call named at its line;
+// a `start` module holding neither — a cross-cutting rule, naming
+// `access_token` as a field and a rename and never calling it — passes.
+// The slice's own turn deletes the loader with its `pub mod` line, and the
+// accepted report names what the tree still holds.
+#[tokio::test]
+async fn omnia_build_loader_refused() {
+    let project = scratch();
+    let loader = "//! Loads the stop table and warms the token.\n\nuse omnia_sdk::{Identity, \
+                  StateStore};\n\n/// Load the stops into the store.\n///\n/// # Errors\n///\n/// \
+                  `server_error` when the store refuses.\npub async fn load_stops<P: \
+                  StateStore>(provider: &P, stops: &[u8]) -> omnia_sdk::Result<()> {\n    \
+                  provider.set(\"orders/stops\", stops, None).await\n}\n\n/// Warm \
+                  the token.\n///\n/// # Errors\n///\n/// `bad_gateway` when the issuer \
+                  refuses.\npub async fn warm_token<P: Identity>(provider: &P) -> \
+                  omnia_sdk::Result<String> {\n    Identity::access_token(provider, \
+                  \"orders\").await\n}\n";
+    let guard = "//! The bearer rule every handler calls first.\n\nuse serde::Deserialize;\n\n/// \
+                 The token a caller presents, as the issuer spells it.\n#[derive(Deserialize)]\npub \
+                 struct Bearer {\n    /// The token itself.\n    #[serde(rename = \
+                 \"access_token\")]\n    pub access_token: String,\n}\n\n/// Whether the request \
+                 carries the deployment's bearer token.\n#[must_use]\npub fn authorised(header: \
+                 Option<&str>, token: &str) -> bool {\n    header.and_then(|value| \
+                 value.strip_prefix(\"Bearer \")) == Some(token)\n}\n";
+    let written = [
+        ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
+        ("crates/start/src/lib.rs", "//! The `start` stem.\n\npub mod guard;\npub mod stops;\n"),
+        ("crates/start/src/guard.rs", guard),
+        ("crates/start/src/stops.rs", loader),
+    ];
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs", "crates/start/src/stops.rs"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs"]}"#;
+    let model = Scripted::answering([first, repaired]).calling(0, [write_files(&written)]).calling(
+        1,
+        [
+            edit_files(&[("crates/start/src/lib.rs", "pub mod stops;\n", "")]),
+            delete_files(&["crates/start/src/stops.rs"]),
+        ],
+    );
+
+    let report = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a module under `crates/start/src/` loads for another stem",
+        "crates/start/src/stops.rs:11: a table loaded for another stem (`provider.set`)",
+        "crates/start/src/stops.rs:20: a token warmed before use (`Identity::access_token`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["is the process the source was", "simulates the host", "guard.rs:"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    assert!(project.read("crates/start/src/stops.rs").is_none(), "the loader is removed");
+    assert!(
+        report.written.iter().any(|path| path == "crates/start/src/guard.rs"),
+        "the rule is reported: {:?}",
+        report.written
+    );
+    assert!(
+        !report.written.iter().any(|path| path == "crates/start/src/stops.rs"),
+        "a removed module is not reported: {:?}",
+        report.written
+    );
+}
+
+// A read of the store under a constant key whose miss is answered empty
+// anywhere in the function that reads — a `None` arm answered as an empty
+// map seven lines below it — is refused at the build with the answer named
+// at its line and the read's beside it, while a read under a key built from
+// the input, one whose miss fetches and stores the table, and a default on
+// the hit's own arm, which decodes what the store held, pass. The slice's
+// own turn lays the fetch into the read, and the accepted report names the
+// module.
+#[tokio::test]
+async fn omnia_build_empty_miss_refused() {
+    let project = scratch();
+    let empty = "    let cached = StateStore::get(provider, RATES_KEY).await?;\n    let table = \
+                 match cached {\n        Some(bytes) => {\n            let decoded: HashMap<String, \
+                 u32> = serde_json::from_slice(&bytes).unwrap_or_default();\n            \
+                 tracing::debug!(entries = decoded.len(), \"rates read from the store\");\n            \
+                 decoded\n        }\n        None => HashMap::new(),\n    };\n    Ok(table)\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, RATES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes).unwrap_or_default());\n    }\n    let \
+                   bytes = fetch_rates(provider).await?;\n    StateStore::set(provider, RATES_KEY, \
+                   &bytes, Some(3600)).await?;\n    decode(&bytes)\n";
+    let module = |rates: &str| {
+        format!(
+            "//! Rates by region.\n\nuse std::collections::HashMap;\n\nuse omnia_sdk::{{HttpRequest, \
+             StateStore}};\n\n/// The store key the rate table sits under.\npub const RATES_KEY: \
+             &str = \"rates/table\";\n\n/// The rate table, fetched when the store holds none.\n///\n\
+             /// # Errors\n///\n/// `bad_gateway` when the upstream refuses.\npub async fn rates<P: \
+             HttpRequest + StateStore>(provider: &P) -> omnia_sdk::Result<HashMap<String, \
+             u32>> {{\n{rates}}}\n\n/// The regions a customer chose, none when none yet.\n///\n/// \
+             # Errors\n///\n/// `server_error` when the store refuses.\npub async fn chosen<P: \
+             StateStore>(provider: &P, customer: &str) -> omnia_sdk::Result<Vec<String>> {{\n    \
+             let key = format!(\"rates/chosen/{{customer}}\");\n    let Some(bytes) = \
+             StateStore::get(provider, &key).await? else {{\n        return Ok(Vec::new());\n    \
+             }};\n    Ok(serde_json::from_slice(&bytes).unwrap_or_default())\n}}\n\nasync fn \
+             fetch_rates<P: HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    \
+             Ok(Vec::new())\n}}\n\nfn decode(bytes: &[u8]) -> omnia_sdk::Result<HashMap<String, \
+             u32>> {{\n    Ok(serde_json::from_slice(bytes).unwrap_or_default())\n}}\n"
+        )
+    };
+    let first_tree = module(empty);
+    let written = [
+        ("crates/rates/Cargo.toml", "[package]\nname = \"rates\"\n"),
+        ("crates/rates/src/lib.rs", "//! The `rates` stem.\n\npub mod table;\n"),
+        ("crates/rates/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/rates/Cargo.toml", "crates/rates/src/lib.rs", "crates/rates/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written)])
+        .calling(1, [edit_files(&[("crates/rates/src/table.rs", empty, fetched)])]);
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a table read from the store under one key answers empty on a miss",
+        "crates/rates/src/table.rs:23: a miss answered as no entries (`None => HashMap::new()`) \
+         after the read at line 16",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/rates/src/table.rs:").count(),
+        1,
+        "a read under a key built from the input, a default outside the reading function, and \
+         one on the hit's own arm are no finding: {correction}"
+    );
+    assert!(
+        text(&project, "crates/rates/src/table.rs").contains("StateStore::set(provider, RATES_KEY"),
+        "the miss fetches and stores the table"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/rates/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
+// A read under a constant key in a crate-private function — `pub(crate)
+// async fn`, which `rustfmt` lays with no space after `pub` — is held to
+// the function it sits in as a public one is, so a `None` arm answered
+// empty seven lines below the read is named rather than passed over. The
+// slice's own turn lays the fetch into the read, and the accepted report
+// names the module.
+#[tokio::test]
+async fn omnia_build_crate_private_miss_refused() {
+    let project = scratch();
+    let empty = "    let cached = StateStore::get(provider, ZONES_KEY).await?;\n    let table = \
+                 match cached {\n        Some(bytes) => {\n            let decoded: Vec<String> = \
+                 serde_json::from_slice(&bytes)?;\n            tracing::debug!(entries = \
+                 decoded.len(), \"zones read from the store\");\n            decoded\n        }\n        \
+                 None => Vec::new(),\n    };\n    Ok(table)\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, ZONES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
+                   fetch_zones(provider).await?;\n    StateStore::set(provider, ZONES_KEY, &bytes, \
+                   Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
+    let module = |zones: &str| {
+        format!(
+            "//! Zones by region.\n\nuse omnia_sdk::{{HttpRequest, StateStore}};\n\n/// The store \
+             key the zone table sits under.\npub const ZONES_KEY: &str = \
+             \"zones/table\";\n\npub(crate) async fn zones<P: HttpRequest + StateStore>(provider: \
+             &P) -> omnia_sdk::Result<Vec<String>> {{\n{zones}}}\n\nasync fn fetch_zones<P: \
+             HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    Ok(Vec::new())\n}}\n"
+        )
+    };
+    let first_tree = module(empty);
+    let written = [
+        ("crates/zones/Cargo.toml", "[package]\nname = \"zones\"\n"),
+        ("crates/zones/src/lib.rs", "//! The `zones` stem.\n\nmod table;\n"),
+        ("crates/zones/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/zones/Cargo.toml", "crates/zones/src/lib.rs", "crates/zones/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written)])
+        .calling(1, [edit_files(&[("crates/zones/src/table.rs", empty, fetched)])]);
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    assert!(
+        correction.contains(
+            "crates/zones/src/table.rs:16: a miss answered as no entries (`None => Vec::new()`) \
+             after the read at line 9"
+        ),
+        "the arm past the window is named: {correction}"
+    );
+    assert_eq!(
+        correction.matches("crates/zones/src/table.rs:").count(),
+        1,
+        "the fetch helper's own empty answer is no finding: {correction}"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/zones/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
+// A miss answered empty with no `return` — an `Ok(HashMap::new())` standing
+// as the function's tail once the hit has returned above it, and an arm
+// naming `None` beside an error, `Ok(None) | Err(_)`, answering
+// `Ok(BTreeMap::new())` — is named at its line as the returning spellings
+// are, while the fetch helper's own empty tail, in a function of its own,
+// is none. The slice's own turn lays the fetch into both reads, and the
+// accepted report names the module.
+#[tokio::test]
+async fn omnia_build_tail_miss_refused() {
+    let project = scratch();
+    let tail = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        return \
+                Ok(serde_json::from_slice(&bytes)?);\n    }\n    Ok(HashMap::new())\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
+                   fetch_fees(provider).await?;\n    StateStore::set(provider, FEES_KEY, &bytes, \
+                   Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
+    let arm = "        Ok(None) | Err(_) => Ok(BTreeMap::new()),\n";
+    let loaded = "        Ok(None) => {\n            let bytes = fetch_fees(provider).await?;\n            \
+                  StateStore::set(provider, SURCHARGES_KEY, &bytes, Some(3600)).await?;\n            \
+                  Ok(serde_json::from_slice(&bytes)?)\n        }\n        Err(error) => \
+                  Err(error),\n";
+    let module = |fees: &str, none: &str| {
+        format!(
+            "//! Fees by region.\n\nuse std::collections::{{BTreeMap, HashMap}};\n\nuse \
+             omnia_sdk::{{HttpRequest, StateStore}};\n\n/// The store key the fee table sits \
+             under.\npub const FEES_KEY: &str = \"fees/table\";\n\n/// The store key the surcharge \
+             table sits under.\npub const SURCHARGES_KEY: &str = \"fees/surcharges\";\n\n/// The fee \
+             table, fetched when the store holds none.\n///\n/// # Errors\n///\n/// `bad_gateway` \
+             when the upstream refuses.\npub async fn fees<P: HttpRequest + StateStore>(provider: \
+             &P) -> omnia_sdk::Result<HashMap<String, u32>> {{\n{fees}}}\n\n/// The surcharge \
+             table, fetched when the store holds none.\n///\n/// # Errors\n///\n/// `bad_gateway` \
+             when the upstream refuses.\npub async fn surcharges<P: HttpRequest + \
+             StateStore>(provider: &P) -> omnia_sdk::Result<BTreeMap<String, u32>> {{\n    match \
+             StateStore::get(provider, SURCHARGES_KEY).await {{\n        Ok(Some(bytes)) => \
+             Ok(serde_json::from_slice(&bytes)?),\n{none}    }}\n}}\n\nasync fn fetch_fees<P: \
+             HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    Ok(Vec::new())\n}}\n"
+        )
+    };
+    let first_tree = module(tail, arm);
+    let written = [
+        ("crates/fees/Cargo.toml", "[package]\nname = \"fees\"\n"),
+        ("crates/fees/src/lib.rs", "//! The `fees` stem.\n\npub mod table;\n"),
+        ("crates/fees/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/fees/Cargo.toml", "crates/fees/src/lib.rs", "crates/fees/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report]).calling(0, [write_files(&written)]).calling(
+        1,
+        [edit_files(&[
+            ("crates/fees/src/table.rs", tail, fetched),
+            ("crates/fees/src/table.rs", arm, loaded),
+        ])],
+    );
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "crates/fees/src/table.rs:22: a miss answered as no entries (`Ok(HashMap::new())`) after \
+         the read at line 19",
+        "crates/fees/src/table.rs:33: a miss answered as no entries (`Ok(None) | Err(_) => \
+         Ok(BTreeMap::new())`) after the read at line 31",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/fees/src/table.rs:").count(),
+        2,
+        "the fetch helper's own empty tail is no finding: {correction}"
+    );
+    assert_eq!(
+        text(&project, "crates/fees/src/table.rs").matches("StateStore::set(provider, ").count(),
+        2,
+        "both misses fetch and store the table"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/fees/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
+// A stem is one word, so a crate the turn lays under the head of a
+// hyphenated stem of the slice, `crates/order/` holding the rest as a part
+// of `order-items`, is refused at the build with the directory named, while
+// `common` and a crate the tree held before the turn pass, the head of
+// another of the slice's stems among them. The slice's own turn lays the
+// stem's crate whole, empties the split one, and puts the stem's lines in
+// the root manifest, and the accepted report names what the tree holds.
+#[tokio::test]
+async fn omnia_build_stem_split() {
+    let project = scratch();
+    project.write("crates/shipment/Cargo.toml", "[package]\nname = \"shipment\"\n");
+    project.write("crates/shipment/src/lib.rs", "//! The `shipment` stem.\n");
+    let slice = slice_for(
+        "order-items",
+        &["order-items.add.reject-unknown-sku", "shipment-notes.record.keep-latest"],
+    );
+    let module = "//! Order items.\n\n/// How many lines an order holds.\n#[must_use]\npub fn \
+                  count(items: &[u32]) -> usize {\n    items.len()\n}\n";
+    let split = [
+        ("crates/order/Cargo.toml", "[package]\nname = \"order\"\n"),
+        ("crates/order/src/lib.rs", "//! The `order` stem.\n\npub mod items;\n"),
+        ("crates/order/src/items.rs", module),
+    ];
+    let whole = [
+        ("crates/order-items/Cargo.toml", "[package]\nname = \"order-items\"\n"),
+        ("crates/order-items/src/lib.rs", "//! The `order-items` stem.\n\npub mod order_items;\n"),
+        ("crates/order-items/src/order_items.rs", module),
+    ];
+    let head_path = "order = { path = \"crates/order\" }\n";
+    let head_crate = "order.workspace = true\n";
+    let stem_path = "order-items = { path = \"crates/order-items\" }\n";
+    let stem_crate = "order-items.workspace = true\n";
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/order/Cargo.toml", "crates/order/src/lib.rs", "crates/order/src/items.rs", "Cargo.toml"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/order-items/Cargo.toml", "crates/order-items/src/lib.rs", "crates/order-items/src/order_items.rs", "Cargo.toml"]}"#;
+    let model = Scripted::answering([first, repaired])
+        .calling(
+            0,
+            [
+                write_files(&split),
+                edit_files(&[
+                    (
+                        "Cargo.toml",
+                        OMNIA_PATH_CRATE_ANCHOR,
+                        &format!("{OMNIA_PATH_CRATE_ANCHOR}{head_path}"),
+                    ),
+                    ("Cargo.toml", OMNIA_STEM_ANCHOR, &format!("{OMNIA_STEM_ANCHOR}{head_crate}")),
+                ]),
+            ],
+        )
+        .calling(
+            1,
+            [
+                write_files(&whole),
+                edit_files(&[
+                    ("Cargo.toml", head_path, stem_path),
+                    ("Cargo.toml", head_crate, stem_crate),
+                ]),
+                delete_files(&[
+                    "crates/order/Cargo.toml",
+                    "crates/order/src/lib.rs",
+                    "crates/order/src/items.rs",
+                ]),
+            ],
+        );
+
+    let report =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a stem is one word and is never split at its hyphen",
+        "`crates/order/` is laid for `order`, the head of the stem `order-items`, whose crate is \
+         `crates/order-items/` (package `order-items`, path `order_items`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["`crates/shipment/`", "`crates/common/`"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+    assert!(
+        project.read("crates/order-items/src/order_items.rs").is_some(),
+        "the stem's crate holds the module"
+    );
+    assert!(project.read("crates/order/src/items.rs").is_none(), "the split crate is emptied");
+    let manifest = text(&project, "Cargo.toml");
+    assert!(
+        manifest.contains(stem_path) && manifest.contains(stem_crate),
+        "the root manifest names the stem: {manifest}"
+    );
+    assert!(
+        !manifest.contains(head_path) && !manifest.contains(head_crate),
+        "the root manifest no longer names the head: {manifest}"
+    );
+    assert!(
+        report.written.iter().any(|path| path == "crates/order-items/src/order_items.rs"),
+        "the module is reported: {:?}",
+        report.written
+    );
+    assert!(
+        !report.written.iter().any(|path| path.starts_with("crates/order/")),
+        "a removed file is not reported: {:?}",
+        report.written
+    );
+}
+
 // The two tables are held to their lists at every verify: a route's
 // constant no statement or no rung entry names, a consumed topic's no rung
 // entry names, a topic the rung lists and no statement consumes, a topic
@@ -990,6 +1408,56 @@ async fn omnia_tables_held() {
     assert!(routes.contains(orders_statement) && !routes.contains(LITERAL_ROUTE), "{routes}");
     let topics = text(&project, "crates/common/src/routes/topic.rs");
     assert!(topics.contains("ORDER_SHIPPED") && !topics.contains("ORDER_RETURNED"), "{topics}");
+}
+
+// A `pub const` of the configuration catalog no module outside `common`
+// reads is named at its line, a mention in a doc comment counting for
+// nothing, while a key a module reads and the template's own `ENV` pass.
+// Removing the constant is the repair.
+#[tokio::test]
+async fn omnia_setting_unread() {
+    let project = omnia_tree();
+    let env_line = "pub const ENV: &str = \"ENV\";\n";
+    let unread = "\n/// Minutes between refreshes of the rate table.\npub const \
+                  RATES_REFRESH_MINUTES: &str = \"RATES_REFRESH_MINUTES\";\n";
+    let catalog = omnia_seed("crates/common/src/config.rs").replace(
+        env_line,
+        &format!(
+            "{env_line}\n/// Base URL of the rates upstream.\npub const RATES_URL: &str = \
+             \"RATES_URL\";\n{unread}"
+        ),
+    );
+    project.write("crates/common/src/config.rs", &catalog);
+    project.write(
+        "crates/rates/src/table.rs",
+        "//! The rate table, refreshed every `RATES_REFRESH_MINUTES`.\n\nuse common::config;\nuse \
+         omnia_sdk::Config;\n\n/// The upstream the rates come from.\n///\n/// # Errors\n///\n/// \
+         `bad_request` when the deployment sets none.\npub async fn upstream<P: \
+         Config>(provider: &P) -> omnia_sdk::Result<String> {\n    Config::get(provider, \
+         config::RATES_URL).await\n}\n",
+    );
+    let model = Scripted::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/common/src/config.rs", unread, "")])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let unread_at = line_of(&catalog, "pub const RATES_REFRESH_MINUTES");
+    for line in [
+        "a setting of the catalog is read by no module".to_owned(),
+        format!(
+            "crates/common/src/config.rs:{unread_at}: setting `RATES_REFRESH_MINUTES` is read by \
+             no module"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["`RATES_URL`", "`ENV`"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+    assert!(!text(&project, "crates/common/src/config.rs").contains("RATES_REFRESH_MINUTES"));
 }
 
 // A route list statement over a literal path rather than a table constant.

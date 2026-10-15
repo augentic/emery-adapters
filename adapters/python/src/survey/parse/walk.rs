@@ -339,6 +339,7 @@ impl<'s> Walker<'s> {
                     private: hidden(&name),
                     lines,
                     signature,
+                    table: None,
                 });
             }
         } else {
@@ -438,6 +439,7 @@ impl<'s> Walker<'s> {
                     private: hidden(&name),
                     lines,
                     signature: header.trim_end_matches(':').to_owned(),
+                    table: None,
                 });
             }
         } else {
@@ -738,6 +740,9 @@ impl<'s> Walker<'s> {
                 if let Some(class) = self.in_class_body().map(str::to_owned) {
                     let signature = self.excerpt(range);
                     let lines = self.lines(range);
+                    let table = value
+                        .filter(|value| table(value) && !empty(value))
+                        .map(|_| self.text_of(range).trim_end().to_owned());
                     if let Some(decl) =
                         self.module.classes.iter_mut().rev().find(|c| c.name == class)
                     {
@@ -747,6 +752,7 @@ impl<'s> Walker<'s> {
                             private: hidden(&name),
                             lines,
                             signature,
+                            table,
                         });
                     }
                     self.bind(
@@ -776,6 +782,9 @@ impl<'s> Walker<'s> {
                     .is_some_and(|value| matches!(core(value), Core::Call(_)))
                     .then_some(self.module.calls.len());
                 let string = value.and_then(string_value);
+                let table = value
+                    .filter(|value| table(value) && !empty(value))
+                    .map(|_| self.text_of(range).trim_end().to_owned());
                 self.bind(
                     name,
                     self.scope(),
@@ -786,6 +795,7 @@ impl<'s> Walker<'s> {
                         string,
                         init,
                         head,
+                        table,
                     },
                     range,
                 );
@@ -1250,6 +1260,40 @@ fn settings(expr: &Expr) -> bool {
         _ => return false,
     }
     any && all
+}
+
+// A dict, list, tuple, or set written out as data: every key, value, or
+// element a literal, a name, an attribute path, or data again — never a
+// call, a lambda, a comprehension, or a splat, which make it wiring or a
+// derivation.
+fn table(expr: &Expr) -> bool {
+    fn datum(expr: &Expr) -> bool {
+        match expr {
+            Expr::Name(_) | Expr::Attribute(_) => true,
+            other => literal(other) || table(other),
+        }
+    }
+    match expr {
+        Expr::Dict(dict) => {
+            dict.items.iter().all(|item| item.key.as_ref().is_some_and(datum) && datum(&item.value))
+        }
+        Expr::List(list) => list.elts.iter().all(datum),
+        Expr::Tuple(tuple) => tuple.elts.iter().all(datum),
+        Expr::Set(set) => set.elts.iter().all(datum),
+        _ => false,
+    }
+}
+
+// A dict, list, tuple, or set with no entry, which a module fills as it
+// runs: a registry or a cache, not data a build could read.
+const fn empty(expr: &Expr) -> bool {
+    match expr {
+        Expr::Dict(dict) => dict.items.is_empty(),
+        Expr::List(list) => list.elts.is_empty(),
+        Expr::Tuple(tuple) => tuple.elts.is_empty(),
+        Expr::Set(set) => set.elts.is_empty(),
+        _ => false,
+    }
 }
 
 fn wraps(call: &ExprCall) -> bool {
