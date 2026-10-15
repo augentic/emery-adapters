@@ -941,8 +941,9 @@ async fn omnia_build_process_refused() {
 // another stem, or warms a token before that stem asks, through the trait
 // or as a method of the provider, is refused at the build under a finding
 // of its own, apart from the lifecycle's, with each call named at its line;
-// a `start` module holding neither, a cross-cutting rule, passes. The
-// slice's own turn deletes the loader with its `pub mod` line, and the
+// a `start` module holding neither — a cross-cutting rule, naming
+// `access_token` as a field and a rename and never calling it — passes.
+// The slice's own turn deletes the loader with its `pub mod` line, and the
 // accepted report names what the tree still holds.
 #[tokio::test]
 async fn omnia_build_loader_refused() {
@@ -956,7 +957,10 @@ async fn omnia_build_loader_refused() {
                   refuses.\npub async fn warm_token<P: Identity>(provider: &P) -> \
                   omnia_sdk::Result<String> {\n    Identity::access_token(provider, \
                   \"orders\").await\n}\n";
-    let guard = "//! The bearer rule every handler calls first.\n\n/// Whether the request \
+    let guard = "//! The bearer rule every handler calls first.\n\nuse serde::Deserialize;\n\n/// \
+                 The token a caller presents, as the issuer spells it.\n#[derive(Deserialize)]\npub \
+                 struct Bearer {\n    /// The token itself.\n    #[serde(rename = \
+                 \"access_token\")]\n    pub access_token: String,\n}\n\n/// Whether the request \
                  carries the deployment's bearer token.\n#[must_use]\npub fn authorised(header: \
                  Option<&str>, token: &str) -> bool {\n    header.and_then(|value| \
                  value.strip_prefix(\"Bearer \")) == Some(token)\n}\n";
@@ -983,7 +987,7 @@ async fn omnia_build_loader_refused() {
     for line in [
         "a module under `crates/start/src/` loads for another stem",
         "crates/start/src/stops.rs:11: a table loaded for another stem (`provider.set`)",
-        "crates/start/src/stops.rs:20: a token warmed before use (`access_token`)",
+        "crates/start/src/stops.rs:20: a token warmed before use (`Identity::access_token`)",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
@@ -1007,21 +1011,22 @@ async fn omnia_build_loader_refused() {
 // anywhere in the function that reads — a `None` arm answered as an empty
 // map seven lines below it — is refused at the build with the answer named
 // at its line and the read's beside it, while a read under a key built from
-// the input, and one whose miss fetches and stores the table, pass. The
-// slice's own turn lays the fetch into the read, and the accepted report
-// names the module.
+// the input, one whose miss fetches and stores the table, and a default on
+// the hit's own arm, which decodes what the store held, pass. The slice's
+// own turn lays the fetch into the read, and the accepted report names the
+// module.
 #[tokio::test]
 async fn omnia_build_empty_miss_refused() {
     let project = scratch();
     let empty = "    let cached = StateStore::get(provider, RATES_KEY).await?;\n    let table = \
-                 match cached {\n        Some(bytes) => {\n            let decoded = \
-                 decode(&bytes)?;\n            tracing::debug!(entries = decoded.len(), \"rates \
-                 read from the store\");\n            decoded\n        }\n        None => \
-                 HashMap::new(),\n    };\n    Ok(table)\n";
+                 match cached {\n        Some(bytes) => {\n            let decoded: HashMap<String, \
+                 u32> = serde_json::from_slice(&bytes).unwrap_or_default();\n            \
+                 tracing::debug!(entries = decoded.len(), \"rates read from the store\");\n            \
+                 decoded\n        }\n        None => HashMap::new(),\n    };\n    Ok(table)\n";
     let fetched = "    if let Some(bytes) = StateStore::get(provider, RATES_KEY).await? {\n        \
-                   return decode(&bytes);\n    }\n    let bytes = fetch_rates(provider).await?;\n    \
-                   StateStore::set(provider, RATES_KEY, &bytes, Some(3600)).await?;\n    \
-                   decode(&bytes)\n";
+                   return Ok(serde_json::from_slice(&bytes).unwrap_or_default());\n    }\n    let \
+                   bytes = fetch_rates(provider).await?;\n    StateStore::set(provider, RATES_KEY, \
+                   &bytes, Some(3600)).await?;\n    decode(&bytes)\n";
     let module = |rates: &str| {
         format!(
             "//! Rates by region.\n\nuse std::collections::HashMap;\n\nuse omnia_sdk::{{HttpRequest, \
@@ -1065,8 +1070,8 @@ async fn omnia_build_empty_miss_refused() {
     assert_eq!(
         correction.matches("crates/rates/src/table.rs:").count(),
         1,
-        "a read under a key built from the input, and a default outside the reading function, \
-         are no finding: {correction}"
+        "a read under a key built from the input, a default outside the reading function, and \
+         one on the hit's own arm are no finding: {correction}"
     );
     assert!(
         text(&project, "crates/rates/src/table.rs").contains("StateStore::set(provider, RATES_KEY"),
@@ -1074,6 +1079,67 @@ async fn omnia_build_empty_miss_refused() {
     );
     assert!(
         accepted.written.iter().any(|path| path == "crates/rates/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
+// A read under a constant key in a crate-private function — `pub(crate)
+// async fn`, which `rustfmt` lays with no space after `pub` — is held to
+// the function it sits in as a public one is, so a `None` arm answered
+// empty seven lines below the read is named rather than passed over. The
+// slice's own turn lays the fetch into the read, and the accepted report
+// names the module.
+#[tokio::test]
+async fn omnia_build_crate_private_miss_refused() {
+    let project = scratch();
+    let empty = "    let cached = StateStore::get(provider, ZONES_KEY).await?;\n    let table = \
+                 match cached {\n        Some(bytes) => {\n            let decoded: Vec<String> = \
+                 serde_json::from_slice(&bytes)?;\n            tracing::debug!(entries = \
+                 decoded.len(), \"zones read from the store\");\n            decoded\n        }\n        \
+                 None => Vec::new(),\n    };\n    Ok(table)\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, ZONES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
+                   fetch_zones(provider).await?;\n    StateStore::set(provider, ZONES_KEY, &bytes, \
+                   Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
+    let module = |zones: &str| {
+        format!(
+            "//! Zones by region.\n\nuse omnia_sdk::{{HttpRequest, StateStore}};\n\n/// The store \
+             key the zone table sits under.\npub const ZONES_KEY: &str = \
+             \"zones/table\";\n\npub(crate) async fn zones<P: HttpRequest + StateStore>(provider: \
+             &P) -> omnia_sdk::Result<Vec<String>> {{\n{zones}}}\n\nasync fn fetch_zones<P: \
+             HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    Ok(Vec::new())\n}}\n"
+        )
+    };
+    let first_tree = module(empty);
+    let written = [
+        ("crates/zones/Cargo.toml", "[package]\nname = \"zones\"\n"),
+        ("crates/zones/src/lib.rs", "//! The `zones` stem.\n\nmod table;\n"),
+        ("crates/zones/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/zones/Cargo.toml", "crates/zones/src/lib.rs", "crates/zones/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written)])
+        .calling(1, [edit_files(&[("crates/zones/src/table.rs", empty, fetched)])]);
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    assert!(
+        correction.contains(
+            "crates/zones/src/table.rs:16: a miss answered as no entries (`None => Vec::new()`) \
+             after the read at line 9"
+        ),
+        "the arm past the window is named: {correction}"
+    );
+    assert_eq!(
+        correction.matches("crates/zones/src/table.rs:").count(),
+        1,
+        "the fetch helper's own empty answer is no finding: {correction}"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/zones/src/table.rs"),
         "the module is reported: {:?}",
         accepted.written
     );

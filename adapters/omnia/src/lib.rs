@@ -237,12 +237,12 @@ impl<'a> Tree<'a> {
     }
 
     // One finding naming every `StateStore::get` under a constant key whose
-    // miss is answered empty within the function that reads, each
-    // `<path>:<line>: <what>` at the line that answers it: a table read
-    // under one key is loaded on a miss, so a read answering an empty
-    // collection there has laid the cache and lost the table. A read under
-    // a key built from the input is a lookup, whose miss is its own, and no
-    // finding.
+    // miss is answered empty within the function that reads, its hit arms
+    // set aside, each `<path>:<line>: <what>` at the line that answers it: a
+    // table read under one key is loaded on a miss, so a read answering an
+    // empty collection there has laid the cache and lost the table. A read
+    // under a key built from the input is a lookup, whose miss is its own,
+    // and no finding.
     fn misses(&self) -> Result<Vec<String>, Error> {
         let mut lines = Vec::new();
         for file in self.modules()? {
@@ -254,12 +254,12 @@ impl<'a> Tree<'a> {
                     continue;
                 }
                 let end = function_end(&all, index);
-                for (offset, later) in all[index..end].iter().enumerate() {
+                for at in answering(&all, index, end) {
                     for (spelling, what) in EMPTY {
-                        if later.contains(spelling) {
+                        if all[at].contains(spelling) {
                             lines.push(format!(
                                 "{path}:{}: {what} (`{spelling}`) after the read at line {}",
-                                index + offset + 1,
+                                at + 1,
                                 index + 1
                             ));
                         }
@@ -805,14 +805,19 @@ const LIFECYCLE: &[(&str, &str)] = &[
 // start-up step that loads for another stem: a table written to the store
 // for a stage to read, or a token warmed before the stem that sends it
 // asks, spelled through the trait or as a method of the provider. Each is
-// matched as a word, so `headers.set(` and `access_token_for` are none.
+// matched as a word, so `headers.set(` and `access_token_for` are none, and
+// the token's is the call alone, so a field, a rename, or a string named
+// `access_token` is none.
 const LOADER: &[(&str, &str)] = &[
     ("StateStore::set", "a table loaded for another stem"),
     ("StateStore>::set", "a table loaded for another stem"),
     ("provider.set", "a table loaded for another stem"),
     ("provider().set", "a table loaded for another stem"),
     ("store.set", "a table loaded for another stem"),
-    ("access_token", "a token warmed before use"),
+    ("Identity::access_token", "a token warmed before use"),
+    ("Identity>::access_token", "a token warmed before use"),
+    ("provider.access_token", "a token warmed before use"),
+    ("provider().access_token", "a token warmed before use"),
 ];
 
 // How a miss is answered empty in the function that reads the store under a
@@ -850,14 +855,7 @@ const MISS_WINDOW: usize = 6;
 // closing brace at the indentation of the nearest `fn` head above, as
 // `rustfmt` lays it; `MISS_WINDOW` lines where no head is above it.
 fn function_end(lines: &[&str], index: usize) -> usize {
-    let head = lines[..=index].iter().rposition(|line| {
-        let rest = line.trim_start();
-        let rest = rest.strip_prefix("pub ").unwrap_or(rest);
-        let rest = rest.strip_prefix("(crate) ").unwrap_or(rest);
-        let rest = rest.strip_prefix("async ").unwrap_or(rest);
-        rest.starts_with("fn ")
-    });
-    let Some(head) = head else {
+    let Some(head) = lines[..=index].iter().rposition(|line| opens_fn(line)) else {
         return lines.len().min(index + MISS_WINDOW);
     };
     let indent = lines[head].len() - lines[head].trim_start().len();
@@ -865,6 +863,66 @@ fn function_end(lines: &[&str], index: usize) -> usize {
         .iter()
         .position(|line| line.len() - line.trim_start().len() == indent && line.trim() == "}")
         .map_or(lines.len(), |offset| index + 1 + offset)
+}
+
+// Whether `line` is a function's head: `fn` behind any visibility — `pub`,
+// `pub(crate)`, `pub(super)`, `pub(in ..)` — and `const`, `async`, or
+// `unsafe`, as `rustfmt` lays one.
+fn opens_fn(line: &str) -> bool {
+    let mut rest = line.trim_start();
+    if let Some(after) = rest.strip_prefix("pub") {
+        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
+        rest = scoped.map_or(after, |(_, after)| after).trim_start();
+    }
+    for qualifier in ["const ", "async ", "unsafe "] {
+        rest = rest.strip_prefix(qualifier).unwrap_or(rest);
+    }
+    rest.starts_with("fn ")
+}
+
+// The lines from the read at `index` to `end` that can answer its miss:
+// every line but a hit arm's — a `Some(..) =>` arm, the body of an `if let
+// Some(..)`, and what follows a `let .. else` once its block closes — since
+// a default there decodes what the store held rather than answering the
+// miss. A hit arm runs over the lines indented past its head and the brace
+// that closes it, as `rustfmt` lays them.
+fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let mut answering = Vec::new();
+    let mut hit: Option<usize> = None;
+    let mut let_else: Option<usize> = None;
+    for (at, line) in lines.iter().enumerate().take(end).skip(index) {
+        let text = line.trim_start();
+        if text.is_empty() {
+            continue;
+        }
+        if let Some(head) = hit {
+            if indent(line) > head || text == "{" {
+                continue;
+            }
+            hit = None;
+            if text.starts_with('}') {
+                continue;
+            }
+        }
+        if let_else.is_some_and(|head| indent(line) == head && text.starts_with('}')) {
+            break;
+        }
+        let arm =
+            (text.starts_with("Some(") || text.starts_with("Ok(Some(")) && text.contains("=>");
+        if arm || text.starts_with("if let Some(") {
+            hit = Some(indent(line));
+            continue;
+        }
+        answering.push(at);
+        if text.starts_with("let Some(") {
+            if text.ends_with("};") {
+                break;
+            }
+            let_else = Some(indent(line));
+        }
+    }
+    answering
 }
 
 // Whether `line` reads the store under a constant key: `StateStore::get(`
