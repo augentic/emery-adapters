@@ -741,7 +741,7 @@ impl<'s> Walker<'s> {
                     let signature = self.excerpt(range);
                     let lines = self.lines(range);
                     let table = value
-                        .filter(|value| table(value))
+                        .filter(|value| table(value) && !empty(value))
                         .map(|_| self.text_of(range).trim_end().to_owned());
                     if let Some(decl) =
                         self.module.classes.iter_mut().rev().find(|c| c.name == class)

@@ -14,7 +14,7 @@ The runner gains the measure recall lacks: `[[absent]]` spans in `expected.toml`
 
 Treated: `train` and `train-pair`, the two whose expectations moved for the rule. Controls: `express-orders` and `fastapi-routers`, whose `start` items moved to `[[absent]]` and whose middleware, CORS, error mapping, required-config, and health items stay; `nestjs-boilerplate`, `django-shop`, and `django-styleguide`, where the retired facts section laid (wiring alone, [the service modules](sdk-rules.md#the-service-modules)) and nothing moves.
 
-First, with no turn spent: `cargo run -p evals -- --facts train train-pair`, read for the section gone from `run-N.facts.md` and the `start` note's new sentence in the brief. Then three specify-only runs a case under `CURSOR_MODEL` pinned to `composer-2.5`, `EVAL_RUNS=3`: `cargo run -p evals -- train train-pair express-orders fastapi-routers nestjs-boilerplate django-shop django-styleguide`.
+First, with no turn spent: `cargo run -p evals -- --facts train train-pair`, read for the section gone from each case's `facts.md`. The `start` note's new sentence reaches no artifact of the runner, since a `--facts` run ends at the survey turn before any brief is laid; `tests/source.rs` shows it with no turn spent either, in `typescript`, `python`, and the two `*_bootstrap_clients` scenarios. Then three specify-only runs a case under `CURSOR_MODEL` pinned to `composer-2.5`, `EVAL_RUNS=3`: `cargo run -p evals -- train train-pair express-orders fastapi-routers nestjs-boilerplate django-shop django-styleguide`.
 
 ## Predictions
 

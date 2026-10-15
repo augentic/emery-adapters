@@ -276,8 +276,9 @@ impl<'s> Walker<'s> {
                         .trim_end_matches(['=', ';'])
                         .trim_end()
                         .to_owned();
-                    let (init, head) = self.initializer(property.value.as_ref());
-                    let table = property.value.as_ref().filter(|value| table(value)).map(|_| {
+                    let value = property.value.as_ref();
+                    let (init, head) = self.initializer(value);
+                    let table = value.filter(|value| table(value) && !empty(value)).map(|_| {
                         self.slice(property.span.start, property.span.end)
                             .trim_end()
                             .trim_end_matches(';')
