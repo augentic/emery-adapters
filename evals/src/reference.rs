@@ -1351,7 +1351,7 @@ oracle-shared /stops, /routes?all=true
             text.contains("- `/stops`, `/routes?all=true` answered from another fixture's"),
             "{text}"
         );
-        assert!(Oracle::parse("oracle-outbound \n").shared.is_empty());
+        assert_eq!(Oracle::parse("oracle-outbound \n").shared, Vec::<String>::new());
     }
 
     #[test]

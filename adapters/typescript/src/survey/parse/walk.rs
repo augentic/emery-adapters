@@ -21,7 +21,7 @@ use oxc_ast::ast::{
     MethodDefinitionKind, NewExpression, ObjectExpression, ObjectPropertyKind, PropertyDefinition,
     PropertyKey, ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility,
     TSEnumDeclaration, TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeAnnotation,
-    TSTypeName, ThrowStatement, UnaryOperator, VariableDeclarator,
+    TSTypeName, ThrowStatement, UnaryOperator, VariableDeclaration, VariableDeclarator,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
@@ -101,6 +101,9 @@ struct Walker<'s> {
     // The name the next function frame takes: a variable's, a method's.
     pending_name: Option<String>,
     constructor: bool,
+    // The keyword of the declaration whose declarators are being walked,
+    // which a table's text leads with.
+    keyword: Option<&'static str>,
 }
 
 struct Frame {
@@ -611,6 +614,12 @@ impl<'a> Visit<'a> for Walker<'_> {
         walk::walk_catch_clause(self, it);
     }
 
+    fn visit_variable_declaration(&mut self, it: &VariableDeclaration<'a>) {
+        let outer = self.keyword.replace(it.kind.as_str());
+        walk::walk_variable_declaration(self, it);
+        self.keyword = outer;
+    }
+
     fn visit_variable_declarator(&mut self, it: &VariableDeclarator<'a>) {
         let init = it.init.as_ref();
         let call = init
@@ -636,6 +645,10 @@ impl<'a> Visit<'a> for Walker<'_> {
                 if let Some(specifier) = &required {
                     self.import(&id.name, specifier, Imported::Whole, false);
                 }
+                let table = init.filter(|init| table(init) && !empty(init)).map(|_| {
+                    let keyword = self.keyword.unwrap_or("const");
+                    format!("{keyword} {}", self.slice(it.span.start, it.span.end))
+                });
                 self.bind(
                     id.name.to_string(),
                     scope,
@@ -646,6 +659,7 @@ impl<'a> Visit<'a> for Walker<'_> {
                         string,
                         init: kind,
                         head,
+                        table,
                     },
                     it.span,
                 );
@@ -672,6 +686,7 @@ impl<'a> Visit<'a> for Walker<'_> {
                             string: None,
                             init: Init::Other,
                             head: None,
+                            table: None,
                         },
                         property.span,
                     );
@@ -1069,6 +1084,16 @@ fn table(expr: &Expression<'_>) -> bool {
         Expression::ArrayExpression(array) => {
             array.elements.iter().all(|element| element.as_expression().is_some_and(datum))
         }
+        _ => false,
+    }
+}
+
+// An object or array with no entry, which a module fills as it runs: a
+// registry or a cache, not data a build could read.
+fn empty(expr: &Expression<'_>) -> bool {
+    match bare(expr) {
+        Expression::ObjectExpression(object) => object.properties.is_empty(),
+        Expression::ArrayExpression(array) => array.elements.is_empty(),
         _ => false,
     }
 }

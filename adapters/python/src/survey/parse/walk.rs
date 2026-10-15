@@ -782,6 +782,9 @@ impl<'s> Walker<'s> {
                     .is_some_and(|value| matches!(core(value), Core::Call(_)))
                     .then_some(self.module.calls.len());
                 let string = value.and_then(string_value);
+                let table = value
+                    .filter(|value| table(value) && !empty(value))
+                    .map(|_| self.text_of(range).trim_end().to_owned());
                 self.bind(
                     name,
                     self.scope(),
@@ -792,6 +795,7 @@ impl<'s> Walker<'s> {
                         string,
                         init,
                         head,
+                        table,
                     },
                     range,
                 );
@@ -1276,6 +1280,18 @@ fn table(expr: &Expr) -> bool {
         Expr::List(list) => list.elts.iter().all(datum),
         Expr::Tuple(tuple) => tuple.elts.iter().all(datum),
         Expr::Set(set) => set.elts.iter().all(datum),
+        _ => false,
+    }
+}
+
+// A dict, list, tuple, or set with no entry, which a module fills as it
+// runs: a registry or a cache, not data a build could read.
+const fn empty(expr: &Expr) -> bool {
+    match expr {
+        Expr::Dict(dict) => dict.items.is_empty(),
+        Expr::List(list) => list.elts.is_empty(),
+        Expr::Tuple(tuple) => tuple.elts.is_empty(),
+        Expr::Set(set) => set.elts.is_empty(),
         _ => false,
     }
 }

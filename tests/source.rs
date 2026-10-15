@@ -2095,7 +2095,10 @@ async fn typescript_types() {
 // A class field initialised by a table — an object or array of literals,
 // names, and member paths — is spelled with it in the `type` claim, its
 // lines re-indented under the class; a scalar, a construction, a function,
-// and an object holding a call stay spelled to their initializer.
+// and an object holding a call stay spelled to their initializer. An
+// exported constant initialised by a table is a `type` claim of its own,
+// the declaration whole less its blank lines; an empty one, a scalar, and
+// one the module does not export are none.
 #[tokio::test]
 async fn typescript_type_tables() {
     let project = scratch();
@@ -2112,7 +2115,9 @@ async fn typescript_type_tables() {
                  [51.5, -0.12];\n  static client = new Client(\"zones\");\n  static parse = (text: \
                  string) => Number(text);\n  static hosts = { primary: process.env.HOST ?? \
                  \"localhost\" };\n\n  static zone(region: string): number {\n    return \
-                 Zones.BY_REGION[region] ?? Zones.DEFAULT;\n  }\n}\n",
+                 Zones.BY_REGION[region] ?? Zones.DEFAULT;\n  }\n}\n\nexport const CODES = {\n  \
+                 EU: \"eu-west\",\n\n  US: \"us-east\",\n};\nexport const EMPTY: { [key: string]: \
+                 number } = {};\nexport const LIMIT = 5;\nconst LOCAL = [\"eu\", \"us\"];\n",
             ),
         ],
     );
@@ -2135,6 +2140,26 @@ async fn typescript_type_tables() {
          static origins = [51.5, -0.12];\n  static client;\n  static parse;\n  static hosts;\n  \
          static zone(region: string): number { .. }\n}"
     );
+    assert_eq!(declared(&evidence), ["CODES", "Zones"]);
+    assert_eq!(
+        signature(&evidence, "CODES"),
+        "const CODES = {\n  EU: \"eu-west\",\n  US: \"us-east\",\n}"
+    );
+    assert_eq!(
+        table_claim(&evidence, "CODES"),
+        (Some("src/zones.ts#L20-L24"), Some("exported table"))
+    );
+}
+
+// The anchor and synopsis of the `type` claim declaring `name`.
+fn table_claim<'e>(evidence: &'e Evidence, name: &str) -> (Option<&'e str>, Option<&'e str>) {
+    let claim = evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Type)
+        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
+        .unwrap_or_else(|| panic!("`{name}` is declared"));
+    (claim.path.as_deref(), claim.synopsis.as_deref())
 }
 
 // The turn lists what the modules spell as values of their own — an
@@ -4685,7 +4710,9 @@ async fn python_types() {
 // A class attribute assigned a table — a dict, list, tuple, or set of
 // literals, names, and attribute paths — is spelled with it in the `type`
 // claim, its lines re-indented under the class; one assigned a call, or a
-// dict holding one, stays spelled by its first line.
+// dict holding one, stays spelled by its first line. A public module-level
+// name assigned a table is a `type` claim of its own, the statement whole;
+// an empty one, a scalar, and a private one are none.
 #[tokio::test]
 async fn python_type_tables() {
     let project = scratch();
@@ -4701,7 +4728,9 @@ async fn python_type_tables() {
                  \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    client = \
                  Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
                  \"localhost\")}\n\n    @staticmethod\n    def zone(region: str) -> int:\n        \
-                 return Zones.BY_REGION.get(region, DEFAULT)\n",
+                 return Zones.BY_REGION.get(region, DEFAULT)\n\n\nCODES: dict[str, str] = {\n    \
+                 \"EU\": \"eu-west\",\n    \"US\": \"us-east\",\n}\nREGISTRY: dict[str, int] = \
+                 {}\n_LOCAL = [\"eu\", \"us\"]\n",
             ),
         ],
     );
@@ -4724,6 +4753,15 @@ async fn python_type_tables() {
          1,\n        \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    \
          client = Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
          \"localhost\")}\n    def zone(region: str) -> int: ..."
+    );
+    assert_eq!(declared(&evidence), ["CODES", "Zones"]);
+    assert_eq!(
+        signature(&evidence, "CODES"),
+        "CODES: dict[str, str] = {\n    \"EU\": \"eu-west\",\n    \"US\": \"us-east\",\n}"
+    );
+    assert_eq!(
+        table_claim(&evidence, "CODES"),
+        (Some("src/zones/zones.py#L23-L26"), Some("exported table"))
     );
 }
 

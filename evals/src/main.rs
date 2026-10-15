@@ -2058,6 +2058,7 @@ fn oracle(project: &Path, reference: &Reference) -> io::Result<(PathBuf, String)
 
 // The tip of `tree` exported whole to `export`, laid fresh, and every path
 // the tip tracks.
+#[expect(clippy::disallowed_types, reason = "the eval unpacks the export with the host's `tar`")]
 fn export_tip(tree: &Tree, export: &Path) -> io::Result<Vec<String>> {
     let (repo, tip) = tree.at();
     if export.exists() {
@@ -2892,7 +2893,10 @@ impl Target {
                 let mut paths = Vec::new();
                 files_under(export, export, "target", &mut paths)?;
                 let mut sources = Vec::new();
-                for path in paths.iter().filter(|path| path.ends_with(".rs")) {
+                for path in paths
+                    .iter()
+                    .filter(|path| Path::new(path).extension().is_some_and(|e| e == "rs"))
+                {
                     sources
                         .push((path.as_str(), code_lines(&fs::read_to_string(export.join(path))?)));
                 }
@@ -3296,7 +3300,6 @@ enum Named {
 }
 
 impl Fidelity {
-    #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
     fn read(
         project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
         target: Target, reference: Option<&Reference>,
@@ -5755,7 +5758,7 @@ mod tests {
         assert_eq!(ladder.len(), 3);
         assert_eq!(ladder[1].to_string(), "1200/240");
         assert_eq!(Rung::parse(BUILD_RUNG, "EVAL_BUILD_RUNG").unwrap(), ladder[1]);
-        assert!(Rung::parse("1200", "EVAL_LADDER").is_err());
+        assert!(Rung::parse("1200", "EVAL_LADDER").unwrap_err().starts_with("EVAL_LADDER:"));
         assert!(Rung::parse("a/b", "EVAL_BUILD_RUNG").unwrap_err().starts_with("EVAL_BUILD_RUNG:"));
     }
 
