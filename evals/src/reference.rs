@@ -205,8 +205,7 @@ fn package_dependency_names(manifest: &toml::Table) -> BTreeSet<String> {
     let mut names: BTreeSet<String> = BTreeSet::new();
     for table in TABLES {
         names.extend(table_keys(manifest.get(table)));
-        for target in manifest.get("target").and_then(toml::Value::as_table).into_iter().flatten()
-        {
+        for target in manifest.get("target").and_then(toml::Value::as_table).into_iter().flatten() {
             names.extend(table_keys(target.1.get(table)));
         }
     }
@@ -1343,9 +1342,15 @@ oracle-shared /stops, /routes?all=true
 ";
         let oracle = Oracle::parse(output);
         assert_eq!(oracle.shared, ["/stops", "/routes?all=true"]);
-        assert_eq!(oracle.outcomes[0].reasons[1], "logged: WARN orders::inbound: rates missing route=12");
+        assert_eq!(
+            oracle.outcomes[0].reasons[1],
+            "logged: WARN orders::inbound: rates missing route=12"
+        );
         let text = oracle.to_string();
-        assert!(text.contains("- `/stops`, `/routes?all=true` answered from another fixture's"), "{text}");
+        assert!(
+            text.contains("- `/stops`, `/routes?all=true` answered from another fixture's"),
+            "{text}"
+        );
         assert!(Oracle::parse("oracle-outbound \n").shared.is_empty());
     }
 

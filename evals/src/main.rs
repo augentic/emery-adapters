@@ -121,9 +121,11 @@ impl Args {
                 return Err("`--oracle` names a case or an adapter".into());
             }
             if facts_only || build {
-                return Err("`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
+                return Err(
+                    "`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
                             `--build`, or `--rebuild`"
-                    .into());
+                        .into(),
+                );
             }
             if target.is_some_and(|target| target != Target::Omnia) {
                 return Err("`--oracle` reads an `omnia` build; `--target` names another".into());
@@ -365,11 +367,10 @@ impl Settings {
             Err(_) => None,
         };
         let ladder = env::var("EVAL_LADDER").unwrap_or_else(|_| LADDER.to_owned());
-        let ladder: Vec<Rung> =
-            ladder.split(',').map(|rung| Rung::parse(rung, "EVAL_LADDER")).collect::<Result<
-                _,
-                _,
-            >>()?;
+        let ladder: Vec<Rung> = ladder
+            .split(',')
+            .map(|rung| Rung::parse(rung, "EVAL_LADDER"))
+            .collect::<Result<_, _>>()?;
         let build_rung = Rung::parse(
             &env::var("EVAL_BUILD_RUNG").unwrap_or_else(|_| BUILD_RUNG.to_owned()),
             "EVAL_BUILD_RUNG",
@@ -2002,10 +2003,7 @@ fn rebuilt(
         let text = fs::read_to_string(source.join(format!("{TAG}.{artifact}.json")))?;
         *slot = Some(serde_json::from_str(&text)?);
     }
-    eprintln!(
-        "eval: `{}` rebuilding revision `{revision}` at {}",
-        case.name, settings.build_rung
-    );
+    eprintln!("eval: `{}` rebuilding revision `{revision}` at {}", case.name, settings.build_rung);
     run.build = Some(build(&project, settings, case, TAG, &revision, run.spec.as_ref())?);
 
     Ok(run)
@@ -2895,7 +2893,8 @@ impl Target {
                 files_under(export, export, "target", &mut paths)?;
                 let mut sources = Vec::new();
                 for path in paths.iter().filter(|path| path.ends_with(".rs")) {
-                    sources.push((path.as_str(), code_lines(&fs::read_to_string(export.join(path))?)));
+                    sources
+                        .push((path.as_str(), code_lines(&fs::read_to_string(export.join(path))?)));
                 }
                 for stem in directories(&crates)? {
                     if stem == "common" || !crates.join(&stem).join("Cargo.toml").is_file() {
@@ -5757,14 +5756,13 @@ mod tests {
         assert_eq!(ladder[1].to_string(), "1200/240");
         assert_eq!(Rung::parse(BUILD_RUNG, "EVAL_BUILD_RUNG").unwrap(), ladder[1]);
         assert!(Rung::parse("1200", "EVAL_LADDER").is_err());
-        assert!(
-            Rung::parse("a/b", "EVAL_BUILD_RUNG").unwrap_err().starts_with("EVAL_BUILD_RUNG:")
-        );
+        assert!(Rung::parse("a/b", "EVAL_BUILD_RUNG").unwrap_err().starts_with("EVAL_BUILD_RUNG:"));
     }
 
     #[test]
     fn oracle_args() {
-        let args = Args::parse(["--oracle", "card", "train"].map(String::from).into_iter()).unwrap();
+        let args =
+            Args::parse(["--oracle", "card", "train"].map(String::from).into_iter()).unwrap();
         assert_eq!(args.oracle.as_deref(), Some("card"));
         assert!(args.filter.contains("train"));
         assert!(args.target.is_none(), "the oracle builds nothing");
