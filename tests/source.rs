@@ -199,6 +199,17 @@ fn check_evidence(evidence: &Evidence) {
     assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
 }
 
+// The signature of the `type` claim declaring `name`.
+fn signature<'e>(evidence: &'e Evidence, name: &str) -> &'e str {
+    evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Type)
+        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
+        .and_then(|claim| claim.extras.get("signature").and_then(|s| s.as_str()))
+        .unwrap_or_else(|| panic!("`{name}` is declared"))
+}
+
 // The `type` claims' declared names, sorted; every one carries a signature.
 fn declared(evidence: &Evidence) -> Vec<&str> {
     let mut names: Vec<&str> = evidence
@@ -2089,6 +2100,51 @@ async fn typescript_types() {
         .await;
 
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A class field initialised by a table — an object or array of literals,
+// names, and member paths — is spelled with it in the `type` claim, its
+// lines re-indented under the class; a scalar, a construction, a function,
+// and an object holding a call stay spelled to their initializer.
+#[tokio::test]
+async fn typescript_type_tables() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"zones\",\"main\":\"dist/index.js\"}\n"),
+            ("src/index.ts", "export { Zones } from \"./zones\";\n"),
+            (
+                "src/zones.ts",
+                "import { Client } from \"client\";\n\nexport class Zones {\n  static readonly \
+                 BY_REGION: { [key: string]: number } = {\n    EU: 3,\n    US: 1,\n    APAC: \
+                 Zones.DEFAULT, // the rest\n  };\n  static DEFAULT = 7;\n  static origins = \
+                 [51.5, -0.12];\n  static client = new Client(\"zones\");\n  static parse = (text: \
+                 string) => Number(text);\n  static hosts = { primary: process.env.HOST ?? \
+                 \"localhost\" };\n\n  static zone(region: string): number {\n    return \
+                 Zones.BY_REGION[region] ?? Zones.DEFAULT;\n  }\n}\n",
+            ),
+        ],
+    );
+    let survey = inventory(&[("Zones", "src/zones.ts#L3-L18", "zones")], &["src/index.ts"]);
+    let answered = serde_json::json!({
+        "claims": [
+            { "kind": "requirement", "id": "zones.zone", "statement": "Answers a region's zone." }
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&survey, &answered]);
+
+    let evidence = TYPESCRIPT.accepted(&workspace(&project), &model).await;
+    model.assert_exhausted();
+
+    assert_eq!(
+        signature(&evidence, "Zones"),
+        "class Zones {\n  static readonly BY_REGION: { [key: string]: number } = {\n    \
+         EU: 3,\n    US: 1,\n    APAC: Zones.DEFAULT, // the rest\n  };\n  static DEFAULT;\n  \
+         static origins = [51.5, -0.12];\n  static client;\n  static parse;\n  static hosts;\n  \
+         static zone(region: string): number { .. }\n}"
+    );
 }
 
 // The turn lists what the modules spell as values of their own — an
@@ -4629,6 +4685,51 @@ async fn python_types() {
         .await;
 
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A class attribute assigned a table — a dict, list, tuple, or set of
+// literals, names, and attribute paths — is spelled with it in the `type`
+// claim, its lines re-indented under the class; one assigned a call, or a
+// dict holding one, stays spelled by its first line.
+#[tokio::test]
+async fn python_type_tables() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("pyproject.toml", "[project]\nname = \"zones\"\n"),
+            ("src/zones/__init__.py", "from .zones import Zones\n"),
+            (
+                "src/zones/zones.py",
+                "import os\n\nfrom client import Client\n\nDEFAULT = 7\n\n\nclass Zones:\n    \
+                 BY_REGION: dict[str, int] = {\n        \"EU\": 3,\n        \"US\": 1,\n        \
+                 \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    client = \
+                 Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
+                 \"localhost\")}\n\n    @staticmethod\n    def zone(region: str) -> int:\n        \
+                 return Zones.BY_REGION.get(region, DEFAULT)\n",
+            ),
+        ],
+    );
+    let survey =
+        inventory(&[("Zones", "src/zones/zones.py#L8-L20", "zones")], &["src/zones/__init__.py"]);
+    let answered = serde_json::json!({
+        "claims": [
+            { "kind": "requirement", "id": "zones.zone", "statement": "Answers a region's zone." }
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&survey, &answered]);
+
+    let evidence = PYTHON.accepted(&workspace(&project), &model).await;
+    model.assert_exhausted();
+
+    assert_eq!(
+        signature(&evidence, "Zones"),
+        "class Zones:\n    BY_REGION: dict[str, int] = {\n        \"EU\": 3,\n        \"US\": \
+         1,\n        \"APAC\": DEFAULT,  # the rest\n    }\n    origins = (51.5, -0.12)\n    \
+         client = Client(\"zones\")\n    hosts = {\"primary\": os.environ.get(\"HOST\", \
+         \"localhost\")}\n    def zone(region: str) -> int: ..."
+    );
 }
 
 // An `__all__` declared with an annotation — `__all__: list[str] = [..]` —

@@ -37,6 +37,11 @@
 //!   writes a table to the store or warms an access token is named with its
 //!   line, since a stage reads its table cache-aside and a token is read
 //!   where it is sent, and the module is removed;
+//! - no read of the store under a constant key answers empty on a miss: a
+//!   table read under one key is fetched from its upstream and stored when
+//!   the store holds none, so a read returning an empty collection or
+//!   defaulting the miss is named with its line, while a read under a key
+//!   built from the input is a lookup and passes;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
@@ -218,9 +223,48 @@ impl<'a> Tree<'a> {
         let mut findings = Vec::new();
         findings.extend(self.manifest()?);
         findings.extend(self.simulated()?);
+        findings.extend(self.misses()?);
         findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
         Ok(findings)
+    }
+
+    // One finding naming every `StateStore::get` under a constant key whose
+    // miss is answered empty, each `<path>:<line>: <what>`: a table read
+    // under one key is loaded on a miss, so a read answering an empty
+    // collection there has laid the cache and lost the table. A read under
+    // a key built from the input is a lookup, whose miss is its own, and no
+    // finding.
+    fn misses(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let text = code(&read(&file)?);
+            let path = self.relative(&file);
+            let all: Vec<&str> = text.lines().collect();
+            for (index, line) in all.iter().enumerate() {
+                if !constant_keyed(line) {
+                    continue;
+                }
+                let window = all[index..all.len().min(index + MISS_WINDOW)].join("\n");
+                if let Some((spelling, what)) =
+                    EMPTY.iter().find(|(spelling, _)| window.contains(spelling))
+                {
+                    lines.push(format!("{path}:{}: {what} (`{spelling}`)", index + 1));
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a table read from the store under one key answers empty on a miss, so the table is \
+             never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
+             design spells the call, stores it under the same key with a TTL, and answers what it \
+             fetched, never an empty collection; repair each read named through `edit_files`, \
+             laying the fetch in the same function:\n{}",
+            lines.join("\n")
+        )])
     }
 
     // One finding naming every crate the turn laid under the head of a
@@ -694,6 +738,41 @@ const LOADER: &[(&str, &str)] = &[
     ("StateStore::set", "a table loaded for another stem"),
     ("Identity::access_token", "a token warmed before use"),
 ];
+
+// How a miss is answered empty within `MISS_WINDOW` lines of a constant-keyed
+// `StateStore::get`: an empty collection returned, or the miss defaulted.
+const EMPTY: &[(&str, &str)] = &[
+    ("return Ok(Vec::new())", "a miss answered as no entries"),
+    ("return Ok(HashMap::new())", "a miss answered as no entries"),
+    ("return Ok(BTreeMap::new())", "a miss answered as no entries"),
+    ("return Ok(HashSet::new())", "a miss answered as no entries"),
+    ("return Ok(BTreeSet::new())", "a miss answered as no entries"),
+    ("return Ok(vec![])", "a miss answered as no entries"),
+    ("return Ok(Default::default())", "a miss answered as no entries"),
+    (".unwrap_or_default()", "a miss defaulted"),
+    (".unwrap_or_else(Vec::new)", "a miss defaulted"),
+    (".unwrap_or_else(HashMap::new)", "a miss defaulted"),
+    (".unwrap_or_else(Default::default)", "a miss defaulted"),
+    (".unwrap_or(Vec::new())", "a miss defaulted"),
+];
+
+// The lines after a constant-keyed `StateStore::get` read for how its miss
+// is answered: the `let .. else` block, or the chain the read ends in.
+const MISS_WINDOW: usize = 6;
+
+// Whether `line` reads the store under a constant key: `StateStore::get(`
+// whose second argument is a constant name, `KEY` or `config::KEY`, rather
+// than a key built from the input.
+fn constant_keyed(line: &str) -> bool {
+    let Some(at) = line.find("StateStore::get(") else { return false };
+    let args = &line[at + "StateStore::get(".len()..];
+    let Some((_, key)) = args.split_once(',') else { return false };
+    let key = key.split(')').next().unwrap_or_default().trim().trim_start_matches('&').trim();
+    let name = key.rsplit("::").next().unwrap_or(key);
+    !name.is_empty()
+        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+        && name.chars().any(|ch| ch.is_ascii_uppercase())
+}
 
 // A table of `common` with the list and the rung its constants are spelled
 // into, in full under `prefix`.

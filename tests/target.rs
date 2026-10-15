@@ -1003,6 +1003,75 @@ async fn omnia_build_loader_refused() {
     );
 }
 
+// A read of the store under a constant key whose miss is answered empty — an
+// empty map returned from a `let .. else`, or the read defaulted — is
+// refused at the build with each read named at its line, while a read under
+// a key built from the input, and one whose miss fetches and stores the
+// table, pass. The slice's own turn lays the fetch into the read, and the
+// accepted report names the module.
+#[tokio::test]
+async fn omnia_build_empty_miss_refused() {
+    let project = scratch();
+    let empty = "    let Some(bytes) = StateStore::get(provider, RATES_KEY).await? else {\n        \
+                 return Ok(HashMap::new());\n    };\n    decode(&bytes)\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, RATES_KEY).await? {\n        \
+                   return decode(&bytes);\n    }\n    let bytes = fetch_rates(provider).await?;\n    \
+                   StateStore::set(provider, RATES_KEY, &bytes, Some(3600)).await?;\n    \
+                   decode(&bytes)\n";
+    let module = |rates: &str| {
+        format!(
+            "//! Rates by region.\n\nuse std::collections::HashMap;\n\nuse omnia_sdk::{{HttpRequest, \
+             StateStore}};\n\n/// The store key the rate table sits under.\npub const RATES_KEY: \
+             &str = \"rates/table\";\n\n/// The rate table, fetched when the store holds none.\n///\n\
+             /// # Errors\n///\n/// `bad_gateway` when the upstream refuses.\npub async fn rates<P: \
+             HttpRequest + StateStore>(provider: &P) -> omnia_sdk::Result<HashMap<String, \
+             u32>> {{\n{rates}}}\n\n/// The regions a customer chose, none when none yet.\n///\n/// \
+             # Errors\n///\n/// `server_error` when the store refuses.\npub async fn chosen<P: \
+             StateStore>(provider: &P, customer: &str) -> omnia_sdk::Result<Vec<String>> {{\n    \
+             let key = format!(\"rates/chosen/{{customer}}\");\n    let Some(bytes) = \
+             StateStore::get(provider, &key).await? else {{\n        return Ok(Vec::new());\n    \
+             }};\n    Ok(serde_json::from_slice(&bytes).unwrap_or_default())\n}}\n\nasync fn \
+             fetch_rates<P: HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    \
+             Ok(Vec::new())\n}}\n\nfn decode(bytes: &[u8]) -> omnia_sdk::Result<HashMap<String, \
+             u32>> {{\n    Ok(serde_json::from_slice(bytes).unwrap_or_default())\n}}\n"
+        )
+    };
+    let first_tree = module(empty);
+    let written = [
+        ("crates/rates/Cargo.toml", "[package]\nname = \"rates\"\n"),
+        ("crates/rates/src/lib.rs", "//! The `rates` stem.\n\npub mod table;\n"),
+        ("crates/rates/src/table.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/rates/Cargo.toml", "crates/rates/src/lib.rs", "crates/rates/src/table.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written)])
+        .calling(1, [edit_files(&[("crates/rates/src/table.rs", empty, fetched)])]);
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a table read from the store under one key answers empty on a miss",
+        "crates/rates/src/table.rs:16: a miss answered as no entries (`return Ok(HashMap::new())`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert!(
+        !correction.contains("table.rs:29"),
+        "a read under a key built from the input is no finding: {correction}"
+    );
+    assert!(
+        text(&project, "crates/rates/src/table.rs").contains("StateStore::set(provider, RATES_KEY"),
+        "the miss fetches and stores the table"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/rates/src/table.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
 // A stem is one word, so a crate the turn lays under the head of a
 // hyphenated stem of the slice, `crates/order/` holding the rest as a part
 // of `order-items`, is refused at the build with the directory named, while

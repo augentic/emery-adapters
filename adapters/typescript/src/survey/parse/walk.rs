@@ -251,6 +251,7 @@ impl<'s> Walker<'s> {
                         private: hidden(method.accessibility, &key),
                         lines: member_lines,
                         signature: self.slice(method.span.start, end).trim_end().to_owned(),
+                        table: None,
                     });
                     let head = self.lines(Span::new(
                         method.decorators.first().map_or(method.span.start, |d| d.span.start),
@@ -273,12 +274,20 @@ impl<'s> Walker<'s> {
                         .trim_end()
                         .to_owned();
                     let (init, head) = self.initializer(property.value.as_ref());
+                    let table = property.value.as_ref().filter(|value| table(value)).map(|_| {
+                        self.slice(property.span.start, property.span.end)
+                            .trim_end()
+                            .trim_end_matches(';')
+                            .trim_end()
+                            .to_owned()
+                    });
                     members.push(Member {
                         name: key.clone(),
                         kind: MemberKind::Field,
                         private: hidden(property.accessibility, &key),
                         lines: self.lines(property.span),
                         signature,
+                        table,
                     });
                     self.bind(
                         key,
@@ -1038,6 +1047,30 @@ fn settings(expr: &Expression<'_>) -> bool {
         _ => return false,
     }
     any && all
+}
+
+// An object or array written out as data: every property or element a
+// literal, a name, a member path, or data again — never a call, a function,
+// or a spread, which make it wiring or a derivation.
+fn table(expr: &Expression<'_>) -> bool {
+    fn datum(expr: &Expression<'_>) -> bool {
+        match bare(expr) {
+            Expression::Identifier(_) | Expression::StaticMemberExpression(_) => true,
+            other => literal(other) || table(other),
+        }
+    }
+    match bare(expr) {
+        Expression::ObjectExpression(object) => {
+            object.properties.iter().all(|property| match property {
+                ObjectPropertyKind::ObjectProperty(p) => !p.method && datum(&p.value),
+                ObjectPropertyKind::SpreadProperty(_) => false,
+            })
+        }
+        Expression::ArrayExpression(array) => {
+            array.elements.iter().all(|element| element.as_expression().is_some_and(datum))
+        }
+        _ => false,
+    }
 }
 
 // A wrapper call over literals: `Number(3000)`, `parseInt("10", 10)`.
