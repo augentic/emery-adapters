@@ -1,0 +1,45 @@
+{
+  "name": "train-position-adapter",
+  "version": "2.2.0",
+  "private": true,
+  "description": "Train Position Adapter",
+  "license": "UNLICENSED",
+  "main": "src/start.ts",
+  "scripts": {
+    "build": "rimraf ./dist && tsc",
+    "cucumber": "build-common --cucumber --config node_modules/build-common/base/cucumber.json",
+    "dev": "ts-node -r dotenv/config ./src/start.ts",
+    "format": "prettier . -w -u --ignore-path .gitignore",
+    "jest": "jest --config node_modules/build-common/base/jest.json",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --no-error-on-unmatched-pattern",
+    "package": "build-common --prepare_azure_deploy && build-common --package",
+    "start": "cd dist || true && node -r dotenv/config src/start.js",
+    "test": "npm run jest && npm run cucumber"
+  },
+  "prettier": "build-common/base/prettier",
+  "eslintConfig": {
+    "extends": [
+      "./node_modules/build-common/base/eslint.json"
+    ]
+  },
+  "dependencies": {
+    "@azure/identity": "^3.2.3",
+    "@azure/keyvault-secrets": "^4.7.0",
+    "auth-common": "^0.8.1",
+    "connector-common": "^15.0.0",
+    "realtime-common": "3.2.0-apm.4",
+    "dotenv": "^16.3.1",
+    "moment-timezone": "^0.5.37",
+    "ta-json": "^2.5.0",
+    "x2js": "^3.4.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.4",
+    "build-common": "^9.1.4",
+    "typescript": "^4.8.4"
+  },
+  "engines": {
+    "node": ">=24",
+    "npm": ">=11"
+  }
+}

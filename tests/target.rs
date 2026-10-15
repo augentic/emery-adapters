@@ -58,7 +58,7 @@ const OMNIA_PATH_CRATE_ANCHOR: &str = "common = { path = \"crates/common\" }\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
 const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
-const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 5 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
+const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
 const OMNIA_PIN: &str = "omnia-sdk = \"0.36.0\"\n";
 const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.37.0\"\n";
@@ -781,11 +781,11 @@ async fn omnia_verify_simulated_host() {
     let project = omnia_tree();
     project.write(
         "crates/orders/src/consuming.rs",
-        "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\npub fn consume() {\n    tokio::spawn(async {});\n}\n",
+        "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\nuse std::env;\n\npub fn consume() {\n    let _ = env::var(\"PORT\");\n    tokio::spawn(async {});\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
     );
     project.write(
         "crates/start/src/main_loop.rs",
-        "//! The loop.\n\nuse std::env;\n\npub fn run() {\n    let _ = env::var(\"PORT\");\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
+        "//! The loop.\n\npub fn run() {\n    loop {}\n}\n",
     );
     project.write(
         "crates/start/src/lifecycle.rs",
@@ -812,11 +812,13 @@ async fn omnia_verify_simulated_host() {
     assert!(verdict.passed);
     let correction = correction(&model);
     for line in [
+        "a module under `crates/start/src/` is the process the source was",
+        "crates/start/src/main_loop.rs:3: a run of its own (`fn run`)",
         "a module simulates the host",
         "crates/orders/src/consuming.rs:1: the workspace's lints silenced",
-        "crates/orders/src/consuming.rs:5: a task of its own",
-        "crates/start/src/main_loop.rs:3: the environment read past the host",
-        "crates/start/src/main_loop.rs:7: a thread of its own",
+        "crates/orders/src/consuming.rs:4: the environment read past the host",
+        "crates/orders/src/consuming.rs:8: a task of its own",
+        "crates/orders/src/consuming.rs:9: a thread of its own",
         "crates/start/src/lifecycle.rs:4: a start-up flag of its own",
         "crates/start/src/lifecycle.rs:6: a stop request of its own",
         "crates/start/src/lifecycle.rs:8: an exit delay of its own",
@@ -824,10 +826,250 @@ async fn omnia_verify_simulated_host() {
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
+    assert!(
+        !correction.contains("main_loop.rs:4"),
+        "a module removed for its lifecycle is not also edited in place: {correction}"
+    );
     assert!(!correction.contains("tests/"), "a stem's tests are not read: {correction}");
     for path in removed {
         assert!(project.read(path).is_none(), "`{path}` is removed");
     }
+}
+
+// A module under `crates/start/src` that retries an upstream in a `loop {`,
+// and one that runs the process, are refused at the build rather than left
+// to a wave's verify, each under its own finding: the loop's names the
+// line to remove from the module, the run's the module to remove. The
+// slice's own turn edits the loop into one fetch and deletes the module,
+// and the accepted report names what the tree still holds.
+#[tokio::test]
+async fn omnia_build_process_refused() {
+    let project = scratch();
+    let looped = "    let mut attempt = 0;\n    loop {\n        attempt += 1;\n        match \
+                  fetch(provider).await {\n            Ok(stops) => return Ok(stops),\n            \
+                  Err(error) if attempt < 3 => tracing::warn!(\"retry loop {error}\"),\n            \
+                  Err(error) => return Err(error),\n        }\n    }\n";
+    let once =
+        "    fetch(provider).await.inspect_err(|error| tracing::warn!(\"retry loop {error}\"))\n";
+    let prefetch = format!(
+        "//! Prefetches the stop table (`fn start` in `struct App`).\n\nuse \
+         omnia_sdk::HttpRequest;\n\n/// Readiness of the stop table.\npub struct Readiness {{\n    \
+         /// Whether the table is ready.\n    pub ready: bool,\n}}\n\n/// Load the stops.\n///\n\
+         /// # Errors\n///\n/// `bad_gateway` when the upstream fails.\npub async fn \
+         load_stops<P: HttpRequest>(provider: &P) -> omnia_sdk::Result<Vec<String>> {{\n{looped}}}\n"
+    );
+    let written = [
+        ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
+        (
+            "crates/start/src/lib.rs",
+            "//! The `start` stem.\n\npub mod prefetch;\npub mod runner;\n",
+        ),
+        ("crates/start/src/prefetch.rs", prefetch.as_str()),
+        (
+            "crates/start/src/runner.rs",
+            "//! Runs the process.\n\n/// Run it.\npub fn run() {\n    loop {}\n}\n",
+        ),
+    ];
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/prefetch.rs", "crates/start/src/runner.rs"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/prefetch.rs"]}"#;
+    let model = Scripted::answering([first, repaired]).calling(0, [write_files(&written)]).calling(
+        1,
+        [
+            edit_files(&[
+                ("crates/start/src/prefetch.rs", looped, once),
+                ("crates/start/src/lib.rs", "pub mod runner;\n", ""),
+            ]),
+            delete_files(&["crates/start/src/runner.rs"]),
+        ],
+    );
+
+    let report = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a module under `crates/start/src/` is the process the source was",
+        "crates/start/src/runner.rs:4: a run of its own (`fn run`)",
+        "a module simulates the host",
+        "crates/start/src/prefetch.rs:18: a loop that polls or retries (`loop {`)",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["prefetch.rs:8", "prefetch.rs:16", "prefetch.rs:22", "runner.rs:5"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    assert!(
+        !text(&project, "crates/start/src/prefetch.rs").contains("    loop {"),
+        "the loop is edited into one fetch"
+    );
+    assert!(project.read("crates/start/src/runner.rs").is_none(), "the module is removed");
+    assert!(
+        report.written.iter().any(|path| path == "crates/start/src/prefetch.rs"),
+        "the loader is reported: {:?}",
+        report.written
+    );
+    assert!(
+        !report.written.iter().any(|path| path == "crates/start/src/runner.rs"),
+        "a removed module is not reported: {:?}",
+        report.written
+    );
+}
+
+// The two tables are held to their lists at every verify: a route's
+// constant no statement or no rung entry names, a consumed topic's no rung
+// entry names, a topic the rung lists and no statement consumes, a topic
+// nothing consumes or publishes, and a statement over a literal are each
+// named at their line, while a topic a module alone publishes to stands
+// with no statement and no entry. The lines added, and the entries and
+// constants removed, are the repair.
+#[tokio::test]
+async fn omnia_tables_held() {
+    let (project, http, topics, routes) = omnia_tables_tree();
+    let orders_statement = "    let router = router.route(\n        \
+                            common::routes::http::ORDERS,\n        \
+                            omnia_sdk::api::http::get(orders::reading::list_orders),\n    );\n";
+    let orders_entry = "    (Method::GET, common::routes::http::ORDERS),\n";
+    let cancelled_entry = "    common::routes::topic::ORDER_CANCELLED,\n";
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("src/routes.rs", OMNIA_ROUTE_LINE, &format!("{OMNIA_ROUTE_LINE}{orders_statement}")),
+            ("src/routes.rs", LITERAL_ROUTE, ""),
+            ("tests/routes.rs", OMNIA_RUNG_LINE, &format!("{OMNIA_RUNG_LINE}{orders_entry}")),
+            ("crates/common/src/routes/topic.rs", RETURNED_CONST, ""),
+            ("crates/common/src/routes/topic.rs", BILLED_CONST, ""),
+            ("tests/messaging.rs", BILLED_ENTRY, cancelled_entry),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let orders_at = line_of(&http, "pub const ORDERS");
+    let returned_at = line_of(&topics, "pub const ORDER_RETURNED");
+    let billed_at = line_of(&topics, "pub const ORDER_BILLED");
+    let cancelled_at = line_of(&topics, "pub const ORDER_CANCELLED");
+    let literal_at = line_of(&routes, "\"/health\"");
+    for line in [
+        "a table and its lists disagree".to_owned(),
+        format!(
+            "crates/common/src/routes/http.rs:{orders_at}: route `ORDERS` is named by no \
+             statement of `src/routes.rs`"
+        ),
+        format!(
+            "crates/common/src/routes/http.rs:{orders_at}: route `ORDERS` is named by no entry \
+             of `ROUTES` in `tests/routes.rs`"
+        ),
+        format!(
+            "crates/common/src/routes/topic.rs:{cancelled_at}: topic `ORDER_CANCELLED` is \
+             consumed by `src/messaging.rs` and named by no entry of `TOPICS` in \
+             `tests/messaging.rs`"
+        ),
+        format!(
+            "crates/common/src/routes/topic.rs:{billed_at}: topic `ORDER_BILLED` is named by an \
+             entry of `TOPICS` in `tests/messaging.rs` and consumed by no statement of \
+             `src/messaging.rs`"
+        ),
+        format!(
+            "crates/common/src/routes/topic.rs:{returned_at}: topic `ORDER_RETURNED` is consumed \
+             by no statement of `src/messaging.rs` and published by no module"
+        ),
+        format!(
+            "src/routes.rs:{literal_at}: a statement names no constant of \
+             `crates/common/src/routes/http.rs`"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for named in ["route `ORDER` ", "ORDER_SHIPPED", "ORDER_PLACED"] {
+        assert!(!correction.contains(named), "{named} is no finding: {correction}");
+    }
+    let routes = text(&project, "src/routes.rs");
+    assert!(routes.contains(orders_statement) && !routes.contains(LITERAL_ROUTE), "{routes}");
+    let topics = text(&project, "crates/common/src/routes/topic.rs");
+    assert!(topics.contains("ORDER_SHIPPED") && !topics.contains("ORDER_RETURNED"), "{topics}");
+}
+
+// A route list statement over a literal path rather than a table constant.
+const LITERAL_ROUTE: &str = "    let router = router.route(\"/health\", \
+                             omnia_sdk::api::http::get(start::health::health));\n";
+// Two topic constants nothing consumes: one no module publishes to either,
+// one the messaging rung lists.
+const RETURNED_CONST: &str = "\n/// An order was returned.\npub const ORDER_RETURNED: &str = \
+                              \"orders-returned.v1\";\n";
+const BILLED_CONST: &str =
+    "\n/// An order was billed.\npub const ORDER_BILLED: &str = \"orders-billed.v1\";\n";
+const BILLED_ENTRY: &str = "    common::routes::topic::ORDER_BILLED,\n";
+
+// The seeded tree with both tables filled and their lists disagreeing: the
+// path table's `ORDER` wired and `ORDERS` wired nowhere, the route list
+// holding a statement over a literal beside `ORDER`'s; the topic table's
+// `ORDER_PLACED` consumed and listed, `ORDER_CANCELLED` consumed and
+// unlisted, `ORDER_SHIPPED` published by a module of `orders` alone,
+// `ORDER_RETURNED` named nowhere, and `ORDER_BILLED` listed by the rung
+// alone. Answers the tree with the texts of the path table, the topic
+// table, and the route list, for the lines a finding names.
+fn omnia_tables_tree() -> (Scratch, String, String, String) {
+    let project = omnia_tree();
+    let http = format!(
+        "{OMNIA_PATH_ANCHOR}{OMNIA_PATH_LINE}\n/// List the orders.\npub const ORDERS: &str = \
+         \"/orders\";\n"
+    );
+    project.write("crates/common/src/routes/http.rs", &http);
+    let routes = omnia_seed("src/routes.rs").replace(
+        OMNIA_ROUTE_ANCHOR,
+        &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}{LITERAL_ROUTE}"),
+    );
+    project.write("src/routes.rs", &routes);
+    project.write(
+        "tests/routes.rs",
+        omnia_seed("tests/routes.rs")
+            .replace(OMNIA_RUNG_ANCHOR, &format!("{OMNIA_RUNG_ANCHOR}{OMNIA_RUNG_LINE}")),
+    );
+    let topics = format!(
+        "{}\n/// An order was placed.\npub const ORDER_PLACED: &str = \"orders-placed.v1\";\n\n\
+         /// An order was cancelled.\npub const ORDER_CANCELLED: &str = \"orders-cancelled.v1\";\n\n\
+         /// An order was shipped.\npub const ORDER_SHIPPED: &str = \
+         \"orders-shipped.v1\";\n{RETURNED_CONST}{BILLED_CONST}",
+        omnia_seed("crates/common/src/routes/topic.rs")
+    );
+    project.write("crates/common/src/routes/topic.rs", &topics);
+    let topic_anchor = "    let router = messaging::Router::new(Client::new(OWNER, provider));\n";
+    let consumed = "    let router = router.route(\n        \
+                    config::topic_for(&env, common::routes::topic::ORDER_PLACED),\n        \
+                    messaging::consume(orders::fulfilment::on_placed),\n    );\n    \
+                    let router = router.route(\n        \
+                    config::topic_for(&env, common::routes::topic::ORDER_CANCELLED),\n        \
+                    messaging::consume(orders::fulfilment::on_cancelled),\n    );\n";
+    project.write(
+        "src/messaging.rs",
+        omnia_seed("src/messaging.rs").replace(topic_anchor, &format!("{topic_anchor}{consumed}")),
+    );
+    let rung_anchor = "    // one entry per topic, each added at the end\n";
+    let placed_entry = "    common::routes::topic::ORDER_PLACED,\n";
+    project.write(
+        "tests/messaging.rs",
+        omnia_seed("tests/messaging.rs")
+            .replace(rung_anchor, &format!("{rung_anchor}{placed_entry}{BILLED_ENTRY}")),
+    );
+    project.write(
+        "crates/orders/src/shipping.rs",
+        "//! Ships orders.\n\nuse common::{config, routes};\nuse omnia_sdk::{Config, Message, \
+         Publish};\n\n/// Announce a shipped order.\n///\n/// # Errors\n///\n/// Fails when the \
+         host cannot publish.\npub async fn announce<P: Config + Publish>(provider: &P, payload: \
+         &[u8]) -> omnia_sdk::Result<()> {\n    let topic = config::topic(provider, \
+         routes::topic::ORDER_SHIPPED).await;\n    Publish::send(provider, &topic, \
+         &Message::new(payload)).await?;\n    Ok(())\n}\n",
+    );
+    (project, http, topics, routes)
+}
+
+fn line_of(text: &str, needle: &str) -> usize {
+    text.lines()
+        .position(|line| line.contains(needle))
+        .map_or_else(|| panic!("`{needle}` is a line of:\n{text}"), |index| index + 1)
 }
 
 // A stem whose modules reach the host through the provider alone passes,

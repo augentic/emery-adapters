@@ -1,0 +1,23 @@
+name: Audit
+
+# Daily advisory-database audit and outdated-dependency check of the
+# workspace, apart from the per-push CI gate so a fresh upstream advisory
+# never blocks an unrelated change.
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+  checks: write
+
+jobs:
+  audit:
+    uses: augentic/toolkit/.github/workflows/audit.yaml@v0.6.0

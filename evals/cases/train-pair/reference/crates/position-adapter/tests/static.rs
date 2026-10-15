@@ -1,0 +1,314 @@
+#![allow(missing_docs, reason = "integration tests, not a published API")]
+#![cfg(not(miri))]
+
+mod fixture;
+
+use std::ops::Sub;
+
+use chrono::{Duration, Timelike, Utc};
+use common::TIMEZONE;
+use omnia_sdk::api::{Client, Metadata};
+use position_adapter::{ChangeType, EventType, TrainMessage, train_update};
+
+use self::fixture::{Case, Expected};
+
+// Should deserialize XML into a train update message.
+#[tokio::test]
+async fn deserialize_xml() {
+    let xml = XmlBuilder::new().xml();
+    let message: TrainMessage =
+        quick_xml::de::from_reader(xml.as_bytes()).expect("should deserialize");
+
+    let train_update = message.train_update;
+    assert_eq!(train_update.train_id(), "5226");
+    assert!(!train_update.changes.is_empty());
+    assert_eq!(train_update.changes[0].r#type, ChangeType::ArrivedAtStation);
+    assert_eq!(train_update.changes[0].station, 0);
+}
+
+// A train arriving at a mapped station: the event carries the stop's own
+// location.
+#[tokio::test]
+async fn station_arrival() {
+    let case = fixture::load("data/static/0001.json");
+
+    run(&case).await.expect("should process");
+
+    let events = case.events();
+    assert_eq!(events.len(), 2);
+
+    let event = &events[0];
+    assert_eq!(event.event_type, EventType::Location);
+
+    // confirm arrival location is the stop's location
+    assert!(event.location_data.latitude.eq(&-36.12345));
+    assert!(event.location_data.longitude.eq(&174.12345));
+    assert_eq!(event.remote_data.external_id, "vehicle1");
+}
+
+// A train departing a mapped station: the event carries the updated stop
+// location.
+#[tokio::test]
+async fn station_departure() {
+    let case = fixture::load("data/static/0002.json");
+
+    run(&case).await.expect("should process");
+
+    let events = case.events();
+    assert_eq!(events.len(), 2);
+
+    let event = &events[0];
+    assert_eq!(event.event_type, EventType::Location);
+
+    // confirm departure location has been updated
+    assert!(event.location_data.latitude.eq(&-36.84448));
+    assert!(event.location_data.longitude.eq(&174.76915));
+}
+
+// Should return no events for an unmapped station.
+#[tokio::test]
+async fn unmapped_station() {
+    let case = fixture::load("data/static/0003.json");
+
+    run(&case).await.expect("should process");
+
+    assert!(case.events().is_empty());
+}
+
+// Should return no events when there are no vehicles found for the train id.
+#[tokio::test]
+async fn no_matching_vehicle() {
+    let case = fixture::load("data/static/0004.json");
+
+    run(&case).await.expect("should process");
+
+    assert!(case.events().is_empty());
+}
+
+// Should return no events when there are no stop is found for the station.
+#[tokio::test]
+async fn no_matching_stop() {
+    let case = fixture::load("data/static/0005.json");
+
+    run(&case).await.expect("should process");
+
+    assert!(case.events().is_empty());
+}
+
+// Should return no events when there is no train update.
+#[tokio::test]
+async fn no_train_update() {
+    expect_error("data/static/0006.json").await;
+}
+
+// Should return no events when there is a train update but it contains no
+// changes.
+#[tokio::test]
+async fn no_changes() {
+    expect_error("data/static/0007.json").await;
+}
+
+// Should return no events when there is a train update but it contains no
+// actual changes.
+#[tokio::test]
+async fn no_actual_changes() {
+    expect_error("data/static/0008.json").await;
+}
+
+// Should return no events when train update arrives more than 60 seconds after
+// the current time.
+#[tokio::test]
+async fn too_late() {
+    expect_error("data/static/0009.json").await;
+}
+
+// Should return no events when train update arrives more than 30 seconds
+// before the current time.
+#[tokio::test]
+async fn too_early() {
+    expect_error("data/static/0010.json").await;
+}
+
+// Run a fixture that is expected to fail and compare the error with the
+// fixture's expected output.
+async fn expect_error(path: &str) {
+    let case = fixture::load(path);
+
+    let Some(Expected::Failure(expected_error)) = &case.expected else {
+        panic!("fixture should expect an error");
+    };
+    let actual_error = run(&case).await.expect_err("should have error");
+    assert_eq!(actual_error.code(), expected_error.code());
+    assert_eq!(actual_error.description(), expected_error.description());
+}
+
+async fn run(case: &Case) -> Result<(), omnia_sdk::Error> {
+    Client::new("transit", case.provider.clone())
+        .call(train_update, case.input.clone(), &Metadata::default())
+        .await
+}
+
+struct XmlBuilder<'a> {
+    station: u64,
+    vehicle: &'a str,
+    arrival: bool,
+    delay_secs: i64,
+    update: UpdateType,
+}
+
+#[derive(PartialEq, Eq)]
+#[allow(dead_code, reason = "each variant names a fixture scenario")]
+enum UpdateType {
+    None,
+    Full,
+    NoChanges,
+    NoActualChanges,
+}
+
+#[allow(dead_code, reason = "builder methods chain; not every test uses each setter")]
+impl<'a> XmlBuilder<'a> {
+    const fn new() -> Self {
+        Self {
+            station: 0,
+            vehicle: "5226",
+            arrival: true,
+            delay_secs: 0,
+            update: UpdateType::Full,
+        }
+    }
+
+    const fn station(mut self, station: u64) -> Self {
+        self.station = station;
+        self
+    }
+
+    const fn vehicle(mut self, vehicle: &'a str) -> Self {
+        self.vehicle = vehicle;
+        self
+    }
+
+    const fn arrival(mut self, arrival: bool) -> Self {
+        self.arrival = arrival;
+        self
+    }
+
+    const fn delay_secs(mut self, delay_secs: i64) -> Self {
+        self.delay_secs = delay_secs;
+        self
+    }
+
+    const fn update(mut self, update: UpdateType) -> Self {
+        self.update = update;
+        self
+    }
+
+    // Generate a train update XML string.
+    fn xml(self) -> String {
+        match self.update {
+            UpdateType::None => return NO_UPDATE_MSG.to_string(),
+            UpdateType::NoChanges => return NO_CHANGE_MSG.to_string(),
+            UpdateType::NoActualChanges => return NO_ACTUAL_CHANGE_MSG.to_string(),
+            UpdateType::Full => {}
+        }
+
+        // create update message
+        let now = Utc::now().with_timezone(&TIMEZONE);
+        let event_dt = now.sub(Duration::seconds(self.delay_secs));
+        let created_date = event_dt.format("%d/%m/%Y");
+        let event_secs = event_dt.num_seconds_from_midnight();
+
+        let change_type = if self.arrival { 3 } else { 1 };
+        let has_arrived = if self.arrival { "true" } else { "false" };
+        let has_departed = if self.arrival { "false" } else { "true" };
+        let station = &self.station;
+        let vehicle = self.vehicle;
+
+        format!(
+            r#"<CCO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" stream="7c104b58-25cb-437a-8c39-297633a6638e" sequence="1214699" xsi:type="CCO">
+            <ActualizarDatosTren>
+                <trenPar>{vehicle}</trenPar>
+                <trenImpar>{vehicle}</trenImpar>
+                <fechaCreacion>{created_date}</fechaCreacion>
+                <numeroRegistro>9299669</numeroRegistro>
+                <operadorComercial>METRO</operadorComercial>
+                <pasoTren>
+                    <tipoCambio>{change_type}</tipoCambio>
+                    <estacion>{station}</estacion>
+                    <idPaso>181353261</idPaso>
+                    <horaEntrada>{event_secs}</horaEntrada>
+                    <horaEntradaReal>{event_secs}</horaEntradaReal>
+                    <haEntrado>{has_arrived}</haEntrado>
+                    <tipoParada>4</tipoParada>
+                    <paridad>p</paridad>
+                    <sentido>0</sentido>
+                    <horaSalida>{event_secs}</horaSalida>
+                    <horaSalidaReal>{event_secs}</horaSalidaReal>
+                    <haSalido>{has_departed}</haSalido>
+                    <viaEntradaMallas>2</viaEntradaMallas>
+                    <retrasoEntrada>-3</retrasoEntrada>
+                    <viaCirculacionMallas>2</viaCirculacionMallas>
+                    <retrasoSalida>0</retrasoSalida>
+                    <horaInicioDetencion>-1</horaInicioDetencion>
+                    <duracionDetencion>-1</duracionDetencion>
+                </pasoTren>
+                <pasoTren>
+                    <tipoCambio>3</tipoCambio>
+                    <estacion>{station}</estacion>
+                    <idPaso>181353261</idPaso>
+                    <horaEntrada>58020</horaEntrada>
+                    <horaEntradaReal>58017</horaEntradaReal>
+                    <haEntrado>true</haEntrado>
+                    <tipoParada>4</tipoParada>
+                    <paridad>p</paridad>
+                    <sentido>0</sentido>
+                    <horaSalida>58080</horaSalida>
+                    <horaSalidaReal>58080</horaSalidaReal>
+                    <haSalido>false</haSalido>
+                    <viaEntradaMallas>2</viaEntradaMallas>
+                    <retrasoEntrada>-3</retrasoEntrada>
+                    <viaCirculacionMallas>2</viaCirculacionMallas>
+                    <retrasoSalida>0</retrasoSalida>
+                    <horaInicioDetencion>-1</horaInicioDetencion>
+                    <duracionDetencion>-1</duracionDetencion>
+                </pasoTren>
+                <codigoOperadorComercial>-1</codigoOperadorComercial>
+                <origenActualizaTren>GAC</origenActualizaTren>
+            </ActualizarDatosTren></CCO>"#
+        )
+    }
+}
+
+const NO_UPDATE_MSG: &str = r#"<CCO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" stream="7c104b58-25cb-437a-8c39-297633a6638e" sequence="1214699" xsi:type="CCO">
+    </CCO>"#;
+const NO_CHANGE_MSG: &str = r#"<CCO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" stream="7c104b58-25cb-437a-8c39-297633a6638e" sequence="1214699" xsi:type="CCO">
+    <ActualizarDatosTren>
+        <trenPar>5226</trenPar>
+        <trenImpar>5226</trenImpar>
+    </ActualizarDatosTren>
+    </CCO>"#;
+const NO_ACTUAL_CHANGE_MSG: &str = r#"<CCO xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" stream="7c104b58-25cb-437a-8c39-297633a6638e" sequence="1214699" xsi:type="CCO">
+    <ActualizarDatosTren>
+        <trenPar>5226</trenPar>
+        <trenImpar>5226</trenImpar>
+        <pasoTren>
+            <tipoCambio>3</tipoCambio>
+            <estacion>80</estacion>
+            <idPaso>181353261</idPaso>
+            <horaEntrada>-1</horaEntrada>
+            <horaEntradaReal>-1</horaEntradaReal>
+            <haEntrado>false</haEntrado>
+            <tipoParada>4</tipoParada>
+            <paridad>p</paridad>
+            <sentido>0</sentido>
+            <horaSalida>58080</horaSalida>
+            <horaSalidaReal>58080</horaSalidaReal>
+            <haSalido>false</haSalido>
+            <viaEntradaMallas>2</viaEntradaMallas>
+            <retrasoEntrada>-3</retrasoEntrada>
+            <viaCirculacionMallas>2</viaCirculacionMallas>
+            <retrasoSalida>0</retrasoSalida>
+            <horaInicioDetencion>-1</horaInicioDetencion>
+            <duracionDetencion>-1</duracionDetencion>
+        </pasoTren>
+    </ActualizarDatosTren>
+    </CCO>"#;
