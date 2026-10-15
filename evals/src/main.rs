@@ -16,6 +16,9 @@
 //! - `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan an
 //!   earlier card committed again under this invocation's binary, target,
 //!   model, and width.
+//! - `--oracle <card> [case|adapter..]` drives the reference's fixtures
+//!   through the tree an earlier card's `omnia` build left, in an export
+//!   kept beside the run's files, with no turn spent and no build run.
 
 #![allow(
     clippy::print_stdout,
@@ -67,12 +70,14 @@ fn main() -> ExitCode {
 }
 
 // What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--build`, `--rebuild <card>`) with the target a build
-// goes through.
+// mode (`--facts`, `--build`, `--rebuild <card>`, `--oracle <card>`) with
+// the target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
     rebuild: Option<String>,
+    // the card whose `omnia` build the reference's fixtures are driven through
+    oracle: Option<String>,
     // the target a build runs through; none where no build runs
     target: Option<Target>,
 }
@@ -82,10 +87,13 @@ impl Args {
         let mut argv = argv;
         let mut filter: BTreeSet<String> = BTreeSet::new();
         let mut rebuild: Option<String> = None;
+        let mut oracle: Option<String> = None;
         let mut target: Option<Target> = None;
         while let Some(arg) = argv.next() {
             if arg == "--rebuild" {
                 rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
+            } else if arg == "--oracle" {
+                oracle = Some(argv.next().ok_or("`--oracle` names a card")?);
             } else if arg == "--target" {
                 let name = argv.next().ok_or("`--target` names a target adapter")?;
                 target = Some(Target::parse(&name)?);
@@ -104,13 +112,26 @@ impl Args {
         if rebuild.is_some() && filter.is_empty() {
             return Err("`--rebuild` names a case or an adapter".into());
         }
-        if target.is_some() && !build {
+        if oracle.is_some() {
+            if filter.is_empty() {
+                return Err("`--oracle` names a case or an adapter".into());
+            }
+            if facts_only || build {
+                return Err("`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
+                            `--build`, or `--rebuild`"
+                    .into());
+            }
+            if target.is_some_and(|target| target != Target::Omnia) {
+                return Err("`--oracle` reads an `omnia` build; `--target` names another".into());
+            }
+        } else if target.is_some() && !build {
             return Err("`--target` chooses what `--build` or `--rebuild` builds through".into());
         }
         Ok(Self {
             filter,
             facts_only,
             rebuild,
+            oracle,
             target: build.then(|| target.unwrap_or_default()),
         })
     }
@@ -127,17 +148,35 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         filter,
         facts_only,
         rebuild,
+        oracle,
         target,
     } = Args::parse(env::args().skip(1))?;
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
+    let eval_dir = root.join("target/eval");
+
+    // the oracle alone needs no binary, no component, and no model
+    if let Some(card) = oracle {
+        for case in &cases {
+            let Some(reference) = Reference::locate(root, case.expected.reference.as_deref())
+            else {
+                eprintln!("eval: case `{}` names no reference; nothing driven", case.name);
+                continue;
+            };
+            let project = eval_dir.join(&card).join(&case.name);
+            let (file, text) = self::oracle(&project, &reference)?;
+            print!("{text}");
+            eprintln!("eval: `{}` oracle at {}", case.name, file.display());
+        }
+        return Ok(());
+    }
+
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
     let mut settings = Settings::from_env(root, &adapters, target)?;
     settings.rebuild = rebuild;
 
-    let eval_dir = root.join("target/eval");
     if let Some(card) = settings.rebuild.clone() {
         let started = now();
         let card_name = started.replace(':', "-");
@@ -410,6 +449,11 @@ struct Expected {
     criteria: Vec<Item>,
     #[serde(default, rename = "decision")]
     decisions: Vec<Item>,
+    // the spans no accepted requirement claim should anchor within: the
+    // readiness and lifecycle code whose behaviour is the design's, so a
+    // run that still states it is read apart from one that merely finds less
+    #[serde(default, rename = "absent")]
+    absent: Vec<Item>,
     // the requirements the engine reconciles across the sources, exactly
     #[serde(default, rename = "behaviour")]
     behaviours: Vec<Behaviour>,
@@ -633,10 +677,19 @@ impl Expected {
             ("requirement", &self.requirements),
             ("criterion", &self.criteria),
             ("decision", &self.decisions),
+            ("absent", &self.absent),
         ] {
             for item in items {
                 self.source(item.source.as_deref())
                     .map_err(|why| format!("{kind} `{}` {why}", item.anchor))?;
+            }
+        }
+        for item in &self.absent {
+            if item.stem.is_some() {
+                return Err(format!(
+                    "absent `{}` names a stem; a span no requirement anchors in has none",
+                    item.anchor
+                ));
             }
         }
         for behaviour in &self.behaviours {
@@ -1533,8 +1586,10 @@ impl Run {
         (blocks.len(), types)
     }
 
-    // The design's type names: each `type` block's key, the name alone where
-    // the key carries an anchor beside it.
+    // The design's data type names: each `data` `type` block's key, the name
+    // alone where the key carries an anchor beside it. A `mechanism` type —
+    // a client, a retriever, a bootstrap, a settings carrier — is left out,
+    // so a requirement naming one counts as stated through the mechanism.
     fn design_types(&self) -> BTreeSet<&str> {
         self.design
             .as_ref()
@@ -1543,6 +1598,7 @@ impl Run {
             .flatten()
             .filter_map(|section| section["blocks"].as_array())
             .flatten()
+            .filter(|block| block["type"]["role"].as_str() != Some("mechanism"))
             .filter_map(|block| block["type"]["key"].as_str())
             .filter_map(|key| key.split([' ', '(']).next())
             .collect()
@@ -1934,6 +1990,79 @@ fn rebuilt(
     Ok(run)
 }
 
+// The reference comparison alone over the tree `run-1` of the case staged at
+// `project` left: the tip exported once to `run-1.oracle/` beside the run's
+// files and kept, so the next invocation reuses its build directory and an
+// operator may patch the export by hand and read the oracle again, and the
+// comparison written to `run-1.oracle.md` with the harness's own output in
+// `run-1.oracle.log`.
+fn oracle(project: &Path, reference: &Reference) -> io::Result<(PathBuf, String)> {
+    const TAG: &str = "run-1";
+    if !project.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("no staged project at `{}`", project.display()),
+        ));
+    }
+    let stdout = fs::read_to_string(project.join(format!("{TAG}.stdout")))?;
+    let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+    let revision = envelope
+        .as_ref()
+        .and_then(|out| out["revision"].as_str())
+        .ok_or_else(|| io::Error::other(format!("`{TAG}` committed no revision")))?;
+    let build = Build::recorded(project, TAG, Target::Omnia, revision)?;
+    let tree = Tree::left(project, revision, &build).ok_or_else(|| {
+        io::Error::other(format!(
+            "`{TAG}` left no tree: its build set no label and no integration copy of its own stands"
+        ))
+    })?;
+
+    // the export kept, so its build directory is
+    let export = project.join(format!("{TAG}.oracle"));
+    if export.is_dir() {
+        eprintln!(
+            "eval: `{TAG}` oracle over the export kept at {}; remove it to export {tree} again",
+            export.display()
+        );
+    } else {
+        eprintln!("eval: `{TAG}` exporting {tree} to {}", export.display());
+        export_tip(&tree, &export)?;
+    }
+
+    let comparison = reference.compare(&export)?;
+    let text = comparison.to_string();
+    fs::write(project.join(format!("{TAG}.oracle.log")), comparison.log())?;
+    let file = project.join(format!("{TAG}.oracle.md"));
+    fs::write(&file, &text)?;
+    Ok((file, text))
+}
+
+// The tip of `tree` exported whole to `export`, laid fresh, and every path
+// the tip tracks.
+fn export_tip(tree: &Tree, export: &Path) -> io::Result<Vec<String>> {
+    let (repo, tip) = tree.at();
+    if export.exists() {
+        fs::remove_dir_all(export)?;
+    }
+    fs::create_dir_all(export)?;
+    let archive = PathBuf::from(format!("{}.tar", export.display()));
+    git(repo, &["archive", "--format=tar", "-o", &archive.display().to_string(), tip])?;
+    let untar = std::process::Command::new("tar")
+        .arg("-xf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(export)
+        .output()?;
+    fs::remove_file(&archive)?;
+    if !untar.status.success() {
+        return Err(io::Error::other(format!(
+            "tar over the exported tree: {}",
+            String::from_utf8_lossy(&untar.stderr).trim()
+        )));
+    }
+    Ok(git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect())
+}
+
 // A copy of a directory tree skipping nothing, for a staged project's
 // sources and `.emery/storage`.
 fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
@@ -2079,6 +2208,39 @@ impl WaveTurns<'_> {
 }
 
 impl Build {
+    // A build read back from the files `build` kept beside its run, with the
+    // chain it left where it stands: the exit is the envelope's success or
+    // the failure's class, and the wall time, unkept, is zero.
+    fn recorded(project: &Path, tag: &str, target: Target, revision: &str) -> io::Result<Self> {
+        let stdout = fs::read_to_string(project.join(format!("{tag}.build.stdout")))?;
+        let stderr = fs::read_to_string(project.join(format!("{tag}.build.stderr")))?;
+        let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+        let failure = failure(&stderr);
+        let exit = match (&envelope, &failure) {
+            (Some(_), _) => Some(0),
+            (None, Some(failure)) => Some(match failure.code.as_str() {
+                "not_found" => 2,
+                "server_error" => 3,
+                "bad_gateway" => 4,
+                _ => 1,
+            }),
+            (None, None) => None,
+        };
+        let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
+        tail.reverse();
+        Ok(Self {
+            target,
+            wall: Duration::ZERO,
+            exit,
+            envelope,
+            failure,
+            completions: completions(&stderr),
+            history: history(project, revision),
+            tail: tail.join("\n"),
+            fidelity: None,
+        })
+    }
+
     fn summary(&self, slices: usize) -> String {
         match self.exit {
             Some(0) => format!(
@@ -3079,31 +3241,8 @@ impl Fidelity {
         project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
         target: Target, reference: Option<&Reference>,
     ) -> io::Result<Self> {
-        let (repo, tip) = tree.at();
         let export = project.join(format!("{tag}.fidelity"));
-        if export.exists() {
-            fs::remove_dir_all(&export)?;
-        }
-        fs::create_dir_all(&export)?;
-
-        // the tip exported whole, and listed
-        let archive = project.join(format!("{tag}.fidelity.tar"));
-        git(repo, &["archive", "--format=tar", "-o", &archive.display().to_string(), tip])?;
-        let untar = std::process::Command::new("tar")
-            .arg("-xf")
-            .arg(&archive)
-            .arg("-C")
-            .arg(&export)
-            .output()?;
-        fs::remove_file(&archive)?;
-        if !untar.status.success() {
-            return Err(io::Error::other(format!(
-                "tar over the exported tree: {}",
-                String::from_utf8_lossy(&untar.stderr).trim()
-            )));
-        }
-        let tracked: Vec<String> =
-            git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect();
+        let tracked = export_tip(tree, &export)?;
 
         // the layout's checks under the tree's own configuration, then the
         // tests the runner counted
@@ -3927,9 +4066,18 @@ struct Grade {
     requirements: Recall,
     criteria: Recall,
     decisions: Recall,
+    absent: Absent,
     behaviours: Behaviours,
     // what each source's survey and stems read against its expectations
     sources: Vec<SourceGrade>,
+}
+
+// The accepted requirement claims anchored within the spans expected to
+// state none: one hit per claim, naming the span and the claim.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Absent {
+    expected: usize,
+    hits: Vec<String>,
 }
 
 struct SourceGrade {
@@ -4023,9 +4171,48 @@ fn grade(expected: &Expected, run: &Run) -> Grade {
         requirements: recall(&expected.requirements, expected, run, ClaimKind::Requirement),
         criteria: recall(&expected.criteria, expected, run, ClaimKind::Criterion),
         decisions: recall(&expected.decisions, expected, run, ClaimKind::Decision),
+        absent: absent(&expected.absent, expected, run),
         behaviours: behaviours(&expected.behaviours, run),
         sources,
     }
+}
+
+// An absent span is hit by every accepted requirement claim of its source
+// whose anchor is held to it (`held`): a claim half or more within the
+// span states what the span does, while one a line wider than it does not.
+// A span naming no lines is hit by any claim in its file. Each hit is
+// labelled by the span and the claim, so the card's reading names the
+// passage of the prompt the claim passed through.
+fn absent(items: &[Item], expected: &Expected, run: &Run) -> Absent {
+    let mut absent = Absent {
+        expected: items.len(),
+        ..Absent::default()
+    };
+    for item in items {
+        let source = match (&item.source, expected.sources.len()) {
+            (Some(source), _) => format!("{source}:"),
+            (None, 1) => String::new(),
+            (None, _) => "?:".to_owned(),
+        };
+        let (Ok(of), Ok(span)) = (expected.source(item.source.as_deref()), Anchor::parse(&item.anchor))
+        else {
+            continue;
+        };
+        for claim in run.claims_of(of.name(), ClaimKind::Requirement) {
+            let Some(Ok(anchor)) = claim.anchor() else { continue };
+            if held(anchor, span) {
+                absent.hits.push(format!(
+                    "{source}`{}` — {} (`{}` at `{}`)",
+                    item.anchor,
+                    item.gloss,
+                    claim.id.as_deref().unwrap_or("?"),
+                    claim.path.as_deref().unwrap_or("?"),
+                ));
+            }
+        }
+    }
+
+    absent
 }
 
 // An expected item is met by a claim of its kind, from its source, whose
@@ -4510,21 +4697,19 @@ impl Display for Card<'_> {
 
         // stability across runs: at the first rung when two landed there,
         // else across the attempts that landed anywhere
-        let first: Vec<&Run> = runs
+        let landed: Vec<&Attempt> = runs
             .iter()
             .filter_map(|attempts| attempts.first())
-            .map(|attempt| &attempt.run)
+            .filter(|attempt| attempt.run.exit == Some(0))
             .collect();
-        let landed: Vec<&Run> = first.iter().copied().filter(|run| run.exit == Some(0)).collect();
         if landed.len() >= 2 {
             let label = format!("across {} runs at {}", landed.len(), self.ladder[0]);
             stability(f, &label, &landed)?;
         } else {
-            let landed: Vec<&Run> = runs
+            let landed: Vec<&Attempt> = runs
                 .iter()
                 .filter_map(|attempts| attempts.last())
-                .map(|attempt| &attempt.run)
-                .filter(|run| run.exit == Some(0))
+                .filter(|attempt| attempt.run.exit == Some(0))
                 .collect();
             if landed.len() >= 2 {
                 let label = format!("across the {} attempts that landed", landed.len());
@@ -4702,6 +4887,12 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
             }
             for misplaced in &recall.misplaced {
                 writeln!(f, "- {kind} misplaced: {misplaced}")?;
+            }
+        }
+        if grade.absent.expected > 0 {
+            writeln!(f, "- absent hits: {}", grade.absent.hits.len())?;
+            for hit in &grade.absent.hits {
+                writeln!(f, "- absent hit: {hit}")?;
             }
         }
     }
@@ -5101,8 +5292,10 @@ fn verdict(attempt: &Attempt) -> String {
     format!("fail: {why} ({wall}s)")
 }
 
-fn stability(f: &mut Formatter<'_>, label: &str, runs: &[&Run]) -> fmt::Result {
+fn stability(f: &mut Formatter<'_>, label: &str, attempts: &[&Attempt]) -> fmt::Result {
     writeln!(f, "\nStability {label}:")?;
+    let runs: Vec<&Run> = attempts.iter().map(|attempt| &attempt.run).collect();
+    let runs = runs.as_slice();
 
     // the stems each run's requirements lead with, as sets of (source, stem)
     let sets: BTreeSet<BTreeSet<(&str, &str)>> = runs.iter().map(|run| run.stems()).collect();
@@ -5117,6 +5310,20 @@ fn stability(f: &mut Formatter<'_>, label: &str, runs: &[&Run]) -> fmt::Result {
     pairwise(f, "requirement ids", runs, Run::ids)?;
     pairwise(f, "spec subjects", runs, Run::subjects)?;
     anchored(f, runs)?;
+
+    // the band the absent hits fell in, where the case expects any
+    if attempts.iter().any(|attempt| attempt.grade.absent.expected > 0) {
+        let hits: Vec<usize> = attempts.iter().map(|attempt| attempt.grade.absent.hits.len()).collect();
+        let (low, high) = (hits.iter().min().copied(), hits.iter().max().copied());
+        let per_run: Vec<String> = attempts
+            .iter()
+            .zip(&hits)
+            .map(|(attempt, hits)| format!("run {} {hits}", attempt.run.n))
+            .collect();
+        if let (Some(low), Some(high)) = (low, high) {
+            writeln!(f, "- absent hits: {low}–{high} ({})", per_run.join(" · "))?;
+        }
+    }
 
     // what each later revision changed
     for run in runs.iter().skip(1) {
@@ -6560,7 +6767,8 @@ mod tests {
     }
 
     // The figure reads each body's spans, in backticks or bare, by shape
-    // alone, and leaves out the names the design owns a type for.
+    // alone, and leaves out the names the design owns a `data` type for; a
+    // `mechanism` type's name is the platform's as much as a decorator is.
     #[test]
     fn mechanism_figure() {
         let spec = spec(&serde_json::json!([
@@ -6578,13 +6786,19 @@ mod tests {
               "sources": [cited("code", "files.local", "files.ts#L20")] },
         ]));
         let design = serde_json::json!({ "sections": [{ "kind": "domain-model", "blocks": [
-            { "type": { "key": "RolesGuard", "signature": "class RolesGuard {}" } },
-            { "type": { "key": "UserMapper (src/users/user.mapper.ts#L8-L72)", "signature": "class UserMapper {}" } },
+            { "type": { "key": "RolesGuard", "signature": "class RolesGuard {}", "role": "mechanism" } },
+            { "type": { "key": "UserMapper (src/users/user.mapper.ts#L8-L72)", "signature": "class UserMapper {}", "role": "data" } },
+            { "type": { "key": "Session", "signature": "interface Session {}" } },
         ] }] });
         let mut run = run_from(Some(0), "", Some(spec));
         run.design = Some(design);
 
-        assert_eq!(run.design_types(), BTreeSet::from(["RolesGuard", "UserMapper"]));
+        assert_eq!(
+            run.design_types(),
+            BTreeSet::from(["Session", "UserMapper"]),
+            "a `mechanism` type is no part of the program's vocabulary; a block without a role \
+             is read as data"
+        );
         let stated = run.mechanism();
         let listed: Vec<(&str, Vec<&str>, Vec<&str>)> = stated
             .iter()
@@ -6600,11 +6814,12 @@ mod tests {
             listed,
             vec![
                 ("REQ-001", vec!["docs"], vec!["AuthGuard('jwt')"]),
+                ("REQ-002", vec!["code"], vec!["RolesGuard"]),
                 ("REQ-004", vec!["code", "docs"], vec!["@Exclude({ toPlainOnly: true })"]),
                 ("REQ-006", vec!["code"], vec!["FileInterceptor", "TypeORM", "validate()"]),
             ],
-            "the design's own `RolesGuard` and `UserMapper.toDomain()` left out, with the \
-             program's own fields, keys, and functions"
+            "the design's `UserMapper.toDomain()` left out and its mechanism `RolesGuard` \
+             counted, with the program's own fields, keys, and functions left out"
         );
         assert_eq!((run.citing("docs"), run.citing("code")), (4, 3));
         for span in [
@@ -6624,6 +6839,62 @@ mod tests {
         assert_eq!(identifier("redis.ping()"), Some("redis"));
         assert_eq!(identifier("createApp(config)"), Some("createApp"));
         assert_eq!(identifier("@Injectable"), Some("Injectable"));
+    }
+
+    // An absent span is graded by `held`, as a behaviour's claims are: a
+    // requirement half or more within it is a hit, one a line wider than it
+    // is not, and a span naming no lines is hit by any requirement in its
+    // file. A criterion anchored within it is no hit, since the figure
+    // reads what the specification states as requirements.
+    #[test]
+    fn absent_hits() {
+        let expected = case(
+            "[[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+             [[requirement]]\nsource = \"code\"\nstem = \"orders\"\nanchor = \"src/orders.ts#L10-L20\"\ngloss = \"an order is placed\"\n\n\
+             [[absent]]\nsource = \"code\"\nanchor = \"src/start.ts#L21-L34\"\ngloss = \"the credentials are loaded before serving\"\n\n\
+             [[absent]]\nsource = \"code\"\nanchor = \"src/secrets.ts\"\ngloss = \"the secret retriever\"\n\n\
+             [[absent]]\nsource = \"docs\"\nanchor = \"ops.md#L5-L9\"\ngloss = \"the restart procedure\"\n",
+        )
+        .unwrap();
+        let stderr = accepted_line(
+            "code",
+            &[
+                requirement("orders.place", "src/orders.ts#L10-L20"),
+                requirement("start.load-credentials", "src/start.ts#L21-L30"),
+                requirement("start.serve", "src/start.ts#L1-L60"),
+                requirement("start.token", "src/secrets.ts#L8-L12"),
+                criterion("start.rotation-interval", "src/start.ts#L25"),
+            ]
+            .join(","),
+        ) + &accepted_line("docs", &requirement("ops.restart", "ops.md#L5-L9"));
+        let run = run_from(Some(0), &stderr, None);
+
+        let graded = absent(&expected.absent, &expected, &run);
+        assert_eq!(graded.expected, 3);
+        assert_eq!(
+            graded.hits,
+            vec![
+                "code:`src/start.ts#L21-L34` — the credentials are loaded before serving \
+                 (`start.load-credentials` at `src/start.ts#L21-L30`)",
+                "code:`src/secrets.ts` — the secret retriever (`start.token` at \
+                 `src/secrets.ts#L8-L12`)",
+                "docs:`ops.md#L5-L9` — the restart procedure (`ops.restart` at `ops.md#L5-L9`)",
+            ],
+            "the whole-file requirement over `start.ts` and the criterion are no hits"
+        );
+        assert_eq!(grade(&expected, &run).absent, graded);
+
+        let stemmed = refused(
+            "[[source]]\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[absent]]\nstem = \"start\"\nanchor = \"src/start.ts\"\ngloss = \"g\"\n",
+        );
+        assert!(stemmed.contains("names a stem"), "{stemmed}");
+        let stranger = refused(
+            "[[source]]\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+             [[absent]]\nsource = \"docs\"\nanchor = \"ops.md\"\ngloss = \"g\"\n",
+        );
+        assert!(stranger.contains("absent `ops.md` names no source of the case"), "{stranger}");
     }
 
     #[test]

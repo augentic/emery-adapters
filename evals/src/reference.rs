@@ -45,21 +45,22 @@ impl Reference {
             Measure::names("config keys", &built.config, &reference.config),
             Measure::names("topics", &built.topics, &reference.topics),
         ];
-        let oracle = match self.stage(export, &built)? {
+        let (oracle, log) = match self.stage(export, &built)? {
             Ok(fixtures) => {
                 let check = host_check(
                     export,
                     "cargo test",
                     &["--test", HARNESS, "--", "--nocapture", "--test-threads=1"],
                 );
-                Oracle::read(&check, fixtures)
+                (Oracle::read(&check, fixtures), check.output)
             }
-            Err(why) => Oracle::not_run(why),
+            Err(why) => (Oracle::not_run(why), String::new()),
         };
         Ok(Comparison {
             name: self.name.clone(),
             measures,
             oracle,
+            log,
         })
     }
 
@@ -137,7 +138,7 @@ impl Reference {
         }
         fs::create_dir_all(export.join("tests"))?;
         fs::write(
-            export.join(format!("tests/{HARNESS}.rs")),
+            export.join(harness_path()),
             HARNESS_SOURCE.replace("__CRATE__", &package.replace('-', "_")),
         )?;
         Ok(Ok(fixtures.len()))
@@ -148,22 +149,27 @@ const GROUPS: [&str; 2] = ["static", "replay"];
 
 const HARNESS: &str = "reference_oracle";
 
+fn harness_path() -> String {
+    format!("tests/{HARNESS}.rs")
+}
+
 // The TOML the harness's dev-dependencies are appended to the built tree's
-// root manifest as, one table per crate the manifest lacks: the workspace's
-// pin where it carries one, a version otherwise. `omnia-test` and `tokio`
-// are the layout's own and are never added, since their versions and
-// features are the tree's to pin.
+// root manifest as, one table per crate the root package depends on under
+// no table: the workspace's pin where it carries one, a version otherwise.
+// `omnia-test` and `tokio` are the layout's own and are never added, since
+// their versions and features are the tree's to pin.
 fn dev_dependency_additions(manifest: &toml::Table) -> Result<String, String> {
-    const NEEDED: [(&str, &str); 5] = [
+    const NEEDED: [(&str, &str); 6] = [
         ("bytes", "1"),
         ("chrono", "0.4"),
         ("chrono-tz", "0.10"),
         ("http", "1"),
         ("serde_json", "1"),
+        ("tracing", "0.1"),
     ];
     const NATIVE: &str = "target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies";
 
-    let present = dev_dependency_names(manifest);
+    let present = package_dependency_names(manifest);
     for required in ["omnia-test", "tokio"] {
         if !present.contains(required) {
             return Err(format!(
@@ -192,11 +198,17 @@ fn dev_dependency_additions(manifest: &toml::Table) -> Result<String, String> {
     Ok(additions)
 }
 
-// Every dev-dependency the manifest declares, under any target.
-fn dev_dependency_names(manifest: &toml::Table) -> BTreeSet<String> {
-    let mut names: BTreeSet<String> = table_keys(manifest.get("dev-dependencies"));
-    for target in manifest.get("target").and_then(toml::Value::as_table).into_iter().flatten() {
-        names.extend(table_keys(target.1.get("dev-dependencies")));
+// Every crate the manifest's package depends on, as a dependency or a
+// dev-dependency, under any target; the workspace's table declares none.
+fn package_dependency_names(manifest: &toml::Table) -> BTreeSet<String> {
+    const TABLES: [&str; 2] = ["dependencies", "dev-dependencies"];
+    let mut names: BTreeSet<String> = BTreeSet::new();
+    for table in TABLES {
+        names.extend(table_keys(manifest.get(table)));
+        for target in manifest.get("target").and_then(toml::Value::as_table).into_iter().flatten()
+        {
+            names.extend(table_keys(target.1.get(table)));
+        }
     }
     names
 }
@@ -222,9 +234,12 @@ struct Shape {
 }
 
 impl Shape {
+    // The tree read less what an earlier comparison staged into it, so an
+    // export kept and compared again measures the same.
     fn read(root: &Path) -> io::Result<Self> {
         let mut paths = Vec::new();
         files_under(root, root, "target", &mut paths)?;
+        paths.retain(|path| !path.starts_with("oracle/") && *path != harness_path());
         paths.sort();
 
         // the crates and the Rust sources
@@ -434,15 +449,22 @@ fn inbound_candidates(topics: &BTreeSet<String>, config: &BTreeMap<String, Strin
     train.into_iter().chain(rest).collect()
 }
 
-// The built tree beside the reference: each measure on both sides, and
-// what the oracle found.
+// The built tree beside the reference: each measure on both sides, what
+// the oracle found, and everything the harness printed as it ran.
 pub struct Comparison {
     name: String,
     measures: Vec<Measure>,
     oracle: Oracle,
+    log: String,
 }
 
 impl Comparison {
+    // What `cargo test` printed as the harness ran, the guest's own events
+    // among it; empty where the harness could not run.
+    pub fn log(&self) -> &str {
+        &self.log
+    }
+
     // The one line the card's build findings carry.
     pub fn finding(&self) -> String {
         let measures: Vec<String> = self
@@ -530,12 +552,14 @@ fn spelled(names: &[String]) -> String {
 }
 
 // What the harness answered: each fixture's outcome, the topic the guest
-// consumed the messages under, the topics it published to, or why it ran
+// consumed the messages under, the topics it published to, the table paths
+// a fixture read that another fixture's recording answered, or why it ran
 // nothing.
 pub struct Oracle {
     outcomes: Vec<Outcome>,
     inbound: Option<String>,
     outbound: Vec<String>,
+    shared: Vec<String>,
     note: Option<String>,
 }
 
@@ -553,6 +577,7 @@ impl Oracle {
             outcomes: Vec::new(),
             inbound: None,
             outbound: Vec::new(),
+            shared: Vec::new(),
             note: Some(why),
         }
     }
@@ -578,13 +603,14 @@ impl Oracle {
 
     // The lines the harness prints: `oracle <fixture> | <expected> | pass`,
     // `oracle <fixture> | <expected> | fail: <reason>; <reason>`,
-    // `oracle-inbound <topic>`, `oracle-outbound <topic>, <topic>`, and
-    // `oracle-none <why>`.
+    // `oracle-inbound <topic>`, `oracle-outbound <topic>, <topic>`,
+    // `oracle-shared <path>, <path>`, and `oracle-none <why>`.
     fn parse(output: &str) -> Self {
         let mut oracle = Self {
             outcomes: Vec::new(),
             inbound: None,
             outbound: Vec::new(),
+            shared: Vec::new(),
             note: None,
         };
         for line in output.lines().map(str::trim) {
@@ -593,6 +619,9 @@ impl Oracle {
             } else if let Some(rest) = marked(line, "oracle-outbound ") {
                 oracle.outbound =
                     rest.split(", ").filter(|topic| !topic.is_empty()).map(str::to_owned).collect();
+            } else if let Some(rest) = marked(line, "oracle-shared ") {
+                oracle.shared =
+                    rest.split(", ").filter(|path| !path.is_empty()).map(str::to_owned).collect();
             } else if let Some(rest) = marked(line, "oracle-none ") {
                 oracle.note = Some(rest.to_owned());
             } else if let Some(rest) = marked(line, "oracle ") {
@@ -679,6 +708,14 @@ impl Display for Oracle {
         if let Some(note) = &self.note {
             writeln!(f, "- {note}")?;
         }
+        if !self.shared.is_empty() {
+            writeln!(
+                f,
+                "- {} answered from another fixture's recording where the fixture driven \
+                 recorded no such read: a table read cache-aside on a miss.",
+                spelled(&self.shared)
+            )?;
+        }
         writeln!(f, "\n| fixture | recorded | outcome |\n| --- | --- | --- |")?;
         for outcome in &self.outcomes {
             let verdict = if outcome.reasons.is_empty() {
@@ -700,9 +737,11 @@ const HARNESS_SOURCE: &str = r#"//! The eval's reference oracle: every recorded 
 //! guest driven through this guest's messaging router. Laid by the eval
 //! into the exported tree and removed with it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use bytes::Bytes;
 use chrono::{Duration, Timelike, Utc};
@@ -711,8 +750,85 @@ use http::{Method, Response};
 use omnia_sdk::api::messaging::{Delivery, DeliveryError};
 use omnia_test::guest::{FixedIdentity, MapConfig, MatchedHttp, Provider};
 use serde_json::Value;
+use tracing::field::{Field, Visit};
+use tracing::{Event, Level, Metadata, Subscriber, span};
 
 const BASE_URL: &str = "http://api.test";
+
+// The longest a logged event is quoted at in a fixture's reasons.
+const LOGGED_CHARS: usize = 240;
+
+// The guest's warn and error events as one fixture runs, since a handler
+// that logs a failure and answers `Ok(())` publishes nothing and says why
+// here alone.
+#[derive(Clone, Default)]
+struct Logged(Arc<Mutex<Vec<String>>>);
+
+impl Logged {
+    fn last(&self) -> Option<String> {
+        self.0.lock().expect("logged").last().cloned()
+    }
+}
+
+impl Subscriber for Logged {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        *metadata.level() <= Level::WARN
+    }
+
+    fn new_span(&self, _span: &span::Attributes<'_>) -> span::Id {
+        span::Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &span::Id, _values: &span::Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &span::Id, _follows: &span::Id) {}
+
+    fn event(&self, event: &Event<'_>) {
+        let mut fields = Fields::default();
+        event.record(&mut fields);
+        let line = format!(
+            "{} {}: {}",
+            event.metadata().level(),
+            event.metadata().target(),
+            fields.0.trim()
+        );
+        self.0.lock().expect("logged").push(line);
+    }
+
+    fn enter(&self, _span: &span::Id) {}
+
+    fn exit(&self, _span: &span::Id) {}
+}
+
+// An event's fields spelled as text, its message first.
+#[derive(Default)]
+struct Fields(String);
+
+impl Visit for Fields {
+    fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" {
+            self.0.insert_str(0, &format!("{value:?} "));
+        } else {
+            let _ = write!(self.0, "{}={value:?} ", field.name());
+        }
+    }
+}
+
+// A logged line as a reason reads it: one line, within the quote length,
+// with the separators the oracle's lines are split on spelled otherwise.
+fn quoted(line: &str) -> String {
+    let mut flat: String = line
+        .replace('\n', " ")
+        .replace(" | ", " / ")
+        .replace("; ", ", ")
+        .chars()
+        .take(LOGGED_CHARS)
+        .collect();
+    if line.chars().count() > LOGGED_CHARS {
+        flat.push('…');
+    }
+    flat
+}
 
 fn oracle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("oracle")
@@ -789,8 +905,8 @@ async fn run() {
     };
     println!("oracle-inbound {inbound}");
 
-    // every fixture, in path order
-    let mut outbound = BTreeSet::new();
+    // every fixture, in path order, over the recordings they share
+    let mut fixtures: Vec<(String, Value)> = Vec::new();
     for group in ["static", "replay"] {
         let mut paths: Vec<PathBuf> = fs::read_dir(dir.join(group))
             .into_iter()
@@ -802,41 +918,119 @@ async fn run() {
         paths.sort();
         for path in paths {
             let stem = path.file_stem().map(|stem| stem.to_string_lossy().into_owned());
-            let name = format!("{group}/{}", stem.unwrap_or_default());
             let fixture: Value =
                 serde_json::from_str(&fs::read_to_string(&path).expect("fixture")).expect("fixture parses");
-            let (expected, reasons, topics) = drive(&inbound, &config, &fixture).await;
-            outbound.extend(topics);
-            if reasons.is_empty() {
-                println!("oracle {name} | {expected} | pass");
-            } else {
-                println!("oracle {name} | {expected} | fail: {}", reasons.join("; "));
-            }
+            fixtures.push((format!("{group}/{}", stem.unwrap_or_default()), fixture));
+        }
+    }
+    let shared = shared_recording(&fixtures);
+    let mut outbound = BTreeSet::new();
+    let mut answered_shared = BTreeSet::new();
+    for (name, fixture) in &fixtures {
+        let driven = drive(&inbound, &config, fixture, &shared).await;
+        outbound.extend(driven.topics);
+        answered_shared.extend(driven.shared);
+        if driven.reasons.is_empty() {
+            println!("oracle {name} | {} | pass", driven.expected);
+        } else {
+            println!("oracle {name} | {} | fail: {}", driven.expected, driven.reasons.join("; "));
         }
     }
     let outbound: Vec<String> = outbound.into_iter().collect();
     println!("oracle-outbound {}", outbound.join(", "));
+    let answered_shared: Vec<String> = answered_shared.into_iter().collect();
+    println!("oracle-shared {}", answered_shared.join(", "));
+}
+
+// The GET exchanges two or more fixtures record, by path and query, each
+// under the first recording: the tables a guest reads cache-aside, which a
+// fixture recorded over a warm cache never saw fetched.
+fn shared_recording(fixtures: &[(String, Value)]) -> Vec<Value> {
+    let mut seen: BTreeMap<String, (usize, Value)> = BTreeMap::new();
+    for (_, fixture) in fixtures {
+        let mut recorded = BTreeSet::new();
+        for request in fixture["http_requests"].as_array().into_iter().flatten() {
+            if request["method"].as_str().is_some_and(|method| method != "GET") {
+                continue;
+            }
+            let key = request_key(request);
+            if !recorded.insert(key.clone()) {
+                continue;
+            }
+            let entry = seen.entry(key).or_insert_with(|| (0, request.clone()));
+            entry.0 += 1;
+        }
+    }
+    seen.into_values().filter(|(fixtures, _)| *fixtures >= 2).map(|(_, request)| request).collect()
+}
+
+fn request_key(request: &Value) -> String {
+    let path = request["path"].as_str().unwrap_or("/");
+    let query = request["request"].as_str().map(|query| format!("?{query}")).unwrap_or_default();
+    format!("{path}{query}")
+}
+
+// Every URL `matched_http_into` answers the requests at: each with its
+// query, and bare where it carries one.
+fn urls_of(requests: &[&Value]) -> BTreeSet<String> {
+    let mut urls = BTreeSet::new();
+    for request in requests {
+        let path = request["path"].as_str().unwrap_or("/");
+        urls.insert(format!("{BASE_URL}{}", request_key(request)));
+        urls.insert(format!("{BASE_URL}{path}"));
+    }
+    urls
+}
+
+// What one fixture driven through the guest showed.
+struct Driven {
+    expected: String,
+    reasons: Vec<String>,
+    topics: Vec<String>,
+    shared: Vec<String>,
 }
 
 // One fixture through the guest: what it recorded, every difference in
-// the guest's answer, and the topics the guest published to.
-async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value) -> (String, Vec<String>, Vec<String>) {
+// the guest's answer, the topics the guest published to, and the shared
+// reads the fixture's own recording lacked that answered the guest.
+async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shared: &[Value]) -> Driven {
     let expected = Expected::of(fixture);
     let mut xml = fixture["input"].as_str().unwrap_or("").to_owned();
     if let Some(delay) = fixture["params"]["delay"].as_i64() {
         xml = shifted(&xml, delay);
     }
-    let provider = provider(config, matched_http(&fixture["http_requests"]));
+    let own: Vec<&Value> = fixture["http_requests"].as_array().into_iter().flatten().collect();
+    let own_keys: BTreeSet<String> = own.iter().map(|request| request_key(request)).collect();
+    let fallback: Vec<&Value> =
+        shared.iter().filter(|request| !own_keys.contains(&request_key(request))).collect();
+    let mut http = matched_http(&fixture["http_requests"]);
+    for request in &fallback {
+        http = matched_http_into(http, request);
+    }
+    let provider = provider(config, http);
     let sink = provider.publish.clone();
+    let http = provider.http.clone();
+    let logged = Logged::default();
     let topic = inbound.to_owned();
     let payload = xml.into_bytes();
-    let outcome = tokio::task::spawn_local(async move {
-        let router = __CRATE__::messaging_router(provider).await;
-        router.handle(delivery(topic, payload)).await
-    })
-    .await;
+    let outcome = {
+        let _default = tracing::subscriber::set_default(logged.clone());
+        tokio::task::spawn_local(async move {
+            let router = __CRATE__::messaging_router(provider).await;
+            router.handle(delivery(topic, payload)).await
+        })
+        .await
+    };
     let sent = sink.sent();
     let topics: BTreeSet<String> = sent.iter().map(|(topic, _)| topic.clone()).collect();
+    let own_urls = urls_of(&own);
+    let answered: BTreeSet<String> = http
+        .requests()
+        .iter()
+        .map(|request| request.uri.to_string())
+        .filter(|url| urls_of(&fallback).contains(url) && !own_urls.contains(url))
+        .map(|url| url.trim_start_matches(BASE_URL).to_owned())
+        .collect();
 
     let mut reasons = BTreeSet::new();
     let result = match outcome {
@@ -901,7 +1095,19 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value) -> (
             }
         }
     }
-    (expected.label(), reasons.into_iter().collect(), topics.into_iter().collect())
+    // what the guest said as it failed, since a handler that logs and
+    // answers `Ok(())` is otherwise silent
+    if !reasons.is_empty()
+        && let Some(last) = logged.last()
+    {
+        reasons.insert(format!("logged: {}", quoted(&last)));
+    }
+    Driven {
+        expected: expected.label(),
+        reasons: reasons.into_iter().collect(),
+        topics: topics.into_iter().collect(),
+        shared: answered.into_iter().collect(),
+    }
 }
 
 enum Expected {
@@ -1012,38 +1218,44 @@ fn compare_event(want: &Value, have: &Value, reasons: &mut BTreeSet<String>) {
 fn matched_http(requests: &Value) -> MatchedHttp {
     let mut http = MatchedHttp::default();
     for request in requests.as_array().into_iter().flatten() {
-        let method = request["method"].as_str().unwrap_or("GET");
-        let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
-        let path = request["path"].as_str().unwrap_or("/");
-        let query = request["request"].as_str().map(|query| format!("?{query}")).unwrap_or_default();
-        let status = request["response"]["status"].as_u64().unwrap_or(200) as u16;
-        let body = &request["response"]["body"];
-        let answer = |body: &Value| {
-            Response::builder()
-                .status(status)
-                .header("content-type", "application/json")
-                .body(Bytes::from(body.to_string()))
-                .expect("fixture response")
-        };
-        http = http.on(method.clone(), format!("{BASE_URL}{path}{query}"), answer(body));
-        if !query.is_empty() {
-            http = http.on(method.clone(), format!("{BASE_URL}{path}"), answer(body));
-        }
-        if path == "/allocations/trips"
-            && let Some(labels) = body.as_array()
-            && labels.iter().all(Value::is_string)
-        {
-            let all: Vec<Value> = labels
-                .iter()
-                .map(|label| serde_json::json!({ "vehicleLabel": label }))
-                .collect();
-            let shaped = serde_json::json!({ "all": all });
-            http = http.on(
-                method,
-                format!("{BASE_URL}{path}{query}&closestTrip=true&include_filtered_routes=true"),
-                answer(&shaped),
-            );
-        }
+        http = matched_http_into(http, request);
+    }
+    http
+}
+
+fn matched_http_into(http: MatchedHttp, request: &Value) -> MatchedHttp {
+    let mut http = http;
+    let method = request["method"].as_str().unwrap_or("GET");
+    let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
+    let path = request["path"].as_str().unwrap_or("/");
+    let query = request["request"].as_str().map(|query| format!("?{query}")).unwrap_or_default();
+    let status = request["response"]["status"].as_u64().unwrap_or(200) as u16;
+    let body = &request["response"]["body"];
+    let answer = |body: &Value| {
+        Response::builder()
+            .status(status)
+            .header("content-type", "application/json")
+            .body(Bytes::from(body.to_string()))
+            .expect("fixture response")
+    };
+    http = http.on(method.clone(), format!("{BASE_URL}{path}{query}"), answer(body));
+    if !query.is_empty() {
+        http = http.on(method.clone(), format!("{BASE_URL}{path}"), answer(body));
+    }
+    if path == "/allocations/trips"
+        && let Some(labels) = body.as_array()
+        && labels.iter().all(Value::is_string)
+    {
+        let all: Vec<Value> = labels
+            .iter()
+            .map(|label| serde_json::json!({ "vehicleLabel": label }))
+            .collect();
+        let shaped = serde_json::json!({ "all": all });
+        http = http.on(
+            method,
+            format!("{BASE_URL}{path}{query}&closestTrip=true&include_filtered_routes=true"),
+            answer(&shaped),
+        );
     }
     http
 }
