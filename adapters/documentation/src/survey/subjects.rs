@@ -150,7 +150,7 @@ impl Cut<'_> {
             text: self.text(subjects, &files, stem),
             files,
             stems: held,
-            anchors: Vec::new(),
+            ..Seam::default()
         }
     }
 

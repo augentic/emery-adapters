@@ -48,7 +48,7 @@ unused = "warn"
 
 [sources]
 allow-git = [
-  "https://github.com/augentic/emery.git",
+#  "https://github.com/augentic/emery.git",
   "https://github.com/augentic/omnia-exemplar.git",
   "https://github.com/augentic/omnia.git",
 ]

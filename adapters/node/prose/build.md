@@ -9,6 +9,8 @@ Build one slice of the plan into the lent project tree as strict TypeScript on N
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
 - **The design, whole** — the types and sections every slice shares.
 
+The specification states behaviour by the role each thing the system reaches plays — a message stream, a store, a cache, a secret store, an upstream service — and names no product, protocol, or host. The technology behind each role is the design's: its `## APIs and integrations` section names each system by its role and beside it what the source ran against, or what a brief or decision record prescribes, with the topic, URL, entity, and keys as constructed. Read a requirement's role there before choosing a package or a client for it; where the section is silent on a role, or says `[unknown]`, implement the behaviour against an interface the slice declares and fake it in the test, and never invent the product.
+
 Build this slice completely in one pass. Other slices of the wave are building beside you from the same commit; what you write merges with theirs under the rules the [layout](references/layout.md) states, so keep to its shape.
 
 ## What to write

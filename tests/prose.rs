@@ -10,7 +10,7 @@ use std::path::Path;
 
 use emery_sdk::survey::Inventory;
 use emery_sdk::target::{Report, Verdict};
-use emery_sdk::{Doc, Evidence, RUNTIME, body, check};
+use emery_sdk::{ClaimKind, Doc, Evidence, Lexicon, RUNTIME, body, check};
 
 // Every shipped adapter component must have a matching test here.
 test_programs::foreach_adapter!();
@@ -76,6 +76,8 @@ fn held(docs: &[Doc], crate_dir: &str, prompts: &[&str]) {
     );
 }
 
+// The SDK holds a `requirement` or `criterion` to the seam's lexicon, so a
+// worked example naming a technology teaches what the gate returns.
 fn gated(path: &str, json: &str) {
     let evidence: Evidence = serde_json::from_str(json).unwrap_or_else(|err| {
         panic!("`{path}`: the worked example is not the SDK's Evidence: {err}")
@@ -87,6 +89,21 @@ fn gated(path: &str, json: &str) {
         "`{path}`: the worked example fails the gate:\n{}",
         findings.join("\n")
     );
+    let lexicon = Lexicon::default();
+    for claim in &evidence.claims {
+        if !matches!(claim.kind, ClaimKind::Requirement | ClaimKind::Criterion) {
+            continue;
+        }
+        let body = claim.extras.get("statement").or_else(|| claim.extras.get("criterion"));
+        for text in claim.id.as_deref().into_iter().chain(body.and_then(|b| b.as_str())) {
+            let named = lexicon.names(text);
+            assert!(
+                named.is_empty(),
+                "`{path}`: `{text}` names the technology {}",
+                named.join(", ")
+            );
+        }
+    }
 }
 
 fn capped(path: &str, prompt: &str) {
