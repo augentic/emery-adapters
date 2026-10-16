@@ -17,14 +17,16 @@ Closed for this adapter:
 
 | Kind | Required body field | When to emit |
 |---|---|---|
-| `requirement` | `statement` | A behavioural claim the docs state about the system, in the present tense: the behaviour and the conditions under which it succeeds or is refused, as the passage states them. |
+| `requirement` | `statement` | A behavioural claim the docs state about the system, in the present tense: the behaviour and the conditions under which it succeeds or is refused, as the passage states them, each thing the system reaches named by its role. |
 | `criterion` | `criterion` | An acceptance criterion the docs list (often under "Acceptance:" or a bullet list under a requirement). |
-| `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs). |
+| `decision` | `decision` | A design or product decision the docs record (often "Decision:" lines or paragraphs), and every passage that prescribes a technology, platform, or product, verbatim. |
 | `section` | (free-form) | A bounded prose section worth carrying into synthesis verbatim when no finer-grained claim fits. |
 
 Other claim kinds are out of scope for this adapter. Ids, `path` anchors, and the gate follow [claims.md](claims.md); derive each id from the docs' own noun phrases (`password-reset.expiry`).
 
 A passage's kind is what the passage is, and one passage can be two. A decision record — a `## Decision` paragraph, a `Decision:` line — is a `decision`, and each rule it decides, stated there or under its consequences, is a `requirement` under the record's stem as well: a record yields both, and neither stands in for the other. A bullet list beneath a rule, the items a sentence introduces with a colon, and an acceptance list under a story are `criterion`s under that rule's id, never requirements of their own.
+
+The technology is the design's, as [claims.md](claims.md) has it. A passage that prescribes one — a decision record choosing the broker, a page saying the secrets live in one vault, a line naming the framework — is a `decision` alone, verbatim, and no `requirement`: it states what was chosen, not what the system does. A rule that mentions a technology in passing — `reset tokens are kept in Redis and expire with the link` — is a `requirement` by the role the technology plays (`the cache`), and the mention a `decision` verbatim at the same line, so the specification keeps the rule and the design the product. A `requirement` or `criterion` naming a technology — in its `id` or its body, however the docs spell it — comes back as a finding to restate.
 
 A requirement's statement is the rule whole. A sentence that qualifies the one before it — which cases succeed, which are refused, a value or a threshold — is part of that requirement's statement, however many sentences the paragraph spends on it: never a second requirement under the same stem, and never a criterion, which is what the docs list beneath the rule, not what they state in its own paragraph. Cut the statement at its first sentence and the condition that tells this source from another is lost to reconciliation, which compares statements alone.
 
@@ -65,6 +67,8 @@ A user resets the password by following the link. Following an unexpired
 link sets the new password and signs the user in; following an expired
 link is refused with an answer that says the link has expired.
 
+Reset tokens are kept in Redis and expire with the link.
+
 Decision: use the existing transactional email provider rather than introducing a new notification service.
 ```
 
@@ -77,17 +81,19 @@ Output:
     { "kind": "criterion", "id": "password-reset.request.response-privacy", "path": "password-reset.md#L6", "criterion": "Unknown email addresses receive the same outward response as known users." },
     { "kind": "criterion", "id": "password-reset.request.expiry", "path": "password-reset.md#L7", "criterion": "Reset links expire after 30 minutes." },
     { "kind": "requirement", "id": "password-reset.complete", "path": "password-reset.md#L9-L11", "statement": "A user resets the password by following the link. Following an unexpired link sets the new password and signs the user in; following an expired link is refused with an answer that says the link has expired." },
-    { "kind": "decision", "path": "password-reset.md#L13", "decision": "Use the existing transactional email provider rather than introducing a new notification service." }
+    { "kind": "requirement", "id": "password-reset.token-store", "path": "password-reset.md#L13", "statement": "Reset tokens are kept in the cache and expire with the link." },
+    { "kind": "decision", "path": "password-reset.md#L13", "decision": "Reset tokens are kept in Redis and expire with the link." },
+    { "kind": "decision", "path": "password-reset.md#L15", "decision": "Use the existing transactional email provider rather than introducing a new notification service." }
   ]
 }
 ```
 
-The second paragraph is one requirement: its second sentence states the conditions of the first, so the statement runs to the end of the paragraph and the expired-link refusal is no criterion.
+The second paragraph is one requirement: its second sentence states the conditions of the first, so the statement runs to the end of the paragraph and the expired-link refusal is no criterion. The third names the store's product in passing, so it is two claims at one line: the rule, a `requirement` by the role the product plays, and the product, a `decision` verbatim.
 
 ## Determinism
 
 - Emit claims in source order (document by document in lexicographic path order, top of document to bottom). Stable order keeps re-runs byte-stable; the caller keeps the order across the calls it joins.
-- Quote statements / criteria / decisions verbatim from the docs where possible. Light grammatical normalisation (capitalisation, terminal punctuation) is allowed; rephrasing is not — the `statement` value is what reconciliation compares across sources, so paraphrase drift manufactures false conflicts.
+- Quote statements / criteria / decisions verbatim from the docs where possible. Light grammatical normalisation (capitalisation, terminal punctuation) is allowed, and so is the one substitution of a technology's name for its role in a `statement` or a `criterion`; rephrasing is not — the `statement` value is what reconciliation compares across sources, so paraphrase drift manufactures false conflicts.
 
 ## Guardrails
 

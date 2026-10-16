@@ -39,7 +39,8 @@ The stem is the first segment of every `requirement` and `criterion` id the subj
 - a document that names the thing by the system's own identifier, and by nothing else — a page headed `OrderService` whose sections are its operations — spells its noun that way, and the stem is that name kebab-cased: `order-service`;
 - a decision record's stem is the thing the decision governs — *Append-only entries* → `entries`; *Idempotent posting* → `posting`; *Amounts in minor units* → `amounts` — not the record's number and not `decisions`;
 - never an operation, a state, or a story of the noun: `orders`, not `order-placement` or `order-cancellation`; `invoices`, not `payments` or `invoice-reminders` — the caller tells the parts apart by the headings you anchor them at;
-- never a file name, a directory name, or a document kind: not `guides`, `reference`, `policies`, `adr`, `stories`, `docs`, `readme`.
+- never a file name, a directory name, or a document kind: not `guides`, `reference`, `policies`, `adr`, `stories`, `docs`, `readme`;
+- never the technology's: a page on the secrets the system keeps in one vault is `secrets`, not `key-vault`; a decision record choosing the broker is the thing the events are, `orders` or `events`, not `kafka` — a stem is a slice of the build, whose platform is the target's to choose, as [claims.md](claims.md) has it, and the caller returns a stem naming a technology to rename.
 
 Subjects on one noun share one stem — the guide, the reference page, and the policy on returns are three subjects under `returns` — and the caller tells them apart by the headings you anchored them at.
 
@@ -54,7 +55,7 @@ One JSON object matching the survey schema: `surfaces`, each with a `name`, an `
 Rules:
 
 - Every `anchor` names a document the message lists, relative to `$SOURCE_DIR`, at a line it holds — its heading's, or its first.
-- Every `stem` is lowercase kebab-case, derived by the convention above.
+- Every `stem` is lowercase kebab-case, derived by the convention above, and names no technology.
 - Every subject has a name, and no two subjects share one; the name is the subject as a reviewer would head it — `Returning a tool`, `Membership`, `Password reset` — never the document's path.
 - No two subjects anchor at one line.
 - An empty `surfaces` is the answer when no document introduces a subject — a tree of indexes, changelogs, and build notes. Do not invent one; the caller then mines the tree by directory.
@@ -127,4 +128,4 @@ Five subjects. The guide and the policy each treat one subject throughout, so ea
 | A document is about the repository, the build, or the documentation itself | Unreached, however long. |
 | No document introduces a subject | Answer `surfaces: []` and list nothing as unreached; the caller mines the tree by directory. |
 | A document is neither a subject's entry nor listed unreached | The caller returns it as a finding: anchor the subject it introduces, or list it. |
-| The answer names a document the tree lacks, a stem outside kebab-case, a subject twice, or two subjects at one line | The caller rejects it and asks again with the findings; correct the named subjects. |
+| The answer names a document the tree lacks, a stem outside kebab-case or naming a technology (`key-vault`), a subject twice, or two subjects at one line | The caller rejects it and asks again with the findings; correct the named subjects. |

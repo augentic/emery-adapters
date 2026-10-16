@@ -43,6 +43,8 @@ The stem is the first segment of every `requirement` and `criterion` id the surf
 - an **exported API**'s stem is the export's name kebab-cased: `class OrderService` → `order-service`; `function parseCsv` → `parse-csv`;
 - a route a framework routes by file takes its stem from the path segments the file spells, by the route rule: `app/api/orders/[id]/route.ts` → `orders`.
 
+The caller holds every stem to the convention: one spelling a technology name — a vendor, a product, a protocol, a framework, a host — comes back as a finding to rename, since every id under it leads with it.
+
 Routes on one resource share one stem — `GET /orders`, `POST /orders`, `GET /orders/:id` are three surfaces under `orders` — and the caller tells them apart by their names. Middleware mounted for every route — a global guard, an error handler, a request log — is the bootstrap's behaviour under `start`, which the caller owns; a guard on one route is that route's. So is what a package serves on the source's behalf with no handler the source writes — a docs UI under a `routePrefix`, a static directory, a metrics page: the source declares no surface there. Name nothing `start`.
 
 ## Unreached modules
@@ -56,7 +58,7 @@ One JSON object matching the survey schema: `surfaces`, each with a `name`, an `
 Rules:
 
 - Every `anchor` names a module the message lists, relative to `$SOURCE_DIR`, with lines the file holds.
-- Every `stem` is lowercase kebab-case, derived by the convention above.
+- Every `stem` is lowercase kebab-case, derived by the convention above, and names no technology.
 - Every surface has a name, and no two surfaces share one; the name is what a caller does — `POST /orders`, `import command`, `invoices worker`, `OrderService` — never a description of the code.
 - No surface leads with `start` when the tree has a bootstrap.
 - A module no surface is registered or declared in is not a surface, however central.
@@ -113,4 +115,4 @@ Four surfaces, each at the registration the message lists, each stem by the conv
 | The tree declares no boundary | Answer `surfaces: []` and list nothing as unreached; the caller mines it as a library. |
 | A module the facts list a registration or declaration in is reached by no surface you named and is not listed as unreached | The caller returns it as a finding: anchor the surface registered or declared there, or list it. |
 | A framework loads a directory of modules nothing imports | Name the surfaces those modules register, anchored where each is registered; the modules that register none — plugins, hooks, helpers — are unreached, not surfaces. |
-| The answer names a module the tree lacks, a stem outside kebab-case, a surface twice, or a surface under `start` | The caller rejects it and asks again with the findings; correct the named surfaces. |
+| The answer names a module the tree lacks, a stem outside kebab-case or naming a technology (`key-vault`, `kafka-consumer`), a surface twice, or a surface under `start` | The caller rejects it and asks again with the findings; correct the named surfaces. |

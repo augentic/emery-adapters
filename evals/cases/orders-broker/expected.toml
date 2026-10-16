@@ -1,0 +1,189 @@
+# The order events service from two sources whose own words are the
+# technology's: two decision records (`docs`) choosing the broker and the
+# secret store by name, and the TypeScript service (`code`) whose
+# identifiers spell them — `useConfluentKafkaConfig`,
+# `ConfluentSecretRetriever`, `KeyVault`, `kafkajs`. The technology case:
+# every requirement and criterion the run accepts, and every stem, scenario
+# line, and preamble paragraph it writes, is read against the lexicon
+# (`leaks`, expected 0); each record's prescription is a `decision` the
+# design lands (`recall dec`); and the rule each record decides is a
+# requirement by role (the behaviours). The code's credential steps — the
+# secret read, parsed, and watched for rotation, the producer constructed
+# from it, the restart — are how the process readies itself and reaches the
+# broker: the design's, in `excerpt` and `call` claims, and no
+# requirement's, so `start` holds the one rule every request gets and the
+# readiness spans are listed `[[absent]]`, each a hit when a run states a
+# requirement there; `KeyVault` and the retriever are mechanisms reached
+# through the bootstrap, never surfaces, so no stem spells them and the
+# lexicon's stem gate has nothing to return here. The two records' stems are
+# the model's: the broker record is about the orders its events are, the
+# credentials record about the secrets it keeps.
+
+[[source]]
+name = "docs"
+adapter = "documentation"
+fixture = "evals/cases/orders-broker/docs"
+stems = ["orders", "secrets"]
+
+[[source.surface]]
+entry = "adr/0001-order-events-broker.md"
+stem = "orders"
+
+[[source.surface]]
+entry = "adr/0002-broker-credentials.md"
+stem = "secrets"
+
+[[source]]
+name = "code"
+adapter = "typescript"
+fixture = "evals/cases/orders-broker/fixture"
+stems = ["start", "orders"]
+
+[[source.surface]]
+entry = "src/start.ts"
+stem = "start"
+
+[[source.surface]]
+entry = "src/orders.ts"
+stem = "orders"
+
+# --- decisions: each record's prescription, verbatim ---
+
+[[decision]]
+source = "docs"
+anchor = "adr/0001-order-events-broker.md#L11-L12"
+gloss = "Publish each order event to Kafka on Confluent Cloud, one topic keyed by the order id"
+
+[[decision]]
+source = "docs"
+anchor = "adr/0002-broker-credentials.md#L12-L13"
+gloss = "Keep the broker credentials in Azure Key Vault, one secret per environment, read at start"
+
+# --- docs: the rules the records decide, each by role ---
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "adr/0001-order-events-broker.md#L16-L17"
+gloss = "An order with no lines, or a line quantity below one, is refused before any event is published"
+
+[[requirement]]
+source = "docs"
+stem = "orders"
+anchor = "adr/0001-order-events-broker.md#L19-L20"
+gloss = "A placed order is acknowledged once its event is published, and the storefront receives the order id"
+
+[[requirement]]
+source = "docs"
+stem = "secrets"
+anchor = "adr/0002-broker-credentials.md#L17-L18"
+gloss = "The broker credentials are obtained before any broker client is constructed"
+
+[[requirement]]
+source = "docs"
+stem = "secrets"
+anchor = "adr/0002-broker-credentials.md#L20"
+gloss = "The service refuses to start without the broker credentials"
+
+[[requirement]]
+source = "docs"
+stem = "secrets"
+anchor = "adr/0002-broker-credentials.md#L22-L23"
+gloss = "When the credentials rotate, the service restarts"
+
+# --- code: start, the one rule every request gets ---
+
+[[requirement]]
+source = "code"
+stem = "start"
+anchor = "src/start.ts#L23"
+gloss = "Request bodies are parsed as JSON for every route"
+
+# --- code: orders ---
+
+[[requirement]]
+source = "code"
+stem = "orders"
+anchor = "src/orders.ts#L27-L30"
+gloss = "An order with no lines is refused with 400"
+
+[[requirement]]
+source = "code"
+stem = "orders"
+anchor = "src/orders.ts#L31-L34"
+gloss = "A line quantity below 1 is refused with 400"
+
+[[requirement]]
+source = "code"
+stem = "orders"
+anchor = "src/orders.ts#L36-L42"
+gloss = "An order-placed event keyed by the order id is published to the order events topic and the order id answered with 202"
+
+# --- criteria: the boundaries the code spells as values of their own ---
+
+[[criterion]]
+source = "code"
+anchor = "src/config.ts#L3"
+gloss = "The managed-broker configuration is in use unless IS_LOCAL is `true`"
+
+[[criterion]]
+source = "code"
+anchor = "src/config.ts#L10"
+gloss = "ORDER_EVENTS_TOPIC defaults to order-events"
+
+# --- absent: how the process readies itself, reaches the broker, and
+# restarts — the design's, and no requirement's ---
+
+[[absent]]
+source = "code"
+anchor = "src/start.ts#L7-L20"
+gloss = "The credentials retrieved under the managed-broker configuration, the producer constructed over the brokers with TLS and plain authentication from them, and connected"
+
+[[absent]]
+source = "code"
+anchor = "src/start.ts#L27-L33"
+gloss = "The credential watcher closing the server and the producer and exiting with 1 after the restart delay when the credentials change"
+
+[[absent]]
+source = "code"
+anchor = "src/confluent-secret-retriever.ts"
+gloss = "The broker secret read from the secret store once, parsed into key and secret, refused when empty, and re-read on the watcher interval"
+
+[[absent]]
+source = "code"
+anchor = "src/key-vault.ts"
+gloss = "The secret store client, a secret without a value an error naming it"
+
+# --- behaviours: the rules the records decide, each by role ---
+
+# the record refuses both faults in one sentence the code refuses in two
+# branches; one requirement citing the sentence and both branches, or two
+# each citing the sentence, is the engine's cut — the second reads as a
+# split, the one this case allows
+[[behaviour]]
+gloss = "an order with no lines, or a line quantity below one, is refused before any event is published"
+claims = [
+  { source = "docs", anchor = "adr/0001-order-events-broker.md#L16-L17" },
+  { source = "code", anchor = "src/orders.ts#L27-L34" },
+]
+
+[[behaviour]]
+gloss = "a placed order is acknowledged with its id once its event is published"
+claims = [
+  { source = "docs", anchor = "adr/0001-order-events-broker.md#L19-L20" },
+  { source = "code", anchor = "src/orders.ts#L36-L42" },
+]
+
+# the credential rules the records decide are the docs' alone: the code's
+# counterpart is readiness the design holds, listed `[[absent]]` above
+[[behaviour]]
+gloss = "the broker credentials are obtained before any broker client is constructed"
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L17-L18" }]
+
+[[behaviour]]
+gloss = "the service refuses to start without the broker credentials"
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L20" }]
+
+[[behaviour]]
+gloss = "the service restarts when the credentials rotate"
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L22-L23" }]

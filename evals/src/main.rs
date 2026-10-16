@@ -35,7 +35,7 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use std::{env, fs, io};
 
-use emery_sdk::{Anchor, Claim, ClaimKind, Evidence};
+use emery_sdk::{Anchor, Claim, ClaimKind, Evidence, Lexicon};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -1624,6 +1624,72 @@ impl Run {
 
     fn mechanism(&self) -> Vec<Stated> {
         mechanism(self.requirements(), &self.design_types())
+    }
+
+    // The lexicon the run's specification is held to, as the engine holds
+    // its spec draft: the fixed names, and the packages the accepted `call`
+    // claims spell before the `:` of their `callee`.
+    fn lexicon(&self) -> Lexicon {
+        Lexicon::from_packages(
+            self.claims(ClaimKind::Call)
+                .filter_map(|claim| claim.extras.get("callee")?.as_str())
+                .filter_map(|callee| callee.split_once(':').map(|(package, _)| package)),
+        )
+    }
+
+    // Every place the specification's own words name a technology, in the
+    // order the gates read them: each accepted `requirement` and
+    // `criterion` claim's id and body, then the committed specification's
+    // preamble paragraphs and scenario lines. Each is one the SDK's or the
+    // engine's gate should have returned for correction, so the list is
+    // expected empty.
+    fn leaks(&self) -> Vec<String> {
+        let lexicon = self.lexicon();
+        let mut leaks = Vec::new();
+        let mut leak = |label: String, text: &str| {
+            let named = lexicon.names(text);
+            if !named.is_empty() {
+                let named: Vec<String> = named.iter().map(|name| format!("`{name}`")).collect();
+                leaks.push(format!("{label} names {}", named.join(", ")));
+            }
+        };
+
+        // the accepted claims
+        for (kind, field) in
+            [(ClaimKind::Requirement, "statement"), (ClaimKind::Criterion, "criterion")]
+        {
+            for (source, claim) in self.sourced(kind) {
+                let id = claim.id.as_deref().unwrap_or("<unnamed>");
+                leak(format!("{source}:`{id}` id"), id);
+                if let Some(text) = claim.extras.get(field).and_then(Value::as_str) {
+                    leak(format!("{source}:`{id}` {field}"), text);
+                }
+            }
+        }
+
+        // the specification
+        let preamble = self.spec.as_ref().map(|spec| strings(&spec["preamble"]));
+        for (index, paragraph) in preamble.iter().flatten().enumerate() {
+            leak(format!("preamble paragraph {}", index + 1), paragraph);
+        }
+        for requirement in self.requirements() {
+            let subject = requirement["subject"].as_str().unwrap_or("?");
+            for scenario in requirement["scenarios"].as_array().into_iter().flatten() {
+                let name = scenario["name"].as_str().unwrap_or("");
+                leak(format!("`{subject}` scenario `{name}` name"), name);
+                for field in ["given", "when", "then", "and"] {
+                    let lines = match &scenario[field] {
+                        Value::String(line) => vec![line.clone()],
+                        value => strings(value),
+                    };
+                    for line in lines {
+                        leak(format!("`{subject}` scenario `{name}` {field}"), &line);
+                    }
+                }
+            }
+        }
+
+        leaks
     }
 
     // The requirements citing `source`.
@@ -4133,6 +4199,8 @@ struct Grade {
     behaviours: Behaviours,
     // what each source's survey and stems read against its expectations
     sources: Vec<SourceGrade>,
+    // where the specification's own words name a technology; expected empty
+    leaks: Vec<String>,
 }
 
 // The accepted requirement claims anchored within the spans expected to
@@ -4237,6 +4305,7 @@ fn grade(expected: &Expected, run: &Run) -> Grade {
         absent: absent(&expected.absent, expected, run),
         behaviours: behaviours(&expected.behaviours, run),
         sources,
+        leaks: run.leaks(),
     }
 }
 
@@ -4736,9 +4805,9 @@ impl Display for Card<'_> {
             "| run | exit | wall | completions | input | cached | output | reasoning | claims | \
              req | crit | recall req | recall crit | recall dec | surfaces | stems | behaviours | \
              conflicts | divergences | unknown | covered | then [unknown] | slices | waves | \
-             design blocks (types) | mechanism |{build_columns}"
+             design blocks (types) | mechanism | leaks |{build_columns}"
         )?;
-        writeln!(f, "|{}", " --- |".repeat(if self.built { 33 } else { 26 }))?;
+        writeln!(f, "|{}", " --- |".repeat(if self.built { 34 } else { 27 }))?;
         for attempts in runs {
             if let Some(first) = attempts.first() {
                 row(f, first, case.expected.sources.len() > 1)?;
@@ -4820,7 +4889,7 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     write!(
         f,
         "| {} | {} | {}s | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | \
-         {} | {} | {} | {} | {} | {} | {} ({}) | {mechanism} |",
+         {} | {} | {} | {} | {} | {} | {} ({}) | {mechanism} | {} |",
         run.n,
         match (run.exit, run.died_in()) {
             (Some(0), _) => "0".to_owned(),
@@ -4852,6 +4921,7 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
         run.waves(),
         blocks,
         types,
+        grade.leaks.len(),
     )
 }
 
@@ -4964,6 +5034,9 @@ fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result
     }
     if run.spec.is_some() {
         mechanism_notes(f, run, &grade.sources, &led)?;
+    }
+    for leak in &grade.leaks {
+        writeln!(f, "- leak: {leak}")?;
     }
     if grade.behaviours.expected > 0 && run.spec.is_some() {
         behaviour_notes(f, &grade.behaviours)?;
@@ -6946,6 +7019,55 @@ mod tests {
         assert_eq!(identifier("redis.ping()"), Some("redis"));
         assert_eq!(identifier("createApp(config)"), Some("createApp"));
         assert_eq!(identifier("@Injectable"), Some("Injectable"));
+    }
+
+    // The lexicon is the engine's: the fixed names and the packages the
+    // `call` claims spell, so a term of the run's own (`acme`) is a leak as
+    // a fixed name is, and a `call` naming one is where it belongs.
+    #[test]
+    fn technology_leaks() {
+        let stderr = accepted_line(
+            "code",
+            &[
+                r#"{"kind":"requirement","id":"start.credentials-before-clients","path":"src/start.ts#L8-L10","statement":"Broker credentials are obtained before the message clients are constructed."}"#,
+                r#"{"kind":"requirement","id":"start.confluent-secret","path":"src/start.ts#L8-L10","statement":"Credentials are read from Key Vault before the clients start."}"#,
+                r#"{"kind":"criterion","id":"start.vault-host","path":"src/config.ts#L6","criterion":"KEYVAULT_HOST names the vault host."}"#,
+                r#"{"kind":"call","path":"src/orders.ts#L20","callee":"@acme/order-bus:Bus.publish"}"#,
+                r#"{"kind":"requirement","id":"orders.publish","path":"src/orders.ts#L20","statement":"Each placed order is sent through the acme bus."}"#,
+            ]
+            .join(","),
+        );
+        let spec = serde_json::json!({
+            "preamble": ["The service publishes order events to Kafka.", "Credentials rotate."],
+            "requirements": [{
+                "id": "REQ-001", "subject": "orders.publish", "body": ["Each placed order is published."],
+                "sources": [cited("code", "orders.publish", "src/orders.ts#L20")],
+                "scenarios": [{
+                    "name": "An order is published to Confluent",
+                    "given": ["the Azure credentials are held"],
+                    "when": "an order is placed",
+                    "then": "the event is on the outbound stream",
+                    "and": ["the storefront receives the id"]
+                }]
+            }]
+        });
+        let run = run_from(Some(0), &stderr, Some(spec));
+
+        assert_eq!(run.lexicon(), Lexicon::with(["acme", "orderbus"]));
+        assert_eq!(
+            run.leaks(),
+            [
+                "code:`start.confluent-secret` id names `confluent`",
+                "code:`start.confluent-secret` statement names `keyvault`",
+                "code:`orders.publish` statement names `acme`",
+                "code:`start.vault-host` criterion names `keyvault`",
+                "preamble paragraph 1 names `kafka`",
+                "`orders.publish` scenario `An order is published to Confluent` name names \
+                 `confluent`",
+                "`orders.publish` scenario `An order is published to Confluent` given names `azure`",
+            ]
+        );
+        assert_eq!(run_from(Some(0), "", None).leaks(), Vec::<String>::new());
     }
 
     // An absent span is graded by `held`, as a behaviour's claims are: a

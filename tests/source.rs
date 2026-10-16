@@ -535,6 +535,73 @@ async fn documentation_subjects() {
     assert!(!turn.contains("### `README.md`"), "an unreached document is laid for no call: {turn}");
 }
 
+// A page whose rule names a product in passing: the requirement that quotes
+// it is refused, and the answer that states the rule by role beside a
+// `decision` carrying the line verbatim is accepted, the decision reaching
+// the evidence anchored at the line, so the design lands the product and the
+// specification keeps the rule.
+#[tokio::test]
+async fn documentation_decision() {
+    const RULE: &str = "Reset tokens are kept in Redis and expire with the link.";
+    let project = scratch();
+    project.write("docs/password-reset.md", format!("# Password reset\n\n{RULE}\n"));
+    let survey =
+        inventory(&[("Password reset", "docs/password-reset.md#L1", "password-reset")], &[]);
+    let quoted = serde_json::json!({
+        "claims": [{
+            "kind": "requirement",
+            "id": "password-reset.token-store",
+            "path": "docs/password-reset.md#L3",
+            "statement": RULE,
+        }]
+    })
+    .to_string();
+    let decided = serde_json::json!({
+        "claims": [
+            {
+                "kind": "requirement",
+                "id": "password-reset.token-store",
+                "path": "docs/password-reset.md#L3",
+                "statement": "Reset tokens are kept in the cache and expire with the link.",
+            },
+            { "kind": "decision", "path": "docs/password-reset.md#L3", "decision": RULE },
+        ]
+    })
+    .to_string();
+    let answer = answer();
+    let model = Scripted::answering([&survey, &quoted, &decided, &answer]);
+
+    let evidence = DOCUMENTATION.accepted(&workspace(&project), &model).await;
+    check_evidence(&evidence);
+    let inline = DOCUMENTATION.accepted(&value(INLINE), &model).await;
+    check_evidence(&inline);
+    model.assert_exhausted();
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
+    system(&seen[0], prompt::survey(emery_documentation::PROSE));
+    for request in &seen[1..] {
+        system(request, prompt::extract(emery_documentation::PROSE));
+    }
+    let exchanges = checked(&model);
+    let finding = exchanges[0].outcome.as_ref().expect_err("the statement naming it is refused");
+    assert!(
+        finding.contains("- claim 0: `statement` names the technology `redis`;"),
+        "the finding names the claim and the technology: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the decided answer is accepted");
+    let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
+    assert_eq!(kinds, [ClaimKind::Requirement, ClaimKind::Decision]);
+    let decision = &evidence.claims[1];
+    assert_eq!(
+        decision.extras.get("decision").and_then(|d| d.as_str()),
+        Some(RULE),
+        "the decision carries the line verbatim"
+    );
+    assert_eq!(decision.path.as_deref(), Some("docs/password-reset.md#L3"), "anchored at the line");
+    assert_eq!(decision.id, None, "a decision carries no id");
+}
+
 // A tree past the inline budget is one seam per stem, each over the documents
 // its subjects anchor in, held to that stem alone and told the others are
 // other calls'.
@@ -786,6 +853,73 @@ async fn intent_not_one_file() {
     several.write("two.md", "second");
     let model = INTENT.refused(&several, None, Scripted::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a tree of several files");
+}
+
+// A brief that prescribes a technology: the requirement that names it is
+// refused, and the answer that states the behaviour by role and carries the
+// prescription as a `decision` is accepted, the decision reaching the
+// evidence unanchored and without an id, over the tree and the value alike.
+#[tokio::test]
+async fn intent_decision() {
+    const DIRECTIVE: &str = "Publish each order event to Kafka.";
+    let project = scratch();
+    project.write("intent.md", DIRECTIVE);
+    let named = serde_json::json!({
+        "claims": [
+            { "kind": "intent", "id": KEY, "statement": DIRECTIVE },
+            {
+                "kind": "requirement",
+                "id": "orders.publish-events",
+                "statement": "Each order event is published to Kafka.",
+            },
+        ]
+    })
+    .to_string();
+    let decided = serde_json::json!({
+        "claims": [
+            { "kind": "intent", "id": KEY, "statement": DIRECTIVE },
+            {
+                "kind": "requirement",
+                "id": "orders.publish-events",
+                "statement": "Each order event is published to the outbound stream.",
+            },
+            { "kind": "decision", "decision": DIRECTIVE },
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&named, &decided, &decided]);
+
+    let evidence = INTENT.accepted(&workspace(&project), &model).await;
+    check_evidence(&evidence);
+    let inline = INTENT.accepted(&value(DIRECTIVE), &model).await;
+    check_evidence(&inline);
+    model.assert_exhausted();
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "two rounds over the tree, one over the value");
+    for request in &seen {
+        system(request, prompt::extract(emery_intent::PROSE));
+    }
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the statement naming it is refused");
+    assert!(
+        finding.contains("- claim 1: `statement` names the technology `kafka`;"),
+        "the finding names the claim and the technology: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the decided answer is accepted");
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "and over the value");
+    for evidence in [&evidence, &inline] {
+        let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
+        assert_eq!(kinds, [ClaimKind::Intent, ClaimKind::Requirement, ClaimKind::Decision]);
+        let decision = &evidence.claims[2];
+        assert_eq!(
+            decision.extras.get("decision").and_then(|d| d.as_str()),
+            Some(DIRECTIVE),
+            "the decision carries the directive verbatim"
+        );
+        assert_eq!(decision.id, None, "a decision carries no id");
+        assert_eq!(decision.path, None, "an intent claim has no file");
+    }
 }
 
 // An intent source is never legitimately empty.
@@ -1506,6 +1640,95 @@ async fn emery_typescript_bootstrap_clients() {
     );
 }
 
+// The survey names a library's exported secret store under the product's
+// stem, and the finding sends the answer back to rename it before extraction
+// locks the stem; the seam then carries the corrected stem and holds its
+// claims to the technology of the packages its modules import, so a
+// statement spelling the store's package comes back too, while the inline
+// value is held to the fixed names alone.
+#[tokio::test]
+async fn typescript_survey_technology_stem() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"secrets\",\"main\":\"dist/index.js\"}\n"),
+            ("src/index.ts", "export { KeyVault } from \"./vault\";\n"),
+            (
+                "src/vault.ts",
+                "import { SecretClient } from \"@azure/keyvault-secrets\";\n\nexport class KeyVault \
+                 {\n  private readonly client: SecretClient;\n\n  constructor(url: string) {\n    \
+                 this.client = new SecretClient(url);\n  }\n\n  async token(): Promise<string> {\n    \
+                 return (await this.client.getSecret(\"token\")).value ?? \"\";\n  }\n}\n",
+            ),
+        ],
+    );
+    let strayed = inventory(&[("KeyVault", "src/vault.ts#L3-L13", "key-vault")], &["src/index.ts"]);
+    let corrected = inventory(&[("KeyVault", "src/vault.ts#L3-L13", "secrets")], &["src/index.ts"]);
+    let named = serde_json::json!({
+        "claims": [{
+            "kind": "requirement",
+            "id": "secrets.token",
+            "statement": "The token is read from the Key Vault secrets store.",
+        }]
+    })
+    .to_string();
+    let restated = serde_json::json!({
+        "claims": [{
+            "kind": "requirement",
+            "id": "secrets.token",
+            "statement": "The token is read from the secret store.",
+        }]
+    })
+    .to_string();
+    let answer = answer();
+
+    let model = TYPESCRIPT
+        .run(&project, Scripted::answering([&strayed, &corrected, &named, &restated, &answer]))
+        .await;
+
+    let seen = model.seen();
+    assert_eq!(
+        seen.len(),
+        5,
+        "two survey rounds, two rounds for the one seam, one for the inline value"
+    );
+    for request in &seen[..2] {
+        system(request, prompt::survey(emery_typescript::PROSE));
+    }
+    for request in &seen[2..] {
+        system(request, prompt::extract(emery_typescript::PROSE));
+    }
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the `key-vault` stem is refused");
+    assert!(
+        finding.contains(
+            "- surface `KeyVault`: stem `key-vault` names the technology `keyvault`; name it for \
+             what the surface handles or does, since every id under it leads with it"
+        ),
+        "the finding names the surface, the stem, and the technology: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the renamed inventory is accepted");
+    let turn = &seen[2].messages[0];
+    assert_eq!(surfaces(turn), [("KeyVault", "src/vault.ts", "secrets")]);
+    assert!(
+        turn.contains("ids `secrets`, `secrets.token`;"),
+        "the seam's ids lead with the renamed stem: {turn}"
+    );
+    assert!(!turn.contains("key-vault"), "the refused stem reaches no seam: {turn}");
+    let finding = exchanges[2].outcome.as_ref().expect_err("the statement naming it is refused");
+    assert!(
+        finding.contains(
+            "- claim 0: `statement` names the technology `keyvaultsecrets`; state what the \
+             system does by the role the technology plays, and carry the technology in a `call` \
+             or `excerpt`"
+        ),
+        "the finding names the package the seam's module imports: {finding}"
+    );
+    assert_eq!(exchanges[3].outcome, Ok(String::new()), "the restated answer is accepted");
+    assert_eq!(exchanges[4].outcome, Ok(String::new()), "the inline value is held to no package");
+}
+
 // The survey's stem stands where the code spells none at the anchor — a
 // route on `/`, a schedule led by a pattern — and gives way where it does:
 // a route's resource under its mount replaces the survey's reading, so the
@@ -1862,27 +2085,28 @@ async fn typescript_survey_alike() {
             (
                 "src/main.ts",
                 "import { NestFactory } from \"@nestjs/core\";\nimport { FilesController as Local } \
-                 from \"./local/files.controller\";\nimport { FilesController as S3 } from \
-                 \"./s3/files.controller\";\n\nasync function bootstrap() {\n  const app = await \
-                 NestFactory.create([Local, S3]);\n  await app.listen(3000);\n}\nbootstrap();\n",
+                 from \"./local/files.controller\";\nimport { FilesController as Remote } from \
+                 \"./remote/files.controller\";\n\nasync function bootstrap() {\n  const app = \
+                 await NestFactory.create([Local, Remote]);\n  await app.listen(3000);\n}\n\
+                 bootstrap();\n",
             ),
             ("src/local/files.controller.ts", CONTROLLER),
-            ("src/s3/files.controller.ts", CONTROLLER),
+            ("src/remote/files.controller.ts", CONTROLLER),
         ],
     );
     let survey = inventory(
         &[
             ("POST /files/upload (local)", "src/local/files.controller.ts#L5-L8", "files"),
-            ("POST /files/upload (s3)", "src/s3/files.controller.ts#L5-L8", "files"),
+            ("POST /files/upload (remote)", "src/remote/files.controller.ts#L5-L8", "files"),
         ],
         &[],
     );
-    let answer = claim("files.upload.s3");
+    let answer = claim("files.upload.remote");
 
     let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
-    for id in ["id `files.upload.local`;", "id `files.upload.s3`;"] {
+    for id in ["id `files.upload.local`;", "id `files.upload.remote`;"] {
         assert!(turns[0].contains(id), "{id} is in the brief: {}", turns[0]);
     }
 }

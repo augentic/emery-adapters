@@ -42,6 +42,8 @@ The stem is the first segment of every `requirement` and `criterion` id the surf
 - a registration led by no literal takes the stem of what its handler handles — the domain type the payload is read into, else the handler's name — kebab-cased, never the type of the client it is registered through: a `KafkaConsumer` subscribed with a callback that parses a `ShipmentNotice` → `shipment-notice`, not `kafka-consumer`;
 - an **exported API**'s stem is the export's name kebab-cased: `class OrderService` → `order-service`; `def parse_csv` → `parse-csv`.
 
+The caller holds every stem to the convention: one spelling a technology name — a vendor, a product, a protocol, a framework, a host — comes back as a finding to rename, since every id under it leads with it.
+
 Routes on one resource share one stem — `GET /orders`, `POST /orders`, `GET /orders/{order_id}` are three surfaces under `orders` — and the caller tells them apart by their names. Middleware applied to every request — a global dependency, an error handler, a request log, Django's `MIDDLEWARE` — is the bootstrap's behaviour under `start`, which the caller owns; a dependency on one route is that route's. So is what a package serves on the source's behalf with no handler the source writes — a docs UI under a `docs_url`, the admin site, a static directory, a metrics page: the source declares no surface there. Name nothing `start`.
 
 ## Unreached modules
@@ -55,7 +57,7 @@ One JSON object matching the survey schema: `surfaces`, each with a `name`, an `
 Rules:
 
 - Every `anchor` names a module the message lists, relative to `$SOURCE_DIR`, with lines the file holds.
-- Every `stem` is lowercase kebab-case, derived by the convention above.
+- Every `stem` is lowercase kebab-case, derived by the convention above, and names no technology.
 - Every surface has a name, and no two surfaces share one; the name is what a caller does — `POST /orders`, `import command`, `send_invoice task`, `OrderService` — never a description of the code.
 - No surface leads with `start` when the tree has a bootstrap.
 - A module no surface is registered or declared in is not a surface, however central.
@@ -113,4 +115,4 @@ Four surfaces, each at the decorated function the message lists, each stem by th
 | The tree declares no boundary | Answer `surfaces: []` and list nothing as unreached; the caller mines it as a library. |
 | A module the facts list a registration or declaration in is reached by no surface you named and is not listed as unreached | The caller returns it as a finding: anchor the surface registered or declared there, or list it. |
 | A framework loads modules by a setting's name — `INSTALLED_APPS`, a `ROOT_URLCONF` | Name the surfaces those modules register, anchored where each is registered; the modules that register none — an `apps.py`, a `models.py`, a settings variant — are unreached, not surfaces. |
-| The answer names a module the tree lacks, a stem outside kebab-case, a surface twice, or a surface under `start` | The caller rejects it and asks again with the findings; correct the named surfaces. |
+| The answer names a module the tree lacks, a stem outside kebab-case or naming a technology (`key-vault`, `kafka-consumer`), a surface twice, or a surface under `start` | The caller rejects it and asks again with the findings; correct the named surfaces. |
