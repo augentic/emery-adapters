@@ -25,12 +25,9 @@ stem = "customers"
 entry = "src/routes/health.ts"
 stem = "health"
 
-# --- start ---
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L18-L19"
-gloss = "A pg pool of at most 10 connections and a lazily connected Redis client are constructed from DATABASE_URL and REDIS_URL"
+# --- start: what every request gets, and the settings the service refuses
+# to run without; how the process connects, listens, and shuts down is the
+# design's and listed `[[absent]]` below ---
 
 [[requirement]]
 stem = "start"
@@ -41,21 +38,6 @@ gloss = "JSON bodies are parsed up to 256kb"
 stem = "start"
 anchor = "src/server.ts#L30-L33"
 gloss = "Health routes mount under /health; /api routes require the bearer token and mount the customers and orders routers"
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L38-L42"
-gloss = "Startup connects Redis, probes Postgres with SELECT 1, and listens on PORT"
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L44-L54"
-gloss = "SIGTERM and SIGINT close the server, end the pool, disconnect Redis, exit 0, or exit 1 after SHUTDOWN_GRACE_MS"
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L57-L60"
-gloss = "A startup failure is logged fatal and exits with 1"
 
 [[requirement]]
 stem = "start"
@@ -198,10 +180,6 @@ anchor = "src/config.ts#L18-L19"
 gloss = "DEFAULT_PAGE_SIZE defaults to 20 and MAX_PAGE_SIZE is 100"
 
 [[criterion]]
-anchor = "src/config.ts#L21"
-gloss = "SHUTDOWN_GRACE_MS defaults to 10000"
-
-[[criterion]]
 anchor = "src/schemas/orders.ts#L4-L8"
 gloss = "MAX_LINES 50, MAX_LINE_QUANTITY 999, MAX_COURIER_NOTE 200, the postcode and sku patterns"
 
@@ -224,3 +202,21 @@ gloss = "SLOW_REQUEST_MS is 1000"
 [[criterion]]
 anchor = "src/routes/health.ts#L5"
 gloss = "PROBE_TIMEOUT_MS is 2000"
+
+# --- absent: how the process connects, listens, and shuts down ---
+
+[[absent]]
+anchor = "src/server.ts#L18-L19"
+gloss = "The pg pool and the Redis client constructed"
+
+[[absent]]
+anchor = "src/server.ts#L37-L42"
+gloss = "Startup connects Redis, probes Postgres, and listens on PORT"
+
+[[absent]]
+anchor = "src/server.ts#L44-L54"
+gloss = "SIGTERM and SIGINT close the server, end the pool, disconnect Redis, and exit, or exit 1 after SHUTDOWN_GRACE_MS"
+
+[[absent]]
+anchor = "src/server.ts#L57-L60"
+gloss = "A startup failure is logged fatal and exits with 1"

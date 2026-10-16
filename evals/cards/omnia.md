@@ -265,3 +265,5 @@ Two arms, so the prose is read apart from the plan. **Arm A** is the protocol's 
 ### Results
 
 Not yet run. The round is the operator's; each arm's card, the `start` tree at its label, the `sealed` and `covered` of its envelope, and `run-1.fidelity.md` are read into this section when it has.
+
+**Arm B of the business-specification round** ([business-spec.md](business-spec.md#arm-b--the-build-after-the-arm-holds)) reads this round's S1 and S2 bands from the other side: once the specification states no requirement under `start` — the credential, the prefetch, the clients, the status log, and the exit timers the design's — the translation's table reduces to its first row and its last, a catalog constant read at use and a cross-cutting `pub fn`, so `crates/start/src` at the label is predicted under 60 lines and `covered` whole, with nothing under `start` left to leave out. A `start` that still lays a lifecycle there is check 3's finding as here; one that lays the clients is a slice reading the design's `apis` section as its own requirements, the build prompt's `start` bullet.

@@ -33,12 +33,8 @@ stem = "customers"
 entry = "app/routers/health.py"
 stem = "health"
 
-# --- start ---
-
-[[requirement]]
-stem = "start"
-anchor = "app/main.py#L19-L25"
-gloss = "On startup the cache connects and readiness is logged; on shutdown the shipping client and the cache close"
+# --- start: what every request gets; how the process connects, serves, and
+# shuts down is the design's and listed `[[absent]]` below ---
 
 [[requirement]]
 stem = "start"
@@ -54,11 +50,6 @@ gloss = "Every response carries a server-timing header with the handling duratio
 stem = "start"
 anchor = "app/main.py#L46-L64"
 gloss = "NotFoundError is 404, ConflictError 409 with the state, ValidationError 422 with the field, UpstreamError 502 with the system and a logged error"
-
-[[requirement]]
-stem = "start"
-anchor = "app/main.py#L72-L73"
-gloss = "The console script serves app.main:app on the configured port at the configured log level"
 
 # --- orders ---
 
@@ -200,3 +191,13 @@ gloss = "free_shipping_threshold_cents is 15000"
 [[criterion]]
 anchor = "app/data/rates.json#L8"
 gloss = "bulk_discount_bps is 300"
+
+# --- absent: how the process connects, serves, and shuts down ---
+
+[[absent]]
+anchor = "app/main.py#L18-L25"
+gloss = "The lifespan: the cache connected and readiness logged on startup, the shipping client and the cache closed on shutdown"
+
+[[absent]]
+anchor = "app/main.py#L72-L73"
+gloss = "The console script serves the application on the configured port at the configured log level"

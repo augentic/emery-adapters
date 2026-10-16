@@ -21,7 +21,7 @@ use oxc_ast::ast::{
     MethodDefinitionKind, NewExpression, ObjectExpression, ObjectPropertyKind, PropertyDefinition,
     PropertyKey, ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility,
     TSEnumDeclaration, TSInterfaceDeclaration, TSType, TSTypeAliasDeclaration, TSTypeAnnotation,
-    TSTypeName, ThrowStatement, UnaryOperator, VariableDeclarator,
+    TSTypeName, ThrowStatement, UnaryOperator, VariableDeclaration, VariableDeclarator,
 };
 use oxc_ast_visit::{Visit, walk};
 use oxc_parser::Parser;
@@ -101,6 +101,9 @@ struct Walker<'s> {
     // The name the next function frame takes: a variable's, a method's.
     pending_name: Option<String>,
     constructor: bool,
+    // The keyword of the declaration whose declarators are being walked,
+    // which a table's text leads with.
+    keyword: Option<&'static str>,
 }
 
 struct Frame {
@@ -251,6 +254,7 @@ impl<'s> Walker<'s> {
                         private: hidden(method.accessibility, &key),
                         lines: member_lines,
                         signature: self.slice(method.span.start, end).trim_end().to_owned(),
+                        table: None,
                     });
                     let head = self.lines(Span::new(
                         method.decorators.first().map_or(method.span.start, |d| d.span.start),
@@ -272,13 +276,22 @@ impl<'s> Walker<'s> {
                         .trim_end_matches(['=', ';'])
                         .trim_end()
                         .to_owned();
-                    let (init, head) = self.initializer(property.value.as_ref());
+                    let value = property.value.as_ref();
+                    let (init, head) = self.initializer(value);
+                    let table = value.filter(|value| table(value) && !empty(value)).map(|_| {
+                        self.slice(property.span.start, property.span.end)
+                            .trim_end()
+                            .trim_end_matches(';')
+                            .trim_end()
+                            .to_owned()
+                    });
                     members.push(Member {
                         name: key.clone(),
                         kind: MemberKind::Field,
                         private: hidden(property.accessibility, &key),
                         lines: self.lines(property.span),
                         signature,
+                        table,
                     });
                     self.bind(
                         key,
@@ -602,6 +615,12 @@ impl<'a> Visit<'a> for Walker<'_> {
         walk::walk_catch_clause(self, it);
     }
 
+    fn visit_variable_declaration(&mut self, it: &VariableDeclaration<'a>) {
+        let outer = self.keyword.replace(it.kind.as_str());
+        walk::walk_variable_declaration(self, it);
+        self.keyword = outer;
+    }
+
     fn visit_variable_declarator(&mut self, it: &VariableDeclarator<'a>) {
         let init = it.init.as_ref();
         let call = init
@@ -627,6 +646,10 @@ impl<'a> Visit<'a> for Walker<'_> {
                 if let Some(specifier) = &required {
                     self.import(&id.name, specifier, Imported::Whole, false);
                 }
+                let table = init.filter(|init| table(init) && !empty(init)).map(|_| {
+                    let keyword = self.keyword.unwrap_or("const");
+                    format!("{keyword} {}", self.slice(it.span.start, it.span.end))
+                });
                 self.bind(
                     id.name.to_string(),
                     scope,
@@ -637,6 +660,7 @@ impl<'a> Visit<'a> for Walker<'_> {
                         string,
                         init: kind,
                         head,
+                        table,
                     },
                     it.span,
                 );
@@ -663,6 +687,7 @@ impl<'a> Visit<'a> for Walker<'_> {
                             string: None,
                             init: Init::Other,
                             head: None,
+                            table: None,
                         },
                         property.span,
                     );
@@ -1038,6 +1063,40 @@ fn settings(expr: &Expression<'_>) -> bool {
         _ => return false,
     }
     any && all
+}
+
+// An object or array written out as data: every property or element a
+// literal, a name, a member path, or data again — never a call, a function,
+// or a spread, which make it wiring or a derivation.
+fn table(expr: &Expression<'_>) -> bool {
+    fn datum(expr: &Expression<'_>) -> bool {
+        match bare(expr) {
+            Expression::Identifier(_) | Expression::StaticMemberExpression(_) => true,
+            other => literal(other) || table(other),
+        }
+    }
+    match bare(expr) {
+        Expression::ObjectExpression(object) => {
+            object.properties.iter().all(|property| match property {
+                ObjectPropertyKind::ObjectProperty(p) => !p.method && datum(&p.value),
+                ObjectPropertyKind::SpreadProperty(_) => false,
+            })
+        }
+        Expression::ArrayExpression(array) => {
+            array.elements.iter().all(|element| element.as_expression().is_some_and(datum))
+        }
+        _ => false,
+    }
+}
+
+// An object or array with no entry, which a module fills as it runs: a
+// registry or a cache, not data a build could read.
+fn empty(expr: &Expression<'_>) -> bool {
+    match bare(expr) {
+        Expression::ObjectExpression(object) => object.properties.is_empty(),
+        Expression::ArrayExpression(array) => array.elements.is_empty(),
+        _ => false,
+    }
 }
 
 // A wrapper call over literals: `Number(3000)`, `parseInt("10", 10)`.

@@ -23,12 +23,28 @@
 //! - the root `Cargo.toml` stands as the template spells it outside its two
 //!   stem lists, so a pin, a lint, the `host` feature, or a target table a
 //!   turn changed is a finding with the lines named;
+//! - at a slice's build, a stem is one word: a crate the turn laid under
+//!   the head of a hyphenated stem of the slice, `crates/order/` for
+//!   `order-items`, is named, since the stem's crate is `crates/<stem>/`
+//!   whole, and a crate the tree held before the turn is an earlier slice's;
 //! - at a wave's verify, every static file of the template stands byte for
 //!   byte, a file the tree lacks among them;
 //! - no module under `crates/start/src` is the process the source was: a
 //!   function that starts, stops, runs, listens, serves, bootstraps, or
 //!   shuts it down, or a `Main`, `App`, `Server`, or `Application` type, is
 //!   named with its line, and the module is removed rather than renamed;
+//! - no module under `crates/start/src` loads for another stem: one that
+//!   writes a table to the store or warms an access token, through the
+//!   trait or as a method of the provider, is named with its line, since a
+//!   stage reads its table cache-aside and a token is read where it is
+//!   sent, and the module is removed; a write that keeps a flag is the
+//!   simulation's below, not a loader's;
+//! - no read of the store under a constant key answers empty on a miss: a
+//!   table read under one key is fetched from its upstream and stored when
+//!   the store holds none, so a read whose function returns an empty
+//!   collection, defaults the miss, or answers the `None` arm as nothing is
+//!   named at the answering line, while a read under a key built from the
+//!   input is a lookup and passes;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
@@ -45,7 +61,10 @@
 //!   `Context` — is handed to its route function or consumer by a statement
 //!   of the route list or the topic list, or to `handle_with` by a route
 //!   function of its stem a statement calls, since one no list reaches is
-//!   code the host never runs.
+//!   code the host never runs;
+//! - every setting of the configuration catalog beyond the template's own
+//!   is read by a module outside `common` or a root source, since a key
+//!   nothing reads is a value the deployment supplies for nothing.
 //!
 //! Before a slice's turn, the root `.gitignore` is put back as the template
 //! spells it: the repository the engine lays holds an ignore file of its
@@ -163,8 +182,15 @@ impl TargetAdapter for Adapter {
             tracing::debug!(slice = %ctx.slice.id, "the root ignore file put back as the template spells it");
         }
 
-        let mut report =
-            emery_sdk::target::build(ctx, PROSE, &seed(), |_| Tree::new(root).held()).await?;
+        // the crates the tree holds before the turn are earlier slices'
+        let stems = Stems::read(&ctx.slice.spec, root)?;
+        let mut report = emery_sdk::target::build(ctx, PROSE, &seed(), |_| {
+            let tree = Tree::new(root);
+            let mut findings = tree.stems(&stems)?;
+            findings.extend(tree.held()?);
+            Ok(findings)
+        })
+        .await?;
         if ignored {
             written(&mut report, IGNORE);
         }
@@ -197,15 +223,96 @@ impl<'a> Tree<'a> {
     }
 
     // The rules a build and a verify share: the root manifest outside its
-    // lists, no simulated host, the tables spelled into their lists, every
-    // handler listed.
+    // lists, no simulated host, no miss answered empty, the tables spelled
+    // into their lists, every handler listed, every setting read.
     fn held(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.manifest()?);
         findings.extend(self.simulated()?);
+        findings.extend(self.misses()?);
         findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
+        findings.extend(self.settings()?);
         Ok(findings)
+    }
+
+    // One finding naming every `StateStore::get` under a constant key whose
+    // miss is answered empty within the function that reads, its hit arms
+    // set aside, each `<path>:<line>: <what>` at the line that answers it: a
+    // table read under one key is loaded on a miss, so a read answering an
+    // empty collection there has laid the cache and lost the table. A read
+    // under a key built from the input is a lookup, whose miss is its own,
+    // and no finding.
+    fn misses(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let text = code(&read(&file)?);
+            let path = self.relative(&file);
+            let all: Vec<&str> = text.lines().collect();
+            for (index, line) in all.iter().enumerate() {
+                if !constant_keyed(line) {
+                    continue;
+                }
+                let end = function_end(&all, index);
+                for at in answering(&all, index, end) {
+                    if let Some((spelling, what)) = empty(all[at]) {
+                        lines.push(format!(
+                            "{path}:{}: {what} (`{spelling}`) after the read at line {}",
+                            at + 1,
+                            index + 1
+                        ));
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        lines.dedup();
+        Ok(vec![format!(
+            "a table read from the store under one key answers empty on a miss, so the table is \
+             never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
+             design spells the call, stores it under the same key with a TTL, and answers what it \
+             fetched, never an empty collection; repair each read named through `edit_files`, \
+             laying the fetch in the same function:\n{}",
+            lines.join("\n")
+        )])
+    }
+
+    // One finding naming every crate the turn laid under the head of a
+    // hyphenated stem of the slice, `crates/order/` for `order-items`: a
+    // stem is one word, so its crate is `crates/<stem>/` whole. A crate the
+    // tree held before the turn is an earlier slice's, and one emptied of
+    // its files is repaired, since `delete` leaves the directory.
+    fn stems(&self, stems: &Stems) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for dir in crates(self.root)? {
+            if dir == "common" || stems.held.contains(&dir) || stems.named.contains(&dir) {
+                continue;
+            }
+            let split = stems.named.iter().find(|stem| {
+                stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
+            });
+            if let Some(stem) = split {
+                lines.push(format!(
+                    "`crates/{dir}/` is laid for `{dir}`, the head of the stem `{stem}`, whose \
+                     crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
+                    stem.replace('-', "_")
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![format!(
+            "a stem is one word and is never split at its hyphen into a crate and a part: lay \
+             each module under the stem's own crate, `crates/<stem>/src/<part>.rs`, with the \
+             stem's manifest and module list beside it, remove every file under the split \
+             directory through `delete`, and put the stem's two lines in the root `Cargo.toml` \
+             in place of the head's through `edit_files`:\n{}",
+            lines.join("\n")
+        )])
     }
 
     // Every static file of the template that differs: the lines where an
@@ -277,19 +384,22 @@ impl<'a> Tree<'a> {
         )
     }
 
-    // Two findings at most, each naming `<path>:<line>: <what>` for every
+    // Three findings at most, each naming `<path>:<line>: <what>` for every
     // line under a stem's `src/`, sorted: the words of `LIFECYCLE` under
-    // `crates/start/src`, whose repair removes the module, and, in the
-    // modules that remain, the spellings of `SIMULATED` under any stem,
-    // whose repair removes the spelling. A tree with no `crates/` answers
-    // none.
+    // `crates/start/src`, whose repair removes the module, the words of
+    // `LOADER` in the `start` modules that remain, whose repair removes the
+    // module too, and, in the modules that remain, the spellings of
+    // `SIMULATED` under any stem, whose repair removes the spelling. A tree
+    // with no `crates/` answers none.
     fn simulated(&self) -> Result<Vec<String>, Error> {
         let mut lifecycle = Vec::new();
+        let mut loaders = Vec::new();
         let mut simulated = Vec::new();
         for file in self.modules()? {
             let text = code(&read(&file)?);
             let path = self.relative(&file);
             let mut process = Vec::new();
+            let mut loading = Vec::new();
             if path.starts_with(START) {
                 for (number, line) in text.lines().enumerate() {
                     for (word, what) in LIFECYCLE {
@@ -297,10 +407,24 @@ impl<'a> Tree<'a> {
                             process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
                         }
                     }
+                    // a write that is a flag machine's is the simulation's,
+                    // not a loader's
+                    if SIMULATED.iter().any(|(needle, _)| line.contains(needle)) {
+                        continue;
+                    }
+                    for (word, what) in LOADER {
+                        if spells(line, word) {
+                            loading.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
+                        }
+                    }
                 }
             }
             if !process.is_empty() {
                 lifecycle.extend(process);
+                continue;
+            }
+            if !loading.is_empty() {
+                loaders.extend(loading);
                 continue;
             }
             for (number, line) in text.lines().enumerate() {
@@ -327,12 +451,28 @@ impl<'a> Tree<'a> {
                 lifecycle.join("\n")
             ));
         }
+        if !loaders.is_empty() {
+            loaders.sort();
+            findings.push(format!(
+                "a module under `{START}` loads for another stem what that stem reads at use: a \
+                 table a stage reads is read cache-aside by the stage's own stem, fetched on a \
+                 miss and stored under one key there, and a token or a secret is read through \
+                 its capability where it is used, so `start` lays no loader and warms nothing; \
+                 remove each module named, with its `pub mod` line and its test, through \
+                 `delete`, and lay what else it held that the translation keeps, a stated health \
+                 route or a cross-cutting rule, in a module without it:\n{}",
+                loaders.join("\n")
+            ));
+        }
         if !simulated.is_empty() {
             simulated.sort();
             findings.push(format!(
                 "a module simulates the host, which the translation lays nothing for; remove each \
                  spelling from its module through `edit_files`, never by renaming it: a loop's \
-                 actions run once, back to back, a failure carried as the classified error; a \
+                 actions run once, back to back, a failure carried as the classified error, and \
+                 never as a function that calls itself in the loop's place; a payload of \
+                 repeated elements, XML among them, is read through `serde` into a type deriving \
+                 `Deserialize` (`quick_xml::de::from_str`), never walked by an event loop; a \
                  flag's step is read at the moment of use; a task's, a timer's, or a reach past \
                  the host's work is laid as the translation says or left out:\n{}",
                 simulated.join("\n")
@@ -512,6 +652,54 @@ impl<'a> Tree<'a> {
         )])
     }
 
+    // One finding naming every `pub const` of the catalog beyond the
+    // template's own that no module outside `common` and no root source
+    // spells, each `<path>:<line>: <what>`: a key nothing reads is a setting
+    // the deployment supplies and the program never consults.
+    fn settings(&self) -> Result<Vec<String>, Error> {
+        let declared = self.constants(CATALOG)?;
+        if declared.is_empty() {
+            return Ok(Vec::new());
+        }
+        let layout: Vec<String> = template(CATALOG)?
+            .lines()
+            .filter_map(|line| {
+                let rest = line.trim_start().strip_prefix("pub const ")?;
+                let name = rest.split(|ch: char| !identifier(ch)).next()?;
+                (!name.is_empty()).then(|| name.to_owned())
+            })
+            .collect();
+        let mut readers = Vec::new();
+        for file in self.modules()? {
+            if !self.relative(&file).starts_with(COMMON) {
+                readers.push(code(&read(&file)?));
+            }
+        }
+        for file in sources(&self.root.join("src"))? {
+            readers.push(code(&read(&file)?));
+        }
+        let mut lines = Vec::new();
+        for (number, name) in declared {
+            if layout.contains(&name) || readers.iter().any(|text| spells(text, &name)) {
+                continue;
+            }
+            lines.push(format!("{CATALOG}:{number}: setting `{name}` is read by no module"));
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        Ok(vec![format!(
+            "a setting of the catalog is read by no module, so a value the deployment supplies \
+             under it changes nothing: a key is declared by the slice whose handler reads it \
+             through `Config::get` where the behaviour runs, so read each setting named where \
+             the requirement that states it is implemented, or, where the setting configured the \
+             source's broker, vault, or agent alone and the translation lays nothing for it, \
+             remove its constant and its doc comment from the catalog through \
+             `edit_files`:\n{}",
+            lines.join("\n")
+        )])
+    }
+
     // Every `.rs` file under a stem's `src/`, its `tests/` unread.
     fn modules(&self) -> Result<Vec<PathBuf>, Error> {
         let mut files = Vec::new();
@@ -523,6 +711,42 @@ impl<'a> Tree<'a> {
 
     fn relative(&self, file: &Path) -> String {
         file.strip_prefix(self.root).unwrap_or(file).display().to_string()
+    }
+}
+
+// The stems a slice builds and the crates the tree held before its turn, so
+// a crate the turn laid is told from one an earlier slice laid.
+struct Stems {
+    named: Vec<String>,
+    held: Vec<String>,
+}
+
+impl Stems {
+    // The stem of every requirement heading in `spec`, the first segment of
+    // the subject's dotted id, beside the crates `root` holds now.
+    fn read(spec: &str, root: &Path) -> Result<Self, Error> {
+        let mut named: Vec<String> = Vec::new();
+        for line in spec.lines() {
+            let line = line.trim_start();
+            if !line.starts_with('#') {
+                continue;
+            }
+            let heading = line.trim_start_matches('#').trim_start();
+            let Some(subject) = heading.strip_prefix("Requirement:") else {
+                continue;
+            };
+            let Some(subject) = subject.split_whitespace().next() else {
+                continue;
+            };
+            let stem = subject.split('.').next().unwrap_or(subject);
+            if !stem.is_empty() && !named.iter().any(|named| named == stem) {
+                named.push(stem.to_owned());
+            }
+        }
+        Ok(Self {
+            named,
+            held: crates(root)?,
+        })
     }
 }
 
@@ -554,6 +778,9 @@ const START: &str = "crates/start/src/";
 // The shared crate, whose tables declare a constant and publish to none.
 const COMMON: &str = "crates/common/src/";
 
+// The configuration catalog, one `pub const` per key the deployment supplies.
+const CATALOG: &str = "crates/common/src/config.rs";
+
 // What no module under `START` spells, each the process the source was: a
 // function that starts, stops, runs, listens, serves, bootstraps, or shuts
 // it down, or a type that is it. Each is matched as a word, so
@@ -571,6 +798,170 @@ const LIFECYCLE: &[(&str, &str)] = &[
     ("struct Server", "a lifecycle type of its own"),
     ("struct Application", "a lifecycle type of its own"),
 ];
+
+// What no module under `START` spells once `LIFECYCLE` is clear, each a
+// start-up step that loads for another stem: a table written to the store
+// for a stage to read, or a token warmed before the stem that sends it
+// asks, spelled through the trait or as a method of the provider. Each is
+// matched as a word, so `headers.set(` and `access_token_for` are none, and
+// the token's is the call alone, so a field, a rename, or a string named
+// `access_token` is none.
+const LOADER: &[(&str, &str)] = &[
+    ("StateStore::set", "a table loaded for another stem"),
+    ("StateStore>::set", "a table loaded for another stem"),
+    ("provider.set", "a table loaded for another stem"),
+    ("provider().set", "a table loaded for another stem"),
+    ("store.set", "a table loaded for another stem"),
+    ("Identity::access_token", "a token warmed before use"),
+    ("Identity>::access_token", "a token warmed before use"),
+    ("provider.access_token", "a token warmed before use"),
+    ("provider().access_token", "a token warmed before use"),
+];
+
+// The empty collections a miss is answered as, each spelled whole: behind a
+// `return Ok(..)`, as the body of an arm naming `None`, bare or in `Ok(..)`,
+// or as the tail expression once the hit has returned above it.
+const NOTHING: &[&str] = &[
+    "Vec::new()",
+    "HashMap::new()",
+    "BTreeMap::new()",
+    "HashSet::new()",
+    "BTreeSet::new()",
+    "vec![]",
+    "Default::default()",
+];
+
+// How a miss is defaulted on its way to the answer, anywhere in a line.
+const DEFAULTED: &[&str] = &[
+    ".unwrap_or_default()",
+    ".unwrap_or_else(Vec::new)",
+    ".unwrap_or_else(HashMap::new)",
+    ".unwrap_or_else(Default::default)",
+    ".unwrap_or(Vec::new())",
+];
+
+// The spelling by which `line` answers a miss empty, and what it is: one of
+// `NOTHING` behind a `return Ok(..)` anywhere in the line; one the line
+// answers with, bare or in `Ok(..)` — the body of an arm whose pattern
+// names `None`, `Ok(None) | Err(_)` among them, or the line whole as a tail,
+// since `Ok(Vec::new())` inside a longer line is an argument rather than
+// the answer; else one of `DEFAULTED`.
+fn empty(line: &str) -> Option<(String, &'static str)> {
+    let text = line.trim();
+    let answer = match text.split_once("=>") {
+        Some((pattern, body)) => spells(pattern, "None").then(|| body.trim().trim_end_matches(',')),
+        None => Some(text),
+    };
+    let nothing = NOTHING.iter().find_map(|nothing| {
+        let returned = format!("return Ok({nothing})");
+        if line.contains(&returned) {
+            return Some(returned);
+        }
+        let answered = answer?;
+        let bare = answered.strip_prefix("Ok(").and_then(|rest| rest.strip_suffix(')'));
+        (answered == *nothing || bare == Some(*nothing))
+            .then(|| text.trim_end_matches(',').to_owned())
+    });
+    nothing.map(|spelling| (spelling, "a miss answered as no entries")).or_else(|| {
+        DEFAULTED
+            .iter()
+            .find(|defaulted| line.contains(*defaulted))
+            .map(|defaulted| ((*defaulted).to_owned(), "a miss defaulted"))
+    })
+}
+
+// The lines a constant-keyed `StateStore::get` is read with where the
+// function it sits in cannot be found: the `let .. else` block, or the
+// chain the read ends in.
+const MISS_WINDOW: usize = 6;
+
+// The index past the last line of the function `lines[index]` sits in: the
+// closing brace at the indentation of the nearest `fn` head above, as
+// `rustfmt` lays it; `MISS_WINDOW` lines where no head is above it.
+fn function_end(lines: &[&str], index: usize) -> usize {
+    let Some(head) = lines[..=index].iter().rposition(|line| opens_fn(line)) else {
+        return lines.len().min(index + MISS_WINDOW);
+    };
+    let indent = lines[head].len() - lines[head].trim_start().len();
+    lines[index + 1..]
+        .iter()
+        .position(|line| line.len() - line.trim_start().len() == indent && line.trim() == "}")
+        .map_or(lines.len(), |offset| index + 1 + offset)
+}
+
+// Whether `line` is a function's head: `fn` behind any visibility — `pub`,
+// `pub(crate)`, `pub(super)`, `pub(in ..)` — and `const`, `async`, or
+// `unsafe`, as `rustfmt` lays one.
+fn opens_fn(line: &str) -> bool {
+    let mut rest = line.trim_start();
+    if let Some(after) = rest.strip_prefix("pub") {
+        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
+        rest = scoped.map_or(after, |(_, after)| after).trim_start();
+    }
+    for qualifier in ["const ", "async ", "unsafe "] {
+        rest = rest.strip_prefix(qualifier).unwrap_or(rest);
+    }
+    rest.starts_with("fn ")
+}
+
+// The lines from the read at `index` to `end` that can answer its miss:
+// every line but a hit arm's — a `Some(..) =>` arm, the body of an `if let
+// Some(..)`, and what follows a `let .. else` once its block closes — since
+// a default there decodes what the store held rather than answering the
+// miss. A hit arm runs over the lines indented past its head and the brace
+// that closes it, as `rustfmt` lays them.
+fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
+    let indent = |line: &str| line.len() - line.trim_start().len();
+    let mut answering = Vec::new();
+    let mut hit: Option<usize> = None;
+    let mut let_else: Option<usize> = None;
+    for (at, line) in lines.iter().enumerate().take(end).skip(index) {
+        let text = line.trim_start();
+        if text.is_empty() {
+            continue;
+        }
+        if let Some(head) = hit {
+            if indent(line) > head || text == "{" {
+                continue;
+            }
+            hit = None;
+            if text.starts_with('}') {
+                continue;
+            }
+        }
+        if let_else.is_some_and(|head| indent(line) == head && text.starts_with('}')) {
+            break;
+        }
+        let arm =
+            (text.starts_with("Some(") || text.starts_with("Ok(Some(")) && text.contains("=>");
+        if arm || text.starts_with("if let Some(") {
+            hit = Some(indent(line));
+            continue;
+        }
+        answering.push(at);
+        if text.starts_with("let Some(") {
+            if text.ends_with("};") {
+                break;
+            }
+            let_else = Some(indent(line));
+        }
+    }
+    answering
+}
+
+// Whether `line` reads the store under a constant key: `StateStore::get(`
+// whose second argument is a constant name, `KEY` or `config::KEY`, rather
+// than a key built from the input.
+fn constant_keyed(line: &str) -> bool {
+    let Some(at) = line.find("StateStore::get(") else { return false };
+    let args = &line[at + "StateStore::get(".len()..];
+    let Some((_, key)) = args.split_once(',') else { return false };
+    let key = key.split(')').next().unwrap_or_default().trim().trim_start_matches('&').trim();
+    let name = key.rsplit("::").next().unwrap_or(key);
+    !name.is_empty()
+        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
+        && name.chars().any(|ch| ch.is_ascii_uppercase())
+}
 
 // A table of `common` with the list and the rung its constants are spelled
 // into, in full under `prefix`.
@@ -817,6 +1208,41 @@ fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
         .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
     paths.sort();
     Ok(paths)
+}
+
+// The name of every directory under `crates/` that holds a file, sorted; a
+// tree with no `crates/` holds none.
+fn crates(root: &Path) -> Result<Vec<String>, Error> {
+    let mut names = Vec::new();
+    for path in entries(&root.join("crates"))? {
+        let meta = fs::symlink_metadata(&path)
+            .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+        if !meta.is_dir() || !occupied(&path)? {
+            continue;
+        }
+        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
+            names.push(name.to_owned());
+        }
+    }
+    Ok(names)
+}
+
+// Whether a regular file lies beneath `dir`, symbolic links left unfollowed.
+fn occupied(dir: &Path) -> Result<bool, Error> {
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_file() {
+                return Ok(true);
+            }
+            if meta.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+    Ok(false)
 }
 
 // Every `.rs` file beneath `dir`, symbolic links left unfollowed.

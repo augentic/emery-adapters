@@ -7,13 +7,17 @@
 # line, and preamble paragraph it writes, is read against the lexicon
 # (`leaks`, expected 0); each record's prescription is a `decision` the
 # design lands (`recall dec`); and the rule each record decides is a
-# requirement by role that the code states too (the behaviours). The code's
-# secret-store surface is `class KeyVault`, which the survey prompt's rule
-# names `secrets` and the SDK's gate returns as `key-vault`, so the stem is
-# the gate's doing; the bootstrap's credential steps are `start`'s by role,
-# never the retriever's name. The two records' stems are the model's: the
-# broker record is about the orders its events are, the credentials record
-# about the secrets it keeps.
+# requirement by role (the behaviours). The code's credential steps — the
+# secret read, parsed, and watched for rotation, the producer constructed
+# from it, the restart — are how the process readies itself and reaches the
+# broker: the design's, in `excerpt` and `call` claims, and no
+# requirement's, so `start` holds the one rule every request gets and the
+# readiness spans are listed `[[absent]]`, each a hit when a run states a
+# requirement there; `KeyVault` and the retriever are mechanisms reached
+# through the bootstrap, never surfaces, so no stem spells them and the
+# lexicon's stem gate has nothing to return here. The two records' stems are
+# the model's: the broker record is about the orders its events are, the
+# credentials record about the secrets it keeps.
 
 [[source]]
 name = "docs"
@@ -33,7 +37,7 @@ stem = "secrets"
 name = "code"
 adapter = "typescript"
 fixture = "evals/cases/orders-broker/fixture"
-stems = ["start", "orders", "secrets"]
+stems = ["start", "orders"]
 
 [[source.surface]]
 entry = "src/start.ts"
@@ -42,10 +46,6 @@ stem = "start"
 [[source.surface]]
 entry = "src/orders.ts"
 stem = "orders"
-
-[[source.surface]]
-entry = "src/key-vault.ts"
-stem = "secrets"
 
 # --- decisions: each record's prescription, verbatim ---
 
@@ -91,51 +91,13 @@ stem = "secrets"
 anchor = "adr/0002-broker-credentials.md#L22-L23"
 gloss = "When the credentials rotate, the service restarts"
 
-# --- code: start, the bootstrap and the retriever only it reaches ---
+# --- code: start, the one rule every request gets ---
 
 [[requirement]]
 source = "code"
 stem = "start"
-anchor = "src/start.ts#L8-L10"
-gloss = "The broker credentials are retrieved before the producer is constructed when the managed-broker configuration is in use"
-
-[[requirement]]
-source = "code"
-stem = "start"
-anchor = "src/start.ts#L12-L20"
-gloss = "The producer is constructed over the configured brokers, with TLS and plain authentication from the retrieved credentials under the managed-broker configuration, and connected"
-
-[[requirement]]
-source = "code"
-stem = "start"
-anchor = "src/start.ts#L22-L25"
-gloss = "The HTTP application parses JSON bodies, mounts the orders router, and listens on the configured port"
-
-[[requirement]]
-source = "code"
-stem = "start"
-anchor = "src/start.ts#L27-L33"
-gloss = "Under the managed-broker configuration a credential watcher closes the server and the producer and exits with 1 after the restart delay when the credentials change"
-
-[[requirement]]
-source = "code"
-stem = "start"
-anchor = "src/confluent-secret-retriever.ts#L12-L26"
-gloss = "Retrieve reads the credential secret from the secret store once, parses key and secret, and throws `No valid kafka keys` when it is empty"
-
-[[requirement]]
-source = "code"
-stem = "start"
-anchor = "src/confluent-secret-retriever.ts#L30-L38"
-gloss = "Watch re-reads the secret every watcher interval and calls closeApp when it changed"
-
-# --- code: secrets, the one client only the bootstrap reaches ---
-
-[[requirement]]
-source = "code"
-stem = ["secrets", "start"]
-anchor = "src/key-vault.ts#L7-L15"
-gloss = "A secret without a value is an error naming the secret"
+anchor = "src/start.ts#L23"
+gloss = "Request bodies are parsed as JSON for every route"
 
 # --- code: orders ---
 
@@ -166,20 +128,33 @@ gloss = "The managed-broker configuration is in use unless IS_LOCAL is `true`"
 
 [[criterion]]
 source = "code"
-anchor = "src/config.ts#L6"
-gloss = "SECRET_WATCHER_INTERVAL defaults to 5 minutes"
-
-[[criterion]]
-source = "code"
-anchor = "src/config.ts#L7"
-gloss = "The restart delay is 10 s"
-
-[[criterion]]
-source = "code"
 anchor = "src/config.ts#L10"
 gloss = "ORDER_EVENTS_TOPIC defaults to order-events"
 
-# --- behaviours: the rules both sources state, each by role ---
+# --- absent: how the process readies itself, reaches the broker, and
+# restarts — the design's, and no requirement's ---
+
+[[absent]]
+source = "code"
+anchor = "src/start.ts#L7-L20"
+gloss = "The credentials retrieved under the managed-broker configuration, the producer constructed over the brokers with TLS and plain authentication from them, and connected"
+
+[[absent]]
+source = "code"
+anchor = "src/start.ts#L27-L33"
+gloss = "The credential watcher closing the server and the producer and exiting with 1 after the restart delay when the credentials change"
+
+[[absent]]
+source = "code"
+anchor = "src/confluent-secret-retriever.ts"
+gloss = "The broker secret read from the secret store once, parsed into key and secret, refused when empty, and re-read on the watcher interval"
+
+[[absent]]
+source = "code"
+anchor = "src/key-vault.ts"
+gloss = "The secret store client, a secret without a value an error naming it"
+
+# --- behaviours: the rules the records decide, each by role ---
 
 # the record refuses both faults in one sentence the code refuses in two
 # branches; one requirement citing the sentence and both branches, or two
@@ -199,23 +174,16 @@ claims = [
   { source = "code", anchor = "src/orders.ts#L36-L42" },
 ]
 
+# the credential rules the records decide are the docs' alone: the code's
+# counterpart is readiness the design holds, listed `[[absent]]` above
 [[behaviour]]
 gloss = "the broker credentials are obtained before any broker client is constructed"
-claims = [
-  { source = "docs", anchor = "adr/0002-broker-credentials.md#L17-L18" },
-  { source = "code", anchor = "src/start.ts#L8-L10" },
-]
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L17-L18" }]
 
 [[behaviour]]
 gloss = "the service refuses to start without the broker credentials"
-claims = [
-  { source = "docs", anchor = "adr/0002-broker-credentials.md#L20" },
-  { source = "code", anchor = "src/confluent-secret-retriever.ts#L17-L25" },
-]
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L20" }]
 
 [[behaviour]]
 gloss = "the service restarts when the credentials rotate"
-claims = [
-  { source = "docs", anchor = "adr/0002-broker-credentials.md#L22-L23" },
-  { source = "code", anchor = "src/start.ts#L27-L33" },
-]
+claims = [{ source = "docs", anchor = "adr/0002-broker-credentials.md#L22-L23" }]
