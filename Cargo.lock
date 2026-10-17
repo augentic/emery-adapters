@@ -2150,9 +2150,9 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
-version = "0.2.190"
+version = "0.2.191"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+checksum = "65cd87c9a6d60536580b316ad985726104730a5151c99845f2490428ef91240a"
 
 [[package]]
 name = "libm"
@@ -2489,7 +2489,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "futures",
@@ -2509,7 +2509,7 @@ dependencies = [
 [[package]]
 name = "omnia-cli"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "clap",
@@ -2518,7 +2518,7 @@ dependencies = [
 [[package]]
 name = "omnia-compile"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2527,7 +2527,7 @@ dependencies = [
 [[package]]
 name = "omnia-core"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
@@ -2554,7 +2554,7 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2564,7 +2564,7 @@ dependencies = [
 [[package]]
 name = "omnia-host-macros"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2574,7 +2574,7 @@ dependencies = [
 [[package]]
 name = "omnia-link"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "futures",
@@ -2586,7 +2586,7 @@ dependencies = [
 [[package]]
 name = "omnia-plugin"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2601,7 +2601,7 @@ dependencies = [
 [[package]]
 name = "omnia-sdk"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "bon",
@@ -2635,12 +2635,12 @@ dependencies = [
 [[package]]
 name = "omnia-template"
 version = "0.1.0"
-source = "git+https://github.com/augentic/omnia-exemplar#4cf56e155b5abdf877b3ea8c4109852d4cd64932"
+source = "git+https://github.com/augentic/omnia-exemplar#1db3fd4afbf789f659a03d47d9f550f424b7c102"
 
 [[package]]
 name = "omnia-test"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2669,7 +2669,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2685,7 +2685,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-config"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "omnia-core",
@@ -2698,7 +2698,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2714,7 +2714,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "axum",
@@ -2741,7 +2741,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2758,7 +2758,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2776,7 +2776,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "futures",
@@ -2792,7 +2792,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2811,7 +2811,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "futures",
@@ -2833,7 +2833,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "fromenv",
@@ -2851,7 +2851,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "futures",
@@ -2866,7 +2866,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vcs"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "cap-std",
@@ -2881,7 +2881,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.37.0"
-source = "git+https://github.com/augentic/omnia#1e8aaf75ee82781ac6869d1224f8da22f2713d0b"
+source = "git+https://github.com/augentic/omnia#e0f8ef32abea9fa986c6a6d348797dc43379f0a9"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -3882,9 +3882,9 @@ dependencies = [
 
 [[package]]
 name = "ruff_python_ast"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15434b06df7d930fad2818639a4e0fec4af9c770121c45a96b72da7feaae9ead"
+checksum = "787e187198eba5c7792f05358d1365ea5c7df8de0e701c7d7d15e07b532092a7"
 dependencies = [
  "aho-corasick",
  "arrayvec",
@@ -3904,9 +3904,9 @@ dependencies = [
 
 [[package]]
 name = "ruff_python_parser"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37a22811d752aa9e255d7dd72524d14352cf9bc654ef79b399bf1eeeb6640fbb"
+checksum = "3fc400c5340219261a2b1e0630070fdac30fa99918ee78a2b006391a50c36df9"
 dependencies = [
  "bitflags",
  "bstr",
@@ -3928,9 +3928,9 @@ dependencies = [
 
 [[package]]
 name = "ruff_python_trivia"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0322a5059fe0feb2e010ca6f31c24ac289f6b7e9e38359539491b10c57f1c5bc"
+checksum = "2eaa30e95771578677685be47e20d7a1beaed762225a444d337f54b1d50e9150"
 dependencies = [
  "itertools 0.15.0",
  "memchr",
@@ -3943,9 +3943,9 @@ dependencies = [
 
 [[package]]
 name = "ruff_source_file"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6ae809a289b5c791f82aa45df33f2a92323e7a1c1d265c10e9ac884027a2e43"
+checksum = "ed363bf1302918442b8111a8be328c82821fb69e57695eb523b93937b7c48d0d"
 dependencies = [
  "memchr",
  "ruff_text_size",
@@ -3953,18 +3953,18 @@ dependencies = [
 
 [[package]]
 name = "ruff_text_size"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daf6344d6915ced9316312c1ee3f24c4300c54295bc4c3b8f4e95b633ae5443b"
+checksum = "d86062237e79a93d78f9a4ded790d9f056c4e0254f892a7a3ecd87a832509b8d"
 dependencies = [
  "get-size2",
 ]
 
 [[package]]
 name = "ruff_unicode_names2"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13418b8fd029d597e35dedc36e91f47122d26075e4c86557574d9441753fb375"
+checksum = "41d0f9803d94036b0043f7659fa3b7ce4249e9205db06f58a4c7d111301c9a2f"
 dependencies = [
  "phf 0.11.3",
  "ruff_unicode_names2_generator",
@@ -3972,12 +3972,12 @@ dependencies = [
 
 [[package]]
 name = "ruff_unicode_names2_generator"
-version = "0.0.17"
+version = "0.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37fd82af49d5685d9054e68185987acaaf62542f671b6df8935155664876bc39"
+checksum = "0399126f10d0de03a01ceded386b4c194e371e60e8d8116fedbb6ecdc807651e"
 dependencies = [
  "phf_codegen",
- "rand 0.8.8",
+ "rand 0.10.3",
 ]
 
 [[package]]
@@ -4138,9 +4138,9 @@ dependencies = [
 
 [[package]]
 name = "schannel"
-version = "0.1.29"
+version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91c1b7e4904c873ef0710c1f407dde2e6287de2bebc1bbbf7d430bb7cbffd939"
+checksum = "9cb23c424d8ee841bb4d813677ca237e2a610067d594fec130f87d6093495ab5"
 dependencies = [
  "windows-sys 0.61.2",
 ]
@@ -5084,9 +5084,9 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "unicode-normalization"
-version = "0.1.25"
+version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
 dependencies = [
  "tinyvec",
 ]
