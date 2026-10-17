@@ -59,9 +59,6 @@ impl Tree<'_> {
         let mut lifecycle = Vec::new();
         let mut simulated = Vec::new();
         for module in &self.modules {
-            if module.is_start() {
-                continue;
-            }
             let path = &module.path;
             let mut process = Vec::new();
             for (number, line) in module.code.lines().enumerate() {

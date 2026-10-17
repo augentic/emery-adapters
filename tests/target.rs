@@ -946,21 +946,33 @@ async fn omnia_build_process_refused() {
 
 // Laying `crates/start/` at a build is refused whole: the seed and the host
 // are `start`, so every file under `crates/start/` is named and removed
-// through `delete` with any `start` line dropped from the root `Cargo.toml`.
+// through `delete` with any `start` line dropped from the root `Cargo.toml`,
+// its modules ignored by the other module rules so a setting read only there
+// is flagged unread in the same round and no handler or miss inside it is
+// asked to be wired or edited in place.
 #[tokio::test]
 async fn omnia_build_start_crate_refused() {
     let project = scratch();
     let start_path = "start = { path = \"crates/start\" }\n";
     let start_crate = "start.workspace = true\n";
+    let env_line = "pub const ENV: &str = \"ENV\";\n";
+    let start_setting = "\n/// Broker address read only at start.\npub const START_BROKER_URL: \
+                         &str = \"START_BROKER_URL\";\n";
     let written = [
         ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
         ("crates/start/src/lib.rs", "//! The `start` stem.\n\npub mod start;\n"),
         (
             "crates/start/src/start.rs",
-            "//! Startup helper.\n\n/// Check a credential.\n#[must_use]\npub fn non_empty(value: &str) -> bool {\n    !value.trim().is_empty()\n}\n",
+            "//! Startup helper.\n\nuse common::config;\nuse omnia_sdk::api::Context;\nuse \
+             omnia_sdk::{Config, StateStore};\n\npub const TABLE_KEY: &str = \"start/table\";\n\n\
+             /// Probe readiness.\npub async fn ready<P: Config + StateStore>(\n    _input: \
+             (),\n    context: Context<P>,\n) -> omnia_sdk::Result<Vec<String>> {\n    let _ = \
+             Config::get(context.provider(), config::START_BROKER_URL).await?;\n    match \
+             StateStore::get(context.provider(), TABLE_KEY).await? {\n        Some(_) => \
+             Ok(Vec::new()),\n        None => Ok(Vec::new()),\n    }\n}\n",
         ),
     ];
-    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "Cargo.toml"]}"#;
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "crates/common/src/config.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": [], "written": []}"#;
     let model = Scripted::answering([first, repaired])
         .calling(
@@ -974,13 +986,22 @@ async fn omnia_build_start_crate_refused() {
                         &format!("{OMNIA_PATH_CRATE_ANCHOR}{start_path}"),
                     ),
                     ("Cargo.toml", OMNIA_STEM_ANCHOR, &format!("{OMNIA_STEM_ANCHOR}{start_crate}")),
+                    (
+                        "crates/common/src/config.rs",
+                        env_line,
+                        &format!("{env_line}{start_setting}"),
+                    ),
                 ]),
             ],
         )
         .calling(
             1,
             [
-                edit_files(&[("Cargo.toml", start_path, ""), ("Cargo.toml", start_crate, "")]),
+                edit_files(&[
+                    ("Cargo.toml", start_path, ""),
+                    ("Cargo.toml", start_crate, ""),
+                    ("crates/common/src/config.rs", start_setting, ""),
+                ]),
                 delete_files(&[
                     "crates/start/Cargo.toml",
                     "crates/start/src/lib.rs",
@@ -997,8 +1018,12 @@ async fn omnia_build_start_crate_refused() {
         "`crates/start/` is laid for `start`, which the seed and the host are and no crate of the \
          tree ever is",
         "crates/start/Cargo.toml\ncrates/start/src/lib.rs\ncrates/start/src/start.rs",
+        "setting `START_BROKER_URL` is read by no module",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["handler `ready`", "crates/start/src/start.rs:"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert!(project.read("crates/start/src/start.rs").is_none(), "`crates/start/` is removed");
     assert!(

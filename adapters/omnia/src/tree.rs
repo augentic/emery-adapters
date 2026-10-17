@@ -27,7 +27,6 @@ const COMMON: &str = "crates/common/src/";
 
 // The forbidden `start` crate directory: the seed and the host are `start`.
 const START: &str = "crates/start";
-const START_PREFIX: &str = "crates/start/";
 
 // The configuration catalog, one `pub const` per key the deployment supplies.
 const CATALOG: &str = "crates/common/src/config.rs";
@@ -55,10 +54,6 @@ impl Module {
     fn is_common(&self) -> bool {
         self.path.starts_with(COMMON)
     }
-
-    fn is_start(&self) -> bool {
-        self.path.starts_with(START_PREFIX)
-    }
 }
 
 pub struct Tree<'a> {
@@ -68,8 +63,12 @@ pub struct Tree<'a> {
 
 impl<'a> Tree<'a> {
     pub fn read(root: &'a Path) -> Result<Self, Error> {
+        let start = root.join(START);
         let mut modules = Vec::new();
         for stem in entries(&root.join("crates"))? {
+            if stem == start {
+                continue;
+            }
             for file in sources(&stem.join("src"))? {
                 modules.push(Module::read(root, &file)?);
             }

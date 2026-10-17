@@ -61,7 +61,7 @@ impl Tree<'_> {
     pub(super) fn response_wrappers(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
-            if module.is_common() || module.is_start() {
+            if module.is_common() {
                 continue;
             }
             for (number, name) in module.response_wrappers() {
