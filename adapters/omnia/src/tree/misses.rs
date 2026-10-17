@@ -3,9 +3,6 @@
 
 use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
 
-// The empty collections a miss is answered as, each spelled whole: behind a
-// `return Ok(..)`, as the body of an arm naming `None`, bare or in `Ok(..)`,
-// or as the tail expression once the hit has returned above it.
 const NOTHING: &[&str] = &[
     "Vec::new()",
     "HashMap::new()",
@@ -16,7 +13,6 @@ const NOTHING: &[&str] = &[
     "Default::default()",
 ];
 
-// How a miss is defaulted on its way to the answer, anywhere in a line.
 const DEFAULTED: &[&str] = &[
     ".unwrap_or_default()",
     ".unwrap_or_else(Vec::new)",
@@ -25,19 +21,9 @@ const DEFAULTED: &[&str] = &[
     ".unwrap_or(Vec::new())",
 ];
 
-// The lines a constant-keyed `StateStore::get` is read with where the
-// function it sits in cannot be found: the `let .. else` block, or the
-// chain the read ends in.
 const MISS_WINDOW: usize = 6;
 
 impl Tree<'_> {
-    // Names every `StateStore::get` under a constant key whose miss is
-    // answered empty within the function that reads, its hit arms set aside,
-    // each `<path>:<line>: <what>` at the line that answers it: a table read
-    // under one key is loaded on a miss, so a read answering an empty
-    // collection there has laid the cache and lost the table. A read under a
-    // key built from the input is a lookup, whose miss is its own, and no
-    // finding.
     pub(super) fn empty_misses(&self) -> Option<String> {
         let mut lines: Vec<String> = self.modules.iter().flat_map(Module::empty_misses).collect();
         if lines.is_empty() {
@@ -55,9 +41,6 @@ impl Tree<'_> {
         ))
     }
 
-    // Names every `Deserialize` struct under a stem's `src/` whose body holds
-    // a single `data` field, each `<path>:<line>: <what>`: a client's `.data`
-    // property wrapped around the response body the wire carries at its root.
     pub(super) fn response_wrappers(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
@@ -109,8 +92,6 @@ impl Module {
         lines
     }
 
-    // Every `Deserialize` struct `self.code` declares whose body holds a
-    // single `data` field, each its 1-based line and name.
     fn response_wrappers(&self) -> Vec<(usize, &str)> {
         let lines: Vec<&str> = self.code.lines().collect();
         let mut found = Vec::new();
@@ -136,12 +117,6 @@ impl Module {
     }
 }
 
-// The spelling by which `line` answers a miss empty, and what it is: one of
-// `NOTHING` behind a `return Ok(..)` anywhere in the line; one the line
-// answers with, bare or in `Ok(..)` — the body of an arm whose pattern
-// names `None`, `Ok(None) | Err(_)` among them, or the line whole as a tail,
-// since `Ok(Vec::new())` inside a longer line is an argument rather than
-// the answer; else one of `DEFAULTED`.
 fn empty(line: &str) -> Option<(String, &'static str)> {
     let text = line.trim();
     let answer = match text.split_once("=>") {
@@ -166,9 +141,7 @@ fn empty(line: &str) -> Option<(String, &'static str)> {
     })
 }
 
-// The index past the last line of the function `lines[index]` sits in: the
-// closing brace at the indentation of the nearest `fn` head above, as
-// `rustfmt` lays it; `MISS_WINDOW` lines where no head is above it.
+// Finds the closing `}` at the same indentation as the enclosing `fn`.
 fn function_end(lines: &[&str], index: usize) -> usize {
     let Some(head) = lines[..=index].iter().rposition(|line| opens_fn(line)) else {
         return lines.len().min(index + MISS_WINDOW);
@@ -180,9 +153,6 @@ fn function_end(lines: &[&str], index: usize) -> usize {
         .map_or(lines.len(), |offset| index + 1 + offset)
 }
 
-// Whether `line` is a function's head: `fn` behind any visibility — `pub`,
-// `pub(crate)`, `pub(super)`, `pub(in ..)` — and `const`, `async`, or
-// `unsafe`, as `rustfmt` lays one.
 fn opens_fn(line: &str) -> bool {
     let mut rest = strip_vis(line);
     for qualifier in ["const ", "async ", "unsafe "] {
@@ -191,12 +161,7 @@ fn opens_fn(line: &str) -> bool {
     rest.starts_with("fn ")
 }
 
-// The lines from the read at `index` to `end` that can answer its miss:
-// every line but a hit arm's — a `Some(..) =>` arm, the body of an `if let
-// Some(..)`, and what follows a `let .. else` once its block closes — since
-// a default there decodes what the store held rather than answering the
-// miss. A hit arm runs over the lines indented past its head and the brace
-// that closes it, as `rustfmt` lays them.
+// Collects lines after the read that handle a miss, skipping `Some(..)` hit branches.
 fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
     let indent = |line: &str| line.len() - line.trim_start().len();
     let mut answering = Vec::new();
@@ -236,9 +201,6 @@ fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
     answering
 }
 
-// Whether `line` reads the store under a constant key: `StateStore::get(`
-// whose second argument is a constant name, `KEY` or `config::KEY`, rather
-// than a key built from the input.
 fn constant_keyed(line: &str) -> bool {
     let Some(at) = line.find("StateStore::get(") else { return false };
     let args = &line[at + "StateStore::get(".len()..];

@@ -1,17 +1,4 @@
 //! Reads a TypeScript or JavaScript source into the tree the SDK surveys.
-//!
-//! An inline value is one seam mined whole, its declarations copied
-//! unanchored, with no survey turn.
-//!
-//! A workspace is listed under this adapter's keep:
-//!
-//! - the production modules
-//! - the `.json` files an import may name
-//! - the tree's own tests
-//!
-//! Every module is parsed, and the tree is settled through the adapter's
-//! recogniser ([`surface`]) for the SDK's `seams` to survey and cut. Only a
-//! tree with no production module is refused.
 
 mod dialect;
 mod parse;
@@ -33,7 +20,6 @@ use crate::PROSE;
 pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let source = &ctx.input.name;
 
-    // an inline value is one seam, with no survey
     let workspace = match &ctx.input.content {
         SourceContent::Value(text) => {
             let module = Module::parse("value.ts", text.clone());
@@ -42,7 +28,6 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
         SourceContent::Workspace(workspace) => workspace,
     };
 
-    // one walk lists the modules and the data files an import may name
     let (data, modules): (Vec<String>, Vec<String>) =
         workspace::list(workspace, |entry| is_module(entry) || is_data(entry))?
             .into_iter()
@@ -54,7 +39,6 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
         ));
     }
 
-    // the settled tree is the model's to survey
     let listing = Listing {
         modules,
         data,
@@ -70,7 +54,6 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
 const TEST_DIRS: &[&str] = &["test", "tests", "__tests__"];
 const TEST_INFIXES: &[&str] = &["spec", "test"];
-// Never a production module's or a test's: dependencies and build output.
 const NEVER_DIRS: &[&str] = &["node_modules", "vendor", "target", "dist", "build"];
 
 fn skipped_dir(name: &str) -> bool {
@@ -97,8 +80,6 @@ fn is_module(entry: Entry<'_>) -> bool {
     )
 }
 
-// A `.json` a module may import by path, wherever a module may sit. Only one
-// an import names is ever laid.
 fn is_data(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;

@@ -27,7 +27,6 @@ fn carrier(root: &str) -> Result<Seam, Error> {
         .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
     require_non_empty(&brief)?;
 
-    // the SDK lays the one file into the turn and holds every anchor to it
     Ok(Seam {
         text: format!("The operator's brief is `{file}`, the one file of the bound tree."),
         ..Seam::files([file.as_str()])

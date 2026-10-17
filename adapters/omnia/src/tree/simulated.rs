@@ -5,10 +5,6 @@ use emery_sdk::Error;
 
 use super::{CATALOG, Tree, spells, start_files};
 
-// What no module of a stem spells, each the process the source was: a
-// function that starts, stops, runs, listens, serves, bootstraps, or shuts
-// it down, or a type that is it. Each is matched as a word, so
-// `fn start_at` and `struct AppError` are none.
 const LIFECYCLE: &[(&str, &str)] = &[
     ("fn start", "a start of its own"),
     ("fn stop", "a stop of its own"),
@@ -23,10 +19,6 @@ const LIFECYCLE: &[(&str, &str)] = &[
     ("struct Application", "a lifecycle type of its own"),
 ];
 
-// What no module of a stem spells, each a mechanism the host owns: the
-// workspace's lints silenced for the crate, a task, a timer, a thread, a
-// reach past the component to the system, a loop that polls or retries, or
-// a flag machine standing in for a lifecycle.
 const SIMULATED: &[(&str, &str)] = &[
     ("#![allow(", "the workspace's lints silenced"),
     ("tokio::spawn", "a task of its own"),
@@ -46,11 +38,6 @@ const SIMULATED: &[(&str, &str)] = &[
 ];
 
 impl Tree<'_> {
-    // Three findings at most: any file laid under `crates/start/` (or a
-    // `crates/start-*` crate), whose repair removes the crate, the words of
-    // `LIFECYCLE` under a stem's `src/`, whose repair removes the module, and,
-    // in the modules that remain, the spellings of `SIMULATED`, whose repair
-    // removes the spelling. A tree with no `crates/` answers none.
     pub(super) fn simulated_host(&self) -> Result<Vec<String>, Error> {
         let start = start_files(self.root)?;
         let mut lifecycle = Vec::new();

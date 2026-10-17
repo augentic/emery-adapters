@@ -1,6 +1,4 @@
-//! The one survey turn a documentation tree opens: the documents' outlines
-//! laid for the model to name the tree's subjects from, the answer held to
-//! the tree, and the span each subject covers derived from its anchor.
+//! Surveys a documentation tree for its subjects and derives their spans.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -11,27 +9,17 @@ use emery_sdk::{Context, Error, Model, serde_json, tracing};
 use super::structure::{self, Kind};
 use super::subjects::Prepared;
 
-// One subject the survey named, with what code derived from its anchor.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Subject {
     pub name: String,
-    // Root-relative path of the document it anchors in.
     pub entry: String,
-    // Stem its `requirement` and `criterion` ids lead with.
     pub stem: String,
-    // Stem alone for the one subject under it, else stem + disambiguating slug.
     pub lead: String,
-    // 1-based line the model anchored it at.
     pub anchor: u32,
-    // From its anchor to the line before the next subject in the same document
-    // (or the document's end), with any preamble before the first folded in.
     pub span: Lines,
 }
 
 impl Prepared<'_> {
-    // Runs the survey turn over the prepared documents and holds the answer to
-    // the tree: every document is a subject's entry or listed `unreached`, and
-    // no two subjects anchor at one line.
     pub async fn inventory<P: Model>(
         &self, ctx: &Context<'_, P>, docs: &'static [emery_sdk::Doc],
     ) -> Result<Inventory, Error> {
@@ -39,7 +27,6 @@ impl Prepared<'_> {
         let modules: Vec<String> = self.documents.iter().map(|doc| doc.path.clone()).collect();
         let text = self.facts();
 
-        // trace the facts for a host reading them without a turn
         if tracing::enabled!(tracing::Level::TRACE) {
             let json = serde_json::Value::String(text.clone()).to_string();
             tracing::trace!(%source, facts = %json, "survey facts");
@@ -53,9 +40,6 @@ impl Prepared<'_> {
         emery_sdk::survey::surfaces(ctx, docs, &facts, |answer| self.check(answer)).await
     }
 
-    // The documents in path order, each with its outline: its length, each
-    // heading at its line, and what its body holds. The message's own nouns are
-    // the SDK's — module, surface — so the facts say first what each is here.
     fn facts(&self) -> String {
         let mut text = String::from(
             "This source is a documentation tree. In this message a module is one of its \
@@ -97,9 +81,6 @@ impl Prepared<'_> {
         text
     }
 
-    // What the tree alone can hold the answer to, past the SDK's own checks:
-    // every document is a subject's entry or listed unreached, and no two
-    // subjects anchor at one line.
     fn check(&self, answer: &Inventory) -> Vec<String> {
         let mut findings = Vec::new();
 
@@ -132,10 +113,7 @@ impl Prepared<'_> {
         findings
     }
 
-    // Derives each named subject's span and lead from its accepted anchor in
-    // document and line order.
     pub fn subjects(&self, inventory: &Inventory) -> Vec<Subject> {
-        // the accepted anchors by document, each at its start line
         let mut by_doc: BTreeMap<&str, Vec<(u32, &Surface)>> = BTreeMap::new();
         for surface in &inventory.surfaces {
             let Ok(anchor) = surface.anchor() else { continue };
@@ -173,9 +151,6 @@ impl Prepared<'_> {
         subjects
     }
 
-    // The lead of each subject: the stem alone where it is the one subject
-    // under its stem, else the stem and the first slug candidate no other
-    // subject under the stem has taken.
     fn leads(&self, subjects: &mut [Subject]) {
         let mut under: BTreeMap<String, usize> = BTreeMap::new();
         for subject in subjects.iter() {
@@ -215,7 +190,6 @@ impl Prepared<'_> {
     }
 }
 
-// A heading or an opening line, cut to one line of the outline.
 fn clipped(text: &str) -> String {
     const WIDTH: usize = 96;
     let text = text.split_whitespace().collect::<Vec<_>>().join(" ");

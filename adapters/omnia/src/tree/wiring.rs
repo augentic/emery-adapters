@@ -11,8 +11,6 @@ use super::{
     uncommented,
 };
 
-// A table of `common` with the list and the rung its constants are spelled
-// into, in full under `prefix`.
 struct Table {
     path: &'static str,
     prefix: &'static str,
@@ -38,15 +36,10 @@ const TOPIC: Table = Table {
 };
 
 impl Tree<'_> {
-    // Names every constant of the two tables its lists disagree with, and
-    // every list statement naming no constant: a route's constant stands in
-    // the route list and the route rung; a consumed topic's in the topic list
-    // and the messaging rung; a topic a module alone names is published and
-    // stands in neither.
     pub(super) fn unwired_tables(&self) -> Result<Option<String>, Error> {
         let mut lines = Vec::new();
 
-        // the path table: every constant in the route list and the route rung
+        // http route constants
         let routes = self.code(HTTP.list)?;
         let rung = self.code(HTTP.rung)?;
         for (number, name) in self.constants(HTTP.path)? {
@@ -65,8 +58,7 @@ impl Tree<'_> {
             }
         }
 
-        // the topic table: a consumed constant in the topic list and the
-        // messaging rung, a published one in a stem's module and neither
+        // topic constants
         let topics = self.code(TOPIC.list)?;
         let rung = self.code(TOPIC.rung)?;
         for (number, name) in self.constants(TOPIC.path)? {
@@ -98,7 +90,7 @@ impl Tree<'_> {
             lines.push(format!("{}:{number}: {finding}", TOPIC.path));
         }
 
-        // every statement of a list over a constant of its table
+        // router statements
         for (table, text) in [(&HTTP, &routes), (&TOPIC, &topics)] {
             for (at, statement) in calls(text, ".route(") {
                 if !statement.contains(table.prefix) {
@@ -126,15 +118,9 @@ impl Tree<'_> {
         )))
     }
 
-    // Names every handler under a stem's `src/` — a `pub async fn` whose
-    // signature takes a `Context` — that no `.route(..)` statement of the two
-    // lists reaches: handed to the route function or consumer the statement
-    // calls, or to `handle_with` by a route function of a stem the statement
-    // calls with no argument.
     pub(super) fn unlisted_handlers(&self) -> Result<Option<String>, Error> {
         let lists = [self.code(HTTP.list)?, self.code(TOPIC.list)?];
 
-        // what the lists hand, then what a route function they call hands
         let mut reached: BTreeSet<String> = lists
             .iter()
             .flat_map(|text| calls(text, ".route("))
@@ -173,10 +159,6 @@ impl Tree<'_> {
         )))
     }
 
-    // Names every `pub const` of the catalog beyond the template's own that no
-    // module outside `common` and no root source spells, each
-    // `<path>:<line>: <what>`: a key nothing reads is a setting the deployment
-    // supplies and the program never consults.
     pub(super) fn unread_settings(&self) -> Result<Option<String>, Error> {
         let declared = self.constants(CATALOG)?;
         if declared.is_empty() {
@@ -216,9 +198,6 @@ impl Tree<'_> {
 }
 
 impl Module {
-    // Every route function `self.code` declares with the handler it hands
-    // `handle_with` as the call's second argument, each qualified as
-    // `(<fn>, <handler>)`.
     fn route_fns(&self) -> Vec<(String, String)> {
         calls(&self.code, "handle_with(")
             .into_iter()
@@ -230,8 +209,6 @@ impl Module {
             .collect()
     }
 
-    // Every handler `self.code` declares, each its 1-based line and name: a
-    // `pub async fn` whose signature, read to its body, takes a `Context<`.
     fn handlers(&self) -> Vec<(usize, &str)> {
         let mut found = Vec::new();
         let mut offset = 0;
@@ -250,9 +227,6 @@ impl Module {
     }
 }
 
-// Every call of `callee` in `text` — the spelling with its opening
-// parenthesis, `.route(` — as the offset it starts at and its argument text,
-// parentheses balanced, so a call spread over lines is one.
 fn calls<'t>(text: &'t str, callee: &str) -> Vec<(usize, &'t str)> {
     let mut found = Vec::new();
     let mut from = 0;
@@ -281,12 +255,7 @@ fn calls<'t>(text: &'t str, callee: &str) -> Vec<(usize, &'t str)> {
     found
 }
 
-// The path a `.route(..)` statement hands, read from the call its second
-// argument makes: the call's first argument where it has one,
-// `get(<handler>)`, `consume(<handler>)`, `consume_with(<handler>,
-// <decode>)`; the callee itself where it has none, a route function of a
-// stem, `orders::placing::place_order_route()`. A statement in another
-// shape hands none.
+// Extracts the handler from `.route(path, get(handler))` or `.route(path, route_fn())`.
 fn handed(statement: &str) -> Option<&str> {
     let call = arguments(statement).get(1)?.trim();
     let open = call.find('(')?;
@@ -298,8 +267,6 @@ fn handed(statement: &str) -> Option<&str> {
     }
 }
 
-// The name of the last `pub fn` declared in `head`, the one a call there
-// sits in.
 fn enclosing_pub_fn(head: &str) -> Option<&str> {
     head.lines().rev().find_map(|line| {
         let rest = line.trim_start().strip_prefix("pub fn ")?;
@@ -308,7 +275,6 @@ fn enclosing_pub_fn(head: &str) -> Option<&str> {
     })
 }
 
-// `text` split at the commas no parenthesis, bracket, or brace encloses.
 fn arguments(text: &str) -> Vec<&str> {
     let mut parts = Vec::new();
     let mut depth = 0usize;
@@ -328,8 +294,6 @@ fn arguments(text: &str) -> Vec<&str> {
     parts
 }
 
-// A `::`-separated path of two or more identifiers,
-// `orders::placing::place_order`; a text in another shape is none.
 fn qualified(path: &str) -> Option<&str> {
     let path = path.trim();
     let mut segments = path.split("::");
@@ -338,9 +302,6 @@ fn qualified(path: &str) -> Option<&str> {
     (is_ident(first) && is_ident(second) && segments.all(is_ident)).then_some(path)
 }
 
-// `path` qualified under `module` (`orders::placing`): a bare identifier
-// sits in `module`, a `crate::` path in its stem, and a qualified path
-// stands as it is.
 fn qualify(module: &str, path: &str) -> Option<String> {
     let path = path.trim();
     if is_ident(path) {

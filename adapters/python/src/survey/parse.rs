@@ -1,13 +1,4 @@
-//! Reads one module into the facts the survey decides from.
-//!
-//! A `Module` is the SDK's [`code::Module`] with what Python alone declares
-//! — the `__main__` guard, the tests, `__all__` — filled by the parser
-//! confined to `walk`, so the rules in `surface` never name a syntax-tree
-//! type and a parser swap touches one file. A module the parser cannot read
-//! is still a `Module`, read as far as the parser got with `parsed` false,
-//! so one broken file never fails a run. Where each import leads is settled
-//! once the tree is read (`Resolver::settle`) and carried on the import. A
-//! test module is read the same way, for the behaviours its tests state.
+//! Parses one Python module into the SDK's code model.
 
 use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
@@ -20,16 +11,12 @@ use super::DIALECT;
 
 mod walk;
 
-// Bases that declare data, beside an enumeration.
 const DATA_BASES: &[&str] = &["TypedDict", "NamedTuple", "Protocol"];
 
-// A type the caller copies, not an export it calls.
 pub fn data_bases(bases: &[String]) -> bool {
     DIALECT.enumerates(bases) || bases.iter().any(|base| DATA_BASES.contains(&base.as_str()))
 }
 
-// A dunder method is a dataclass's or a model's, not a caller's. An empty
-// body declares nothing either way.
 pub fn declares_data(class: &ClassDecl) -> bool {
     data_bases(&class.bases)
         || (!class.members.is_empty()
@@ -46,11 +33,8 @@ pub fn declares_data(class: &ClassDecl) -> bool {
 #[derive(Debug, Default)]
 pub struct Module {
     core: code::Module,
-    // The module-level `if __name__ == "__main__":`, if any.
     pub main_guard: Option<Lines>,
-    // Every `def test_*`, at module level or in a class.
     tests: Vec<TestDef>,
-    // `__all__`, where declared.
     all: Option<Vec<String>>,
 }
 
@@ -69,7 +53,6 @@ impl DerefMut for Module {
 }
 
 impl Module {
-    // `path` is root-relative. Imports are the resolver's to settle.
     pub fn parse(path: &str, text: String) -> Self {
         let mut module = walk::read(path, &text);
         module.settle_exports();
@@ -81,11 +64,6 @@ impl Module {
         module
     }
 
-    // The exports are the names `__all__` lists, else every module-level
-    // declaration not led by an underscore. The re-exports are:
-    // - a listed name the module imports rather than declares
-    // - every relative `from` import of an `__init__.py`
-    // - a star import of an `__init__.py`, which re-exports everything
     fn settle_exports(&mut self) {
         let is_init = self.is_init();
         let Self { core, all, .. } = self;
@@ -104,7 +82,6 @@ impl Module {
             exports.retain(|export| !export.name.starts_with('_'));
         }
 
-        // group the re-exports by specifier, in first-seen order
         let mut grouped: Vec<Reexport> = Vec::new();
         for import in imports.iter().filter(|import| !import.local.is_empty()) {
             let relative = import.specifier.starts_with('.');
@@ -141,7 +118,6 @@ impl Module {
         }
         *reexports = grouped;
 
-        // mark the declared types and classes exported
         let exported: BTreeSet<&str> = exports.iter().map(|export| export.name.as_str()).collect();
         for decl in types {
             decl.exported = exported.contains(decl.name.as_str());
@@ -155,8 +131,6 @@ impl Module {
         self.path.ends_with("__init__.py")
     }
 
-    // Each test by its docstring's first line, else its name spelled as
-    // words, under its class's name less `Test`.
     pub fn statements(&self) -> Vec<Statement> {
         self.tests
             .iter()
@@ -186,7 +160,6 @@ impl Module {
 struct TestDef {
     name: String,
     class: Option<String>,
-    // The first line of the docstring, if any.
     doc: Option<String>,
     parametrized: bool,
     lines: Lines,
