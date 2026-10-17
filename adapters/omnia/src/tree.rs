@@ -1,68 +1,123 @@
 //! Holds the lent tree to the layout's rules before a build's report or a
 //! verification's verdict is accepted.
 //!
-//! Each rule answers the findings the turn repairs, one per rule with every
-//! line named, so a report or a verdict is refused once with everything the
-//! tree breaks.
+//! [`Tree::read`] loads every stem module once and checks the tree in memory,
+//! answering one finding per violated rule with every offending line named so
+//! the turn repairs everything in one round.
 
 mod misses;
 mod simulated;
 mod wiring;
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use emery_sdk::{Error, bad_request, server_error};
+use emery_sdk::target::Report;
+use emery_sdk::{Error, bad_request, server_error, tracing};
 use omnia_template::Manifest;
 
-// The shared crate, whose tables declare a constant and publish to none.
+// The root ignore file, which the engine lays a one-line copy of at a laid
+// repository's root commit.
+const IGNORE: &str = ".gitignore";
+
+// The shared crate, whose tables declare constants and publish to none.
 const COMMON: &str = "crates/common/src/";
+
+// The forbidden `start` crate directory: the seed and the host are `start`.
+const START: &str = "crates/start";
+const START_PREFIX: &str = "crates/start/";
 
 // The configuration catalog, one `pub const` per key the deployment supplies.
 const CATALOG: &str = "crates/common/src/config.rs";
 
 // The most differing lines a finding asks an edit to put back; past it the
 // file is laid whole.
-const LISTED: usize = 24;
+const MAX_DIFF_LINES: usize = 24;
+
+// One `.rs` module under `crates/<stem>/src/`, with comments stripped and line
+// numbers preserved.
+struct Module {
+    path: String,
+    name: String,
+    code: String,
+}
+
+impl Module {
+    fn read(root: &Path, file: &Path) -> Result<Self, Error> {
+        let path = relative(root, file);
+        let name = module_path(&path);
+        let code = uncommented(&read(file)?);
+        Ok(Self { path, name, code })
+    }
+
+    fn is_common(&self) -> bool {
+        self.path.starts_with(COMMON)
+    }
+
+    fn is_start(&self) -> bool {
+        self.path.starts_with(START_PREFIX)
+    }
+}
 
 pub struct Tree<'a> {
     root: &'a Path,
+    modules: Vec<Module>,
 }
 
 impl<'a> Tree<'a> {
-    pub const fn new(root: &'a Path) -> Self {
-        Self { root }
+    pub fn read(root: &'a Path) -> Result<Self, Error> {
+        let mut modules = Vec::new();
+        for stem in entries(&root.join("crates"))? {
+            for file in sources(&stem.join("src"))? {
+                modules.push(Module::read(root, &file)?);
+            }
+        }
+        Ok(Self { root, modules })
+    }
+
+    pub fn check_build(&self, stems: &Stems) -> Result<Vec<String>, Error> {
+        let mut findings = Vec::new();
+        findings.extend(self.split_stems(stems)?);
+        findings.extend(self.check_common()?);
+        Ok(findings)
+    }
+
+    pub fn check_verify(&self) -> Result<Vec<String>, Error> {
+        let mut findings = self.static_drift()?;
+        findings.extend(self.check_common()?);
+        Ok(findings)
     }
 
     // The rules a build and a verify share: the root manifest outside its
     // lists, no simulated host, no miss answered empty, no response wrapper
-    // struct, the tables spelled into their lists, every handler listed,
+    // struct, the tables spelled into their lists, every handler listed, and
     // every setting read.
-    pub fn held(&self) -> Result<Vec<String>, Error> {
+    fn check_common(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
-        findings.extend(self.manifest()?);
-        findings.extend(self.simulated()?);
-        findings.extend(self.misses()?);
-        findings.extend(self.wrappers()?);
-        findings.extend(self.tables()?);
-        findings.extend(self.unlisted()?);
-        findings.extend(self.settings()?);
+        findings.extend(self.manifest_drift()?);
+        findings.extend(self.simulated_host()?);
+        findings.extend(self.empty_misses());
+        findings.extend(self.response_wrappers());
+        findings.extend(self.unwired_tables()?);
+        findings.extend(self.unlisted_handlers()?);
+        findings.extend(self.unread_settings()?);
         Ok(findings)
     }
 
-    // One finding naming every crate the turn laid under the head of a
-    // hyphenated stem of the slice, `crates/order/` for `order-items`: a
-    // stem is one word, so its crate is `crates/<stem>/` whole. A crate the
-    // tree held before the turn is an earlier slice's, and one emptied of
-    // its files is repaired, since `delete` leaves the directory.
-    pub fn stems(&self, stems: &Stems) -> Result<Vec<String>, Error> {
+    // Names every crate the turn laid under the head of a hyphenated stem of
+    // the slice, `crates/order/` for `order-items`: a stem is one word, so its
+    // crate is `crates/<stem>/` whole. A crate the tree had before the turn is
+    // an earlier slice's, and one emptied of its files is repaired, since
+    // `delete` leaves the directory.
+    fn split_stems(&self, stems: &Stems) -> Result<Option<String>, Error> {
         let mut lines = Vec::new();
         for dir in crates(self.root)? {
-            if dir == "common" || stems.held.contains(&dir) || stems.named.contains(&dir) {
+            if dir == "common" || stems.existing.contains(&dir) || stems.slice.contains(&dir) {
                 continue;
             }
-            let split = stems.named.iter().find(|stem| {
+            let split = stems.slice.iter().find(|stem| {
                 stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
             });
             if let Some(stem) = split {
@@ -74,23 +129,22 @@ impl<'a> Tree<'a> {
             }
         }
         if lines.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
-        Ok(vec![format!(
+        Ok(Some(format!(
             "a stem is one word and is never split at its hyphen into a crate and a part: lay \
              each module under the stem's own crate, `crates/<stem>/src/<part>.rs`, with the \
              stem's manifest and module list beside it, remove every file under the split \
              directory through `delete`, and put the stem's two lines in the root `Cargo.toml` \
              in place of the head's through `edit_files`:\n{}",
             lines.join("\n")
-        )])
+        )))
     }
 
-    // Every static file of the template that differs: the lines where an
-    // edit puts them back, the template's body whole for a file the tree
-    // lacks or rewrote past `LISTED` lines, since the lines alone cannot lay
-    // it.
-    pub fn statics(&self) -> Result<Vec<String>, Error> {
+    // Every static file of the template that differs: the lines where an edit
+    // puts them back, or the template's body whole for a file the tree lacks
+    // or rewrote past `MAX_DIFF_LINES` lines.
+    fn static_drift(&self) -> Result<Vec<String>, Error> {
         let drift = omnia_template::drift(self.root).map_err(|err| refusal(&err))?;
         let mut findings = Vec::new();
         for file in drift.files() {
@@ -101,7 +155,7 @@ impl<'a> Tree<'a> {
                     file.path,
                     template(file.path)?
                 )
-            } else if file.lines.len() > LISTED {
+            } else if file.lines.len() > MAX_DIFF_LINES {
                 format!(
                     "`{}` is a static file of the template and differs from it in {} lines; lay it \
                      whole through `write_files`, as the template spells it:\n{}",
@@ -123,12 +177,12 @@ impl<'a> Tree<'a> {
         Ok(findings)
     }
 
-    // The root manifest outside its two stem lists, the template's whole for
-    // a tree that lacks it.
-    fn manifest(&self) -> Result<Vec<String>, Error> {
+    // The root manifest outside its two stem lists, the template's whole for a
+    // tree that lacks it.
+    fn manifest_drift(&self) -> Result<Option<String>, Error> {
         let drift = Manifest::new(self.root).drift().map_err(|err| refusal(&err))?;
         if drift.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
         let finding = if self.lacks(Manifest::PATH) {
             format!(
@@ -145,7 +199,7 @@ impl<'a> Tree<'a> {
                 Manifest::PATH
             )
         };
-        Ok(vec![finding])
+        Ok(Some(finding))
     }
 
     fn lacks(&self, path: &str) -> bool {
@@ -155,45 +209,36 @@ impl<'a> Tree<'a> {
         )
     }
 
-    // The text at `path`, empty where the tree holds no file there.
-    fn text(&self, path: &str) -> Result<String, Error> {
+    // The uncommented text at `path`, empty where the tree holds no file there.
+    fn code(&self, path: &str) -> Result<String, Error> {
         let file = self.root.join(path);
-        if file.is_file() { read(&file) } else { Ok(String::new()) }
+        if file.is_file() { Ok(uncommented(&read(&file)?)) } else { Ok(String::new()) }
     }
 
     // Every `pub const` the table at `path` declares, each its 1-based line
     // and name; an absent table declares none.
     fn constants(&self, path: &str) -> Result<Vec<(usize, String)>, Error> {
-        let text = self.text(path)?;
-        Ok(pub_consts(&text).map(|(line, name)| (line, name.to_owned())).collect())
-    }
-
-    // Every `.rs` file under a stem's `src/`, its `tests/` unread.
-    fn modules(&self) -> Result<Vec<PathBuf>, Error> {
-        let mut files = Vec::new();
-        for stem in entries(&self.root.join("crates"))? {
-            files.extend(sources(&stem.join("src"))?);
+        let file = self.root.join(path);
+        if !file.is_file() {
+            return Ok(Vec::new());
         }
-        Ok(files)
-    }
-
-    fn relative(&self, file: &Path) -> String {
-        file.strip_prefix(self.root).unwrap_or(file).display().to_string()
+        let text = read(&file)?;
+        Ok(pub_consts(&text).map(|(line, name)| (line, name.to_owned())).collect())
     }
 }
 
-// The stems a slice builds and the crates the tree held before its turn, so
-// a crate the turn laid is told from one an earlier slice laid.
+// The stems a slice builds and the crate directories the tree already had
+// before its turn, so a crate the turn laid is told from an earlier slice's.
 pub struct Stems {
-    named: Vec<String>,
-    held: Vec<String>,
+    slice: BTreeSet<String>,
+    existing: BTreeSet<String>,
 }
 
 impl Stems {
     // The stem of every requirement heading in `spec`, the first segment of
-    // the subject's dotted id, beside the crates `root` holds now.
+    // the subject's dotted id, beside the crates `root` has before the turn.
     pub fn read(spec: &str, root: &Path) -> Result<Self, Error> {
-        let mut named: Vec<String> = Vec::new();
+        let mut slice = BTreeSet::new();
         for line in spec.lines() {
             let line = line.trim_start();
             if !line.starts_with('#') {
@@ -207,14 +252,41 @@ impl Stems {
                 continue;
             };
             let stem = subject.split('.').next().unwrap_or(subject);
-            if !stem.is_empty() && !named.iter().any(|named| named == stem) {
-                named.push(stem.to_owned());
+            if !stem.is_empty() {
+                slice.insert(stem.to_owned());
             }
         }
         Ok(Self {
-            named,
-            held: crates(root)?,
+            slice,
+            existing: crates(root)?.into_iter().collect(),
         })
+    }
+}
+
+// Overwrites a held `.gitignore` (such as the engine's root-commit `.emery/`
+// rule) with the template's, since `seed` only lays missing files.
+pub fn restore_ignore(root: &Path, slice: &str) -> Result<bool, Error> {
+    let body = template(IGNORE)?;
+    let path = root.join(IGNORE);
+    let current = match fs::symlink_metadata(&path) {
+        Ok(meta) if meta.is_file() => {
+            fs::read(&path).map_err(|err| server_error!("reading `{IGNORE}`: {err}"))?
+        }
+        Ok(_) => return Err(bad_request!("a directory or symbolic link stands at `{IGNORE}`")),
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
+        Err(err) => return Err(server_error!("reading `{IGNORE}`: {err}")),
+    };
+    if current == body.as_bytes() {
+        return Ok(false);
+    }
+    fs::write(&path, body).map_err(|err| server_error!("writing `{IGNORE}`: {err}"))?;
+    tracing::debug!(%slice, "the root ignore file put back as the template spells it");
+    Ok(true)
+}
+
+pub fn record_ignore(report: &mut Report) {
+    if let Err(at) = report.written.binary_search_by(|path| path.as_str().cmp(IGNORE)) {
+        report.written.insert(at, IGNORE.to_owned());
     }
 }
 
@@ -236,12 +308,69 @@ fn refusal(err: &omnia_template::Error) -> Error {
     }
 }
 
-// `text` with every comment line blanked and its newlines kept, so a
-// statement a doc comment spells is none and line numbers hold.
-fn code(text: &str) -> String {
-    text.split_inclusive('\n')
-        .map(|line| if line.trim_start().starts_with("//") { "\n" } else { line })
-        .collect()
+fn relative(root: &Path, file: &Path) -> String {
+    file.strip_prefix(root).unwrap_or(file).display().to_string()
+}
+
+// The Rust module path of a `.rs` file under `crates/<stem>/src/`,
+// `orders::reading` for `crates/orders/src/reading.rs`.
+fn module_path(path: &str) -> String {
+    let rest = path.strip_prefix("crates/").unwrap_or(path);
+    let rest = rest.strip_suffix(".rs").unwrap_or(rest);
+    let Some((stem, module)) = rest.split_once("/src/") else {
+        return rest.replace(['-', '/'], "_");
+    };
+    let stem = stem.replace('-', "_");
+    let module = module.strip_suffix("/mod").unwrap_or(module);
+    if module == "lib" { stem } else { format!("{stem}::{}", module.replace('/', "::")) }
+}
+
+// `text` with every `//` comment stripped and its newlines kept, so a
+// statement or keyword a comment spells is none and line numbers hold.
+fn uncommented(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let newline = line.ends_with('\n');
+        let content = line.strip_suffix('\n').unwrap_or(line);
+        let code = match comment_start(content) {
+            Some(0) => "",
+            Some(at) => content[..at].trim_end(),
+            None => content,
+        };
+        out.push_str(code);
+        if newline {
+            out.push('\n');
+        }
+    }
+    out
+}
+
+// The byte offset where a `//` comment begins outside a string literal.
+fn comment_start(line: &str) -> Option<usize> {
+    if line.trim_start().starts_with("//") {
+        return Some(0);
+    }
+    if !line.contains("//") {
+        return None;
+    }
+    let mut in_string = false;
+    let mut escaped = false;
+    for (at, ch) in line.char_indices() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+        } else if ch == '"' {
+            in_string = true;
+        } else if line[at..].starts_with("//") {
+            return Some(at);
+        }
+    }
+    None
 }
 
 // Whether `text` spells `word` whole: no identifier character continues it
@@ -255,8 +384,8 @@ fn spells(text: &str, word: &str) -> bool {
     while let Some(at) = text[from..].find(word) {
         let start = from + at;
         let end = start + word.len();
-        let before = text[..start].chars().next_back().is_none_or(|ch| !identifier(ch));
-        let after = text[end..].chars().next().is_none_or(|ch| !identifier(ch));
+        let before = text[..start].chars().next_back().is_none_or(|ch| !is_ident_char(ch));
+        let after = text[end..].chars().next().is_none_or(|ch| !is_ident_char(ch));
         if before && after {
             return true;
         }
@@ -265,12 +394,12 @@ fn spells(text: &str, word: &str) -> bool {
     false
 }
 
-fn identifier(ch: char) -> bool {
+fn is_ident_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
-fn ident(name: &str) -> bool {
-    !name.is_empty() && name.chars().all(identifier)
+fn is_ident(name: &str) -> bool {
+    !name.is_empty() && name.chars().all(is_ident_char)
 }
 
 // `line` past any leading visibility (`pub` or `pub(..)`).
@@ -287,7 +416,7 @@ fn strip_vis(line: &str) -> &str {
 fn pub_consts(text: &str) -> impl Iterator<Item = (usize, &str)> {
     text.lines().enumerate().filter_map(|(index, line)| {
         let rest = line.trim_start().strip_prefix("pub const ")?;
-        let name = rest.split(|ch: char| !identifier(ch)).next()?;
+        let name = rest.split(|ch: char| !is_ident_char(ch)).next()?;
         (!name.is_empty()).then_some((index + 1, name))
     })
 }
@@ -314,7 +443,7 @@ fn crates(root: &Path) -> Result<Vec<String>, Error> {
     for path in entries(&root.join("crates"))? {
         let meta = fs::symlink_metadata(&path)
             .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-        if !meta.is_dir() || !occupied(&path)? {
+        if !meta.is_dir() || !has_files(&path)? {
             continue;
         }
         if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
@@ -325,8 +454,20 @@ fn crates(root: &Path) -> Result<Vec<String>, Error> {
 }
 
 // Whether a regular file lies beneath `dir`, symbolic links left unfollowed.
-fn occupied(dir: &Path) -> Result<bool, Error> {
-    Ok(!files(dir)?.is_empty())
+fn has_files(dir: &Path) -> Result<bool, Error> {
+    let mut pending = vec![dir.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_file() {
+                return Ok(true);
+            } else if meta.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+    Ok(false)
 }
 
 // Every regular file beneath `dir`, symbolic links left unfollowed, sorted.

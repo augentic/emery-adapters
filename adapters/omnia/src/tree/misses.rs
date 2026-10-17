@@ -1,10 +1,7 @@
-//! Holds every constant-keyed `StateStore::get` to a cache-aside load: a
-//! table read under one key fetches and stores the table on `Ok(None)` and
-//! never answers the miss as an empty collection.
+//! Holds every constant-keyed `StateStore::get` to a cache-aside load and
+//! every HTTP response `Deserialize` struct to the wire's root.
 
-use emery_sdk::Error;
-
-use super::{Tree, code, read, spells, strip_vis};
+use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
 
 // The empty collections a miss is answered as, each spelled whole: behind a
 // `return Ok(..)`, as the body of an arm naming `None`, bare or in `Ok(..)`,
@@ -34,48 +31,108 @@ const DEFAULTED: &[&str] = &[
 const MISS_WINDOW: usize = 6;
 
 impl Tree<'_> {
-    // One finding naming every `StateStore::get` under a constant key whose
-    // miss is answered empty within the function that reads, its hit arms
-    // set aside, each `<path>:<line>: <what>` at the line that answers it: a
-    // table read under one key is loaded on a miss, so a read answering an
-    // empty collection there has laid the cache and lost the table. A read
-    // under a key built from the input is a lookup, whose miss is its own,
-    // and no finding.
-    pub(super) fn misses(&self) -> Result<Vec<String>, Error> {
-        let mut lines = Vec::new();
-        for file in self.modules()? {
-            let text = code(&read(&file)?);
-            let path = self.relative(&file);
-            let all: Vec<&str> = text.lines().collect();
-            for (index, line) in all.iter().enumerate() {
-                if !constant_keyed(line) {
-                    continue;
-                }
-                let end = function_end(&all, index);
-                for at in answering(&all, index, end) {
-                    if let Some((spelling, what)) = empty(all[at]) {
-                        lines.push(format!(
-                            "{path}:{}: {what} (`{spelling}`) after the read at line {}",
-                            at + 1,
-                            index + 1
-                        ));
-                    }
-                }
-            }
-        }
+    // Names every `StateStore::get` under a constant key whose miss is
+    // answered empty within the function that reads, its hit arms set aside,
+    // each `<path>:<line>: <what>` at the line that answers it: a table read
+    // under one key is loaded on a miss, so a read answering an empty
+    // collection there has laid the cache and lost the table. A read under a
+    // key built from the input is a lookup, whose miss is its own, and no
+    // finding.
+    pub(super) fn empty_misses(&self) -> Option<String> {
+        let mut lines: Vec<String> = self.modules.iter().flat_map(Module::empty_misses).collect();
         if lines.is_empty() {
-            return Ok(Vec::new());
+            return None;
         }
         lines.sort();
         lines.dedup();
-        Ok(vec![format!(
+        Some(format!(
             "a table read from the store under one key answers empty on a miss, so the table is \
              never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
              design spells the call, stores it under the same key with a TTL, and answers what it \
              fetched, never an empty collection; repair each read named through `edit_files`, \
              laying the fetch in the same function:\n{}",
             lines.join("\n")
-        )])
+        ))
+    }
+
+    // Names every `Deserialize` struct under a stem's `src/` whose body holds
+    // a single `data` field, each `<path>:<line>: <what>`: a client's `.data`
+    // property wrapped around the response body the wire carries at its root.
+    pub(super) fn response_wrappers(&self) -> Option<String> {
+        let mut lines = Vec::new();
+        for module in &self.modules {
+            if module.is_common() || module.is_start() {
+                continue;
+            }
+            for (number, name) in module.response_wrappers() {
+                lines.push(format!(
+                    "{}:{number}: response wrapper struct `{name}` wraps a single `data` field",
+                    module.path
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a struct wraps an HTTP response in a single `data` field, which is the source's \
+             HTTP client property (`response.data`) and never a field on the wire: remove each \
+             wrapper struct named through `edit_files` and deserialize `response.body()` \
+             directly into the body's own shape, a top-level `Vec<T>` for a JSON array or a \
+             struct with the body's fields at its root:\n{}",
+            lines.join("\n")
+        ))
+    }
+}
+
+impl Module {
+    fn empty_misses(&self) -> Vec<String> {
+        let all: Vec<&str> = self.code.lines().collect();
+        let mut lines = Vec::new();
+        for (index, line) in all.iter().enumerate() {
+            if !constant_keyed(line) {
+                continue;
+            }
+            let end = function_end(&all, index);
+            for at in answering(&all, index, end) {
+                if let Some((spelling, what)) = empty(all[at]) {
+                    lines.push(format!(
+                        "{}:{}: {what} (`{spelling}`) after the read at line {}",
+                        self.path,
+                        at + 1,
+                        index + 1
+                    ));
+                }
+            }
+        }
+        lines
+    }
+
+    // Every `Deserialize` struct `self.code` declares whose body holds a
+    // single `data` field, each its 1-based line and name.
+    fn response_wrappers(&self) -> Vec<(usize, &str)> {
+        let lines: Vec<&str> = self.code.lines().collect();
+        let mut found = Vec::new();
+        for (index, line) in lines.iter().enumerate() {
+            let Some(name) = opens_struct(line) else { continue };
+            if !derives_deserialize(&lines, index) {
+                continue;
+            }
+            let Some(end) = lines[index + 1..]
+                .iter()
+                .position(|line| line.trim_start().starts_with('}'))
+                .map(|offset| index + 1 + offset)
+            else {
+                continue;
+            };
+            let fields: Vec<&str> =
+                lines[index + 1..end].iter().filter_map(|line| field_name(line)).collect();
+            if fields == ["data"] {
+                found.push((index + 1, name));
+            }
+        }
+        found
     }
 }
 
@@ -191,4 +248,36 @@ fn constant_keyed(line: &str) -> bool {
     !name.is_empty()
         && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
         && name.chars().any(|ch| ch.is_ascii_uppercase())
+}
+
+fn opens_struct(line: &str) -> Option<&str> {
+    let rest = strip_vis(line).strip_prefix("struct ")?;
+    let name = rest.split(|ch: char| !is_ident_char(ch)).next()?;
+    (!name.is_empty() && line.trim_end().ends_with('{')).then_some(name)
+}
+
+fn derives_deserialize(lines: &[&str], index: usize) -> bool {
+    for line in lines[..index].iter().rev() {
+        let text = line.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if text.ends_with('}') || text.ends_with(';') || text.ends_with('{') {
+            return false;
+        }
+        if spells(text, "Deserialize") {
+            return true;
+        }
+    }
+    false
+}
+
+fn field_name(line: &str) -> Option<&str> {
+    let rest = line.trim_start();
+    if rest.is_empty() || rest.starts_with('#') {
+        return None;
+    }
+    let (name, _) = strip_vis(rest).split_once(':')?;
+    let name = name.trim();
+    is_ident(name).then_some(name)
 }

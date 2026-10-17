@@ -2,10 +2,13 @@
 //! rungs, the configuration catalog, and every stem's handlers to the guest's
 //! wiring.
 
+use std::collections::BTreeSet;
+
 use emery_sdk::Error;
 
 use super::{
-    CATALOG, COMMON, Tree, code, ident, identifier, pub_consts, read, sources, spells, template,
+    CATALOG, Module, Tree, is_ident, is_ident_char, pub_consts, read, sources, spells, template,
+    uncommented,
 };
 
 // A table of `common` with the list and the rung its constants are spelled
@@ -34,21 +37,18 @@ const TOPIC: Table = Table {
     entries: "TOPICS",
 };
 
-// The two lists whose `.route(..)` statements reach a handler.
-const LISTS: &[&str] = &["src/routes.rs", "src/messaging.rs"];
-
 impl Tree<'_> {
-    // One finding naming every constant of the two tables its lists
-    // disagree with, and every list statement naming no constant: a route's
-    // constant stands in the route list and the route rung; a consumed
-    // topic's in the topic list and the messaging rung; a topic a module
-    // alone names is published and stands in neither.
-    pub(super) fn tables(&self) -> Result<Vec<String>, Error> {
+    // Names every constant of the two tables its lists disagree with, and
+    // every list statement naming no constant: a route's constant stands in
+    // the route list and the route rung; a consumed topic's in the topic list
+    // and the messaging rung; a topic a module alone names is published and
+    // stands in neither.
+    pub(super) fn unwired_tables(&self) -> Result<Option<String>, Error> {
         let mut lines = Vec::new();
 
         // the path table: every constant in the route list and the route rung
-        let routes = code(&self.text(HTTP.list)?);
-        let rung = code(&self.text(HTTP.rung)?);
+        let routes = self.code(HTTP.list)?;
+        let rung = self.code(HTTP.rung)?;
         for (number, name) in self.constants(HTTP.path)? {
             let qualified = format!("{}{name}", HTTP.prefix);
             if !spells(&routes, &qualified) {
@@ -67,18 +67,9 @@ impl Tree<'_> {
 
         // the topic table: a consumed constant in the topic list and the
         // messaging rung, a published one in a stem's module and neither
-        let topics = code(&self.text(TOPIC.list)?);
-        let rung = code(&self.text(TOPIC.rung)?);
-        let constants = self.constants(TOPIC.path)?;
-        let mut modules = Vec::new();
-        if !constants.is_empty() {
-            for file in self.modules()? {
-                if !self.relative(&file).starts_with(COMMON) {
-                    modules.push(code(&read(&file)?));
-                }
-            }
-        }
-        for (number, name) in constants {
+        let topics = self.code(TOPIC.list)?;
+        let rung = self.code(TOPIC.rung)?;
+        for (number, name) in self.constants(TOPIC.path)? {
             let qualified = format!("{}{name}", TOPIC.prefix);
             let finding = match (spells(&topics, &qualified), spells(&rung, &qualified)) {
                 (true, true) => continue,
@@ -91,7 +82,14 @@ impl Tree<'_> {
                      statement of `{}`",
                     TOPIC.entries, TOPIC.rung, TOPIC.list
                 ),
-                (false, false) if modules.iter().any(|text| spells(text, &name)) => continue,
+                (false, false)
+                    if self
+                        .modules
+                        .iter()
+                        .any(|module| !module.is_common() && spells(&module.code, &name)) =>
+                {
+                    continue;
+                }
                 (false, false) => format!(
                     "topic `{name}` is consumed by no statement of `{}` and published by no module",
                     TOPIC.list
@@ -114,10 +112,10 @@ impl Tree<'_> {
         }
 
         if lines.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
         lines.sort();
-        Ok(vec![format!(
+        Ok(Some(format!(
             "a table and its lists disagree: a route's constant is named by one statement of \
              `src/routes.rs` and one entry of `ROUTES` in `tests/routes.rs`, a consumed topic's \
              by one statement of `src/messaging.rs` and one entry of `TOPICS` in \
@@ -125,99 +123,86 @@ impl Tree<'_> {
              neither list; add the missing line at the end of its list through `edit_files`, \
              remove an entry nothing consumes, and rewrite no other line:\n{}",
             lines.join("\n")
-        )])
+        )))
     }
 
-    // One finding naming every handler under a stem's `src/` — a `pub async
-    // fn` whose signature takes a `Context` — that no `.route(..)` statement
-    // of the two lists reaches: handed to the route function or consumer the
-    // statement calls, or to `handle_with` by a route function of a stem the
-    // statement calls with no argument.
-    pub(super) fn unlisted(&self) -> Result<Vec<String>, Error> {
-        let mut lists = Vec::new();
-        for list in LISTS {
-            let path = self.root.join(list);
-            if path.is_file() {
-                lists.push(code(&read(&path)?));
-            }
-        }
-        let mut modules = Vec::new();
-        for file in self.modules()? {
-            let path = self.relative(&file);
-            if let Some(module) = module_path(&path) {
-                modules.push((path, module, code(&read(&file)?)));
-            }
-        }
+    // Names every handler under a stem's `src/` — a `pub async fn` whose
+    // signature takes a `Context` — that no `.route(..)` statement of the two
+    // lists reaches: handed to the route function or consumer the statement
+    // calls, or to `handle_with` by a route function of a stem the statement
+    // calls with no argument.
+    pub(super) fn unlisted_handlers(&self) -> Result<Option<String>, Error> {
+        let lists = [self.code(HTTP.list)?, self.code(TOPIC.list)?];
 
         // what the lists hand, then what a route function they call hands
-        let mut reached: Vec<String> = lists
+        let mut reached: BTreeSet<String> = lists
             .iter()
             .flat_map(|text| calls(text, ".route("))
             .filter_map(|(_, statement)| handed(statement).map(str::to_owned))
             .collect();
-        for (_, module, text) in &modules {
-            for (route, handler) in constructed(module, text) {
-                if reached.contains(&route) && !reached.contains(&handler) {
-                    reached.push(handler);
+        for module in &self.modules {
+            for (route, handler) in module.route_fns() {
+                if reached.contains(&route) {
+                    reached.insert(handler);
                 }
             }
         }
 
         let mut lines = Vec::new();
-        for (path, module, text) in &modules {
-            for (number, name) in handlers(text) {
-                let full = format!("{module}::{name}");
+        for module in &self.modules {
+            for (number, name) in module.handlers() {
+                let full = format!("{}::{name}", module.name);
                 if !reached.contains(&full) {
                     lines.push(format!(
-                        "{path}:{number}: handler `{name}` is reached by no list statement"
+                        "{}:{number}: handler `{name}` is reached by no list statement",
+                        module.path
                     ));
                 }
             }
         }
         if lines.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
         lines.sort();
-        Ok(vec![format!(
+        Ok(Some(format!(
             "a handler is reached by no `.route(..)` statement of `src/routes.rs` or \
              `src/messaging.rs`, so the host never runs it; list it under the route or topic its \
              requirement states, or, where it is a helper and no handler, hand it the provider \
              rather than the `Context`:\n{}",
             lines.join("\n")
-        )])
+        )))
     }
 
-    // One finding naming every `pub const` of the catalog beyond the
-    // template's own that no module outside `common` and no root source
-    // spells, each `<path>:<line>: <what>`: a key nothing reads is a setting
-    // the deployment supplies and the program never consults.
-    pub(super) fn settings(&self) -> Result<Vec<String>, Error> {
+    // Names every `pub const` of the catalog beyond the template's own that no
+    // module outside `common` and no root source spells, each
+    // `<path>:<line>: <what>`: a key nothing reads is a setting the deployment
+    // supplies and the program never consults.
+    pub(super) fn unread_settings(&self) -> Result<Option<String>, Error> {
         let declared = self.constants(CATALOG)?;
         if declared.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
-        let layout: Vec<String> =
-            pub_consts(template(CATALOG)?).map(|(_, name)| name.to_owned()).collect();
-        let mut readers = Vec::new();
-        for file in self.modules()? {
-            if !self.relative(&file).starts_with(COMMON) {
-                readers.push(code(&read(&file)?));
-            }
-        }
+        let layout: BTreeSet<&str> = pub_consts(template(CATALOG)?).map(|(_, name)| name).collect();
+        let mut root_sources = Vec::new();
         for file in sources(&self.root.join("src"))? {
-            readers.push(code(&read(&file)?));
+            root_sources.push(uncommented(&read(&file)?));
         }
         let mut lines = Vec::new();
         for (number, name) in declared {
-            if layout.contains(&name) || readers.iter().any(|text| spells(text, &name)) {
+            let read_by_module = self
+                .modules
+                .iter()
+                .any(|module| !module.is_common() && spells(&module.code, &name));
+            let read_by_root = root_sources.iter().any(|text| spells(text, &name));
+            if layout.contains(name.as_str()) || read_by_module || read_by_root {
                 continue;
             }
             lines.push(format!("{CATALOG}:{number}: setting `{name}` is read by no module"));
         }
         if lines.is_empty() {
-            return Ok(Vec::new());
+            return Ok(None);
         }
-        Ok(vec![format!(
+        Ok(Some(format!(
             "a setting of the catalog is read by no module, so a value the deployment supplies \
              under it changes nothing: a key is declared by the slice whose handler reads it \
              through `Config::get` where the behaviour runs, so read each setting named where \
@@ -226,7 +211,42 @@ impl Tree<'_> {
              remove its constant and its doc comment from the catalog through \
              `edit_files`:\n{}",
             lines.join("\n")
-        )])
+        )))
+    }
+}
+
+impl Module {
+    // Every route function `self.code` declares with the handler it hands
+    // `handle_with` as the call's second argument, each qualified as
+    // `(<fn>, <handler>)`.
+    fn route_fns(&self) -> Vec<(String, String)> {
+        calls(&self.code, "handle_with(")
+            .into_iter()
+            .filter_map(|(at, inner)| {
+                let route = enclosing_pub_fn(&self.code[..at])?;
+                let handler = qualify(&self.name, arguments(inner).get(1)?)?;
+                Some((format!("{}::{route}", self.name), handler))
+            })
+            .collect()
+    }
+
+    // Every handler `self.code` declares, each its 1-based line and name: a
+    // `pub async fn` whose signature, read to its body, takes a `Context<`.
+    fn handlers(&self) -> Vec<(usize, &str)> {
+        let mut found = Vec::new();
+        let mut offset = 0;
+        for (index, raw) in self.code.split_inclusive('\n').enumerate() {
+            if let Some(rest) = raw.trim_start().strip_prefix("pub async fn ") {
+                let name = rest.split(|ch: char| !is_ident_char(ch)).next().unwrap_or_default();
+                let head = &self.code[offset..];
+                let signature = head.find('{').map_or(head, |body| &head[..body]);
+                if !name.is_empty() && signature.contains("Context<") {
+                    found.push((index + 1, name));
+                }
+            }
+            offset += raw.len();
+        }
+        found
     }
 }
 
@@ -278,26 +298,12 @@ fn handed(statement: &str) -> Option<&str> {
     }
 }
 
-// Every route function `text` declares in `module` with the handler it
-// hands `handle_with` as the call's second argument, each qualified as
-// `(<fn>, <handler>)`.
-fn constructed(module: &str, text: &str) -> Vec<(String, String)> {
-    calls(text, "handle_with(")
-        .into_iter()
-        .filter_map(|(at, inner)| {
-            let route = declared(&text[..at])?;
-            let handler = qualify(module, arguments(inner).get(1)?)?;
-            Some((format!("{module}::{route}"), handler))
-        })
-        .collect()
-}
-
 // The name of the last `pub fn` declared in `head`, the one a call there
 // sits in.
-fn declared(head: &str) -> Option<&str> {
+fn enclosing_pub_fn(head: &str) -> Option<&str> {
     head.lines().rev().find_map(|line| {
         let rest = line.trim_start().strip_prefix("pub fn ")?;
-        let name = rest.split(|ch: char| !identifier(ch)).next()?;
+        let name = rest.split(|ch: char| !is_ident_char(ch)).next()?;
         (!name.is_empty()).then_some(name)
     })
 }
@@ -322,20 +328,6 @@ fn arguments(text: &str) -> Vec<&str> {
     parts
 }
 
-// The Rust module path of a `.rs` file under `crates/<stem>/src/`,
-// `orders::reading` for `crates/orders/src/reading.rs`.
-fn module_path(path: &str) -> Option<String> {
-    let rest = path.strip_prefix("crates/")?.strip_suffix(".rs")?;
-    let (stem, module) = rest.split_once("/src/")?;
-    let stem = stem.replace('-', "_");
-    let module = module.strip_suffix("/mod").unwrap_or(module);
-    if module == "lib" {
-        Some(stem)
-    } else {
-        Some(format!("{stem}::{}", module.replace('/', "::")))
-    }
-}
-
 // A `::`-separated path of two or more identifiers,
 // `orders::placing::place_order`; a text in another shape is none.
 fn qualified(path: &str) -> Option<&str> {
@@ -343,7 +335,7 @@ fn qualified(path: &str) -> Option<&str> {
     let mut segments = path.split("::");
     let first = segments.next()?;
     let second = segments.next()?;
-    (ident(first) && ident(second) && segments.all(ident)).then_some(path)
+    (is_ident(first) && is_ident(second) && segments.all(is_ident)).then_some(path)
 }
 
 // `path` qualified under `module` (`orders::placing`): a bare identifier
@@ -351,7 +343,7 @@ fn qualified(path: &str) -> Option<&str> {
 // stands as it is.
 fn qualify(module: &str, path: &str) -> Option<String> {
     let path = path.trim();
-    if ident(path) {
+    if is_ident(path) {
         return Some(format!("{module}::{path}"));
     }
     if let Some(rest) = path.strip_prefix("crate::") {
@@ -360,23 +352,4 @@ fn qualify(module: &str, path: &str) -> Option<String> {
         return qualified(&full).map(str::to_owned);
     }
     qualified(path).map(str::to_owned)
-}
-
-// Every handler `text` declares, each its 1-based line and name: a `pub
-// async fn` whose signature, read to its body, takes a `Context<`.
-fn handlers(text: &str) -> Vec<(usize, &str)> {
-    let mut found = Vec::new();
-    let mut offset = 0;
-    for (index, raw) in text.split_inclusive('\n').enumerate() {
-        if let Some(rest) = raw.trim_start().strip_prefix("pub async fn ") {
-            let name = rest.split(|ch: char| !identifier(ch)).next().unwrap_or_default();
-            let head = &text[offset..];
-            let signature = head.find('{').map_or(head, |body| &head[..body]);
-            if !name.is_empty() && signature.contains("Context<") {
-                found.push((index + 1, name));
-            }
-        }
-        offset += raw.len();
-    }
-    found
 }
