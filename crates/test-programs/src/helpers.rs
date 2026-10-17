@@ -6,6 +6,7 @@ use serde_json::json;
 pub const KEY: &str = "source";
 
 /// The caller every driver dispatches through: a `Source` and a `Target` with no state.
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Caller;
 
 impl Source for Caller {}

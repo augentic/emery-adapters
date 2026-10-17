@@ -6,7 +6,7 @@
 use emery_sdk::survey::route::Spelling;
 use emery_sdk::survey::{ClassSyntax, Dialect};
 
-pub(super) static DIALECT: Dialect = Dialect {
+pub static DIALECT: Dialect = Dialect {
     self_name: "this",
     generic_stems: &["index", "main"],
     structural: &[

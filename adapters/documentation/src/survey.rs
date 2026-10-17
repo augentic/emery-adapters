@@ -20,8 +20,8 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> 
             directories(prepared.input)
         }
         Preparation::Workspace(prepared) => {
-            let inventory = model::subjects(ctx, PROSE, &prepared).await?;
-            subjects::seams(&prepared, &inventory)
+            let inventory = prepared.subjects(ctx, PROSE).await?;
+            prepared.seams(&inventory)
         }
     }
 }

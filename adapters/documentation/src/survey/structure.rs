@@ -7,63 +7,47 @@
 
 use emery_sdk::survey::Lines;
 
-/// What one document's lines hold.
+// What one document's lines hold.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Outline {
-    /// The document's line count.
     pub lines: u32,
-    /// Every heading, in order.
     pub headings: Vec<Heading>,
-    /// Every block, in order, each over the lines it spans.
     pub blocks: Vec<Block>,
 }
 
-/// One heading: an ATX or setext heading, or a Gherkin keyword line.
+// One heading: an ATX or setext heading, or a Gherkin keyword line.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Heading {
-    /// The heading's level, `1` for a document's title.
+    // `1` for a document's title.
     pub level: u8,
-    /// The line it stands at, 1-based.
+    // 1-based line number.
     pub line: u32,
-    /// Its text, with the marks stripped.
+    // With the heading marks stripped.
     pub text: String,
 }
 
-/// One block of a document and the lines it spans.
+// One block of a document and the inclusive lines it spans.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Block {
-    /// What the block is.
     pub kind: Kind,
-    /// The lines it spans, inclusive.
     pub lines: Lines,
 }
 
-/// The kinds of block the reader tells apart.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Kind {
-    /// Running prose, to the next blank line or block.
     Paragraph,
-    /// One list item with its continuation lines.
     Item,
-    /// One body row of a table.
     Row,
-    /// One Gherkin step.
     Step,
-    /// A blockquote, consecutive `>` lines together.
     Quote,
-    /// A heading line, or a setext heading with its underline.
     Heading,
-    /// A fenced code block, fence to fence.
     Fence,
-    /// YAML front matter at the top of the document.
     FrontMatter,
-    /// A thematic break, a table's header and delimiter rows, an HTML block.
+    // A thematic break, a table's header and delimiter rows, or an HTML block.
     Other,
 }
 
 impl Outline {
-    /// Reads a document's structure.
-    #[must_use]
     pub fn read(text: &str) -> Self {
         let lines: Vec<&str> = text.lines().collect();
         let mut reader = Reader {
@@ -83,21 +67,16 @@ impl Outline {
         }
     }
 
-    /// Whether the document holds a block of `kind`.
-    #[must_use]
     pub fn holds(&self, kind: Kind) -> bool {
         self.blocks.iter().any(|block| block.kind == kind)
     }
 
-    /// The heading standing at `line`, when one does.
-    #[must_use]
     pub fn heading_at(&self, line: u32) -> Option<&Heading> {
         self.headings.iter().find(|heading| heading.line == line)
     }
 }
 
-/// The first non-blank line of a document and its number, when it has one.
-#[must_use]
+// The first non-blank line of a document and its 1-based number.
 pub fn opens(text: &str) -> Option<(u32, &str)> {
     text.lines()
         .enumerate()

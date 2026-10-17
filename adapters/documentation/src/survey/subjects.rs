@@ -8,7 +8,7 @@ use std::path::Path;
 use emery_sdk::survey::Inventory;
 use emery_sdk::{Error, INLINE_BYTES, Seam, SourceContent, SourceInput, serde_json, tracing};
 
-use super::model::{self, Subject};
+use super::model::Subject;
 use super::structure::Outline;
 
 // What an input is to the survey.
@@ -41,6 +41,62 @@ impl Prepared<'_> {
     pub fn document(&self, path: &str) -> Option<&Document> {
         self.documents.iter().find(|doc| doc.path == path)
     }
+
+    // Cuts the seams from the subjects the model named: one seam over every
+    // subject's document within the inline budget, one per stem past it, and
+    // the directory cut — told no subject was found — when it named none.
+    pub fn seams(&self, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
+        let source = self.source();
+        let subjects = self.build(inventory);
+        tracing::info!(
+            %source,
+            surfaces = subjects.len(),
+            unplaced = inventory.unreached.len(),
+            "placed by model"
+        );
+        logged(source, &subjects);
+
+        if subjects.is_empty() {
+            tracing::info!(%source, "no subject named; the tree is cut by directory");
+            let seams = super::directories(self.input)?;
+            return Ok(seams
+                .into_iter()
+                .map(|seam| Seam {
+                    text: UNSURVEYED.to_owned(),
+                    ..seam
+                })
+                .collect());
+        }
+
+        // the tree's size decides the cut, as the SDK's code survey sums every
+        // module: one call within the inline budget, one per stem past it
+        let size: usize = self.documents.iter().map(|doc| doc.text.len()).sum();
+        let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
+        let stems: Vec<&str> = {
+            let set: BTreeSet<&str> =
+                subjects.iter().map(|subject| subject.stem.as_str()).collect();
+            set.into_iter().collect()
+        };
+        let cut = Cut {
+            prepared: self,
+            stems: &stems,
+            unreached: &inventory.unreached,
+        };
+
+        Ok(if fits {
+            let all: Vec<&Subject> = subjects.iter().collect();
+            vec![cut.seam(&all, None)]
+        } else {
+            stems
+                .iter()
+                .map(|stem| {
+                    let under: Vec<&Subject> =
+                        subjects.iter().filter(|subject| subject.stem == *stem).collect();
+                    cut.seam(&under, Some(stem))
+                })
+                .collect()
+        })
+    }
 }
 
 // Reads the workspace: every file the directory cut would list that
@@ -60,61 +116,6 @@ pub fn prepare(input: &SourceInput) -> Result<Preparation<'_>, Error> {
         })
         .collect();
     Ok(Preparation::Workspace(Prepared { input, documents }))
-}
-
-// Cuts the seams from the subjects the model named: one seam over every
-// subject's document within the inline budget, one per stem past it, and
-// the directory cut — told no subject was found — when it named none.
-pub fn seams(prepared: &Prepared<'_>, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
-    let source = prepared.source();
-    let subjects = model::build(prepared, inventory);
-    tracing::info!(
-        %source,
-        surfaces = subjects.len(),
-        unplaced = inventory.unreached.len(),
-        "placed by model"
-    );
-    logged(source, &subjects);
-
-    if subjects.is_empty() {
-        tracing::info!(%source, "no subject named; the tree is cut by directory");
-        let seams = super::directories(prepared.input)?;
-        return Ok(seams
-            .into_iter()
-            .map(|seam| Seam {
-                text: UNSURVEYED.to_owned(),
-                ..seam
-            })
-            .collect());
-    }
-
-    // the tree's size decides the cut, as the SDK's code survey sums every
-    // module: one call within the inline budget, one per stem past it
-    let size: usize = prepared.documents.iter().map(|doc| doc.text.len()).sum();
-    let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
-    let stems: Vec<&str> = {
-        let set: BTreeSet<&str> = subjects.iter().map(|subject| subject.stem.as_str()).collect();
-        set.into_iter().collect()
-    };
-    let cut = Cut {
-        prepared,
-        stems: &stems,
-        unreached: &inventory.unreached,
-    };
-
-    Ok(if fits {
-        let all: Vec<&Subject> = subjects.iter().collect();
-        vec![cut.seam(&all, None)]
-    } else {
-        stems
-            .iter()
-            .map(|stem| {
-                let under: Vec<&Subject> =
-                    subjects.iter().filter(|subject| subject.stem == *stem).collect();
-                cut.seam(&under, Some(stem))
-            })
-            .collect()
-    })
 }
 
 const UNSURVEYED: &str = "No subject was found in this tree: the survey named none, so it is \

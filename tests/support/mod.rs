@@ -5,7 +5,7 @@
 //! [`Barrier`] can hold completions until a required number of requests are
 //! pending together.
 
-#![allow(dead_code, reason = "shared by suites that each use a subset")]
+#![expect(dead_code, reason = "shared by suites that each use a subset")]
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

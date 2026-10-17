@@ -23,13 +23,13 @@ mod walk;
 const DATA_BASES: &[&str] = &["TypedDict", "NamedTuple", "Protocol"];
 
 // A type the caller copies, not an export it calls.
-pub(super) fn data_bases(bases: &[String]) -> bool {
+pub fn data_bases(bases: &[String]) -> bool {
     DIALECT.enumerates(bases) || bases.iter().any(|base| DATA_BASES.contains(&base.as_str()))
 }
 
 // A dunder method is a dataclass's or a model's, not a caller's. An empty
 // body declares nothing either way.
-pub(super) fn declares_data(class: &ClassDecl) -> bool {
+pub fn declares_data(class: &ClassDecl) -> bool {
     data_bases(&class.bases)
         || (!class.members.is_empty()
             && class.members.iter().all(|member| match member.kind {
@@ -48,7 +48,7 @@ pub struct Module {
     // The module-level `if __name__ == "__main__":`, if any.
     pub main_guard: Option<Lines>,
     // Every `def test_*`, at module level or in a class.
-    pub tests: Vec<TestDef>,
+    tests: Vec<TestDef>,
     // `__all__`, where declared.
     all: Option<Vec<String>>,
 }
@@ -150,7 +150,7 @@ impl Module {
         }
     }
 
-    pub fn is_init(&self) -> bool {
+    fn is_init(&self) -> bool {
         self.path.ends_with("__init__.py")
     }
 
@@ -182,11 +182,11 @@ impl Module {
 }
 
 #[derive(Debug)]
-pub struct TestDef {
-    pub name: String,
-    pub class: Option<String>,
+struct TestDef {
+    name: String,
+    class: Option<String>,
     // The first line of the docstring, if any.
-    pub doc: Option<String>,
-    pub parametrized: bool,
-    pub lines: Lines,
+    doc: Option<String>,
+    parametrized: bool,
+    lines: Lines,
 }

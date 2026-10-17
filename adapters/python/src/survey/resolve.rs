@@ -110,19 +110,15 @@ impl Resolver {
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier, None);
         }
-        let scopes: Vec<Option<String>> = module
-            .dynamic
-            .iter()
-            .map(|load| load.specifier.as_deref().and_then(|spelled| self.scope(module, spelled)))
-            .collect();
-        for (load, scope) in module.dynamic.iter_mut().zip(scopes) {
-            load.scope = scope;
+        let code::Module { imports, dynamic, .. } = &mut **module;
+        for load in dynamic {
+            load.scope = load.specifier.as_deref().and_then(|spelled| self.scope(imports, spelled));
         }
     }
 
     // `name` is what a `from` import takes. An import of a namespace package
     // binds no module and is `None`.
-    pub fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
+    fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
         let unresolved = || Some(Target::Unresolved(specifier.to_owned()));
         let dots = specifier.len() - specifier.trim_start_matches('.').len();
         if dots > 0 {
@@ -262,14 +258,15 @@ impl Resolver {
     // The directory a computed load leads into: the package the dotted name
     // it spells is, beneath the first root holding one, else the package
     // that name is imported as.
-    fn scope(&self, module: &Module, spelled: &str) -> Option<String> {
+    fn scope(&self, imports: &[code::Import], spelled: &str) -> Option<String> {
         let path = spelled.replace('.', "/");
         if let Some(base) =
             self.roots.iter().map(|root| join(root, &path)).find(|base| self.holds_package(base))
         {
             return Some(base);
         }
-        module.imported(spelled)?.strip_suffix("/__init__.py").map(str::to_owned)
+        let target = imports.iter().find(|import| import.local == spelled)?.target.as_ref()?;
+        target.module()?.strip_suffix("/__init__.py").map(str::to_owned)
     }
 
     // A namespace package: a directory of modules with no `__init__`.

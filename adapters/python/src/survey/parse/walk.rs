@@ -114,7 +114,7 @@ const WALKERS: &[&str] = &["iter_modules", "walk_packages", "entry_points", "aut
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
 // Exports unsettled and `text` unset; `parse` finishes both.
-pub(super) fn read(path: &str, text: &str) -> Module {
+pub fn read(path: &str, text: &str) -> Module {
     let parsed = parse_unchecked_source(text, PySourceType::Python);
     if let Some(first) = parsed.errors().first() {
         emery_sdk::tracing::warn!(

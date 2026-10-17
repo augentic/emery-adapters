@@ -601,16 +601,7 @@ impl<'a> Tree<'a> {
     // and name; an absent table declares none.
     fn constants(&self, path: &str) -> Result<Vec<(usize, String)>, Error> {
         let text = self.text(path)?;
-        let constants = text
-            .lines()
-            .enumerate()
-            .filter_map(|(index, line)| {
-                let rest = line.trim_start().strip_prefix("pub const ")?;
-                let name = rest.split(|ch: char| !identifier(ch)).next()?;
-                (!name.is_empty()).then(|| (index + 1, name.to_owned()))
-            })
-            .collect();
-        Ok(constants)
+        Ok(pub_consts(&text).map(|(line, name)| (line, name.to_owned())).collect())
     }
 
     // One finding naming every handler under a stem's `src/` — a `pub async
@@ -681,14 +672,8 @@ impl<'a> Tree<'a> {
         if declared.is_empty() {
             return Ok(Vec::new());
         }
-        let layout: Vec<String> = template(CATALOG)?
-            .lines()
-            .filter_map(|line| {
-                let rest = line.trim_start().strip_prefix("pub const ")?;
-                let name = rest.split(|ch: char| !identifier(ch)).next()?;
-                (!name.is_empty()).then(|| name.to_owned())
-            })
-            .collect();
+        let layout: Vec<String> =
+            pub_consts(template(CATALOG)?).map(|(_, name)| name.to_owned()).collect();
         let mut readers = Vec::new();
         for file in self.modules()? {
             if !self.relative(&file).starts_with(COMMON) {
@@ -892,18 +877,33 @@ fn function_end(lines: &[&str], index: usize) -> usize {
 }
 
 // Whether `line` is a function's head: `fn` behind any visibility — `pub`,
-// `pub(crate)`, `pub(super)`, `pub(in ..)` — and `const`, `async`, or
+// `pub(crate)`, `pub`, `pub(in ..)` — and `const`, `async`, or
 // `unsafe`, as `rustfmt` lays one.
 fn opens_fn(line: &str) -> bool {
-    let mut rest = line.trim_start();
-    if let Some(after) = rest.strip_prefix("pub") {
-        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
-        rest = scoped.map_or(after, |(_, after)| after).trim_start();
-    }
+    let mut rest = strip_vis(line);
     for qualifier in ["const ", "async ", "unsafe "] {
         rest = rest.strip_prefix(qualifier).unwrap_or(rest);
     }
     rest.starts_with("fn ")
+}
+
+// `line` past any leading visibility (`pub` or `pub(..)`).
+fn strip_vis(line: &str) -> &str {
+    let rest = line.trim_start();
+    let Some(after) = rest.strip_prefix("pub") else { return rest };
+    if let Some(scoped) = after.strip_prefix('(') {
+        return scoped.split_once(')').map_or(rest, |(_, tail)| tail.trim_start());
+    }
+    after.strip_prefix(char::is_whitespace).map_or(rest, str::trim_start)
+}
+
+// Every `pub const` in `text`, as its 1-based line and name.
+fn pub_consts(text: &str) -> impl Iterator<Item = (usize, &str)> {
+    text.lines().enumerate().filter_map(|(index, line)| {
+        let rest = line.trim_start().strip_prefix("pub const ")?;
+        let name = rest.split(|ch: char| !identifier(ch)).next()?;
+        (!name.is_empty()).then_some((index + 1, name))
+    })
 }
 
 // The lines from the read at `index` to `end` that can answer its miss:
@@ -1225,12 +1225,7 @@ fn wrappers(text: &str) -> Vec<(usize, &str)> {
 }
 
 fn opens_struct(line: &str) -> Option<&str> {
-    let mut rest = line.trim_start();
-    if let Some(after) = rest.strip_prefix("pub") {
-        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
-        rest = scoped.map_or(after, |(_, after)| after).trim_start();
-    }
-    let rest = rest.strip_prefix("struct ")?;
+    let rest = strip_vis(line).strip_prefix("struct ")?;
     let name = rest.split(|ch: char| !identifier(ch)).next()?;
     (!name.is_empty() && line.trim_end().ends_with('{')).then_some(name)
 }
@@ -1252,15 +1247,11 @@ fn derives_deserialize(lines: &[&str], index: usize) -> bool {
 }
 
 fn field_name(line: &str) -> Option<&str> {
-    let mut rest = line.trim_start();
+    let rest = line.trim_start();
     if rest.is_empty() || rest.starts_with('#') {
         return None;
     }
-    if let Some(after) = rest.strip_prefix("pub") {
-        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
-        rest = scoped.map_or(after, |(_, after)| after).trim_start();
-    }
-    let (name, _) = rest.split_once(':')?;
+    let (name, _) = strip_vis(rest).split_once(':')?;
     let name = name.trim();
     ident(name).then_some(name)
 }
@@ -1299,20 +1290,7 @@ fn crates(root: &Path) -> Result<Vec<String>, Error> {
 
 // Whether a regular file lies beneath `dir`, symbolic links left unfollowed.
 fn occupied(dir: &Path) -> Result<bool, Error> {
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_file() {
-                return Ok(true);
-            }
-            if meta.is_dir() {
-                pending.push(path);
-            }
-        }
-    }
-    Ok(false)
+    Ok(!files(dir)?.is_empty())
 }
 
 // Every regular file beneath `dir`, symbolic links left unfollowed, sorted.

@@ -45,7 +45,7 @@ const TIMERS: &[&str] =
 const WRAPPERS: &[&str] = &["Number", "String", "Boolean", "BigInt", "parseInt", "parseFloat"];
 
 // Exports unsettled and `text` unset; `Module::parse` finishes both.
-pub(super) fn read(path: &str, text: &str) -> Module {
+pub fn read(path: &str, text: &str) -> Module {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::ts());
     let parsed = Parser::new(&allocator, text, source_type).parse();

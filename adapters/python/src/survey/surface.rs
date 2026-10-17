@@ -105,7 +105,7 @@ enum At<'m> {
 impl Python {
     // The manifest read and the resolver built over the parsed tree, before
     // any import is settled.
-    pub(super) fn new(parsed: &Parsed<Module>) -> Self {
+    pub fn new(parsed: &Parsed<Module>) -> Self {
         let manifest = resolve::Manifest::read(&parsed.root);
         let resolver = Resolver::new(parsed, manifest.name.as_deref());
         Self { resolver, manifest }

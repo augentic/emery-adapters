@@ -1022,7 +1022,8 @@ async fn omnia_build_wrappers_refused() {
                    struct AllocationsResponse {\n    data: Allocations,\n}\n";
     let direct = "/// Vehicles allocated to a trip.\n#[derive(Debug, Clone, Deserialize)]\npub \
                   struct Allocations {\n    /// All vehicle allocations.\n    #[serde(default)]\n    \
-                  pub all: Vec<String>,\n}\n";
+                  pub all: Vec<String>,\n}\n\n#[derive(Deserialize)]\nstruct Published {\n    \
+                  pubdata: String,\n}\n";
     let module = |body: &str| {
         format!(
             "//! Fetches stops and allocations.\n\nuse serde::Deserialize;\n\n/// A GTFS \
@@ -1056,7 +1057,7 @@ async fn omnia_build_wrappers_refused() {
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["`Stop`", "`Holder`", "`Allocations`"] {
+    for absent in ["`Stop`", "`Holder`", "`Allocations`", "`Published`"] {
         assert!(!correction.contains(absent), "{absent} is no finding: {correction}");
     }
     assert!(
