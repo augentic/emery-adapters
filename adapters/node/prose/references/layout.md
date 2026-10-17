@@ -197,6 +197,6 @@ The engine merges each slice's commit into the integrated tree under these rules
 | --- | --- | --- |
 | `package-lock.json` | the integrated side kept | the next `npm install` regenerates it |
 | `src/index.ts`, every `index.ts` | both sides' lines kept | each is a list of independent lines |
-| everything else | a conflict | the slice is rebuilt over the merged tree |
+| everything else | the model combines both sides | the slice re-merges with the result |
 
-A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own directories never conflict. The root `package.json` is everything else on purpose: it is static, every slice that lays it lays the same bytes, and a directory's packages are in a manifest of its own, so no manifest is ever written by two slices. A slice that writes under another's directory, or into `src/start/` to be reached, is the one conflict the layout leaves possible, and it is the slice's to avoid.
+A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own directories never conflict. The root `package.json` is everything else on purpose: it is static, every slice that lays it lays the same bytes, and a directory's packages are in a manifest of its own, so no manifest is ever written by two slices. A slice that writes under another's directory, or into `src/start/` to be reached, is the one conflict the layout leaves possible: a file both slices wrote is handed to a model turn to combine, and one it cannot combine ends the run, so it is the slice's to avoid.

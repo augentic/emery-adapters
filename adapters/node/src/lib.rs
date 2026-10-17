@@ -4,10 +4,8 @@
 //! under the root `workspaces`, running `npm install`, `tsc --noEmit`, and
 //! `npm test` at each slice and wave.
 
-use std::borrow::Cow;
-
 use emery_sdk::target::{
-    Base, Context, MergeRule, MergeStrategy, Report, TargetAdapter, Verdict, VerifyContext, Worker,
+    Base, Context, MergeRule, Report, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Error, Model};
 
@@ -16,8 +14,11 @@ pub struct Adapter;
 
 impl TargetAdapter for Adapter {
     const BASE: Base = Base::Fresh;
-    const MERGE_RULES: &'static [MergeRule] =
-        &[ours("package-lock.json"), union("src/index.ts"), union("**/index.ts")];
+    const MERGE_RULES: &'static [MergeRule] = &[
+        MergeRule::ours("package-lock.json"),
+        MergeRule::union("src/index.ts"),
+        MergeRule::union("**/index.ts"),
+    ];
     const WORKER: Worker = Worker {
         egress: &["registry.npmjs.org"],
         read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
@@ -30,20 +31,6 @@ impl TargetAdapter for Adapter {
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
         emery_sdk::target::verify(ctx, PROSE, |_| Ok(Vec::new())).await
-    }
-}
-
-const fn ours(paths: &'static str) -> MergeRule {
-    MergeRule {
-        paths: Cow::Borrowed(paths),
-        strategy: MergeStrategy::Ours,
-    }
-}
-
-const fn union(paths: &'static str) -> MergeRule {
-    MergeRule {
-        paths: Cow::Borrowed(paths),
-        strategy: MergeStrategy::Union,
     }
 }
 

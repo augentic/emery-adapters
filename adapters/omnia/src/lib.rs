@@ -8,12 +8,10 @@
 
 mod tree;
 
-use std::borrow::Cow;
 use std::path::Path;
 
 use emery_sdk::target::{
-    Base, Context, MergeRule, MergeStrategy, Report, Seed, TargetAdapter, Verdict, VerifyContext,
-    Worker,
+    Base, Context, MergeRule, Report, Seed, TargetAdapter, Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Error, Model};
 use omnia_template::ENTRIES;
@@ -26,17 +24,17 @@ pub struct Adapter;
 impl TargetAdapter for Adapter {
     const BASE: Base = Base::Fresh;
     const MERGE_RULES: &'static [MergeRule] = &[
-        ours("Cargo.lock"),
-        union("Cargo.toml"),
-        union("clippy.toml"),
-        union("src/routes.rs"),
-        union("src/messaging.rs"),
-        union("tests/routes.rs"),
-        union("tests/messaging.rs"),
-        union("crates/common/src/routes/*.rs"),
-        union("crates/common/src/config.rs"),
-        union("crates/*/Cargo.toml"),
-        union("crates/*/src/lib.rs"),
+        MergeRule::ours("Cargo.lock"),
+        MergeRule::union("Cargo.toml"),
+        MergeRule::union("clippy.toml"),
+        MergeRule::union("src/routes.rs"),
+        MergeRule::union("src/messaging.rs"),
+        MergeRule::union("tests/routes.rs"),
+        MergeRule::union("tests/messaging.rs"),
+        MergeRule::union("crates/common/src/routes/*.rs"),
+        MergeRule::union("crates/common/src/config.rs"),
+        MergeRule::union("crates/*/Cargo.toml"),
+        MergeRule::union("crates/*/src/lib.rs"),
     ];
     const WORKER: Worker = Worker {
         egress: &["index.crates.io", "static.crates.io"],
@@ -81,20 +79,6 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
 #[must_use]
 pub fn seed() -> Vec<Seed> {
     ENTRIES.iter().map(|entry| Seed::new(entry.path, entry.body)).collect()
-}
-
-const fn ours(paths: &'static str) -> MergeRule {
-    MergeRule {
-        paths: Cow::Borrowed(paths),
-        strategy: MergeStrategy::Ours,
-    }
-}
-
-const fn union(paths: &'static str) -> MergeRule {
-    MergeRule {
-        paths: Cow::Borrowed(paths),
-        strategy: MergeStrategy::Union,
-    }
 }
 
 #[cfg(target_arch = "wasm32")]

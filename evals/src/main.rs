@@ -2223,7 +2223,7 @@ struct Integrated {
     covered: Vec<String>,
     files: Vec<String>,
     commit: Option<String>,
-    conflicts: Vec<String>,
+    resolved: Vec<String>,
 }
 
 impl Integrated {
@@ -2375,7 +2375,7 @@ impl Build {
                         covered,
                         files: strings(&slice["written"]),
                         commit: slice["commit"].as_str().map(str::to_owned),
-                        conflicts: strings(&slice["conflicts"]),
+                        resolved: strings(&slice["resolved"]),
                     }
                 })
                 .collect();
@@ -2395,7 +2395,7 @@ impl Build {
                     covered: landed.covered.clone(),
                     files: landed.files.clone(),
                     commit: Some(landed.commit.clone()),
-                    conflicts: Vec::new(),
+                    resolved: Vec::new(),
                 })
             })
             .collect();
@@ -4935,13 +4935,10 @@ fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         return write!(f, " — | — | — | — | — | — | — |");
     };
     let integrated = build.integrated();
-    let conflicted = integrated.iter().filter(|slice| !slice.conflicts.is_empty()).count();
+    let resolved = integrated.iter().filter(|slice| !slice.resolved.is_empty()).count();
     let mut merged = format!("{}/{}", integrated.len(), run.slices());
-    if conflicted > 0 {
-        let _ = write!(merged, " -{conflicted}");
-    }
-    if build.code() == Some("slice-conflict") {
-        merged.push_str(" !1");
+    if resolved > 0 {
+        let _ = write!(merged, " ~{resolved}");
     }
     if let Some(code) = build.code() {
         let _ = write!(merged, " `{code}`");
@@ -5094,7 +5091,7 @@ fn mechanism_notes(
 }
 
 // The build beneath its run: how it ended, each wave's slices as they
-// merged, what conflicted, what the verify refused, what was left
+// merged, what the model resolved, what the verify refused, what was left
 // uncovered, the chain the repository holds, and the turns it spent.
 fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
     let integrated = build.integrated();
@@ -5184,20 +5181,20 @@ fn build_notes(f: &mut Formatter<'_>, run: &Run, build: &Build) -> fmt::Result {
     Ok(())
 }
 
-// What the build's waves left to read: the conflicted slices and their
-// paths, the waves the verify repaired and the files each sealed, the
-// verify's refusals, the uncovered ids per slice, and what the host's
-// checks say of the tree.
+// What the build's waves left to read: the slices whose merge the model
+// resolved and the paths, the waves the verify repaired and the files each
+// sealed, the verify's refusals, the uncovered ids per slice, and what the
+// host's checks say of the tree.
 fn build_findings(
     f: &mut Formatter<'_>, build: &Build, integrated: &[Integrated],
     repairs: &BTreeMap<usize, Vec<String>>,
 ) -> fmt::Result {
-    for slice in integrated.iter().filter(|slice| !slice.conflicts.is_empty()) {
+    for slice in integrated.iter().filter(|slice| !slice.resolved.is_empty()) {
         writeln!(
             f,
-            "- conflicted: {} at {}, merged on a later build",
+            "- resolved: {} at {}, combined by the model and merged again",
             slice.id,
-            slice.conflicts.join(", ")
+            slice.resolved.join(", ")
         )?;
     }
     let repaired = build.repaired();
@@ -5764,7 +5761,7 @@ mod tests {
     {"id": "SLICE-002", "name": "orders", "wave": 2, "covered": ["REQ-002"], "uncovered": ["REQ-003"],
      "written": ["src/orders/index.ts"], "commit": "bbbbbbbb"},
     {"id": "SLICE-003", "name": "payments", "wave": 3, "covered": ["REQ-004", "REQ-005"], "uncovered": [],
-     "written": ["src/payments/index.ts"], "commit": "cccccccc", "conflicts": ["src/index.ts"]}
+     "written": ["src/payments/index.ts"], "commit": "cccccccc", "resolved": ["src/index.ts"]}
   ],
   "verified": ["aaaaaaaa", "bbbbbbbb", "cccccccc"],
   "repaired": [2],
@@ -5929,7 +5926,7 @@ mod tests {
         let integrated = build.integrated();
         assert_eq!(integrated.len(), 3);
         assert_eq!(integrated[1].uncovered(), ["REQ-003"]);
-        assert_eq!(integrated[2].conflicts, ["src/index.ts"]);
+        assert_eq!(integrated[2].resolved, ["src/index.ts"]);
         assert_eq!(build.waves(), 3);
         assert_eq!(build.verified(), 3);
         assert_eq!(build.covered(), (4, 5));
@@ -6279,7 +6276,7 @@ mod tests {
             covered: Vec::new(),
             files: Vec::new(),
             commit: None,
-            conflicts: Vec::new(),
+            resolved: Vec::new(),
         };
         let slices = [
             owned("orders-reading", &["REQ-001"]),
@@ -6691,19 +6688,20 @@ mod tests {
     }
 
     #[test]
-    fn build_slice_conflict_wave() {
-        let envelope = "{\n  \"error\": \"slice-conflict\",\n  \"message\": \"slice `SLICE-003` \
+    fn build_merge_unresolved_wave() {
+        let envelope = "{\n  \"error\": \"merge-unresolved\",\n  \"message\": \"slice `SLICE-003` \
                         (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
-                        `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts \
-                        on its build 2\",\n  \"exit-code\": 1\n}\n";
+                        `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts, \
+                        and the conflict cannot be resolved: the slice removed `package.json`\",\n  \
+                        \"exit-code\": 1\n}\n";
         let bare = build_from(1, "", envelope, Vec::new());
-        assert_eq!(bare.code(), Some("slice-conflict"));
+        assert_eq!(bare.code(), Some("merge-unresolved"));
         assert_eq!(bare.wave_failed(), Some(3));
         assert_eq!(bare.verify_failures(), [] as [&str; 0]);
         assert_eq!(bare.speedup(), None, "no turn read, no path to measure");
         assert_eq!(bare.verified(), 0, "no verify read, none passed");
 
-        // SLICE-003 conflicted in wave 2 and again in wave 3, whose verify never opened
+        // SLICE-003 built in wave 2 and again in wave 3, whose verify never opened
         let stderr = completion("build-SLICE-001", "ok")
             + &completion("verify", "ok")
             + &completion("build-SLICE-002", "ok")
