@@ -114,7 +114,7 @@ const WALKERS: &[&str] = &["iter_modules", "walk_packages", "entry_points", "aut
 const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
 // Exports unsettled and `text` unset; `parse` finishes both.
-pub(super) fn read(path: &str, text: &str) -> Module {
+pub fn read(path: &str, text: &str) -> Module {
     let parsed = parse_unchecked_source(text, PySourceType::Python);
     if let Some(first) = parsed.errors().first() {
         emery_sdk::tracing::warn!(
@@ -538,12 +538,10 @@ impl<'s> Walker<'s> {
         }
     }
 
-    fn record_call(&mut self, call: &ExprCall) -> Option<&Call> {
+    fn record_call(&mut self, call: &ExprCall, callee: Callee) -> bool {
         let range = call.range();
-        let callee = callee(&call.func)?;
-        if !callee.structural(None, &DIALECT)
-            && let Some(inner) = inner_call(&call.func)
-        {
+        let structural = callee.structural(None, &DIALECT);
+        if !structural && let Some(inner) = inner_call(&call.func) {
             self.chained.push(inner);
         }
         let args = self.args(&call.arguments);
@@ -576,7 +574,7 @@ impl<'s> Walker<'s> {
             class,
             lines,
         });
-        self.module.calls.last()
+        !structural
     }
 
     fn args(&self, arguments: &Arguments) -> Vec<Arg> {
@@ -865,12 +863,12 @@ impl<'s> Walker<'s> {
     }
 
     fn call_expr(&mut self, call: &'s ExprCall) {
-        let method = callee(&call.func).map(|callee| callee.method().to_owned());
-        if let Some(method) = &method {
+        let handler = if let Some(callee) = callee(&call.func) {
+            let method = callee.method();
             let first = call.arguments.args.first();
-            let walks = WALKERS.contains(&method.as_str());
+            let walks = WALKERS.contains(&method);
             let loads_computed =
-                LOADERS.contains(&method.as_str()) && first.and_then(string_value).is_none();
+                LOADERS.contains(&method) && first.and_then(string_value).is_none();
             if loads_computed || walks {
                 let specifier = first
                     .and_then(|arg| if walks { walked_package(arg) } else { literal_head(arg) });
@@ -881,11 +879,13 @@ impl<'s> Walker<'s> {
                     scope: None,
                 });
             }
-            if let Some(key) = env_key(call) {
+            if let Some(key) = env_key(call, &callee) {
                 self.env_read(&key, call.range());
             }
-        }
-        let handler = self.record_call(call).is_some_and(|call| !call.structural(&DIALECT));
+            self.record_call(call, callee)
+        } else {
+            false
+        };
         self.positions.push(handler);
         self.visit_expr(&call.func);
         self.visit_arguments(&call.arguments);
@@ -1101,10 +1101,11 @@ fn type_kind(value: Option<&Expr>) -> Option<TypeKind> {
     let value = value?;
     match value {
         Expr::Call(call) => {
-            let method = callee(&call.func)?.method().to_owned();
-            if TYPE_ALIASES.contains(&method.as_str()) {
+            let callee = callee(&call.func)?;
+            let method = callee.method();
+            if TYPE_ALIASES.contains(&method) {
                 Some(TypeKind::Alias)
-            } else if TYPE_FUNCTIONAL.contains(&method.as_str()) {
+            } else if TYPE_FUNCTIONAL.contains(&method) {
                 Some(TypeKind::Functional)
             } else {
                 None
@@ -1324,8 +1325,7 @@ fn is_environ(expr: &Expr) -> bool {
 }
 
 // `os.getenv("K")`, `os.environ.get("K")`, `environ.get("K")`, `getenv("K")`.
-fn env_key(call: &ExprCall) -> Option<String> {
-    let callee = callee(&call.func)?;
+fn env_key(call: &ExprCall, callee: &Callee) -> Option<String> {
     let reads = match callee.method() {
         "getenv" => matches!(callee.head.as_str(), "os" | "getenv") && callee.links.len() <= 1,
         "get" => match &*call.func {
@@ -1345,7 +1345,9 @@ fn reads_env(expr: &Expr) -> bool {
         fn visit_expr(&mut self, expr: &'a Expr) {
             match expr {
                 Expr::Subscript(subscript) => self.0 |= is_environ(&subscript.value),
-                Expr::Call(call) => self.0 |= env_key(call).is_some(),
+                Expr::Call(call) => {
+                    self.0 |= callee(&call.func).is_some_and(|c| env_key(call, &c).is_some());
+                }
                 _ => {}
             }
             visitor::walk_expr(self, expr);

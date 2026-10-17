@@ -1,13 +1,8 @@
 //! Extracts claims from an operator's written brief.
 //!
-//! The source is inline text or a workspace holding one regular file. The
-//! brief is mined whole, in one call.
-//!
-//! # Refusals
-//!
-//! - an empty brief
-//! - a workspace holding no file, or more than one, hidden entries and
-//!   Emery's own files left out of the count
+//! The source is inline text or a workspace holding one regular file, mined
+//! whole in one call. An empty brief, or a workspace holding no file or more
+//! than one, is refused.
 
 mod survey;
 

@@ -69,14 +69,8 @@ impl Resolver {
 
         // the owned names from the top-level modules
         for path in &modules {
-            let under = |root: &str| {
-                if root.is_empty() {
-                    (!path.contains('/')).then_some(path.as_str())
-                } else {
-                    path.strip_prefix(&format!("{root}/")).filter(|rest| !rest.contains('/'))
-                }
-            };
-            if let Some(file) = under("").or_else(|| under("src"))
+            let file = path.strip_prefix("src/").unwrap_or(path);
+            if !file.contains('/')
                 && let Some(stem) = file.strip_suffix(".py")
             {
                 owned.insert(stem.to_owned());
@@ -110,19 +104,15 @@ impl Resolver {
         for reexport in &mut module.reexports {
             reexport.target = self.resolve(&from, &reexport.specifier, None);
         }
-        let scopes: Vec<Option<String>> = module
-            .dynamic
-            .iter()
-            .map(|load| load.specifier.as_deref().and_then(|spelled| self.scope(module, spelled)))
-            .collect();
-        for (load, scope) in module.dynamic.iter_mut().zip(scopes) {
-            load.scope = scope;
+        let code::Module { imports, dynamic, .. } = &mut **module;
+        for load in dynamic {
+            load.scope = load.specifier.as_deref().and_then(|spelled| self.scope(imports, spelled));
         }
     }
 
     // `name` is what a `from` import takes. An import of a namespace package
     // binds no module and is `None`.
-    pub fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
+    fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
         let unresolved = || Some(Target::Unresolved(specifier.to_owned()));
         let dots = specifier.len() - specifier.trim_start_matches('.').len();
         if dots > 0 {
@@ -262,19 +252,24 @@ impl Resolver {
     // The directory a computed load leads into: the package the dotted name
     // it spells is, beneath the first root holding one, else the package
     // that name is imported as.
-    fn scope(&self, module: &Module, spelled: &str) -> Option<String> {
+    fn scope(&self, imports: &[code::Import], spelled: &str) -> Option<String> {
         let path = spelled.replace('.', "/");
         if let Some(base) =
             self.roots.iter().map(|root| join(root, &path)).find(|base| self.holds_package(base))
         {
             return Some(base);
         }
-        module.imported(spelled)?.strip_suffix("/__init__.py").map(str::to_owned)
+        let target = imports.iter().find(|import| import.local == spelled)?.target.as_ref()?;
+        target.module()?.strip_suffix("/__init__.py").map(str::to_owned)
     }
 
     // A namespace package: a directory of modules with no `__init__`.
     fn holds_package(&self, base: &str) -> bool {
-        !base.is_empty() && self.modules.iter().any(|path| path.starts_with(&format!("{base}/")))
+        if base.is_empty() {
+            return false;
+        }
+        let prefix = format!("{base}/");
+        self.modules.iter().any(|path| path.starts_with(&prefix))
     }
 }
 
@@ -413,13 +408,15 @@ fn sections(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
         };
         let key = key.trim().trim_matches('"');
         let value = value.trim();
-        let value = match value.strip_prefix(['"', '\'']) {
-            Some(rest) => rest.split(['"', '\'']).next().unwrap_or(rest).to_owned(),
-            None if value.starts_with(['[', '{']) => {
-                last_key = None;
-                continue;
-            }
-            None => value.to_owned(),
+        let value = if let Some(rest) = value.strip_prefix('"') {
+            rest.split('"').next().unwrap_or(rest).to_owned()
+        } else if let Some(rest) = value.strip_prefix('\'') {
+            rest.split('\'').next().unwrap_or(rest).to_owned()
+        } else if value.starts_with(['[', '{']) {
+            last_key = None;
+            continue;
+        } else {
+            value.split('#').next().unwrap_or(value).trim_end().to_owned()
         };
         if key.is_empty() {
             continue;

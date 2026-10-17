@@ -90,7 +90,7 @@ impl Resolver {
     // A bare specifier matching a `paths` pattern other than the catch-all
     // `*` is aliased, so one the mapping does not answer is `Unresolved`
     // rather than a package.
-    pub fn resolve(&self, from: &str, specifier: &str) -> Option<Target> {
+    fn resolve(&self, from: &str, specifier: &str) -> Option<Target> {
         if specifier.starts_with('/') {
             return None;
         }
@@ -275,12 +275,12 @@ fn strip_jsonc(text: &str) -> String {
                     last = next;
                 }
             }
-            ',' => {
-                let closes =
-                    matches!(chars.clone().find(|next| !next.is_whitespace()), Some('}' | ']'));
-                if !closes {
-                    out.push(c);
+            '}' | ']' => {
+                let trimmed = out.trim_end().len();
+                if out[..trimmed].ends_with(',') {
+                    out.remove(trimmed - 1);
                 }
+                out.push(c);
             }
             other => out.push(other),
         }
@@ -290,10 +290,10 @@ fn strip_jsonc(text: &str) -> String {
 
 #[derive(Debug, Default)]
 pub struct Manifest {
-    pub name: Option<String>,
-    pub main: Option<String>,
-    pub bin: Option<String>,
-    pub scripts: BTreeMap<String, String>,
+    name: Option<String>,
+    main: Option<String>,
+    bin: Option<String>,
+    scripts: BTreeMap<String, String>,
 }
 
 impl Manifest {

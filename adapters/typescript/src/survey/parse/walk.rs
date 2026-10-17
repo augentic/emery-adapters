@@ -45,7 +45,7 @@ const TIMERS: &[&str] =
 const WRAPPERS: &[&str] = &["Number", "String", "Boolean", "BigInt", "parseInt", "parseFloat"];
 
 // Exports unsettled and `text` unset; `Module::parse` finishes both.
-pub(super) fn read(path: &str, text: &str) -> Module {
+pub fn read(path: &str, text: &str) -> Module {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::ts());
     let parsed = Parser::new(&allocator, text, source_type).parse();
@@ -443,7 +443,7 @@ impl<'s> Walker<'s> {
         });
     }
 
-    fn declared(&mut self, declaration: &Declaration<'_>, span: Span) {
+    fn export_declaration(&mut self, declaration: &Declaration<'_>, span: Span) {
         match declaration {
             Declaration::FunctionDeclaration(function) => {
                 if let Some(id) = &function.id {
@@ -780,7 +780,7 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_export_declaration(&mut self, it: &ExportDeclaration<'a>) {
-        self.declared(&it.declaration, it.span);
+        self.export_declaration(&it.declaration, it.span);
         walk::walk_export_declaration(self, it);
     }
 

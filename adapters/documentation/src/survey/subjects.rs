@@ -8,7 +8,7 @@ use std::path::Path;
 use emery_sdk::survey::Inventory;
 use emery_sdk::{Error, INLINE_BYTES, Seam, SourceContent, SourceInput, serde_json, tracing};
 
-use super::model::{self, Subject};
+use super::model::Subject;
 use super::structure::Outline;
 
 // What an input is to the survey.
@@ -19,10 +19,36 @@ pub enum Preparation<'i> {
     Workspace(Prepared<'i>),
 }
 
-// A workspace read for the survey: the input it was read from and every
-// document of the tree in path order.
+impl<'i> Preparation<'i> {
+    // Reads the workspace: every file the directory cut would list that reads as
+    // text is a document, with its outline. A file that does not — an image
+    // beside the documents — is no document and no module.
+    pub fn read(input: &'i SourceInput) -> Result<Self, Error> {
+        let SourceContent::Workspace(root) = &input.content else {
+            return Ok(Self::Value);
+        };
+        let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
+        let documents = files
+            .into_iter()
+            .filter_map(|path| {
+                let text = std::fs::read_to_string(Path::new(root).join(&path)).ok()?;
+                let outline = Outline::read(&text);
+                Some(Document { path, text, outline })
+            })
+            .collect();
+        Ok(Self::Workspace(Prepared {
+            source: &input.name,
+            root,
+            documents,
+        }))
+    }
+}
+
+// A workspace read for the survey: the source name, the workspace root, and
+// every document of the tree in path order.
 pub struct Prepared<'i> {
-    pub input: &'i SourceInput,
+    pub source: &'i str,
+    pub root: &'i str,
     pub documents: Vec<Document>,
 }
 
@@ -34,87 +60,69 @@ pub struct Document {
 }
 
 impl Prepared<'_> {
-    pub fn source(&self) -> &str {
-        &self.input.name
+    pub const fn source(&self) -> &str {
+        self.source
     }
 
     pub fn document(&self, path: &str) -> Option<&Document> {
         self.documents.iter().find(|doc| doc.path == path)
     }
-}
 
-// Reads the workspace: every file the directory cut would list that
-// reads as text is a document, with its outline. A file that does not —
-// an image beside the documents — is no document and no module.
-pub fn prepare(input: &SourceInput) -> Result<Preparation<'_>, Error> {
-    let SourceContent::Workspace(root) = &input.content else {
-        return Ok(Preparation::Value);
-    };
-    let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
-    let documents = files
-        .into_iter()
-        .filter_map(|path| {
-            let text = std::fs::read_to_string(Path::new(root).join(&path)).ok()?;
-            let outline = Outline::read(&text);
-            Some(Document { path, text, outline })
+    // Cuts the seams from the subjects the model named: one seam over every
+    // subject's document within the inline budget, one per stem past it, and
+    // the directory cut — told no subject was found — when it named none.
+    pub fn seams(&self, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
+        let source = self.source();
+        let subjects = self.subjects(inventory);
+        tracing::info!(
+            %source,
+            surfaces = subjects.len(),
+            unplaced = inventory.unreached.len(),
+            "placed by model"
+        );
+        trace_subjects(source, &subjects);
+
+        if subjects.is_empty() {
+            tracing::info!(%source, "no subject named; the tree is cut by directory");
+            let seams = super::directories(self.root)?;
+            return Ok(seams
+                .into_iter()
+                .map(|seam| Seam {
+                    text: UNSURVEYED.to_owned(),
+                    ..seam
+                })
+                .collect());
+        }
+
+        // the tree's size decides the cut, as the SDK's code survey sums every
+        // module: one call within the inline budget, one per stem past it
+        let size: usize = self.documents.iter().map(|doc| doc.text.len()).sum();
+        let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
+        let stems: Vec<&str> = {
+            let set: BTreeSet<&str> =
+                subjects.iter().map(|subject| subject.stem.as_str()).collect();
+            set.into_iter().collect()
+        };
+        let cut = Cut {
+            prepared: self,
+            stems: &stems,
+            unreached: &inventory.unreached,
+        };
+
+        Ok(if fits {
+            let all: Vec<&Subject> = subjects.iter().collect();
+            vec![cut.seam(&all, None)]
+        } else {
+            stems
+                .iter()
+                .map(|stem| {
+                    let under: Vec<&Subject> =
+                        subjects.iter().filter(|subject| subject.stem == *stem).collect();
+                    cut.seam(&under, Some(stem))
+                })
+                .collect()
         })
-        .collect();
-    Ok(Preparation::Workspace(Prepared { input, documents }))
-}
-
-// Cuts the seams from the subjects the model named: one seam over every
-// subject's document within the inline budget, one per stem past it, and
-// the directory cut — told no subject was found — when it named none.
-pub fn seams(prepared: &Prepared<'_>, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
-    let source = prepared.source();
-    let subjects = model::build(prepared, inventory);
-    tracing::info!(
-        %source,
-        surfaces = subjects.len(),
-        unplaced = inventory.unreached.len(),
-        "placed by model"
-    );
-    logged(source, &subjects);
-
-    if subjects.is_empty() {
-        tracing::info!(%source, "no subject named; the tree is cut by directory");
-        let seams = super::directories(prepared.input)?;
-        return Ok(seams
-            .into_iter()
-            .map(|seam| Seam {
-                text: UNSURVEYED.to_owned(),
-                ..seam
-            })
-            .collect());
     }
-
-    // the tree's size decides the cut, as the SDK's code survey sums every
-    // module: one call within the inline budget, one per stem past it
-    let size: usize = prepared.documents.iter().map(|doc| doc.text.len()).sum();
-    let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
-    let stems: Vec<&str> = {
-        let set: BTreeSet<&str> = subjects.iter().map(|subject| subject.stem.as_str()).collect();
-        set.into_iter().collect()
-    };
-    let cut = Cut {
-        prepared,
-        stems: &stems,
-        unreached: &inventory.unreached,
-    };
-
-    Ok(if fits {
-        let all: Vec<&Subject> = subjects.iter().collect();
-        vec![cut.seam(&all, None)]
-    } else {
-        stems
-            .iter()
-            .map(|stem| {
-                let under: Vec<&Subject> =
-                    subjects.iter().filter(|subject| subject.stem == *stem).collect();
-                cut.seam(&under, Some(stem))
-            })
-            .collect()
-    })
 }
 
 const UNSURVEYED: &str = "No subject was found in this tree: the survey named none, so it is \
@@ -159,8 +167,8 @@ impl Cut<'_> {
     // anchor rule.
     fn text(&self, subjects: &[&Subject], files: &[String], stem: Option<&str>) -> String {
         let source = self.prepared.source();
-        let plural = |n: usize, one: &str, many: &str| {
-            if n == 1 { one.to_owned() } else { many.to_owned() }
+        let plural = |n: usize, one: &'static str, many: &'static str| {
+            if n == 1 { one } else { many }
         };
         let counted = format!(
             "{} {} in {} {}",
@@ -245,7 +253,7 @@ impl Cut<'_> {
 
 // The `surveyed` trace line the eval reads, in the shape the SDK logs
 // for a parsed tree: each subject's name, entry, stem, span, and lead.
-fn logged(source: &str, subjects: &[Subject]) {
+fn trace_subjects(source: &str, subjects: &[Subject]) {
     if !tracing::enabled!(tracing::Level::TRACE) {
         return;
     }

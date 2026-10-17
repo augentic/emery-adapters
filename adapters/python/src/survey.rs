@@ -20,9 +20,9 @@ mod surface;
 
 use std::path::Path;
 
-use emery_sdk::survey::Survey;
 use emery_sdk::survey::code::{Listing, Parsed};
-use emery_sdk::workspace::Entry;
+use emery_sdk::survey::{self, Survey};
+use emery_sdk::workspace::{self, Entry};
 use emery_sdk::{Context, Error, Model, SourceContent, bad_request};
 
 use self::dialect::DIALECT;
@@ -44,7 +44,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 
     // one walk lists the modules and the data files a string may name
     let (modules, data): (Vec<String>, Vec<String>) =
-        emery_sdk::workspace::list(workspace, |entry| include(entry) || is_data(entry))?
+        workspace::list(workspace, |entry| is_module(entry) || is_data(entry))?
             .into_iter()
             .partition(|path| Path::new(path).extension().is_some_and(|ext| ext == "py"));
     if modules.is_empty() {
@@ -58,17 +58,25 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let listing = Listing {
         modules,
         data,
-        tests: emery_sdk::workspace::list(workspace, is_test)?,
+        tests: workspace::list(workspace, is_test)?,
     };
     let parsed = Parsed::read(Path::new(workspace), &DIALECT, listing, Module::parse);
     let recogniser = Python::new(&parsed);
     let tree = parsed.settle(recogniser);
-    emery_sdk::survey::seams(ctx, PROSE, &tree).await
+    survey::seams(ctx, PROSE, &tree).await
 }
 
-// Never a production module's: dependencies, environments, caches, build
-// output, coverage, documentation, tests, and schema history.
-const SKIP_DIRS: &[&str] = &[
+// Build and test configuration, not the program. `manage.py` stays: it is
+// Django's bootstrap. `setup.py` is the packaging script at the root alone;
+// beneath a package it is a module like any other.
+const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
+const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
+const EXTENSIONS: &[&str] = &["py"];
+const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
+const TEST_DIRS: &[&str] = &["test", "tests", "testing", "__tests__", "features"];
+// Never a production module's or a test's: dependencies, environments,
+// caches, build output, coverage, documentation, and schema history.
+const NEVER_DIRS: &[&str] = &[
     "__pycache__",
     "node_modules",
     "vendor",
@@ -80,30 +88,22 @@ const SKIP_DIRS: &[&str] = &[
     "dist",
     "htmlcov",
     "docs",
-    "test",
-    "tests",
-    "testing",
-    "__tests__",
-    "features",
     "migrations",
 ];
-// Build and test configuration, not the program. `manage.py` stays: it is
-// Django's bootstrap. `setup.py` is the packaging script at the root alone;
-// beneath a package it is a module like any other.
-const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
-const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
-const EXTENSIONS: &[&str] = &["py"];
-const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
 // Alembic's `versions` is schema history, not a package.
-fn skipped_dir(entry: Entry<'_>) -> bool {
+fn never_dir(entry: Entry<'_>) -> bool {
     let name = entry.name();
-    SKIP_DIRS.contains(&name)
+    NEVER_DIRS.contains(&name)
         || name.ends_with(".egg-info")
         || (name == "versions" && entry.path().ends_with("alembic/versions"))
 }
 
-fn include(entry: Entry<'_>) -> bool {
+fn skipped_dir(entry: Entry<'_>) -> bool {
+    never_dir(entry) || TEST_DIRS.contains(&entry.name())
+}
+
+fn is_module(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
     }
@@ -135,28 +135,12 @@ fn is_data(entry: Entry<'_>) -> bool {
     entry.extension().is_some_and(|extension| DATA_EXTENSIONS.contains(&extension))
 }
 
-const TEST_DIRS: &[&str] = &["test", "tests", "testing", "__tests__", "features"];
-const NEVER_DIRS: &[&str] = &[
-    "__pycache__",
-    "node_modules",
-    "vendor",
-    "target",
-    "venv",
-    "env",
-    "site-packages",
-    "build",
-    "dist",
-    "htmlcov",
-    "docs",
-    "migrations",
-];
-
 fn is_test(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
     }
     if let Entry::Dir(_) = entry {
-        return !NEVER_DIRS.contains(&entry.name()) && !entry.name().ends_with(".egg-info");
+        return !never_dir(entry);
     }
     let name = entry.name();
     let Some((stem, extension)) = name.rsplit_once('.') else {

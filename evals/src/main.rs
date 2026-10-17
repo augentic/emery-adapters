@@ -20,7 +20,7 @@
 //!   through the tree an earlier card's `omnia` build left, in an export
 //!   kept beside the run's files, with no turn spent and no build run.
 
-#![allow(
+#![expect(
     clippy::print_stdout,
     clippy::print_stderr,
     reason = "operator-facing CLI; stdout and stderr are the interface"

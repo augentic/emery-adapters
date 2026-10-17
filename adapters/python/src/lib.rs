@@ -1,75 +1,9 @@
 //! Extracts behavioural claims from Python source.
 //!
-//! The source is a workspace or an inline value. A workspace's production
-//! modules are its `.py` files outside tests, stubs, virtual environments,
-//! caches, build output, and migrations. An inline value is mined whole, in
-//! one call, with no survey.
-//!
-//! # Survey
-//!
-//! A workspace is surveyed before it is mined. The parser reads the tree,
-//! and one survey call has the model name the surfaces a caller enters the
-//! source through, each at the lines that register or declare it:
-//!
-//! - a handler handed to something a package provides, outside any handler
-//!   of its own: a route, a command, a task, a consumer
-//! - a function or class under a decorator a package provides
-//! - what the entry modules export, where nothing is registered
-//!
-//! The bootstrap is the first module that runs when loaded: a console
-//! script's target, a module under a `__main__` guard, or one constructing
-//! an application at module level. It is the adapter's own surface,
-//! `start`, and never the model's to name.
-//!
-//! The answer is held to the tree before anything rests on it:
-//!
-//! - every anchor names a module the tree holds
-//! - no surface leads with `start`
-//! - every module the facts locate a surface in is reached by a named
-//!   surface or listed as unreached
-//!
-//! From the accepted anchors the code derives the rest:
-//!
-//! - the stem each surface's `requirement` and `criterion` ids lead with
-//! - the id that tells a surface from the others under its stem
-//! - an exported class's public methods
-//! - the modules the surface reaches
-//!
-//! # Seams
-//!
-//! The seams follow the surfaces:
-//!
-//! - a tree within the SDK's inline budget is one call over every module,
-//!   held to every surface's stem
-//! - a larger tree is one call per stem, over the modules its surfaces
-//!   reach, held to that stem alone
-//! - where a module imports one the tree does not hold, the modules of the
-//!   directory the import leads into follow
-//! - a tree whose survey names no surface is cut mechanically, by package
-//!   or by top-level directory, and read as a library is
-//!
-//! Each call is told:
-//!
-//! - its surfaces, each with its id and what it reaches
-//! - the boundaries its modules spell as values of their own
-//! - the packages they import, and the calls made through them
-//! - the data files they name
-//! - what the tree's own tests state
-//! - what could not be followed
-//!
-//! # Type claims
-//!
-//! The `type` claims are copied from the declarations, never answered by
-//! the model: every public class, type alias, and enumeration the seams'
-//! modules declare at module level, as its header and member signatures. A
-//! name led by an underscore, or left out of a declared `__all__`, is not
-//! public.
-//!
-//! # Refusals
-//!
-//! A workspace with no production module is refused. Nothing else is: a
-//! module the parser cannot read is walked as far as it got and never fails
-//! the run.
+//! An inline value is mined whole in one call. A workspace's production
+//! modules are parsed and surveyed into seams by surface stem, with public
+//! module-level declarations joined as `type` claims. A workspace with no
+//! production module is refused.
 
 #![expect(
     clippy::multiple_crate_versions,

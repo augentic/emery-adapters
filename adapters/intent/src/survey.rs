@@ -7,9 +7,7 @@ use emery_sdk::{Error, Seam, SourceContent, SourceInput, bad_request, server_err
 pub fn survey(input: &SourceInput) -> Result<Vec<Seam>, Error> {
     let seam = match &input.content {
         SourceContent::Value(value) => {
-            if value.trim().is_empty() {
-                return Err(bad_request!("intent brief is empty"));
-            }
+            require_non_empty(value)?;
             Seam::whole()
         }
         SourceContent::Workspace(root) => carrier(root)?,
@@ -27,13 +25,18 @@ fn carrier(root: &str) -> Result<Seam, Error> {
     let path = Path::new(root).join(file);
     let brief = std::fs::read_to_string(&path)
         .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-    if brief.trim().is_empty() {
-        return Err(bad_request!("intent brief is empty"));
-    }
+    require_non_empty(&brief)?;
 
     // the SDK lays the one file into the turn and holds every anchor to it
     Ok(Seam {
         text: format!("The operator's brief is `{file}`, the one file of the bound tree."),
         ..Seam::files([file.as_str()])
     })
+}
+
+fn require_non_empty(text: &str) -> Result<(), Error> {
+    if text.trim().is_empty() {
+        return Err(bad_request!("intent brief is empty"));
+    }
+    Ok(())
 }

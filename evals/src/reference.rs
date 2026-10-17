@@ -554,7 +554,7 @@ fn spelled(names: &[String]) -> String {
 // consumed the messages under, the topics it published to, the table paths
 // a fixture read that another fixture's recording answered, or why it ran
 // nothing.
-pub struct Oracle {
+struct Oracle {
     outcomes: Vec<Outcome>,
     inbound: Option<String>,
     outbound: Vec<String>,

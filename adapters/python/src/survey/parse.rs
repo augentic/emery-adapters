@@ -9,6 +9,7 @@
 //! once the tree is read (`Resolver::settle`) and carried on the import. A
 //! test module is read the same way, for the behaviours its tests state.
 
+use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
 
 use emery_sdk::survey::Lines;
@@ -23,13 +24,13 @@ mod walk;
 const DATA_BASES: &[&str] = &["TypedDict", "NamedTuple", "Protocol"];
 
 // A type the caller copies, not an export it calls.
-pub(super) fn data_bases(bases: &[String]) -> bool {
+pub fn data_bases(bases: &[String]) -> bool {
     DIALECT.enumerates(bases) || bases.iter().any(|base| DATA_BASES.contains(&base.as_str()))
 }
 
 // A dunder method is a dataclass's or a model's, not a caller's. An empty
 // body declares nothing either way.
-pub(super) fn declares_data(class: &ClassDecl) -> bool {
+pub fn declares_data(class: &ClassDecl) -> bool {
     data_bases(&class.bases)
         || (!class.members.is_empty()
             && class.members.iter().all(|member| match member.kind {
@@ -48,7 +49,7 @@ pub struct Module {
     // The module-level `if __name__ == "__main__":`, if any.
     pub main_guard: Option<Lines>,
     // Every `def test_*`, at module level or in a class.
-    pub tests: Vec<TestDef>,
+    tests: Vec<TestDef>,
     // `__all__`, where declared.
     all: Option<Vec<String>>,
 }
@@ -141,16 +142,16 @@ impl Module {
         *reexports = grouped;
 
         // mark the declared types and classes exported
-        let exported: Vec<&str> = exports.iter().map(|export| export.name.as_str()).collect();
+        let exported: BTreeSet<&str> = exports.iter().map(|export| export.name.as_str()).collect();
         for decl in types {
-            decl.exported = exported.contains(&decl.name.as_str());
+            decl.exported = exported.contains(decl.name.as_str());
         }
         for class in classes {
-            class.exported = exported.contains(&class.name.as_str());
+            class.exported = exported.contains(class.name.as_str());
         }
     }
 
-    pub fn is_init(&self) -> bool {
+    fn is_init(&self) -> bool {
         self.path.ends_with("__init__.py")
     }
 
@@ -182,11 +183,11 @@ impl Module {
 }
 
 #[derive(Debug)]
-pub struct TestDef {
-    pub name: String,
-    pub class: Option<String>,
+struct TestDef {
+    name: String,
+    class: Option<String>,
     // The first line of the docstring, if any.
-    pub doc: Option<String>,
-    pub parametrized: bool,
-    pub lines: Lines,
+    doc: Option<String>,
+    parametrized: bool,
+    lines: Lines,
 }

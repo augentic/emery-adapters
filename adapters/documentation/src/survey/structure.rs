@@ -7,63 +7,47 @@
 
 use emery_sdk::survey::Lines;
 
-/// What one document's lines hold.
+// What one document's lines hold.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Outline {
-    /// The document's line count.
     pub lines: u32,
-    /// Every heading, in order.
     pub headings: Vec<Heading>,
-    /// Every block, in order, each over the lines it spans.
     pub blocks: Vec<Block>,
 }
 
-/// One heading: an ATX or setext heading, or a Gherkin keyword line.
+// One heading: an ATX or setext heading, or a Gherkin keyword line.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Heading {
-    /// The heading's level, `1` for a document's title.
+    // `1` for a document's title.
     pub level: u8,
-    /// The line it stands at, 1-based.
+    // 1-based line number.
     pub line: u32,
-    /// Its text, with the marks stripped.
+    // With the heading marks stripped.
     pub text: String,
 }
 
-/// One block of a document and the lines it spans.
+// One block of a document and the inclusive lines it spans.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Block {
-    /// What the block is.
     pub kind: Kind,
-    /// The lines it spans, inclusive.
     pub lines: Lines,
 }
 
-/// The kinds of block the reader tells apart.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Kind {
-    /// Running prose, to the next blank line or block.
     Paragraph,
-    /// One list item with its continuation lines.
     Item,
-    /// One body row of a table.
     Row,
-    /// One Gherkin step.
     Step,
-    /// A blockquote, consecutive `>` lines together.
     Quote,
-    /// A heading line, or a setext heading with its underline.
     Heading,
-    /// A fenced code block, fence to fence.
     Fence,
-    /// YAML front matter at the top of the document.
     FrontMatter,
-    /// A thematic break, a table's header and delimiter rows, an HTML block.
+    // A thematic break, a table's header and delimiter rows, or an HTML block.
     Other,
 }
 
 impl Outline {
-    /// Reads a document's structure.
-    #[must_use]
     pub fn read(text: &str) -> Self {
         let lines: Vec<&str> = text.lines().collect();
         let mut reader = Reader {
@@ -83,22 +67,21 @@ impl Outline {
         }
     }
 
-    /// Whether the document holds a block of `kind`.
-    #[must_use]
     pub fn holds(&self, kind: Kind) -> bool {
         self.blocks.iter().any(|block| block.kind == kind)
     }
 
-    /// The heading standing at `line`, when one does.
-    #[must_use]
     pub fn heading_at(&self, line: u32) -> Option<&Heading> {
         self.headings.iter().find(|heading| heading.line == line)
     }
+
+    pub fn heading_in(&self, span: Lines) -> Option<&Heading> {
+        self.headings.iter().find(|heading| span.holds(heading.line))
+    }
 }
 
-/// The first non-blank line of a document and its number, when it has one.
-#[must_use]
-pub fn opens(text: &str) -> Option<(u32, &str)> {
+// The first non-blank line of a document and its 1-based number.
+pub fn opening_line(text: &str) -> Option<(u32, &str)> {
     text.lines()
         .enumerate()
         .find(|(_, line)| !line.trim().is_empty())
@@ -132,7 +115,7 @@ struct Reader<'a> {
     open: Option<Open>,
 }
 
-impl Reader<'_> {
+impl<'a> Reader<'a> {
     fn read(&mut self) {
         let mut index = self.front_matter();
         let mut table = false;
@@ -155,7 +138,7 @@ impl Reader<'_> {
             } else if table && line.contains('|') {
                 self.block(Kind::Row, number, number);
                 index += 1;
-            } else if delimiter_row(line) && self.open_paragraph_row(number) {
+            } else if delimiter_row(line) && self.close_table_header(number) {
                 table = true;
                 index += 1;
             } else if let Some(level) = setext_underline(line).filter(|_| self.open_paragraph()) {
@@ -251,7 +234,7 @@ impl Reader<'_> {
 
     // A delimiter row under a one-line paragraph holding `|` makes that
     // paragraph a table's header: both become one `Other` block.
-    fn open_paragraph_row(&mut self, number: u32) -> bool {
+    fn close_table_header(&mut self, number: u32) -> bool {
         let Some(Open {
             kind: Kind::Paragraph,
             start,
@@ -270,8 +253,8 @@ impl Reader<'_> {
     // The open paragraph becomes a heading of `level` with the underline.
     fn setext(&mut self, level: u8, number: u32) {
         let Some(Open { start, .. }) = self.open.take() else { return };
-        let text = self.line(start).trim().to_owned();
-        self.heading(level, start, number, &text);
+        let text = self.line(start).trim();
+        self.heading(level, start, number, text);
     }
 
     fn heading(&mut self, level: u8, start: u32, end: u32, text: &str) {
@@ -283,7 +266,7 @@ impl Reader<'_> {
         });
     }
 
-    fn line(&self, number: u32) -> &str {
+    fn line(&self, number: u32) -> &'a str {
         usize::try_from(number)
             .ok()
             .and_then(|number| self.lines.get(number.wrapping_sub(1)))

@@ -44,7 +44,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 
     // one walk lists the modules and the data files an import may name
     let (data, modules): (Vec<String>, Vec<String>) =
-        workspace::list(workspace, |entry| include(entry) || is_data(entry))?
+        workspace::list(workspace, |entry| is_module(entry) || is_data(entry))?
             .into_iter()
             .partition(|path| Path::new(path).extension().is_some_and(|ext| ext == "json"));
     if modules.is_empty() {
@@ -67,19 +67,22 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     survey::seams(ctx, PROSE, &tree).await
 }
 
-// Never a production module's: dependencies, build output, and tests.
-const SKIP_DIRS: &[&str] =
-    &["node_modules", "vendor", "target", "dist", "build", "test", "tests", "__tests__"];
-// A declaration's or a test's file, by the infix before its extension.
-const SKIP_INFIXES: &[&str] = &["d", "spec", "test"];
 const EXTENSIONS: &[&str] = &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"];
+const TEST_DIRS: &[&str] = &["test", "tests", "__tests__"];
+const TEST_INFIXES: &[&str] = &["spec", "test"];
+// Never a production module's or a test's: dependencies and build output.
+const NEVER_DIRS: &[&str] = &["node_modules", "vendor", "target", "dist", "build"];
 
-fn include(entry: Entry<'_>) -> bool {
+fn skipped_dir(name: &str) -> bool {
+    NEVER_DIRS.contains(&name) || TEST_DIRS.contains(&name)
+}
+
+fn is_module(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
     }
     if let Entry::Dir(_) = entry {
-        return !SKIP_DIRS.contains(&entry.name());
+        return !skipped_dir(entry.name());
     }
     let Some((stem, extension)) = entry.name().rsplit_once('.') else {
         return false;
@@ -88,7 +91,10 @@ fn include(entry: Entry<'_>) -> bool {
         return false;
     }
 
-    !matches!(stem.rsplit_once('.'), Some((_, infix)) if SKIP_INFIXES.contains(&infix))
+    !matches!(
+        stem.rsplit_once('.'),
+        Some((_, infix)) if infix == "d" || TEST_INFIXES.contains(&infix)
+    )
 }
 
 // A `.json` a module may import by path, wherever a module may sit. Only one
@@ -98,15 +104,10 @@ fn is_data(entry: Entry<'_>) -> bool {
         return false;
     }
     if let Entry::Dir(_) = entry {
-        return !SKIP_DIRS.contains(&entry.name());
+        return !skipped_dir(entry.name());
     }
     entry.extension() == Some("json")
 }
-
-const TEST_DIRS: &[&str] = &["test", "tests", "__tests__"];
-const TEST_INFIXES: &[&str] = &["spec", "test"];
-// Never a test's either: dependencies and build output.
-const NEVER_DIRS: &[&str] = &["node_modules", "vendor", "target", "dist", "build"];
 
 fn is_test(entry: Entry<'_>) -> bool {
     if entry.hidden() {

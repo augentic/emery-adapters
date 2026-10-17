@@ -1001,31 +1001,31 @@ version = "0.1.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_ast]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_parser]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_python_trivia]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_source_file]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_text_size]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_unicode_names2]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.ruff_unicode_names2_generator]]
-version = "0.0.17"
+version = "0.0.18"
 criteria = "safe-to-deploy"
 
 [[exemptions.rusqlite]]
@@ -1065,7 +1065,7 @@ version = "1.0.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.schannel]]
-version = "0.1.29"
+version = "0.1.30"
 criteria = "safe-to-deploy"
 
 [[exemptions.schemars]]
