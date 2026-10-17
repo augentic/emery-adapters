@@ -801,16 +801,18 @@ async fn omnia_manifest_refused() {
 #[tokio::test]
 async fn omnia_verify_simulated_host() {
     let project = omnia_tree();
+    project.write("crates/start/Cargo.toml", "[package]\nname = \"start\"\n");
+    project.write("crates/start/src/lib.rs", "//! The `start` stem.\n");
     project.write(
         "crates/orders/src/consuming.rs",
         "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\nuse std::env;\n\npub fn consume() {\n    let _ = env::var(\"PORT\");\n    tokio::spawn(async {});\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
     );
     project.write(
-        "crates/start/src/main_loop.rs",
+        "crates/orders/src/main_loop.rs",
         "//! The loop.\n\npub fn run() {\n    loop {}\n}\n",
     );
     project.write(
-        "crates/start/src/lifecycle.rs",
+        "crates/orders/src/lifecycle.rs",
         "//! The lifecycle.\n\n/// Whether start ran.\npub const START_STARTED_KEY: &str = \"start/started\";\n\
          /// Whether a stop was asked for.\npub const STOP_REQUESTED: &str = \"start/stop-requested\";\n\
          /// How long to wait before exiting.\npub const EXIT_DELAY: u64 = 5;\n\n\
@@ -822,9 +824,11 @@ async fn omnia_verify_simulated_host() {
         "#[tokio::test]\nasync fn waits() {\n    tokio::time::sleep(std::time::Duration::from_secs(1)).await;\n}\n",
     );
     let removed = [
+        "crates/start/Cargo.toml",
+        "crates/start/src/lib.rs",
         "crates/orders/src/consuming.rs",
-        "crates/start/src/main_loop.rs",
-        "crates/start/src/lifecycle.rs",
+        "crates/orders/src/main_loop.rs",
+        "crates/orders/src/lifecycle.rs",
     ];
     let model = Scripted::answering([PASSED, PASSED]).calling(1, [delete_files(&removed)]);
 
@@ -834,17 +838,20 @@ async fn omnia_verify_simulated_host() {
     assert!(verdict.passed);
     let correction = correction(&model);
     for line in [
-        "a module under `crates/start/src/` is the process the source was",
-        "crates/start/src/main_loop.rs:3: a run of its own (`fn run`)",
+        "`crates/start/` is laid for `start`, which the seed and the host are and no crate of the \
+         tree ever is",
+        "crates/start/Cargo.toml\ncrates/start/src/lib.rs",
+        "a module is the process the source was",
+        "crates/orders/src/main_loop.rs:3: a run of its own (`fn run`)",
         "a module simulates the host",
         "crates/orders/src/consuming.rs:1: the workspace's lints silenced",
         "crates/orders/src/consuming.rs:4: the environment read past the host",
         "crates/orders/src/consuming.rs:8: a task of its own",
         "crates/orders/src/consuming.rs:9: a thread of its own",
-        "crates/start/src/lifecycle.rs:4: a start-up flag of its own",
-        "crates/start/src/lifecycle.rs:6: a stop request of its own",
-        "crates/start/src/lifecycle.rs:8: an exit delay of its own",
-        "crates/start/src/lifecycle.rs:12: a step-done write of its own",
+        "crates/orders/src/lifecycle.rs:4: a start-up flag of its own",
+        "crates/orders/src/lifecycle.rs:6: a stop request of its own",
+        "crates/orders/src/lifecycle.rs:8: an exit delay of its own",
+        "crates/orders/src/lifecycle.rs:12: a step-done write of its own",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
@@ -858,7 +865,7 @@ async fn omnia_verify_simulated_host() {
     }
 }
 
-// A module under `crates/start/src` that retries an upstream in a `loop {`,
+// A module under a stem's `src/` that retries an upstream in a `loop {`,
 // and one that runs the process, are refused at the build rather than left
 // to a wave's verify, each under its own finding: the loop's names the
 // line to remove from the module, the run's the module to remove. The
@@ -881,27 +888,27 @@ async fn omnia_build_process_refused() {
          load_stops<P: HttpRequest>(provider: &P) -> omnia_sdk::Result<Vec<String>> {{\n{looped}}}\n"
     );
     let written = [
-        ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
+        ("crates/orders/Cargo.toml", "[package]\nname = \"orders\"\n"),
         (
-            "crates/start/src/lib.rs",
-            "//! The `start` stem.\n\npub mod prefetch;\npub mod runner;\n",
+            "crates/orders/src/lib.rs",
+            "//! The `orders` stem.\n\npub mod prefetch;\npub mod runner;\n",
         ),
-        ("crates/start/src/prefetch.rs", prefetch.as_str()),
+        ("crates/orders/src/prefetch.rs", prefetch.as_str()),
         (
-            "crates/start/src/runner.rs",
+            "crates/orders/src/runner.rs",
             "//! Runs the process.\n\n/// Run it.\npub fn run() {\n    loop {}\n}\n",
         ),
     ];
-    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/prefetch.rs", "crates/start/src/runner.rs"]}"#;
-    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/prefetch.rs"]}"#;
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/prefetch.rs", "crates/orders/src/runner.rs"]}"#;
+    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/prefetch.rs"]}"#;
     let model = Scripted::answering([first, repaired]).calling(0, [write_files(&written)]).calling(
         1,
         [
             edit_files(&[
-                ("crates/start/src/prefetch.rs", looped, once),
-                ("crates/start/src/lib.rs", "pub mod runner;\n", ""),
+                ("crates/orders/src/prefetch.rs", looped, once),
+                ("crates/orders/src/lib.rs", "pub mod runner;\n", ""),
             ]),
-            delete_files(&["crates/start/src/runner.rs"]),
+            delete_files(&["crates/orders/src/runner.rs"]),
         ],
     );
 
@@ -910,10 +917,10 @@ async fn omnia_build_process_refused() {
 
     let correction = correction(&model);
     for line in [
-        "a module under `crates/start/src/` is the process the source was",
-        "crates/start/src/runner.rs:4: a run of its own (`fn run`)",
+        "a module is the process the source was",
+        "crates/orders/src/runner.rs:4: a run of its own (`fn run`)",
         "a module simulates the host",
-        "crates/start/src/prefetch.rs:18: a loop that polls or retries (`loop {`)",
+        "crates/orders/src/prefetch.rs:18: a loop that polls or retries (`loop {`)",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
@@ -921,89 +928,145 @@ async fn omnia_build_process_refused() {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert!(
-        !text(&project, "crates/start/src/prefetch.rs").contains("    loop {"),
+        !text(&project, "crates/orders/src/prefetch.rs").contains("    loop {"),
         "the loop is edited into one fetch"
     );
-    assert!(project.read("crates/start/src/runner.rs").is_none(), "the module is removed");
+    assert!(project.read("crates/orders/src/runner.rs").is_none(), "the module is removed");
     assert!(
-        report.written.iter().any(|path| path == "crates/start/src/prefetch.rs"),
+        report.written.iter().any(|path| path == "crates/orders/src/prefetch.rs"),
         "the loader is reported: {:?}",
         report.written
     );
     assert!(
-        !report.written.iter().any(|path| path == "crates/start/src/runner.rs"),
+        !report.written.iter().any(|path| path == "crates/orders/src/runner.rs"),
         "a removed module is not reported: {:?}",
         report.written
     );
 }
 
-// A module under `crates/start/src` that loads a table into the store for
-// another stem, or warms a token before that stem asks, through the trait
-// or as a method of the provider, is refused at the build under a finding
-// of its own, apart from the lifecycle's, with each call named at its line;
-// a `start` module holding neither — a cross-cutting rule, naming
-// `access_token` as a field and a rename and never calling it — passes.
-// The slice's own turn deletes the loader with its `pub mod` line, and the
-// accepted report names what the tree still holds.
+// Laying `crates/start/` at a build is refused whole: the seed and the host
+// are `start`, so every file under `crates/start/` is named and removed
+// through `delete` with any `start` line dropped from the root `Cargo.toml`.
 #[tokio::test]
-async fn omnia_build_loader_refused() {
+async fn omnia_build_start_crate_refused() {
     let project = scratch();
-    let loader = "//! Loads the stop table and warms the token.\n\nuse omnia_sdk::{Identity, \
-                  StateStore};\n\n/// Load the stops into the store.\n///\n/// # Errors\n///\n/// \
-                  `server_error` when the store refuses.\npub async fn load_stops<P: \
-                  StateStore>(provider: &P, stops: &[u8]) -> omnia_sdk::Result<()> {\n    \
-                  provider.set(\"orders/stops\", stops, None).await\n}\n\n/// Warm \
-                  the token.\n///\n/// # Errors\n///\n/// `bad_gateway` when the issuer \
-                  refuses.\npub async fn warm_token<P: Identity>(provider: &P) -> \
-                  omnia_sdk::Result<String> {\n    Identity::access_token(provider, \
-                  \"orders\").await\n}\n";
-    let guard = "//! The bearer rule every handler calls first.\n\nuse serde::Deserialize;\n\n/// \
-                 The token a caller presents, as the issuer spells it.\n#[derive(Deserialize)]\npub \
-                 struct Bearer {\n    /// The token itself.\n    #[serde(rename = \
-                 \"access_token\")]\n    pub access_token: String,\n}\n\n/// Whether the request \
-                 carries the deployment's bearer token.\n#[must_use]\npub fn authorised(header: \
-                 Option<&str>, token: &str) -> bool {\n    header.and_then(|value| \
-                 value.strip_prefix(\"Bearer \")) == Some(token)\n}\n";
+    let start_path = "start = { path = \"crates/start\" }\n";
+    let start_crate = "start.workspace = true\n";
     let written = [
         ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
-        ("crates/start/src/lib.rs", "//! The `start` stem.\n\npub mod guard;\npub mod stops;\n"),
-        ("crates/start/src/guard.rs", guard),
-        ("crates/start/src/stops.rs", loader),
+        ("crates/start/src/lib.rs", "//! The `start` stem.\n\npub mod start;\n"),
+        (
+            "crates/start/src/start.rs",
+            "//! Startup helper.\n\n/// Check a credential.\n#[must_use]\npub fn non_empty(value: &str) -> bool {\n    !value.trim().is_empty()\n}\n",
+        ),
     ];
-    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs", "crates/start/src/stops.rs"]}"#;
-    let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/guard.rs"]}"#;
-    let model = Scripted::answering([first, repaired]).calling(0, [write_files(&written)]).calling(
-        1,
-        [
-            edit_files(&[("crates/start/src/lib.rs", "pub mod stops;\n", "")]),
-            delete_files(&["crates/start/src/stops.rs"]),
-        ],
-    );
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "Cargo.toml"]}"#;
+    let repaired = r#"{"covered": [], "written": []}"#;
+    let model = Scripted::answering([first, repaired])
+        .calling(
+            0,
+            [
+                write_files(&written),
+                edit_files(&[
+                    (
+                        "Cargo.toml",
+                        OMNIA_PATH_CRATE_ANCHOR,
+                        &format!("{OMNIA_PATH_CRATE_ANCHOR}{start_path}"),
+                    ),
+                    ("Cargo.toml", OMNIA_STEM_ANCHOR, &format!("{OMNIA_STEM_ANCHOR}{start_crate}")),
+                ]),
+            ],
+        )
+        .calling(
+            1,
+            [
+                edit_files(&[("Cargo.toml", start_path, ""), ("Cargo.toml", start_crate, "")]),
+                delete_files(&[
+                    "crates/start/Cargo.toml",
+                    "crates/start/src/lib.rs",
+                    "crates/start/src/start.rs",
+                ]),
+            ],
+        );
 
     let report = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
     model.assert_exhausted();
 
     let correction = correction(&model);
     for line in [
-        "a module under `crates/start/src/` loads for another stem",
-        "crates/start/src/stops.rs:11: a table loaded for another stem (`provider.set`)",
-        "crates/start/src/stops.rs:20: a token warmed before use (`Identity::access_token`)",
+        "`crates/start/` is laid for `start`, which the seed and the host are and no crate of the \
+         tree ever is",
+        "crates/start/Cargo.toml\ncrates/start/src/lib.rs\ncrates/start/src/start.rs",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["is the process the source was", "simulates the host", "guard.rs:"] {
-        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
-    }
-    assert!(project.read("crates/start/src/stops.rs").is_none(), "the loader is removed");
+    assert!(project.read("crates/start/src/start.rs").is_none(), "`crates/start/` is removed");
     assert!(
-        report.written.iter().any(|path| path == "crates/start/src/guard.rs"),
-        "the rule is reported: {:?}",
+        !report.written.iter().any(|path| path.starts_with("crates/start/")),
+        "removed `crates/start/` files are not reported: {:?}",
         report.written
     );
+}
+
+// A `Deserialize` struct under a stem's `src/` whose body holds a single
+// `data` field — wrapping an HTTP response in the source client's
+// `response.data` property — is refused at the build with its path and line
+// named, while a multi-field `Deserialize` struct and a struct without
+// `Deserialize` pass. The slice's own turn removes the wrapper structs, and
+// the accepted report names the module.
+#[tokio::test]
+async fn omnia_build_wrappers_refused() {
+    let project = scratch();
+    let wrapped = "#[derive(Debug, Clone, Deserialize)]\npub struct StopsResponse {\n    \
+                   #[serde(default)]\n    pub data: Vec<Stop>,\n}\n\n#[derive(Deserialize)]\n\
+                   struct AllocationsResponse {\n    data: Allocations,\n}\n";
+    let direct = "/// Vehicles allocated to a trip.\n#[derive(Debug, Clone, Deserialize)]\npub \
+                  struct Allocations {\n    /// All vehicle allocations.\n    #[serde(default)]\n    \
+                  pub all: Vec<String>,\n}\n";
+    let module = |body: &str| {
+        format!(
+            "//! Fetches stops and allocations.\n\nuse serde::Deserialize;\n\n/// A GTFS \
+             stop.\n#[derive(Debug, Clone, Deserialize)]\npub struct Stop {{\n    /// The stop \
+             code.\n    pub stop_code: String,\n    /// The stop latitude.\n    pub stop_lat: \
+             f64,\n}}\n\n/// Raw bytes held in memory.\npub struct Holder {{\n    /// The \
+             bytes.\n    pub data: Vec<u8>,\n}}\n\n{body}"
+        )
+    };
+    let first_tree = module(&format!("{wrapped}\n{direct}"));
+    let written = [
+        ("crates/stops/Cargo.toml", "[package]\nname = \"stops\"\n"),
+        ("crates/stops/src/lib.rs", "//! The `stops` stem.\n\npub mod fetching;\n"),
+        ("crates/stops/src/fetching.rs", first_tree.as_str()),
+    ];
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/stops/Cargo.toml", "crates/stops/src/lib.rs", "crates/stops/src/fetching.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written)])
+        .calling(1, [edit_files(&[("crates/stops/src/fetching.rs", &format!("{wrapped}\n"), "")])]);
+
+    let accepted = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a struct wraps an HTTP response in a single `data` field",
+        "crates/stops/src/fetching.rs:21: response wrapper struct `StopsResponse` wraps a single \
+         `data` field",
+        "crates/stops/src/fetching.rs:27: response wrapper struct `AllocationsResponse` wraps a \
+         single `data` field",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["`Stop`", "`Holder`", "`Allocations`"] {
+        assert!(!correction.contains(absent), "{absent} is no finding: {correction}");
+    }
     assert!(
-        !report.written.iter().any(|path| path == "crates/start/src/stops.rs"),
-        "a removed module is not reported: {:?}",
-        report.written
+        !text(&project, "crates/stops/src/fetching.rs").contains("StopsResponse"),
+        "the wrapper struct is removed"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/stops/src/fetching.rs"),
+        "the module is reported: {:?}",
+        accepted.written
     );
 }
 

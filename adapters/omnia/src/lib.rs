@@ -29,22 +29,24 @@
 //!   whole, and a crate the tree held before the turn is an earlier slice's;
 //! - at a wave's verify, every static file of the template stands byte for
 //!   byte, a file the tree lacks among them;
-//! - no module under `crates/start/src` is the process the source was: a
+//! - no crate is laid at `crates/start/`: the seed and the host are the
+//!   program's start, a deployment setting sits in `crates/common/src/config.rs`,
+//!   a cross-cutting rule in `crates/common/`, and a stated health route in its
+//!   own stem's crate, so any file under `crates/start/` is named and removed;
+//! - no module under `crates/*/src` is the process the source was: a
 //!   function that starts, stops, runs, listens, serves, bootstraps, or
 //!   shuts it down, or a `Main`, `App`, `Server`, or `Application` type, is
 //!   named with its line, and the module is removed rather than renamed;
-//! - no module under `crates/start/src` loads for another stem: one that
-//!   writes a table to the store or warms an access token, through the
-//!   trait or as a method of the provider, is named with its line, since a
-//!   stage reads its table cache-aside and a token is read where it is
-//!   sent, and the module is removed; a write that keeps a flag is the
-//!   simulation's below, not a loader's;
 //! - no read of the store under a constant key answers empty on a miss: a
 //!   table read under one key is fetched from its upstream and stored when
 //!   the store holds none, so a read whose function returns an empty
 //!   collection, defaults the miss, or answers the `None` arm as nothing is
 //!   named at the answering line, while a read under a key built from the
 //!   input is a lookup and passes;
+//! - no `Deserialize` struct under `crates/*/src` wraps an HTTP response in a
+//!   single `data` field: the wire carries the response body at its root,
+//!   never under the source's HTTP client property (`response.data`), so the
+//!   wrapper is named at its line and removed;
 //! - no module under `crates/*/src` simulates the host: one that silences
 //!   the workspace's lints for its crate, spawns a task, a timer, or a
 //!   thread, reaches the environment, the file system, a socket, or a
@@ -223,17 +225,51 @@ impl<'a> Tree<'a> {
     }
 
     // The rules a build and a verify share: the root manifest outside its
-    // lists, no simulated host, no miss answered empty, the tables spelled
-    // into their lists, every handler listed, every setting read.
+    // lists, no simulated host, no miss answered empty, no response wrapper
+    // struct, the tables spelled into their lists, every handler listed,
+    // every setting read.
     fn held(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.manifest()?);
         findings.extend(self.simulated()?);
         findings.extend(self.misses()?);
+        findings.extend(self.wrappers()?);
         findings.extend(self.tables()?);
         findings.extend(self.unlisted()?);
         findings.extend(self.settings()?);
         Ok(findings)
+    }
+
+    // One finding naming every `Deserialize` struct under a stem's `src/`
+    // whose body holds a single `data` field, each `<path>:<line>: <what>`:
+    // a client's `.data` property wrapped around the response body the wire
+    // carries at its root.
+    fn wrappers(&self) -> Result<Vec<String>, Error> {
+        let mut lines = Vec::new();
+        for file in self.modules()? {
+            let path = self.relative(&file);
+            if path.starts_with(COMMON) || path.starts_with(START_PREFIX) {
+                continue;
+            }
+            let text = code(&read(&file)?);
+            for (number, name) in wrappers(&text) {
+                lines.push(format!(
+                    "{path}:{number}: response wrapper struct `{name}` wraps a single `data` field"
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return Ok(Vec::new());
+        }
+        lines.sort();
+        Ok(vec![format!(
+            "a struct wraps an HTTP response in a single `data` field, which is the source's \
+             HTTP client property (`response.data`) and never a field on the wire: remove each \
+             wrapper struct named through `edit_files` and deserialize `response.body()` \
+             directly into the body's own shape, a top-level `Vec<T>` for a JSON array or a \
+             struct with the body's fields at its root:\n{}",
+            lines.join("\n")
+        )])
     }
 
     // One finding naming every `StateStore::get` under a constant key whose
@@ -384,47 +420,32 @@ impl<'a> Tree<'a> {
         )
     }
 
-    // Three findings at most, each naming `<path>:<line>: <what>` for every
-    // line under a stem's `src/`, sorted: the words of `LIFECYCLE` under
-    // `crates/start/src`, whose repair removes the module, the words of
-    // `LOADER` in the `start` modules that remain, whose repair removes the
-    // module too, and, in the modules that remain, the spellings of
-    // `SIMULATED` under any stem, whose repair removes the spelling. A tree
-    // with no `crates/` answers none.
+    // Three findings at most: any file laid under `crates/start/`, whose
+    // repair removes the crate, the words of `LIFECYCLE` under a stem's
+    // `src/`, whose repair removes the module, and, in the modules that
+    // remain, the spellings of `SIMULATED`, whose repair removes the
+    // spelling. A tree with no `crates/` answers none.
     fn simulated(&self) -> Result<Vec<String>, Error> {
+        let start: Vec<String> =
+            files(&self.root.join(START))?.into_iter().map(|file| self.relative(&file)).collect();
         let mut lifecycle = Vec::new();
-        let mut loaders = Vec::new();
         let mut simulated = Vec::new();
         for file in self.modules()? {
-            let text = code(&read(&file)?);
             let path = self.relative(&file);
+            if path.starts_with(START_PREFIX) {
+                continue;
+            }
+            let text = code(&read(&file)?);
             let mut process = Vec::new();
-            let mut loading = Vec::new();
-            if path.starts_with(START) {
-                for (number, line) in text.lines().enumerate() {
-                    for (word, what) in LIFECYCLE {
-                        if spells(line, word) {
-                            process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
-                        }
-                    }
-                    // a write that is a flag machine's is the simulation's,
-                    // not a loader's
-                    if SIMULATED.iter().any(|(needle, _)| line.contains(needle)) {
-                        continue;
-                    }
-                    for (word, what) in LOADER {
-                        if spells(line, word) {
-                            loading.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
-                        }
+            for (number, line) in text.lines().enumerate() {
+                for (word, what) in LIFECYCLE {
+                    if spells(line, word) {
+                        process.push(format!("{path}:{}: {what} (`{word}`)", number + 1));
                     }
                 }
             }
             if !process.is_empty() {
                 lifecycle.extend(process);
-                continue;
-            }
-            if !loading.is_empty() {
-                loaders.extend(loading);
                 continue;
             }
             for (number, line) in text.lines().enumerate() {
@@ -441,27 +462,26 @@ impl<'a> Tree<'a> {
             }
         }
         let mut findings = Vec::new();
+        if !start.is_empty() {
+            findings.push(format!(
+                "`{START}/` is laid for `start`, which the seed and the host are and no crate of \
+                 the tree ever is: a deployment setting a handler reads is a constant of \
+                 `{CATALOG}`, a cross-cutting rule is a `pub fn` of `common`, a stated health \
+                 route is its own stem's, and how the source readied itself, loaded its \
+                 credentials or tables, or shut down is laid nowhere; remove every file under \
+                 `{START}/` through `delete` and drop any `start` line from the root `Cargo.toml` \
+                 through `edit_files`:\n{}",
+                start.join("\n")
+            ));
+        }
         if !lifecycle.is_empty() {
             lifecycle.sort();
             findings.push(format!(
-                "a module under `{START}` is the process the source was, which the host is and the \
-                 tree never simulates; remove each module named, with its `pub mod` line and its \
-                 test, through `delete` rather than rename it, and leave what it stood for to the \
+                "a module is the process the source was, which the host is and the tree never \
+                 simulates; remove each module named, with its `pub mod` line and its test, \
+                 through `delete` rather than rename it, and leave what it stood for to the \
                  report:\n{}",
                 lifecycle.join("\n")
-            ));
-        }
-        if !loaders.is_empty() {
-            loaders.sort();
-            findings.push(format!(
-                "a module under `{START}` loads for another stem what that stem reads at use: a \
-                 table a stage reads is read cache-aside by the stage's own stem, fetched on a \
-                 miss and stored under one key there, and a token or a secret is read through \
-                 its capability where it is used, so `start` lays no loader and warms nothing; \
-                 remove each module named, with its `pub mod` line and its test, through \
-                 `delete`, and lay what else it held that the translation keeps, a stated health \
-                 route or a cross-cutting rule, in a module without it:\n{}",
-                loaders.join("\n")
             ));
         }
         if !simulated.is_empty() {
@@ -772,8 +792,9 @@ const SIMULATED: &[(&str, &str)] = &[
     ("b\"1\"", "a step-done write of its own"),
 ];
 
-// The modules of the `start` stem, where the source's process would be laid.
-const START: &str = "crates/start/src/";
+// The forbidden `start` crate directory: the seed and the host are `start`.
+const START: &str = "crates/start";
+const START_PREFIX: &str = "crates/start/";
 
 // The shared crate, whose tables declare a constant and publish to none.
 const COMMON: &str = "crates/common/src/";
@@ -781,7 +802,7 @@ const COMMON: &str = "crates/common/src/";
 // The configuration catalog, one `pub const` per key the deployment supplies.
 const CATALOG: &str = "crates/common/src/config.rs";
 
-// What no module under `START` spells, each the process the source was: a
+// What no module of a stem spells, each the process the source was: a
 // function that starts, stops, runs, listens, serves, bootstraps, or shuts
 // it down, or a type that is it. Each is matched as a word, so
 // `fn start_at` and `struct AppError` are none.
@@ -797,25 +818,6 @@ const LIFECYCLE: &[(&str, &str)] = &[
     ("struct App", "a lifecycle type of its own"),
     ("struct Server", "a lifecycle type of its own"),
     ("struct Application", "a lifecycle type of its own"),
-];
-
-// What no module under `START` spells once `LIFECYCLE` is clear, each a
-// start-up step that loads for another stem: a table written to the store
-// for a stage to read, or a token warmed before the stem that sends it
-// asks, spelled through the trait or as a method of the provider. Each is
-// matched as a word, so `headers.set(` and `access_token_for` are none, and
-// the token's is the call alone, so a field, a rename, or a string named
-// `access_token` is none.
-const LOADER: &[(&str, &str)] = &[
-    ("StateStore::set", "a table loaded for another stem"),
-    ("StateStore>::set", "a table loaded for another stem"),
-    ("provider.set", "a table loaded for another stem"),
-    ("provider().set", "a table loaded for another stem"),
-    ("store.set", "a table loaded for another stem"),
-    ("Identity::access_token", "a token warmed before use"),
-    ("Identity>::access_token", "a token warmed before use"),
-    ("provider.access_token", "a token warmed before use"),
-    ("provider().access_token", "a token warmed before use"),
 ];
 
 // The empty collections a miss is answered as, each spelled whole: behind a
@@ -1195,6 +1197,74 @@ fn handlers(text: &str) -> Vec<(usize, &str)> {
     found
 }
 
+// Every `Deserialize` struct `text` declares whose body holds a single
+// `data` field, each its 1-based line and name: a client's `.data` holder
+// wrapped around the response body.
+fn wrappers(text: &str) -> Vec<(usize, &str)> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut found = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some(name) = opens_struct(line) else { continue };
+        if !derives_deserialize(&lines, index) {
+            continue;
+        }
+        let Some(end) = lines[index + 1..]
+            .iter()
+            .position(|line| line.trim_start().starts_with('}'))
+            .map(|offset| index + 1 + offset)
+        else {
+            continue;
+        };
+        let fields: Vec<&str> =
+            lines[index + 1..end].iter().filter_map(|line| field_name(line)).collect();
+        if fields == ["data"] {
+            found.push((index + 1, name));
+        }
+    }
+    found
+}
+
+fn opens_struct(line: &str) -> Option<&str> {
+    let mut rest = line.trim_start();
+    if let Some(after) = rest.strip_prefix("pub") {
+        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
+        rest = scoped.map_or(after, |(_, after)| after).trim_start();
+    }
+    let rest = rest.strip_prefix("struct ")?;
+    let name = rest.split(|ch: char| !identifier(ch)).next()?;
+    (!name.is_empty() && line.trim_end().ends_with('{')).then_some(name)
+}
+
+fn derives_deserialize(lines: &[&str], index: usize) -> bool {
+    for line in lines[..index].iter().rev() {
+        let text = line.trim();
+        if text.is_empty() {
+            continue;
+        }
+        if text.ends_with('}') || text.ends_with(';') || text.ends_with('{') {
+            return false;
+        }
+        if spells(text, "Deserialize") {
+            return true;
+        }
+    }
+    false
+}
+
+fn field_name(line: &str) -> Option<&str> {
+    let mut rest = line.trim_start();
+    if rest.is_empty() || rest.starts_with('#') {
+        return None;
+    }
+    if let Some(after) = rest.strip_prefix("pub") {
+        let scoped = after.strip_prefix('(').and_then(|scope| scope.split_once(')'));
+        rest = scoped.map_or(after, |(_, after)| after).trim_start();
+    }
+    let (name, _) = rest.split_once(':')?;
+    let name = name.trim();
+    ident(name).then_some(name)
+}
+
 // The entries of `dir`, sorted; an absent `dir` has none.
 fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
     let listing = match fs::read_dir(dir) {
@@ -1245,9 +1315,9 @@ fn occupied(dir: &Path) -> Result<bool, Error> {
     Ok(false)
 }
 
-// Every `.rs` file beneath `dir`, symbolic links left unfollowed.
-fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let mut files = Vec::new();
+// Every regular file beneath `dir`, symbolic links left unfollowed, sorted.
+fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut found = Vec::new();
     let mut pending = vec![dir.to_path_buf()];
     while let Some(dir) = pending.pop() {
         for path in entries(&dir)? {
@@ -1255,12 +1325,21 @@ fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
                 .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
             if meta.is_dir() {
                 pending.push(path);
-            } else if meta.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
-                files.push(path);
+            } else if meta.is_file() {
+                found.push(path);
             }
         }
     }
-    Ok(files)
+    found.sort();
+    Ok(found)
+}
+
+// Every `.rs` file beneath `dir`, symbolic links left unfollowed.
+fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    Ok(files(dir)?
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
+        .collect())
 }
 
 /// The prompts and the references embedded in the adapter.
