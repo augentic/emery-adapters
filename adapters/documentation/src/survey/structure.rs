@@ -74,10 +74,14 @@ impl Outline {
     pub fn heading_at(&self, line: u32) -> Option<&Heading> {
         self.headings.iter().find(|heading| heading.line == line)
     }
+
+    pub fn heading_in(&self, span: Lines) -> Option<&Heading> {
+        self.headings.iter().find(|heading| span.holds(heading.line))
+    }
 }
 
 // The first non-blank line of a document and its 1-based number.
-pub fn opens(text: &str) -> Option<(u32, &str)> {
+pub fn opening_line(text: &str) -> Option<(u32, &str)> {
     text.lines()
         .enumerate()
         .find(|(_, line)| !line.trim().is_empty())
@@ -111,7 +115,7 @@ struct Reader<'a> {
     open: Option<Open>,
 }
 
-impl Reader<'_> {
+impl<'a> Reader<'a> {
     fn read(&mut self) {
         let mut index = self.front_matter();
         let mut table = false;
@@ -134,7 +138,7 @@ impl Reader<'_> {
             } else if table && line.contains('|') {
                 self.block(Kind::Row, number, number);
                 index += 1;
-            } else if delimiter_row(line) && self.open_paragraph_row(number) {
+            } else if delimiter_row(line) && self.close_table_header(number) {
                 table = true;
                 index += 1;
             } else if let Some(level) = setext_underline(line).filter(|_| self.open_paragraph()) {
@@ -230,7 +234,7 @@ impl Reader<'_> {
 
     // A delimiter row under a one-line paragraph holding `|` makes that
     // paragraph a table's header: both become one `Other` block.
-    fn open_paragraph_row(&mut self, number: u32) -> bool {
+    fn close_table_header(&mut self, number: u32) -> bool {
         let Some(Open {
             kind: Kind::Paragraph,
             start,
@@ -249,8 +253,8 @@ impl Reader<'_> {
     // The open paragraph becomes a heading of `level` with the underline.
     fn setext(&mut self, level: u8, number: u32) {
         let Some(Open { start, .. }) = self.open.take() else { return };
-        let text = self.line(start).trim().to_owned();
-        self.heading(level, start, number, &text);
+        let text = self.line(start).trim();
+        self.heading(level, start, number, text);
     }
 
     fn heading(&mut self, level: u8, start: u32, end: u32, text: &str) {
@@ -262,7 +266,7 @@ impl Reader<'_> {
         });
     }
 
-    fn line(&self, number: u32) -> &str {
+    fn line(&self, number: u32) -> &'a str {
         usize::try_from(number)
             .ok()
             .and_then(|number| self.lines.get(number.wrapping_sub(1)))

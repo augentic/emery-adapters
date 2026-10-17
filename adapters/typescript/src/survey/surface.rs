@@ -274,10 +274,12 @@ impl Recogniser for TypeScript {
         if let Some(class) = decorated_class_at(module, lines) {
             return at_decorated_class(tree, module, class);
         }
-        if let Some(decorated) = decorated_at(module, lines) {
+        if let Some(decorated) =
+            decorated_at(module, lines).or_else(|| decorated_enclosing(module, lines))
+        {
             return at_decorated_method(tree, module, decorated);
         }
-        if let Some(export) = export_at(module, lines) {
+        if let Some(export) = export_at(module, lines).or_else(|| export_enclosing(module, lines)) {
             return at_export(tree, module, export, stem);
         }
         Derived::named(tree, module, lines, name, stem)
@@ -420,33 +422,34 @@ fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
         .find(|d| lines.holds(d.lines.start))
 }
 
-// The registering decorator of the first method starting within `lines`,
-// else of the one enclosing their first line.
 fn decorated_at(module: &Module, lines: Lines) -> Option<&Decorated> {
-    let methods =
-        || module.decorated.iter().filter(|d| d.member.is_some() && d.registering(&DIALECT));
-    methods()
-        .find(|d| lines.holds(d.lines.start))
-        .or_else(|| methods().find(|d| d.lines.holds(lines.start)))
+    registering_methods(module).find(|d| lines.holds(d.lines.start))
 }
 
-// A function or class whose declaration starts within `lines`, else a
-// value's, else the one enclosing their first line.
+fn decorated_enclosing(module: &Module, lines: Lines) -> Option<&Decorated> {
+    registering_methods(module).find(|d| d.lines.holds(lines.start))
+}
+
+fn registering_methods(module: &Module) -> impl Iterator<Item = &Decorated> {
+    module.decorated.iter().filter(|d| d.member.is_some() && d.registering(&DIALECT))
+}
+
+// A function or class before a value.
 fn export_at(module: &Module, lines: Lines) -> Option<&Export> {
+    let starts = |export: &&Export| lines.holds(module.declared_at(export).start);
     let exports = || module.exports.iter();
     exports()
         .filter(|export| export.kind.callable())
-        .find(|export| lines.holds(module.declared_at(export).start))
-        .or_else(|| {
-            exports()
-                .filter(|export| export.kind.valued())
-                .find(|export| lines.holds(module.declared_at(export).start))
-        })
-        .or_else(|| {
-            exports()
-                .filter(|export| export.kind.callable() || export.kind.valued())
-                .find(|export| module.declared_at(export).holds(lines.start))
-        })
+        .find(starts)
+        .or_else(|| exports().filter(|export| export.kind.valued()).find(starts))
+}
+
+fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
+    module
+        .exports
+        .iter()
+        .filter(|export| export.kind.callable() || export.kind.valued())
+        .find(|export| module.declared_at(export).holds(lines.start))
 }
 
 // The directory segments past the one that spells `stem`, a parameter by its

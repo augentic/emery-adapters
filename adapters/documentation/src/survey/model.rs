@@ -9,7 +9,7 @@ use emery_sdk::survey::{Facts, Inventory, Lines, Surface};
 use emery_sdk::{Context, Error, Model, serde_json, tracing};
 
 use super::structure::{self, Kind};
-use super::subjects::{Document, Prepared};
+use super::subjects::Prepared;
 
 // One subject the survey named, with what code derived from its anchor.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -32,7 +32,7 @@ impl Prepared<'_> {
     // Runs the survey turn over the prepared documents and holds the answer to
     // the tree: every document is a subject's entry or listed `unreached`, and
     // no two subjects anchor at one line.
-    pub async fn subjects<P: Model>(
+    pub async fn inventory<P: Model>(
         &self, ctx: &Context<'_, P>, docs: &'static [emery_sdk::Doc],
     ) -> Result<Inventory, Error> {
         let source = self.source();
@@ -78,7 +78,7 @@ impl Prepared<'_> {
             let holds = if holds.is_empty() { "prose alone".to_owned() } else { holds.join(", ") };
             let _ = write!(text, "\n- `{}` — {} lines; {holds}", doc.path, outline.lines);
             if outline.headings.is_empty() {
-                match structure::opens(&doc.text) {
+                match structure::opening_line(&doc.text) {
                     Some((line, opening)) => {
                         let _ = write!(
                             text,
@@ -134,7 +134,7 @@ impl Prepared<'_> {
 
     // Derives each named subject's span and lead from its accepted anchor in
     // document and line order.
-    pub fn build(&self, inventory: &Inventory) -> Vec<Subject> {
+    pub fn subjects(&self, inventory: &Inventory) -> Vec<Subject> {
         // the accepted anchors by document, each at its start line
         let mut by_doc: BTreeMap<&str, Vec<(u32, &Surface)>> = BTreeMap::new();
         for surface in &inventory.surfaces {
@@ -147,7 +147,7 @@ impl Prepared<'_> {
         let mut subjects = Vec::new();
         for doc in &self.documents {
             let Some(anchored) = by_doc.get_mut(doc.path.as_str()) else { continue };
-            anchored.sort_by_key(|(start, surface)| (*start, surface.name.clone()));
+            anchored.sort_by_key(|(start, surface)| (*start, surface.name.as_str()));
             anchored.dedup_by_key(|(start, _)| *start);
             let end = doc.outline.lines.max(1);
             for (index, (start, surface)) in anchored.iter().enumerate() {
@@ -189,8 +189,11 @@ impl Prepared<'_> {
             }
             let doc = self.document(&subject.entry);
             let heading = doc
-                .and_then(|doc| doc.outline.heading_at(subject.anchor))
-                .or_else(|| doc.and_then(|doc| doc.outline.heading_at(first_heading(doc, subject))))
+                .and_then(|doc| {
+                    doc.outline
+                        .heading_at(subject.anchor)
+                        .or_else(|| doc.outline.heading_in(subject.span))
+                })
                 .map(|heading| heading.text.as_str());
             let file = subject.entry.rsplit('/').next().and_then(|name| name.split('.').next());
             let candidates = [
@@ -226,15 +229,4 @@ fn clipped(text: &str) -> String {
 
 fn start_line(lines: Option<(u64, u64)>) -> u32 {
     lines.map_or(1, |(start, _)| u32::try_from(start).unwrap_or(u32::MAX).max(1))
-}
-
-// The first heading within a subject's span, where it was anchored at a
-// line that is none: the document's title for a subject anchored at its
-// first line.
-fn first_heading(doc: &Document, subject: &Subject) -> u32 {
-    doc.outline
-        .headings
-        .iter()
-        .find(|heading| subject.span.holds(heading.line))
-        .map_or(subject.anchor, |heading| heading.line)
 }

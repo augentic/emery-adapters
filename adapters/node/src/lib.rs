@@ -16,20 +16,8 @@ pub struct Adapter;
 
 impl TargetAdapter for Adapter {
     const BASE: Base = Base::Fresh;
-    const MERGE_RULES: &'static [MergeRule] = &[
-        MergeRule {
-            paths: Cow::Borrowed("package-lock.json"),
-            strategy: MergeStrategy::Ours,
-        },
-        MergeRule {
-            paths: Cow::Borrowed("src/index.ts"),
-            strategy: MergeStrategy::Union,
-        },
-        MergeRule {
-            paths: Cow::Borrowed("**/index.ts"),
-            strategy: MergeStrategy::Union,
-        },
-    ];
+    const MERGE_RULES: &'static [MergeRule] =
+        &[ours("package-lock.json"), union("src/index.ts"), union("**/index.ts")];
     const WORKER: Worker = Worker {
         egress: &["registry.npmjs.org"],
         read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
@@ -42,6 +30,20 @@ impl TargetAdapter for Adapter {
 
     async fn verify<P: Model>(ctx: &VerifyContext<'_, P>) -> Result<Verdict, Error> {
         emery_sdk::target::verify(ctx, PROSE, |_| Ok(Vec::new())).await
+    }
+}
+
+const fn ours(paths: &'static str) -> MergeRule {
+    MergeRule {
+        paths: Cow::Borrowed(paths),
+        strategy: MergeStrategy::Ours,
+    }
+}
+
+const fn union(paths: &'static str) -> MergeRule {
+    MergeRule {
+        paths: Cow::Borrowed(paths),
+        strategy: MergeStrategy::Union,
     }
 }
 

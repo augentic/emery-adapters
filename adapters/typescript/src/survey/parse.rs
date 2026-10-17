@@ -8,6 +8,7 @@
 //! the tree is read (`Resolver::settle`) and carried on the import. A test
 //! module is read the same way, for the cases it states.
 
+use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
 
 use emery_sdk::survey::Lines;
@@ -126,13 +127,13 @@ impl Module {
         }
 
         // mark the declared types and classes exported
-        let exported: Vec<&str> =
+        let exported: BTreeSet<&str> =
             exports.iter().map(|export| export.local.as_deref().unwrap_or(&export.name)).collect();
         for decl in types {
-            decl.exported = exported.contains(&decl.name.as_str());
+            decl.exported = exported.contains(decl.name.as_str());
         }
         for class in classes {
-            class.exported = exported.contains(&class.name.as_str());
+            class.exported = exported.contains(class.name.as_str());
         }
     }
 }

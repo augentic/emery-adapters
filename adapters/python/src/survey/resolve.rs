@@ -69,14 +69,8 @@ impl Resolver {
 
         // the owned names from the top-level modules
         for path in &modules {
-            let under = |root: &str| {
-                if root.is_empty() {
-                    (!path.contains('/')).then_some(path.as_str())
-                } else {
-                    path.strip_prefix(&format!("{root}/")).filter(|rest| !rest.contains('/'))
-                }
-            };
-            if let Some(file) = under("").or_else(|| under("src"))
+            let file = path.strip_prefix("src/").unwrap_or(path);
+            if !file.contains('/')
                 && let Some(stem) = file.strip_suffix(".py")
             {
                 owned.insert(stem.to_owned());
@@ -271,7 +265,11 @@ impl Resolver {
 
     // A namespace package: a directory of modules with no `__init__`.
     fn holds_package(&self, base: &str) -> bool {
-        !base.is_empty() && self.modules.iter().any(|path| path.starts_with(&format!("{base}/")))
+        if base.is_empty() {
+            return false;
+        }
+        let prefix = format!("{base}/");
+        self.modules.iter().any(|path| path.starts_with(&prefix))
     }
 }
 
@@ -410,13 +408,15 @@ fn sections(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
         };
         let key = key.trim().trim_matches('"');
         let value = value.trim();
-        let value = match value.strip_prefix(['"', '\'']) {
-            Some(rest) => rest.split(['"', '\'']).next().unwrap_or(rest).to_owned(),
-            None if value.starts_with(['[', '{']) => {
-                last_key = None;
-                continue;
-            }
-            None => value.to_owned(),
+        let value = if let Some(rest) = value.strip_prefix('"') {
+            rest.split('"').next().unwrap_or(rest).to_owned()
+        } else if let Some(rest) = value.strip_prefix('\'') {
+            rest.split('\'').next().unwrap_or(rest).to_owned()
+        } else if value.starts_with(['[', '{']) {
+            last_key = None;
+            continue;
+        } else {
+            value.split('#').next().unwrap_or(value).trim_end().to_owned()
         };
         if key.is_empty() {
             continue;

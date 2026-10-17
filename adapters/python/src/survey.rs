@@ -44,7 +44,7 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 
     // one walk lists the modules and the data files a string may name
     let (modules, data): (Vec<String>, Vec<String>) =
-        workspace::list(workspace, |entry| include(entry) || is_data(entry))?
+        workspace::list(workspace, |entry| is_module(entry) || is_data(entry))?
             .into_iter()
             .partition(|path| Path::new(path).extension().is_some_and(|ext| ext == "py"));
     if modules.is_empty() {
@@ -103,7 +103,7 @@ fn skipped_dir(entry: Entry<'_>) -> bool {
     never_dir(entry) || TEST_DIRS.contains(&entry.name())
 }
 
-fn include(entry: Entry<'_>) -> bool {
+fn is_module(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
     }

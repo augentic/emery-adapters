@@ -275,12 +275,12 @@ fn strip_jsonc(text: &str) -> String {
                     last = next;
                 }
             }
-            ',' => {
-                let closes =
-                    matches!(chars.clone().find(|next| !next.is_whitespace()), Some('}' | ']'));
-                if !closes {
-                    out.push(c);
+            '}' | ']' => {
+                let trimmed = out.trim_end().len();
+                if out[..trimmed].ends_with(',') {
+                    out.remove(trimmed - 1);
                 }
+                out.push(c);
             }
             other => out.push(other),
         }

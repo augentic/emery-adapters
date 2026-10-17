@@ -443,7 +443,7 @@ impl<'s> Walker<'s> {
         });
     }
 
-    fn declared(&mut self, declaration: &Declaration<'_>, span: Span) {
+    fn export_declaration(&mut self, declaration: &Declaration<'_>, span: Span) {
         match declaration {
             Declaration::FunctionDeclaration(function) => {
                 if let Some(id) = &function.id {
@@ -780,7 +780,7 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_export_declaration(&mut self, it: &ExportDeclaration<'a>) {
-        self.declared(&it.declaration, it.span);
+        self.export_declaration(&it.declaration, it.span);
         walk::walk_export_declaration(self, it);
     }
 

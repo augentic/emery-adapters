@@ -8,19 +8,19 @@ mod subjects;
 
 use std::collections::BTreeMap;
 
-use emery_sdk::{Context, Error, Model, Seam, SourceContent, SourceInput};
+use emery_sdk::{Context, Error, Model, Seam};
 
 use self::subjects::Preparation;
 use crate::PROSE;
 
 pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
-    match subjects::prepare(ctx.input)? {
+    match Preparation::read(ctx.input)? {
         Preparation::Value => Ok(vec![Seam::whole()]),
         Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
-            directories(prepared.input)
+            directories(prepared.root)
         }
         Preparation::Workspace(prepared) => {
-            let inventory = prepared.subjects(ctx, PROSE).await?;
+            let inventory = prepared.inventory(ctx, PROSE).await?;
             prepared.seams(&inventory)
         }
     }
@@ -33,11 +33,7 @@ const MIN_SIZE: usize = 2;
 const MAX_SIZE: usize = 16;
 
 // The directory cut, where no subject leads the seams.
-fn directories(input: &SourceInput) -> Result<Vec<Seam>, Error> {
-    let SourceContent::Workspace(root) = &input.content else {
-        return Ok(vec![Seam::whole()]);
-    };
-
+fn directories(root: &str) -> Result<Vec<Seam>, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let seams: Vec<Seam> = partition("", files).into_iter().map(Seam::files).collect();
     Ok(if seams.len() < 2 { vec![Seam::whole()] } else { seams })

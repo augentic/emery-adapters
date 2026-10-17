@@ -659,7 +659,7 @@ fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated)
     let literal = || decorated.literal.as_deref().and_then(route::literal_stem);
     let stem = route.as_deref().map_or_else(
         || group.clone().or_else(literal),
-        |route| under(mount, module, decorated).or_else(|| DIALECT.route.stem(route)),
+        |route| parent_stem(mount, module, decorated).or_else(|| DIALECT.route.stem(route)),
     );
     let discriminator = match (&route, &stem) {
         (Some(route), Some(stem)) => {
@@ -717,7 +717,7 @@ fn at_export(tree: &Tree<Python>, module: &Module, export: &Export) -> Derived {
 // declared on — `APIRouter(tags=["login"])` with no prefix groups its routes
 // as `login`, however each spells its path. `None` where only the literal
 // names one.
-fn under(mount: &str, module: &Module, decorated: &Decorated) -> Option<String> {
+fn parent_stem(mount: &str, module: &Module, decorated: &Decorated) -> Option<String> {
     let prefix = decorated
         .class
         .as_deref()
