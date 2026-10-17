@@ -3,7 +3,7 @@
 
 use emery_sdk::Error;
 
-use super::{CATALOG, START, Tree, files, relative, spells};
+use super::{CATALOG, Tree, spells, start_files};
 
 // What no module of a stem spells, each the process the source was: a
 // function that starts, stops, runs, listens, serves, bootstraps, or shuts
@@ -46,16 +46,13 @@ const SIMULATED: &[(&str, &str)] = &[
 ];
 
 impl Tree<'_> {
-    // Three findings at most: any file laid under `crates/start/`, whose
-    // repair removes the crate, the words of `LIFECYCLE` under a stem's
-    // `src/`, whose repair removes the module, and, in the modules that
-    // remain, the spellings of `SIMULATED`, whose repair removes the
-    // spelling. A tree with no `crates/` answers none.
+    // Three findings at most: any file laid under `crates/start/` (or a
+    // `crates/start-*` crate), whose repair removes the crate, the words of
+    // `LIFECYCLE` under a stem's `src/`, whose repair removes the module, and,
+    // in the modules that remain, the spellings of `SIMULATED`, whose repair
+    // removes the spelling. A tree with no `crates/` answers none.
     pub(super) fn simulated_host(&self) -> Result<Vec<String>, Error> {
-        let start: Vec<String> = files(&self.root.join(START))?
-            .into_iter()
-            .map(|file| relative(self.root, &file))
-            .collect();
+        let start = start_files(self.root)?;
         let mut lifecycle = Vec::new();
         let mut simulated = Vec::new();
         for module in &self.modules {
@@ -88,13 +85,13 @@ impl Tree<'_> {
         let mut findings = Vec::new();
         if !start.is_empty() {
             findings.push(format!(
-                "`{START}/` is laid for `start`, which the seed and the host are and no crate of \
-                 the tree ever is: a deployment setting a handler reads is a constant of \
+                "`crates/start/` is laid for `start`, which the seed and the host are and no crate \
+                 of the tree ever is: a deployment setting a handler reads is a constant of \
                  `{CATALOG}`, a cross-cutting rule is a `pub fn` of `common`, a stated health \
                  route is its own stem's, and how the source readied itself, loaded its \
-                 credentials or tables, or shut down is laid nowhere; remove every file under \
-                 `{START}/` through `delete` and drop any `start` line from the root `Cargo.toml` \
-                 through `edit_files`:\n{}",
+                 credentials or tables, or shut down is laid nowhere; remove every file named \
+                 under `crates/start` through `delete` and drop any `start` line from the root \
+                 `Cargo.toml` through `edit_files`:\n{}",
                 start.join("\n")
             ));
         }

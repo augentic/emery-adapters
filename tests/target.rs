@@ -944,12 +944,13 @@ async fn omnia_build_process_refused() {
     );
 }
 
-// Laying `crates/start/` at a build is refused whole: the seed and the host
-// are `start`, so every file under `crates/start/` is named and removed
-// through `delete` with any `start` line dropped from the root `Cargo.toml`,
-// its modules ignored by the other module rules so a setting read only there
-// is flagged unread in the same round and no handler or miss inside it is
-// asked to be wired or edited in place.
+// Laying `crates/start/` (or a `crates/start-*` crate for a slice cut from
+// `start`, such as `crates/start-prefetch/`) at a build is refused whole: the
+// seed and the host are `start`, so every file under `crates/start` or
+// `crates/start-*` is named and removed through `delete` with any `start` line
+// dropped from the root `Cargo.toml`, its modules ignored by the other module
+// rules so a setting read only there is flagged unread in the same round and no
+// handler, loader, or miss inside it is asked to be wired or edited in place.
 #[tokio::test]
 async fn omnia_build_start_crate_refused() {
     let project = scratch();
@@ -971,8 +972,16 @@ async fn omnia_build_start_crate_refused() {
              StateStore::get(context.provider(), TABLE_KEY).await? {\n        Some(_) => \
              Ok(Vec::new()),\n        None => Ok(Vec::new()),\n    }\n}\n",
         ),
+        (
+            "crates/start-prefetch/src/lib.rs",
+            "//! Prefetches stops.\n\nuse omnia_sdk::{Identity, StateStore};\n\n/// Load the \
+             stops into the store.\npub async fn load_stops<P: StateStore + Identity>(provider: \
+             &P, stops: &[u8]) -> omnia_sdk::Result<()> {\n    let _ = \
+             Identity::access_token(provider, \"orders\").await?;\n    \
+             StateStore::set(provider, \"orders/stops\", stops, None).await\n}\n",
+        ),
     ];
-    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "crates/common/src/config.rs", "Cargo.toml"]}"#;
+    let first = r#"{"covered": ["REQ-001"], "written": ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "crates/start-prefetch/src/lib.rs", "crates/common/src/config.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": [], "written": []}"#;
     let model = Scripted::answering([first, repaired])
         .calling(
@@ -1006,6 +1015,7 @@ async fn omnia_build_start_crate_refused() {
                     "crates/start/Cargo.toml",
                     "crates/start/src/lib.rs",
                     "crates/start/src/start.rs",
+                    "crates/start-prefetch/src/lib.rs",
                 ]),
             ],
         );
@@ -1017,18 +1027,25 @@ async fn omnia_build_start_crate_refused() {
     for line in [
         "`crates/start/` is laid for `start`, which the seed and the host are and no crate of the \
          tree ever is",
-        "crates/start/Cargo.toml\ncrates/start/src/lib.rs\ncrates/start/src/start.rs",
+        "crates/start-prefetch/src/lib.rs\ncrates/start/Cargo.toml\ncrates/start/src/lib.rs\n\
+         crates/start/src/start.rs",
         "setting `START_BROKER_URL` is read by no module",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["handler `ready`", "crates/start/src/start.rs:"] {
+    for absent in
+        ["handler `ready`", "crates/start/src/start.rs:", "crates/start-prefetch/src/lib.rs:"]
+    {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert!(project.read("crates/start/src/start.rs").is_none(), "`crates/start/` is removed");
     assert!(
-        !report.written.iter().any(|path| path.starts_with("crates/start/")),
-        "removed `crates/start/` files are not reported: {:?}",
+        project.read("crates/start-prefetch/src/lib.rs").is_none(),
+        "`crates/start-prefetch/` is removed"
+    );
+    assert!(
+        !report.written.iter().any(|path| path.starts_with("crates/start")),
+        "removed `crates/start*` files are not reported: {:?}",
         report.written
     );
 }

@@ -25,9 +25,6 @@ const IGNORE: &str = ".gitignore";
 // The shared crate, whose tables declare constants and publish to none.
 const COMMON: &str = "crates/common/src/";
 
-// The forbidden `start` crate directory: the seed and the host are `start`.
-const START: &str = "crates/start";
-
 // The configuration catalog, one `pub const` per key the deployment supplies.
 const CATALOG: &str = "crates/common/src/config.rs";
 
@@ -63,10 +60,9 @@ pub struct Tree<'a> {
 
 impl<'a> Tree<'a> {
     pub fn read(root: &'a Path) -> Result<Self, Error> {
-        let start = root.join(START);
         let mut modules = Vec::new();
         for stem in entries(&root.join("crates"))? {
-            if stem == start {
+            if is_start_crate(&stem) {
                 continue;
             }
             for file in sources(&stem.join("src"))? {
@@ -433,6 +429,34 @@ fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
         .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
     paths.sort();
     Ok(paths)
+}
+
+// Whether `dir` is `crates/start` or a crate laid for a slice of the `start`
+// stem (`crates/start-prefetch`, `crates/start_credentials`): the seed and the
+// host are `start`, so no crate under it is ever laid.
+fn is_start_crate(dir: &Path) -> bool {
+    dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
+        name == "start"
+            || name
+                .strip_prefix("start")
+                .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
+    })
+}
+
+// Every file laid under `crates/start` or a `crates/start-*` / `crates/start_*`
+// crate, root-relative and sorted.
+fn start_files(root: &Path) -> Result<Vec<String>, Error> {
+    let mut found = Vec::new();
+    for dir in entries(&root.join("crates"))? {
+        if !is_start_crate(&dir) {
+            continue;
+        }
+        for file in files(&dir)? {
+            found.push(relative(root, &file));
+        }
+    }
+    found.sort();
+    Ok(found)
 }
 
 // The name of every directory under `crates/` that holds a file, sorted; a
