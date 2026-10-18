@@ -2,9 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{
-    Context, Doc, Error, Evidence, Metadata, Model, Seam, SourceAdapter, SourceKind,
-};
+use emery_sdk::{Context, Doc, Error, Evidence, Metadata, Model, Seam, SourceAdapter, SourceKind};
 
 const PROSE: &[Doc] = &[
     Doc {

@@ -14,7 +14,9 @@ pub struct Adapter;
 
 impl SourceAdapter for Adapter {
     fn metadata() -> Metadata {
-        Metadata { kind: SourceKind::Documentation }
+        Metadata {
+            kind: SourceKind::Documentation,
+        }
     }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {

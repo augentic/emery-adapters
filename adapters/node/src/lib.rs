@@ -95,7 +95,7 @@ fn init(ctx: &InitContext<'_>) -> Result<(), Error> {
             Err(err) => return Err(server_error!("laying `{path}`: {err}")),
         }
     }
-    
+
     tracing::info!(laid, "laid the root manifests");
     Ok(())
 }
