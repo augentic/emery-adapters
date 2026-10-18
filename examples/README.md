@@ -48,7 +48,7 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 ```bash
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-# swith to HEAD to view the build in `.emery/vcs/repos/omnia`
+# switch to HEAD to view the build in `.emery/vcs/repos/omnia`
 git -C .emery/vcs/repos/omnia checkout emery/<revision>
 ```
 

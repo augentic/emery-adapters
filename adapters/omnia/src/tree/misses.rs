@@ -1,4 +1,5 @@
-//! Checks for empty cache misses on constant `StateStore` keys and single-field `data` response wrappers.
+//! Checks for empty cache misses on constant `StateStore` keys, single-field
+//! `data` response wrappers, refusals answered `Ok(())`, and format settings.
 
 use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
 
@@ -21,6 +22,8 @@ const DEFAULTED: &[&str] = &[
 ];
 
 const MISS_WINDOW: usize = 6;
+
+const UNIT: &str = "Ok(())";
 
 impl Tree<'_> {
     pub(super) fn empty_misses(&self) -> Option<String> {
@@ -66,9 +69,102 @@ impl Tree<'_> {
             lines.join("\n")
         ))
     }
+
+    pub(super) fn swallowed_rejections(&self) -> Option<String> {
+        let mut lines: Vec<String> =
+            self.modules.iter().flat_map(Module::swallowed_rejections).collect();
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a delivery or a call the code refused is answered `Ok(())`, as processed, so the \
+             refusal is lost: return the error with `?` — `bad_request!` for a validation or \
+             timeliness rejection, `bad_gateway!` for an upstream that refused — and answer \
+             `Ok(())` only for a valid message the rule filters out; repair each line named \
+             through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
+    pub(super) fn format_settings(&self) -> Option<String> {
+        let mut lines = Vec::new();
+        for module in &self.modules {
+            for (number, name) in module.format_settings() {
+                lines.push(format!("{}:{number}: setting `{name}` names a format", module.path));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a format is the parser's syntax and never a deployment value: a date or time format \
+             a criterion spells (`DD/MM/YYYY`) is a `const` of the module that parses with it, \
+             holding the parser's own syntax (`\"%d/%m/%Y\"`), and no setting read through \
+             `Config::get`; replace each setting named with that constant through \
+             `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
 }
 
 impl Module {
+    // A refusal is read under one of the shapes `refusal_opened` names; each
+    // `Ok(())` in the arm's body or the block beneath the opener, to the
+    // first line back at the opener's indentation, answers it as processed.
+    fn swallowed_rejections(&self) -> Vec<String> {
+        let all: Vec<&str> = self.code.lines().collect();
+        let indent = |line: &str| line.len() - line.trim_start().len();
+        let mut lines = Vec::new();
+        for (index, line) in all.iter().enumerate() {
+            let Some(opened) = refusal_opened(line) else { continue };
+            let body = line.split_once("=>").map(|(_, body)| body.trim());
+            if let Some(body) = body
+                && !body.is_empty()
+                && !body.ends_with('{')
+            {
+                if spells(body, UNIT) {
+                    lines.push(format!(
+                        "{}:{}: `Ok(())` answers the refusal the {opened} caught",
+                        self.path,
+                        index + 1
+                    ));
+                }
+                continue;
+            }
+            let head = indent(line);
+            for (at, inner) in all.iter().enumerate().skip(index + 1) {
+                if inner.trim().is_empty() {
+                    continue;
+                }
+                if indent(inner) <= head {
+                    break;
+                }
+                if spells(inner, UNIT) {
+                    lines.push(format!(
+                        "{}:{}: `Ok(())` answers the refusal the {opened} at line {} caught",
+                        self.path,
+                        at + 1,
+                        index + 1
+                    ));
+                }
+            }
+        }
+        lines
+    }
+
+    fn format_settings(&self) -> Vec<(usize, &str)> {
+        self.code
+            .lines()
+            .enumerate()
+            .filter_map(|(index, line)| {
+                let name = setting_const(line)?;
+                name.split('_').any(|segment| segment == "FORMAT").then_some((index + 1, name))
+            })
+            .collect()
+    }
+
     fn empty_misses(&self) -> Vec<String> {
         let all: Vec<&str> = self.code.lines().collect();
         let mut lines = Vec::new();
@@ -198,6 +294,39 @@ fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
         }
     }
     answering
+}
+
+// The shapes a refused `Result` is read under: a `let`-`else` over `Ok(..)`
+// or over `.ok()`, an `Err(..)` arm, and an `if` over `is_err()` or
+// `let Err(..)`.
+fn refusal_opened(line: &str) -> Option<&'static str> {
+    let text = line.trim();
+    if text.starts_with("let Ok(") && text.ends_with("else {") {
+        return Some("`let Ok(..) = .. else` block");
+    }
+    if text.starts_with("let Some(") && text.ends_with("else {") && text.contains(".ok()") {
+        return Some("`.ok() else` block");
+    }
+    if text.starts_with("if ") && text.ends_with('{') && text.contains(".is_err()") {
+        return Some("`is_err()` branch");
+    }
+    if text.starts_with("if let Err(") && text.ends_with('{') {
+        return Some("`if let Err(..)` branch");
+    }
+    if text.starts_with("Err(") && text.contains("=>") {
+        return Some("`Err(..) =>` arm");
+    }
+    None
+}
+
+// The name of a `const NAME: &str = "NAME";` line, the shape a part
+// declares a setting in.
+fn setting_const(line: &str) -> Option<&str> {
+    let rest = strip_vis(line).strip_prefix("const ")?;
+    let (name, rest) = rest.split_once(':')?;
+    let name = name.trim();
+    let literal = rest.split_once("= \"")?.1.split_once('"')?.0;
+    (is_ident(name) && literal == name).then_some(name)
 }
 
 fn constant_keyed(line: &str) -> bool {

@@ -71,8 +71,11 @@ impl<'a> Tree<'a> {
         findings.extend(self.unused_dependencies()?);
         findings.extend(self.stems_merged()?);
         findings.extend(self.unnamed_topics()?);
+        findings.extend(self.unreached_publishers()?);
         findings.extend(self.empty_misses());
         findings.extend(self.response_wrappers());
+        findings.extend(self.swallowed_rejections());
+        findings.extend(self.format_settings());
         Ok(findings)
     }
 
