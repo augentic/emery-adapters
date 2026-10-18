@@ -1,5 +1,5 @@
-use emery_sdk::target::Slice;
 use emery_sdk::target::capability::Target;
+use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
 use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
 
@@ -14,20 +14,38 @@ impl Source for Caller {}
 
 impl Target for Caller {}
 
-/// Returns the slice every target driver builds: one requirement under the `orders` stem.
+/// Returns the slice every target driver builds: one routed requirement under the `orders` stem.
 #[must_use]
 pub fn slice() -> Slice {
     Slice {
         id: "SLICE-001".to_owned(),
         name: "orders".to_owned(),
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-        requirements: vec!["REQ-001".to_owned()],
-        spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nAn order is \
-               created from at least one item.\n"
+        requirements: vec![Requirement {
+            id: "REQ-001".to_owned(),
+            subject: "orders.create".to_owned(),
+            statement: vec!["POST /orders creates an order from at least one item.".to_owned()],
+            route: None,
+            topic: None,
+            scenarios: vec![Scenario {
+                name: "An order is created".to_owned(),
+                given: vec!["an item".to_owned()],
+                when: "POST /orders is called with it".to_owned(),
+                then: "the order is answered".to_owned(),
+                and: Vec::new(),
+            }],
+        }],
+        types: vec![DesignType {
+            key: "orders.Order".to_owned(),
+            signature: "interface Order { id: string; items: string[] }".to_owned(),
+        }],
+        brief: vec!["Create an order from its items.".to_owned()],
+        spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nPOST /orders \
+               creates an order from at least one item.\n"
             .to_owned(),
-        design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: Order\nDepends \
-               on: none\n"
+        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
+        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: orders.Order\n\
+               Depends on: none\n"
             .to_owned(),
     }
 }

@@ -60,10 +60,10 @@ async fn refused_past_the_limit() {
 }
 ```
 
-- One `#[tokio::test]` per scenario, named by the scenario in snake_case: `an_order_with_no_items_is_refused`. A scenario the specification gives you is a test; invent none.
+- One `#[tokio::test]` per scenario, named by the scenario in snake_case: `an_order_with_no_items_is_refused`. The adapter lays each before the turn, under `#[ignore = "<id> <scenario>: unfilled"]` over a `todo!("<id> <scenario>: arrange, act, assert")`, with the scenario's `GIVEN`, `WHEN`, and `THEN` in a comment above it: fill the body and remove the `#[ignore = ..]` line. A scenario the specification gives you is a test; invent none, and delete none.
 - The `WHEN` is the request — its method, path, headers, and body — and the state the doubles start in; the `THEN` is the response's status and body, and what the doubles hold after. A handler's `Ok` is `200` with the output as JSON; its `Err` is the class's status, `400` for `bad_request`, `404` for `not_found`, `500` for `server_error`, `502` for `bad_gateway`, with the body `{"error": "<code>", "message": ".."}`, so a test asserts the status and, where the scenario states the reason, the body's `message`. When a scenario's `THEN` is `[unknown]`, derive the assertion from the outcome stated in the requirement's statement itself (for example, `StatusCode::BAD_REQUEST` when the requirement states an input is rejected or skipped on validation failure, or asserting the returned value or published messages), and include the requirement in `covered`.
 - A helper that sends one request and answers `(StatusCode, Vec<u8>)`, as `place` above, keeps each scenario to its arrangement and its assertions; a `GET` is `Request::get("/orders/42").body(Body::empty())`, a query `Request::get("/orders?status=open")`.
-- The file opens with a `//!` and declares nothing `pub`: the workspace lints want a doc on every public item and on every crate, a test file included, and a helper is a private `fn`.
+- The file declares nothing `pub`: the workspace lints want a doc on every public item, a test file included, and a helper is a private `fn`.
 - The tests reach the stem as another crate would, through `<stem>::router()`, `<stem>::topics(..)`, and `<stem>::<part>::<Type>` for the `pub` types a response or a payload decodes into; what the handler stored is read back from the doubles under the key the module spells, `provider.storage.state("orders/42")`, or through a `pub fn key` the module shares with its readers.
 - A topic's handler is driven through the stem's `topics(..)` over a `messaging::Router` of the doubles, the delivery's `topic` the qualified name under the test's environment and its `payload` the wire's bytes:
 
@@ -151,4 +151,4 @@ A request the `MatchedHttp` holds no answer for, or a statement the `ScriptedTab
 - Read a file, an environment variable, or the clock for its arrangement: the test's data is in the test.
 - Call the production provider, or anything under `cfg(target_arch = "wasm32")`: the tests compile natively, over `omnia_test::guest::Provider`.
 - Sleep, retry, or wait on a timer.
-- Carry `#[ignore]`, or pass by asserting nothing: a scenario the module does not yet satisfy is a test that fails, and a requirement the report leaves uncovered.
+- Keep its `#[ignore = ..]` line once filled, or pass by asserting nothing: a scenario the module does not yet satisfy keeps the ignored test the adapter laid, as laid, and its requirement stays out of `covered`; a filled test runs and asserts what the scenario states.

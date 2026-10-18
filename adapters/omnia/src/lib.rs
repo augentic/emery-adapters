@@ -5,7 +5,15 @@
 //! merges, holds the tree to the layout's rules before accepting a report or
 //! verdict, and runs `cargo clippy`, `cargo test`, and the `wasm32-wasip2`
 //! check at each slice and wave.
+//!
+//! Before a slice's turn, the adapter lays the slice's skeleton from the
+//! typed slice: the stem's crate where the tree lacks it, the part with a
+//! handler per route the requirements state and a function per requirement
+//! stating none, an ignored test per scenario, and the stem's lines in every
+//! list. The turn fills the markers it laid, and a covered requirement whose
+//! marker or ignored test still stands is refused for correction.
 
+mod scaffold;
 mod tree;
 
 use std::path::Path;
@@ -13,7 +21,8 @@ use std::path::Path;
 use emery_sdk::target::{Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Error, Model, tracing};
 
-use self::tree::{Stems, Tree};
+use self::scaffold::Scaffold;
+use self::tree::Tree;
 
 const RULES: &[MergeRule] = &[
     MergeRule::ours("Cargo.lock"),
@@ -56,10 +65,15 @@ impl TargetAdapter for Adapter {
             }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let stems = Stems::read(&ctx.slice.spec, root)?;
-                emery_sdk::target::build(&ctx, PROSE, |_| Tree::read(root)?.check_build(&stems))
-                    .await
-                    .map(Outcome::Built)
+                let scaffold = Scaffold::plan(ctx.slice, root)?;
+                let laid = scaffold.lay(root)?;
+                tracing::info!(laid = laid.len(), "laid the slice's skeleton");
+                let brief = scaffold.brief();
+                emery_sdk::target::build(&ctx, PROSE, Some(&brief), |report| {
+                    Tree::read(root)?.check_build(&scaffold, report)
+                })
+                .await
+                .map(Outcome::Built)
             }
             Task::Verify(ctx) => {
                 let root = Path::new(ctx.workspace);

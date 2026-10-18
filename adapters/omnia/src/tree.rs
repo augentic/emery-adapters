@@ -4,15 +4,20 @@ mod lists;
 mod misses;
 mod process;
 
-use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use emery_sdk::target::Report;
 use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
 
+use crate::scaffold::Scaffold;
+
 const MAX_DIFF_LINES: usize = 24;
+// The lead of a marker the scaffold lays, in a handler's or a function's
+// body as in a test's.
+const MARKER: &str = "todo!(\"REQ-";
 
 struct Module {
     path: String,
@@ -50,9 +55,11 @@ impl<'a> Tree<'a> {
         Ok(Self { root, modules })
     }
 
-    pub fn check_build(&self, stems: &Stems) -> Result<Vec<String>, Error> {
+    pub fn check_build(&self, scaffold: &Scaffold, report: &Report) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
-        findings.extend(self.split_stems(stems)?);
+        findings.extend(self.split_stems(scaffold)?);
+        findings.extend(self.markers_left(&report.covered));
+        findings.extend(self.scenarios_tested(scaffold, &report.covered)?);
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -79,20 +86,108 @@ impl<'a> Tree<'a> {
         Ok(findings)
     }
 
-    fn split_stems(&self, stems: &Stems) -> Result<Option<String>, Error> {
+    // A crate the turn laid is one of the slice's stems' or none of the
+    // tree's; `crates/start/` is the process rule's.
+    fn split_stems(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
+        let stems: Vec<&str> = scaffold.stems().collect();
         let mut lines = Vec::new();
         for dir in crates(self.root)? {
-            if dir == "common" || stems.existing.contains(&dir) || stems.slice.contains(&dir) {
+            if dir == "common"
+                || is_start_stem(&dir)
+                || scaffold.existing().contains(&dir)
+                || stems.contains(&dir.as_str())
+            {
                 continue;
             }
-            let split = stems.slice.iter().find(|stem| {
+            let split = stems.iter().find(|stem| {
                 stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
             });
-            if let Some(stem) = split {
+            lines.push(split.map_or_else(
+                || {
+                    format!(
+                        "`crates/{dir}/` is laid for `{dir}`, which is no stem of this slice ({})",
+                        stems.iter().map(|stem| format!("`{stem}`")).collect::<Vec<_>>().join(", ")
+                    )
+                },
+                |stem| {
+                    format!(
+                        "`crates/{dir}/` is laid for `{dir}`, the head of the stem `{stem}`, whose \
+                         crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
+                        stem.replace('-', "_")
+                    )
+                },
+            ));
+        }
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "a slice lays modules under the crates of its own stems alone, and a stem is one \
+             word and is never split at its hyphen into a crate and a part: lay each module \
+             under `crates/<stem>/src/<part>.rs` for the stem its requirements lead with, remove \
+             every file under the other directory through `delete`, and drop its lines from the \
+             root `Cargo.toml` through `edit_files`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
+    fn markers_left(&self, covered: &[String]) -> Option<String> {
+        let mut lines = Vec::new();
+        for module in &self.modules {
+            for (index, line) in module.code.lines().enumerate() {
+                for id in marker_ids(line) {
+                    if covered.iter().any(|covered| covered == id) {
+                        lines.push(format!(
+                            "{}:{}: {id} is covered and its marker stands",
+                            module.path,
+                            index + 1
+                        ));
+                    }
+                }
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "a covered requirement is implemented, so no marker of its stands: fill each \
+             `todo!(\"REQ-..\")` the adapter laid for a covered requirement through `edit_files` \
+             — a handler's body with its `let _ = (input, context);` line dropped, a function's \
+             body — or leave the requirement out of `covered`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
+    // The test files are read here alone, since the tree's modules are a
+    // stem's sources.
+    fn scenarios_tested(
+        &self, scaffold: &Scaffold, covered: &[String],
+    ) -> Result<Option<String>, Error> {
+        let mut lines = Vec::new();
+        for expected in scaffold.expected() {
+            if !covered.iter().any(|covered| covered == expected.id) {
+                continue;
+            }
+            let file = self.root.join(expected.path);
+            let text = if file.is_file() { read(&file)? } else { String::new() };
+            let Some(found) = test_of(&text, expected.test) else {
                 lines.push(format!(
-                    "`crates/{dir}/` is laid for `{dir}`, the head of the stem `{stem}`, whose \
-                     crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
-                    stem.replace('-', "_")
+                    "{}: {} is covered and its scenario `{}` has no test `{}`",
+                    expected.path, expected.id, expected.scenario, expected.test
+                ));
+                continue;
+            };
+            if found.ignored {
+                lines.push(format!(
+                    "{}:{}: {} is covered and the test `{}` of its scenario `{}` is ignored",
+                    expected.path, found.line, expected.id, expected.test, expected.scenario
+                ));
+            }
+            if let Some(line) = found.marker {
+                lines.push(format!(
+                    "{}:{line}: {} is covered and the test `{}` of its scenario `{}` holds its \
+                     marker",
+                    expected.path, expected.id, expected.test, expected.scenario
                 ));
             }
         }
@@ -100,11 +195,10 @@ impl<'a> Tree<'a> {
             return Ok(None);
         }
         Ok(Some(format!(
-            "a stem is one word and is never split at its hyphen into a crate and a part: lay \
-             each module under the stem's own crate, `crates/<stem>/src/<part>.rs`, with the \
-             stem's manifest and module list beside it, remove every file under the split \
-             directory through `delete`, and put the stem's two lines in the root `Cargo.toml` \
-             in place of the head's through `edit_files`:\n{}",
+            "a covered requirement's scenarios are tests that run and pass: each scenario of a \
+             covered requirement is the `#[tokio::test]` the adapter laid for it in the part's \
+             test file, filled, with its `#[ignore = ..]` line removed; fill each through \
+             `edit_files`, or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         )))
     }
@@ -212,39 +306,61 @@ impl<'a> Tree<'a> {
     }
 }
 
-pub struct Stems {
-    slice: BTreeSet<String>,
-    existing: BTreeSet<String>,
+struct Found {
+    line: usize,
+    ignored: bool,
+    marker: Option<usize>,
 }
 
-impl Stems {
-    pub fn read(spec: &str, root: &Path) -> Result<Self, Error> {
-        let mut slice = BTreeSet::new();
-        for line in spec.lines() {
+// The test `name` declares in a test file: its line, whether an `#[ignore]`
+// stands among the attributes above it, and the line of a marker left in
+// its body, read to the brace that closes it at the margin.
+fn test_of(text: &str, name: &str) -> Option<Found> {
+    let lines: Vec<&str> = text.lines().collect();
+    let at = lines.iter().position(|line| {
+        let rest = line.trim_start();
+        rest.strip_prefix("async fn ")
+            .or_else(|| rest.strip_prefix("fn "))
+            .and_then(|rest| rest.strip_prefix(name))
+            .is_some_and(|after| after.starts_with('(') || after.starts_with('<'))
+    })?;
+    let ignored = lines[..at]
+        .iter()
+        .rev()
+        .take_while(|line| {
             let line = line.trim_start();
-            if !line.starts_with('#') {
-                continue;
-            }
-            let heading = line.trim_start_matches('#').trim_start();
-            let Some(subject) = heading.strip_prefix("Requirement:") else {
-                continue;
-            };
-            let Some(subject) = subject.split_whitespace().next() else {
-                continue;
-            };
-            let stem = subject.split('.').next().unwrap_or(subject);
-            if !stem.is_empty() {
-                slice.insert(stem.to_owned());
-            }
-        }
-        Ok(Self {
-            slice,
-            existing: crates(root)?.into_iter().collect(),
+            line.starts_with('#') || line.starts_with("//")
         })
-    }
+        .any(|line| line.trim_start().starts_with("#[ignore"));
+    let end = lines[at..].iter().position(|line| *line == "}").map_or(lines.len(), |end| at + end);
+    let marker =
+        lines[at..end].iter().position(|line| line.contains(MARKER)).map(|index| at + index + 1);
+    Some(Found {
+        line: at + 1,
+        ignored,
+        marker,
+    })
 }
 
-fn read(file: &Path) -> Result<String, Error> {
+// The requirement ids a marker on `line` names: the string of its `todo!`
+// up to the colon, one `REQ-<n> <subject>` per comma.
+fn marker_ids(line: &str) -> Vec<&str> {
+    let Some(at) = line.find(MARKER) else { return Vec::new() };
+    let rest = &line[at + MARKER.len() - "REQ-".len()..];
+    let body = rest.split('"').next().unwrap_or(rest);
+    let named = body.split(':').next().unwrap_or(body);
+    named
+        .split(',')
+        .filter_map(|entry| entry.split_whitespace().next())
+        .filter(|id| {
+            id.strip_prefix("REQ-").is_some_and(|digits| {
+                !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
+            })
+        })
+        .collect()
+}
+
+pub fn read(file: &Path) -> Result<String, Error> {
     fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
 }
 
@@ -394,7 +510,7 @@ fn is_start_crate(dir: &Path) -> bool {
     dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
 }
 
-fn is_start_stem(name: &str) -> bool {
+pub fn is_start_stem(name: &str) -> bool {
     name == "start"
         || name
             .strip_prefix("start")
@@ -416,7 +532,7 @@ fn start_files(root: &Path) -> Result<Vec<String>, Error> {
 }
 
 // Ignores empty directories left behind by `delete`.
-fn crates(root: &Path) -> Result<Vec<String>, Error> {
+pub fn crates(root: &Path) -> Result<Vec<String>, Error> {
     let mut names = Vec::new();
     for path in entries(&root.join("crates"))? {
         let meta = fs::symlink_metadata(&path)
