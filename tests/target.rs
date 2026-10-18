@@ -8,8 +8,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task, Verdict,
-    VerifyContext,
+    BuildContext, Grant, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task,
+    Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -157,7 +157,7 @@ impl<A: TargetAdapter> Shipped<A> {
             adapter_id: self.name,
             slice,
             workspace: root(project),
-            worker: &A::WORKER,
+            grants: A::metadata().grants,
             model,
         };
         match A::run(Task::Build(ctx)).await? {
@@ -171,7 +171,7 @@ impl<A: TargetAdapter> Shipped<A> {
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
-            worker: &A::WORKER,
+            grants: A::metadata().grants,
             model,
         };
         match A::run(Task::Verify(ctx)).await? {
@@ -180,9 +180,9 @@ impl<A: TargetAdapter> Shipped<A> {
         }
     }
 
-    // The grant the adapter's `WORKER` puts on a turn, as the script records it.
+    // The grant the adapter's `grants` put on a turn, as the script records it.
     fn granted() -> Option<SeenWorker> {
-        A::WORKER.grant().map(SeenWorker::from)
+        Grant::union(A::metadata().grants).map(SeenWorker::from)
     }
 
     // The prompt at `path` as this build compiled it in.
@@ -492,7 +492,8 @@ async fn node_init() {
 // manifest under none.
 #[test]
 fn node_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::metadata()
+        .rules
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();
@@ -510,12 +511,13 @@ fn node_rules() {
 
 // What a build's or verify's worker reaches beyond the tree, as the grant the
 // turns carry: the npm registry, a Node installed beneath the home by nvm,
-// Volta, or fnm, and Volta's root named for it. The grant is asserted rather
-// than the reaches, so the adapter may regroup them while any widening shows.
+// Volta, or fnm, and Volta's root named for it. The union is asserted rather
+// than the grants, so the adapter may regroup them while any widening shows.
 #[test]
 fn node_worker() {
+    let grants = emery_node::Adapter::metadata().grants;
     assert_eq!(
-        emery_node::Adapter::WORKER.grant().map(SeenWorker::from),
+        Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
             egress: vec!["registry.npmjs.org".to_owned()],
             read: vec![
@@ -527,7 +529,7 @@ fn node_worker() {
         }),
         "the worker grant the adapter's turns carry"
     );
-    assert_eq!(emery_node::Adapter::WORKER.findings(), Vec::<String>::new());
+    assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
 #[tokio::test]
@@ -746,7 +748,8 @@ async fn omnia_init_files() {
 // path under none, the entry `src/lib.rs` among them.
 #[test]
 fn omnia_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::metadata()
+        .rules
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();
@@ -772,7 +775,8 @@ fn omnia_rules() {
 // list the template adds or drops moves the rules with it.
 #[test]
 fn omnia_rules_follow_template() {
-    let union: Vec<&str> = emery_omnia::Adapter::MERGE_RULES
+    let union: Vec<&str> = emery_omnia::Adapter::metadata()
+        .rules
         .iter()
         .filter(|rule| rule.strategy == MergeStrategy::Union)
         .map(|rule| rule.paths.as_ref())
@@ -811,12 +815,13 @@ fn omnia_rules_follow_template() {
 // What a build's or verify's worker reaches beyond the tree, as the grant the
 // turns carry: the crates.io index and its downloads, the toolchain and the
 // binaries beneath the home, never `~/.cargo` whole, and `RUSTUP_HOME` named
-// for it. The grant is asserted rather than the reaches, so the adapter may
+// for it. The union is asserted rather than the grants, so the adapter may
 // regroup them while any widening shows.
 #[test]
 fn omnia_worker() {
+    let grants = emery_omnia::Adapter::metadata().grants;
     assert_eq!(
-        emery_omnia::Adapter::WORKER.grant().map(SeenWorker::from),
+        Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
             egress: vec!["index.crates.io".to_owned(), "static.crates.io".to_owned()],
             read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
@@ -824,7 +829,7 @@ fn omnia_worker() {
         }),
         "the worker grant the adapter's turns carry"
     );
-    assert_eq!(emery_omnia::Adapter::WORKER.findings(), Vec::<String>::new());
+    assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
 #[tokio::test]
@@ -1722,6 +1727,336 @@ async fn omnia_dependency_unused() {
     }
     let manifest = text(&project, "crates/orders/Cargo.toml");
     assert!(manifest.contains("chrono") && !manifest.contains("uuid"), "{manifest}");
+}
+
+// A part that publishes in a stem whose entry registers no part, and whose
+// crate no other stem calls, is never run, so the verdict is refused with
+// the part named at its first `Publish` in code, a mention in its doc
+// counting for nothing, while a publishing stem whose entry registers a
+// part and one another stem's module reaches pass. The repair lays the
+// trigger: the topic's constant, the `.route(..)` in the part's
+// `topics(..)`, and the part's entry in the stem's array.
+#[tokio::test]
+async fn omnia_publisher_unreached() {
+    let project = omnia_tree().await;
+    let charged =
+        "\n/// A charge was taken.\npub const BILLING_CHARGED: &str = \"billing-charged\";\n";
+    project.write(
+        "crates/common/src/topic.rs",
+        format!("{}{charged}", omnia_seed("crates/common/src/topic.rs")),
+    );
+    let topics_anchor = "        // one entry per part with topics, each added at the end\n";
+    let entry = OMNIA_ENTRY
+        .replace("pub mod reading;", "pub mod publishing;")
+        .replace("        reading::routes(),\n", "")
+        .replace("        reading::topics,\n", "");
+    let handler = "pub(crate) async fn on_placed<P: Config + Publish>(\n    input: Order, context: \
+                   Context<P>,\n) -> omnia_sdk::Result<()> {\n    todo!()\n}\n";
+    let part = format!(
+        "//! Publishes placed orders.\n\nuse common::{{Capabilities, config, topic}};\nuse \
+         omnia_sdk::api::{{Context, messaging}};\nuse omnia_sdk::{{Config, Publish}};\n\n/// An \
+         order as the wire carries it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    \
+         /// Its id.\n    pub id: String,\n}}\n\n{handler}"
+    );
+    project.write("crates/orders/src/lib.rs", &entry);
+    project.write("crates/orders/src/publishing.rs", &part);
+    reached_publishers(&project);
+    let route = "pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
+                 &str,\n) -> messaging::Router<P> {\n    router.route(config::topic_for(env, \
+                 topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n\n";
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("crates/common/src/topic.rs", charged, &format!("{charged}{OMNIA_TABLE_LINE}")),
+            ("crates/orders/src/publishing.rs", handler, &format!("{route}{handler}")),
+            (
+                "crates/orders/src/lib.rs",
+                topics_anchor,
+                &format!("{topics_anchor}        publishing::topics,\n"),
+            ),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let publish_at = line_of(&part, "use omnia_sdk::{Config, Publish};");
+    for line in [
+        "the host runs a stem through its `routes()` and `topics(..)` alone".to_owned(),
+        format!(
+            "crates/orders/src/publishing.rs:{publish_at}: `Publish` in a stem no route or topic \
+             reaches"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["billing", "audit"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    assert!(
+        text(&project, "crates/orders/src/lib.rs").contains("publishing::topics,"),
+        "the entry's array holds the part the repair added"
+    );
+    assert!(
+        text(&project, "crates/orders/src/publishing.rs").contains("topic::ORDER_PLACED"),
+        "the part consumes the topic the repair laid"
+    );
+}
+
+// Two publishing stems the check credits as reached: `billing`, whose entry
+// registers the part that publishes and which the root lists name, and
+// `audit`, which no entry registers and `billing`'s handler calls.
+fn reached_publishers(project: &Scratch) {
+    project.write(
+        "crates/billing/src/lib.rs",
+        OMNIA_ENTRY.replace("reading", "charging").replace("orders", "billing"),
+    );
+    project.write(
+        "crates/billing/src/charging.rs",
+        "//! Takes charges.\n\nuse audit::recording::record;\nuse common::{Capabilities, config, \
+         topic};\nuse omnia_sdk::api::{Client, Context, messaging};\nuse omnia_sdk::Publish;\n\n\
+         pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+         axum::Router::new()\n}\n\npub(crate) fn topics<P: Capabilities>(\n    router: \
+         messaging::Router<P>, env: &str,\n) -> messaging::Router<P> {\n    \
+         router.route(config::topic_for(env, topic::BILLING_CHARGED), \
+         messaging::consume(on_charged))\n}\n\npub(crate) async fn on_charged<P: Publish>(input: \
+         String, context: Context<P>) -> omnia_sdk::Result<()> {\n    record(context.provider(), \
+         &input).await\n}\n",
+    );
+    project.write("crates/audit/src/lib.rs", "//! # audit\n\npub mod recording;\n");
+    project.write(
+        "crates/audit/src/recording.rs",
+        "//! Records what the stems did.\n\nuse omnia_sdk::Publish;\n\n/// Record one \
+         action.\n///\n/// # Errors\n///\n/// `bad_gateway` when the stream refuses.\npub async \
+         fn record<P: Publish>(provider: &P, action: &str) -> omnia_sdk::Result<()> {\n    \
+         todo!()\n}\n",
+    );
+    project.write(
+        "src/routes.rs",
+        omnia_seed("src/routes.rs").replace(
+            OMNIA_ROUTE_ANCHOR,
+            &format!(
+                "{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}    let router = \
+                 router.merge(billing::router());\n"
+            ),
+        ),
+    );
+    project.write(
+        "src/messaging.rs",
+        omnia_seed("src/messaging.rs").replace(
+            OMNIA_TOPICS_ANCHOR,
+            &format!(
+                "{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}    let router = billing::topics(router, \
+                 &env);\n"
+            ),
+        ),
+    );
+}
+
+// A refusal answered `Ok(())` — in a `let Ok(..) = .. else` block, an
+// `Err(..) =>` arm, or an `is_err()` branch — is a delivery or a call lost
+// as processed, so the verdict is refused with each answer named at its
+// line, while a `let Some(..) = .. else` answering an empty list and an
+// `Err(..)` arm returning the error pass. Returning the error is the
+// repair.
+#[tokio::test]
+async fn omnia_rejection_swallowed() {
+    let project = omnia_tree().await;
+    let invalid = "        tracing::warn!(\"invalid order\");\n        return Ok(());\n";
+    let unstored = "    if remember(provider, &order).await.is_err() {\n        return \
+                    Ok(());\n    }\n";
+    let unsent = "        Err(_) => Ok(()),\n";
+    let module = format!(
+        "//! Reads orders.\n\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{{HttpRequest, \
+         StateStore, bad_request}};\n\n/// An order as the wire carries \
+         it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    /// Its id.\n    pub id: \
+         String,\n}}\n\npub(crate) async fn on_placed<P: HttpRequest + StateStore>(\n    input: \
+         Order, context: Context<P>,\n) -> omnia_sdk::Result<()> {{\n    let provider = \
+         context.provider();\n    let Ok(order) = validate(&input) else {{\n{invalid}    \
+         }};\n{unstored}    match notify(provider, &order).await {{\n        Ok(()) => \
+         Ok(()),\n{unsent}    }}\n}}\n\npub(crate) async fn lines<P: StateStore>(provider: &P, \
+         id: &str) -> omnia_sdk::Result<Vec<String>> {{\n    let Some(bytes) = \
+         StateStore::get(provider, &format!(\"orders/{{id}}/lines\")).await? else {{\n        \
+         return Ok(vec![]);\n    }};\n    match serde_json::from_slice(&bytes) {{\n        \
+         Ok(lines) => Ok(lines),\n        Err(error) => return Err(bad_request!(\"lines: \
+         {{error}}\")),\n    }}\n}}\n"
+    );
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write("crates/orders/src/reading.rs", &module);
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            (
+                "crates/orders/src/reading.rs",
+                invalid,
+                "        return Err(bad_request!(\"invalid order\"));\n",
+            ),
+            ("crates/orders/src/reading.rs", unstored, "    remember(provider, &order).await?;\n"),
+            ("crates/orders/src/reading.rs", unsent, "        Err(error) => Err(error),\n"),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let let_else_at = line_of(&module, "let Ok(order)");
+    let is_err_at = line_of(&module, ".is_err() {");
+    for line in [
+        "a delivery or a call the code refused is answered `Ok(())`, as processed".to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `let Ok(..) = .. \
+             else` block at line {let_else_at} caught",
+            line_of(&module, "tracing::warn!") + 1
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `is_err()` branch \
+             at line {is_err_at} caught",
+            is_err_at + 1
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `Err(..) =>` arm \
+             caught",
+            line_of(&module, "Err(_) => Ok(())")
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/orders/src/reading.rs:").count(),
+        3,
+        "an empty list answered where the store holds none and an arm returning its error are \
+         no finding: {correction}"
+    );
+    let repaired = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        repaired.contains("Err(bad_request!(\"invalid order\"))")
+            && repaired.contains("Err(error) => Err(error)")
+            && !repaired.contains("Err(_) => Ok(())"),
+        "{repaired}"
+    );
+}
+
+// A refusal caught and answered `Ok(())` on one line — the `let Ok(..) = ..
+// else { return Ok(()) };` the translation reference names, an `is_err()`
+// branch, and an `if let Err(..)` branch closed on their own line — is the
+// loss the block shapes are, so each is named at its line, while a one-line
+// `let Ok(()) = .. else` returning the error passes. Propagating the error
+// is the repair.
+#[tokio::test]
+async fn omnia_rejection_swallowed_on_one_line() {
+    let project = omnia_tree().await;
+    let invalid = "    let Ok(order) = validate(&input) else { return Ok(()) };\n";
+    let unstored = "    if remember(provider, &order).await.is_err() { return Ok(()); }\n";
+    let unsent = "    if let Err(error) = notify(provider, &order).await { \
+                  tracing::warn!(%error); return Ok(()); }\n";
+    let module = format!(
+        "//! Reads orders.\n\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{{HttpRequest, \
+         StateStore, bad_request}};\n\n/// An order as the wire carries \
+         it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    /// Its id.\n    pub id: \
+         String,\n}}\n\npub(crate) async fn on_placed<P: HttpRequest + StateStore>(\n    input: \
+         Order, context: Context<P>,\n) -> omnia_sdk::Result<()> {{\n    let provider = \
+         context.provider();\n{invalid}{unstored}{unsent}    let Ok(()) = audit(provider, \
+         &order).await else {{ return Err(bad_request!(\"unaudited\")) }};\n    Ok(())\n}}\n"
+    );
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write("crates/orders/src/reading.rs", &module);
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", invalid, "    let order = validate(&input)?;\n"),
+            ("crates/orders/src/reading.rs", unstored, "    remember(provider, &order).await?;\n"),
+            ("crates/orders/src/reading.rs", unsent, "    notify(provider, &order).await?;\n"),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    for line in [
+        "a delivery or a call the code refused is answered `Ok(())`, as processed".to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `let Ok(..) = .. \
+             else` block caught",
+            line_of(&module, "let Ok(order)")
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `is_err()` branch \
+             caught",
+            line_of(&module, ".is_err() {")
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `if let Err(..)` \
+             branch caught",
+            line_of(&module, "if let Err(error)")
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/orders/src/reading.rs:").count(),
+        3,
+        "a one-line `let Ok(()) = .. else` returning the error and the handler's own tail are \
+         no finding: {correction}"
+    );
+    let repaired = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        repaired.contains("let order = validate(&input)?;")
+            && repaired.contains("notify(provider, &order).await?;")
+            && !repaired.contains("return Ok(())"),
+        "{repaired}"
+    );
+}
+
+// A setting whose name spells `FORMAT` reads a parser's syntax from the
+// deployment, so the verdict is refused with the setting named at its
+// line, while the settings beside it and a format constant holding the
+// syntax itself pass. Holding the syntax in the constant is the repair.
+#[tokio::test]
+async fn omnia_format_setting() {
+    let project = omnia_tree().await;
+    let setting = "pub(crate) const DATE_FORMAT: &str = \"DATE_FORMAT\";\n";
+    let module = format!(
+        "//! Reads orders.\n\npub(crate) const STATIONS: &str = \"STATIONS\";\npub(crate) const \
+         BLOCK_MGT_URL: &str = \"BLOCK_MGT_URL\";\npub(crate) const TIMEZONE: &str = \
+         \"TIMEZONE\";\n{setting}pub(crate) const ISSUE_FORMAT: &str = \"%d/%m/%Y\";\n"
+    );
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write("crates/orders/src/reading.rs", &module);
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            setting,
+            "pub(crate) const DATE_FORMAT: &str = \"%d/%m/%Y\";\n",
+        )])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let setting_at = line_of(&module, "DATE_FORMAT");
+    for line in [
+        "a format is the parser's syntax and never a deployment value".to_owned(),
+        format!("crates/orders/src/reading.rs:{setting_at}: setting `DATE_FORMAT` names a format"),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["STATIONS", "BLOCK_MGT_URL", "TIMEZONE", "ISSUE_FORMAT"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    let repaired = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        repaired.contains("\"%d/%m/%Y\"") && !repaired.contains("\"DATE_FORMAT\""),
+        "{repaired}"
+    );
 }
 
 fn line_of(text: &str, needle: &str) -> usize {

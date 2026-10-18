@@ -1,10 +1,11 @@
 //! Checks that stem routers, topic constants, and stem dependencies are each
-//! used by the workspace.
+//! used by the workspace, and that a stem which publishes is reached.
 
 use emery_sdk::Error;
 
 use super::{
-    Module, Tree, crates, is_ident_char, is_start_stem, read, sources, spells, uncommented,
+    Module, Tree, crates, is_ident, is_ident_char, is_start_stem, read, sources, spells,
+    uncommented,
 };
 
 const ROUTES: &str = "src/routes.rs";
@@ -133,6 +134,53 @@ impl Tree<'_> {
             lines.join("\n")
         )))
     }
+
+    // A stem is run through its `routes()` and `topics(..)` or through
+    // another stem's call, so a publishing part in a stem neither reaches is
+    // never run; the root lists name every stem and tell nothing.
+    pub(super) fn unreached_publishers(&self) -> Result<Option<String>, Error> {
+        let mut lines = Vec::new();
+        for stem in crates(self.root)? {
+            if stem == "common" || is_start_stem(&stem) {
+                continue;
+            }
+            let prefix = format!("crates/{stem}/");
+            let (own, others): (Vec<&Module>, Vec<&Module>) =
+                self.modules.iter().partition(|module| module.path.starts_with(&prefix));
+            let registers = own
+                .iter()
+                .any(|module| module.entry_of() == Some(stem.as_str()) && module.registers());
+            let ident = stem.replace('-', "_");
+            let reached =
+                others.iter().any(|module| !module.is_common() && reaches(&module.code, &ident));
+            if registers || reached {
+                continue;
+            }
+            for module in own {
+                if let Some(number) = module.publishes() {
+                    lines.push(format!(
+                        "{}:{number}: `Publish` in a stem no route or topic reaches",
+                        module.path
+                    ));
+                }
+            }
+        }
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "the host runs a stem through its `routes()` and `topics(..)` alone, so a part that \
+             publishes in a stem no route or topic reaches, and no other stem calls, is never \
+             run: the trigger is the inbound stream the design's `## APIs and integrations` \
+             lists for the stem — its bullet spells the topic and names the requirement its \
+             deliveries set off — never a requirement at the registration, which the host owns; \
+             lay it through `edit_files`: the topic's constant at the end of `{TOPICS}`, \
+             `.route(config::topic_for(env, topic::<NAME>), messaging::consume_with(<handler>, \
+             <decode>))` in the part's `topics(..)` with the handler calling the earlier parts' \
+             functions, and `<part>::topics,` at the end of the entry's array:\n{}",
+            lines.join("\n")
+        )))
+    }
 }
 
 impl Module {
@@ -140,6 +188,30 @@ impl Module {
     fn entry_of(&self) -> Option<&str> {
         let stem = self.path.strip_prefix("crates/")?.strip_suffix("/src/lib.rs")?;
         (!stem.is_empty() && !stem.contains('/') && !self.is_common()).then_some(stem)
+    }
+
+    // Whether the entry names a part's `routes()` or `topics`, as an array
+    // entry or a call; `common`'s own folds are not a part's.
+    fn registers(&self) -> bool {
+        ["::routes()", "::topics"].into_iter().any(|needle| {
+            let mut from = 0;
+            while let Some(at) = self.code[from..].find(needle) {
+                let start = from + at;
+                let end = start + needle.len();
+                let ident = self.code[..start].trim_end_matches(is_ident_char);
+                let ident = &self.code[ident.len()..start];
+                let after = self.code[end..].chars().next().is_none_or(|ch| !is_ident_char(ch));
+                if is_ident(ident) && ident != "common" && after {
+                    return true;
+                }
+                from = end;
+            }
+            false
+        })
+    }
+
+    fn publishes(&self) -> Option<usize> {
+        self.code.lines().position(|line| spells(line, "Publish")).map(|index| index + 1)
     }
 
     // The line declaring `pub fn <name>`, the `pub` bare: a `pub(crate)` one
@@ -155,6 +227,20 @@ impl Module {
             })
             .map(|index| index + 1)
     }
+}
+
+// Whether `code` names an item of the crate `ident`, as `<ident>::<item>`.
+fn reaches(code: &str, ident: &str) -> bool {
+    let needle = format!("{ident}::");
+    let mut from = 0;
+    while let Some(at) = code[from..].find(&needle) {
+        let start = from + at;
+        if code[..start].chars().next_back().is_none_or(|ch| !is_ident_char(ch) && ch != ':') {
+            return true;
+        }
+        from = start + needle.len();
+    }
+    false
 }
 
 // The crates a manifest names under `[dependencies]`, each at the first line

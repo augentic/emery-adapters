@@ -5,7 +5,7 @@
 mod support;
 
 use emery_sdk::survey::{Inventory, Surface};
-use emery_sdk::target::TargetAdapter;
+use emery_sdk::target::{Grant, TargetAdapter};
 use emery_sdk::{Doc, body};
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 use omnia_test::{Seen, SeenWorker};
@@ -62,10 +62,10 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
     assert!(system.starts_with(body), "the compiled-in `{prompt}` leads the system");
 }
 
-// The worker grant a target's `WORKER` lowers through the world onto each
-// of its turns, as the host records it.
+// The worker grant a target's `grants` lower through the world onto each of
+// its turns, as the host records it.
 fn granted<A: TargetAdapter>(seen: &[Seen]) {
-    let grant = A::WORKER.grant().map(SeenWorker::from);
+    let grant = Grant::union(A::metadata().grants).map(SeenWorker::from);
     assert!(grant.is_some(), "the shipped target spells what its worker reaches");
     for request in seen {
         assert_eq!(request.worker, grant, "the turn carries the adapter's worker grant");

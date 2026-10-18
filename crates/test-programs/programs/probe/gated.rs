@@ -2,7 +2,7 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{Context, Doc, Error, Evidence, Model, Seam, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Doc, Error, Evidence, Metadata, Model, Seam, SourceAdapter, SourceKind};
 
 const PROSE: &[Doc] = &[
     Doc {
@@ -20,7 +20,11 @@ struct Adapter;
 emery_sdk::export_source!(Adapter);
 
 impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Documentation;
+    fn metadata() -> Metadata {
+        Metadata {
+            kind: SourceKind::Documentation,
+        }
+    }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
         emery_sdk::extract(ctx, PROSE, &[Seam::whole()]).await

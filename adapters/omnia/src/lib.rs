@@ -10,20 +10,26 @@ mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{MergeRule, Outcome, Reach, TargetAdapter, Task, Worker};
+use emery_sdk::target::{Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Error, Model, tracing};
 
 use self::tree::{Stems, Tree};
 
-// cargo fetches from crates.io's sparse index and its download host.
-const CARGO: Reach = Reach {
+const RULES: &[MergeRule] = &[
+    MergeRule::ours("Cargo.lock"),
+    MergeRule::union("Cargo.toml"),
+    MergeRule::union("src/routes.rs"),
+    MergeRule::union("src/messaging.rs"),
+    MergeRule::union("crates/common/src/topic.rs"),
+    MergeRule::union("crates/*/Cargo.toml"),
+    MergeRule::union("crates/*/src/lib.rs"),
+];
+const CARGO: Grant = Grant {
     egress: &["index.crates.io", "static.crates.io"],
     read: &[],
     env: &[],
 };
-
-// `RUSTUP_HOME` set since the private `HOME` hides it; `bin` alone keeps `credentials.toml` out.
-const RUSTUP: Reach = Reach {
+const RUSTUP: Grant = Grant {
     egress: &[],
     read: &["~/.rustup", "~/.cargo/bin"],
     env: &[("RUSTUP_HOME", "~/.rustup")],
@@ -33,16 +39,12 @@ const RUSTUP: Reach = Reach {
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
-    const MERGE_RULES: &'static [MergeRule] = &[
-        MergeRule::ours("Cargo.lock"),
-        MergeRule::union("Cargo.toml"),
-        MergeRule::union("src/routes.rs"),
-        MergeRule::union("src/messaging.rs"),
-        MergeRule::union("crates/common/src/topic.rs"),
-        MergeRule::union("crates/*/Cargo.toml"),
-        MergeRule::union("crates/*/src/lib.rs"),
-    ];
-    const WORKER: Worker = Worker::of(&[CARGO, RUSTUP]);
+    fn metadata() -> Metadata {
+        Metadata {
+            rules: RULES,
+            grants: &[CARGO, RUSTUP],
+        }
+    }
 
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {
