@@ -1,14 +1,75 @@
-//! Checks that stem routers and topic constants are wired into the workspace.
+//! Checks that stem routers, topic constants, and stem dependencies are each
+//! used by the workspace.
 
 use emery_sdk::Error;
 
-use super::{Module, Tree, is_ident_char, spells};
+use super::{
+    Module, Tree, crates, is_ident_char, is_start_stem, read, sources, spells, uncommented,
+};
 
 const ROUTES: &str = "src/routes.rs";
 const MESSAGING: &str = "src/messaging.rs";
 const TOPICS: &str = "crates/common/src/topic.rs";
+// The lines every stem's manifest carries whether or not each module reaches
+// the crate, so none is a finding.
+const LAYOUT_DEPENDENCIES: [&str; 6] =
+    ["axum", "common", "omnia-sdk", "serde", "serde_json", "tracing"];
 
 impl Tree<'_> {
+    pub(super) fn unused_dependencies(&self) -> Result<Option<String>, Error> {
+        let mut lines = Vec::new();
+        for stem in crates(self.root)? {
+            if stem == "common" || is_start_stem(&stem) {
+                continue;
+            }
+            let path = format!("crates/{stem}/Cargo.toml");
+            let file = self.root.join(&path);
+            if !file.is_file() {
+                continue;
+            }
+            let manifest = read(&file)?;
+            let code = self.stem_code(&stem)?;
+            for (number, name) in dependencies(&manifest) {
+                let ident = name.replace('-', "_");
+                if LAYOUT_DEPENDENCIES.contains(&name.as_str())
+                    || code.iter().any(|text| spells(text, &ident))
+                {
+                    continue;
+                }
+                lines.push(format!(
+                    "{path}:{number}: dependency `{name}` is used by no file of `crates/{stem}/`"
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "a stem's manifest names the crates its files use and nothing more, since a \
+             dependency no module or test spells is compiled for nothing and hides the use the \
+             slice meant to lay: use the crate where the slice meant to, or remove its line \
+             through `edit_files`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
+    // Every source of the stem the check reads a dependency's use in: its
+    // modules, read once with the tree, and its tests, which nothing else
+    // reads.
+    fn stem_code(&self, stem: &str) -> Result<Vec<String>, Error> {
+        let prefix = format!("crates/{stem}/");
+        let mut code: Vec<String> = self
+            .modules
+            .iter()
+            .filter(|module| module.path.starts_with(&prefix))
+            .map(|module| module.code.clone())
+            .collect();
+        for file in sources(&self.root.join("crates").join(stem).join("tests"))? {
+            code.push(uncommented(&read(&file)?));
+        }
+        Ok(code)
+    }
+
     pub(super) fn stems_merged(&self) -> Result<Option<String>, Error> {
         let routes = self.code(ROUTES)?;
         let messaging = self.code(MESSAGING)?;
@@ -94,4 +155,34 @@ impl Module {
             })
             .map(|index| index + 1)
     }
+}
+
+// The crates a manifest names under `[dependencies]`, each at the first line
+// naming it: a dotted key (`uuid.workspace = true`), an inline table
+// (`uuid = { .. }`), or a `[dependencies.uuid]` table of its own.
+fn dependencies(manifest: &str) -> Vec<(usize, String)> {
+    let mut found: Vec<(usize, String)> = Vec::new();
+    let mut in_table = false;
+    for (index, line) in manifest.lines().enumerate() {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        let name = if let Some(header) = line.strip_prefix('[') {
+            let header = header.strip_suffix(']').map_or("", str::trim);
+            in_table = header == "dependencies";
+            let Some(name) = header.strip_prefix("dependencies.") else { continue };
+            unquoted(name)
+        } else if in_table {
+            let Some((key, _)) = line.split_once('=') else { continue };
+            unquoted(key.split('.').next().unwrap_or_default())
+        } else {
+            continue;
+        };
+        if !name.is_empty() && !found.iter().any(|(_, seen)| seen == name) {
+            found.push((index + 1, name.to_owned()));
+        }
+    }
+    found
+}
+
+fn unquoted(key: &str) -> &str {
+    key.trim().trim_matches(|ch| ch == '"' || ch == '\'')
 }

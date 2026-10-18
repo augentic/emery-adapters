@@ -68,6 +68,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.manifest_drift()?);
         findings.extend(self.process()?);
         findings.extend(self.stem_lints()?);
+        findings.extend(self.unused_dependencies()?);
         findings.extend(self.stems_merged()?);
         findings.extend(self.unnamed_topics()?);
         findings.extend(self.empty_misses());
