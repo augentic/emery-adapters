@@ -9,9 +9,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write as _};
 use std::path::Path;
 
-use emery_sdk::target::{
-    Base, InitContext, MergeRule, Outcome, Reach, TargetAdapter, Task, Worker,
-};
+use emery_sdk::target::{InitContext, MergeRule, Outcome, Reach, TargetAdapter, Task, Worker};
 use emery_sdk::{Error, Model, server_error, tracing};
 
 // The root files every tree of the layout starts from, which no slice writes.
@@ -54,7 +52,6 @@ const FNM: Reach = Reach {
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
-    const BASE: Base = Base::Fresh;
     const MERGE_RULES: &'static [MergeRule] = &[
         MergeRule::ours("package-lock.json"),
         MergeRule::union("src/index.ts"),

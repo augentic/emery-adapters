@@ -200,16 +200,16 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the fresh base and the merge rules; the init lays the
-// root manifests in the lent tree with no turn, the build writes the mount
-// through `write_files`, its turns carry the worker grant, and its report
-// and the verdict lift back to the driver.
+// The metadata lowers the merge rules; the init lays the root manifests in
+// the lent tree with no turn, the build writes the mount through
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["metadata", "fresh", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &["metadata", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
     )
     .await;
@@ -240,11 +240,11 @@ async fn emery_node() {
     );
 }
 
-// The metadata lowers the fresh base and the seven rules in order; the init
-// lays the template in the lent tree with no turn, the build writes a stem's
-// list through `write_files`, its turns carry the worker grant, and its
-// report and the verdict lift back to the driver, the verify's check finding
-// the static files standing as the template spells them.
+// The metadata lowers the seven rules in order; the init lays the template
+// in the lent tree with no turn, the build writes a stem's list through
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver, the verify's check finding the static
+// files standing as the template spells them.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
@@ -252,7 +252,6 @@ async fn emery_omnia() {
         &scratch(),
         &[
             "metadata",
-            "fresh",
             "Cargo.lock=ours",
             "Cargo.toml=union",
             "src/routes.rs=union",

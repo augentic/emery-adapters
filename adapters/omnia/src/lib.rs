@@ -10,7 +10,7 @@ mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{Base, MergeRule, Outcome, Reach, TargetAdapter, Task, Worker};
+use emery_sdk::target::{MergeRule, Outcome, Reach, TargetAdapter, Task, Worker};
 use emery_sdk::{Error, Model, tracing};
 
 use self::tree::{Stems, Tree};
@@ -33,7 +33,6 @@ const RUSTUP: Reach = Reach {
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
-    const BASE: Base = Base::Fresh;
     const MERGE_RULES: &'static [MergeRule] = &[
         MergeRule::ours("Cargo.lock"),
         MergeRule::union("Cargo.toml"),

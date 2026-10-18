@@ -16,8 +16,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    Base, BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task,
-    Verdict, VerifyContext,
+    BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task, Verdict,
+    VerifyContext,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -516,13 +516,6 @@ fn node_rules() {
     );
 }
 
-// The layout is the whole of what the adapter lays, so it builds into a
-// fresh tree and never over a project.
-#[test]
-fn node_base() {
-    assert_eq!(emery_node::Adapter::BASE, Base::Fresh, "the base the adapter declares");
-}
-
 // What a build's or verify's worker reaches beyond the tree, as the grant the
 // turns carry: the npm registry, a Node installed beneath the home by nvm,
 // Volta, or fnm, and Volta's root named for it. The grant is asserted rather
@@ -821,13 +814,6 @@ fn omnia_rules_follow_template() {
             );
         }
     }
-}
-
-// The seed and the slices are the whole of what the adapter lays, so it
-// builds into a fresh tree and never over a project.
-#[test]
-fn omnia_base() {
-    assert_eq!(emery_omnia::Adapter::BASE, Base::Fresh, "the base the adapter declares");
 }
 
 // What a build's or verify's worker reaches beyond the tree, as the grant the
