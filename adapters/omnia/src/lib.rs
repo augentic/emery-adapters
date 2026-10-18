@@ -10,10 +10,24 @@ mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{Base, MergeRule, Outcome, TargetAdapter, Task, Worker};
+use emery_sdk::target::{Base, MergeRule, Outcome, Reach, TargetAdapter, Task, Worker};
 use emery_sdk::{Error, Model, tracing};
 
 use self::tree::{Stems, Tree};
+
+// cargo fetches from crates.io's sparse index and its download host.
+const CARGO: Reach = Reach {
+    egress: &["index.crates.io", "static.crates.io"],
+    read: &[],
+    env: &[],
+};
+
+// `RUSTUP_HOME` set since the private `HOME` hides it; `bin` alone keeps `credentials.toml` out.
+const RUSTUP: Reach = Reach {
+    egress: &[],
+    read: &["~/.rustup", "~/.cargo/bin"],
+    env: &[("RUSTUP_HOME", "~/.rustup")],
+};
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -29,11 +43,7 @@ impl TargetAdapter for Adapter {
         MergeRule::union("crates/*/Cargo.toml"),
         MergeRule::union("crates/*/src/lib.rs"),
     ];
-    const WORKER: Worker = Worker {
-        egress: &["index.crates.io", "static.crates.io"],
-        read: &["~/.rustup", "~/.cargo/bin"],
-        env: &[("RUSTUP_HOME", "~/.rustup")],
-    };
+    const WORKER: Worker = Worker::of(&[CARGO, RUSTUP]);
 
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {

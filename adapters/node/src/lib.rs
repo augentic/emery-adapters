@@ -9,7 +9,9 @@ use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write as _};
 use std::path::Path;
 
-use emery_sdk::target::{Base, InitContext, MergeRule, Outcome, TargetAdapter, Task, Worker};
+use emery_sdk::target::{
+    Base, InitContext, MergeRule, Outcome, Reach, TargetAdapter, Task, Worker,
+};
 use emery_sdk::{Error, Model, server_error, tracing};
 
 // The root files every tree of the layout starts from, which no slice writes.
@@ -18,6 +20,35 @@ const FILES: &[(&str, &str)] = &[
     ("package.json", include_str!("../seed/package.json")),
     ("tsconfig.json", include_str!("../seed/tsconfig.json")),
 ];
+
+// npm fetches from the public registry.
+const NPM: Reach = Reach {
+    egress: &["registry.npmjs.org"],
+    read: &[],
+    env: &[],
+};
+
+// nvm keeps each installed Node under its versions directory.
+const NVM: Reach = Reach {
+    egress: &[],
+    read: &["~/.nvm/versions/node"],
+    env: &[],
+};
+
+// Volta finds its toolchains under `VOLTA_HOME`, which the worker's private
+// `HOME` would otherwise hide.
+const VOLTA: Reach = Reach {
+    egress: &[],
+    read: &["~/.volta"],
+    env: &[("VOLTA_HOME", "~/.volta")],
+};
+
+// fnm keeps its installs under the XDG data directory.
+const FNM: Reach = Reach {
+    egress: &[],
+    read: &["~/.local/share/fnm"],
+    env: &[],
+};
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -29,11 +60,7 @@ impl TargetAdapter for Adapter {
         MergeRule::union("src/index.ts"),
         MergeRule::union("**/index.ts"),
     ];
-    const WORKER: Worker = Worker {
-        egress: &["registry.npmjs.org"],
-        read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
-        env: &[("VOLTA_HOME", "~/.volta")],
-    };
+    const WORKER: Worker = Worker::of(&[NPM, NVM, VOLTA, FNM]);
 
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {

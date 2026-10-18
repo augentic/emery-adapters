@@ -17,7 +17,7 @@ use std::path::Path;
 
 use emery_sdk::target::{
     Base, BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task,
-    Verdict, VerifyContext, Worker,
+    Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -523,20 +523,26 @@ fn node_base() {
     assert_eq!(emery_node::Adapter::BASE, Base::Fresh, "the base the adapter declares");
 }
 
-// What a build's or verify's worker reaches beyond the tree: the npm
-// registry, a Node installed beneath the home by nvm, Volta, or fnm, and
-// Volta's root named for it.
+// What a build's or verify's worker reaches beyond the tree, as the grant the
+// turns carry: the npm registry, a Node installed beneath the home by nvm,
+// Volta, or fnm, and Volta's root named for it. The grant is asserted rather
+// than the reaches, so the adapter may regroup them while any widening shows.
 #[test]
 fn node_worker() {
     assert_eq!(
-        emery_node::Adapter::WORKER,
-        Worker {
-            egress: &["registry.npmjs.org"],
-            read: &["~/.nvm/versions/node", "~/.volta", "~/.local/share/fnm"],
-            env: &[("VOLTA_HOME", "~/.volta")],
-        },
-        "the worker grant the adapter declares"
+        emery_node::Adapter::WORKER.grant().map(SeenWorker::from),
+        Some(SeenWorker {
+            egress: vec!["registry.npmjs.org".to_owned()],
+            read: vec![
+                "~/.nvm/versions/node".to_owned(),
+                "~/.volta".to_owned(),
+                "~/.local/share/fnm".to_owned(),
+            ],
+            env: vec![("VOLTA_HOME".to_owned(), "~/.volta".to_owned())],
+        }),
+        "the worker grant the adapter's turns carry"
     );
+    assert_eq!(emery_node::Adapter::WORKER.findings(), Vec::<String>::new());
 }
 
 #[tokio::test]
@@ -824,20 +830,23 @@ fn omnia_base() {
     assert_eq!(emery_omnia::Adapter::BASE, Base::Fresh, "the base the adapter declares");
 }
 
-// What a build's or verify's worker reaches beyond the tree: the crates.io
-// index and its downloads, the toolchain and the binaries beneath the home,
-// and `RUSTUP_HOME` named for it.
+// What a build's or verify's worker reaches beyond the tree, as the grant the
+// turns carry: the crates.io index and its downloads, the toolchain and the
+// binaries beneath the home, never `~/.cargo` whole, and `RUSTUP_HOME` named
+// for it. The grant is asserted rather than the reaches, so the adapter may
+// regroup them while any widening shows.
 #[test]
 fn omnia_worker() {
     assert_eq!(
-        emery_omnia::Adapter::WORKER,
-        Worker {
-            egress: &["index.crates.io", "static.crates.io"],
-            read: &["~/.rustup", "~/.cargo/bin"],
-            env: &[("RUSTUP_HOME", "~/.rustup")],
-        },
-        "the worker grant the adapter declares"
+        emery_omnia::Adapter::WORKER.grant().map(SeenWorker::from),
+        Some(SeenWorker {
+            egress: vec!["index.crates.io".to_owned(), "static.crates.io".to_owned()],
+            read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
+            env: vec![("RUSTUP_HOME".to_owned(), "~/.rustup".to_owned())],
+        }),
+        "the worker grant the adapter's turns carry"
     );
+    assert_eq!(emery_omnia::Adapter::WORKER.findings(), Vec::<String>::new());
 }
 
 #[tokio::test]
