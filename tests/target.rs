@@ -1016,15 +1016,15 @@ async fn omnia_build_process_refused() {
     );
 }
 
-// A stem's manifest that does not inherit the workspace's lints is refused
-// at the build with the manifest named, since the lints are the host
-// boundary and reach a crate through that table alone; the turn adds the
-// table and the report is accepted. A `lints.workspace = true` key is the
-// same table spelled dotted.
+// A stem's manifest that does not inherit the workspace's lints, such as a
+// `lints.workspace = true` key nested under `[package]`, is refused at the
+// build with the manifest named, since the lints are the host boundary and
+// reach a crate through `[lints]` alone. The turn adds the `[lints]` table
+// and the report is accepted.
 #[tokio::test]
 async fn omnia_stem_without_workspace_lints() {
     let project = omnia_tree().await;
-    let unlinted = "[package]\nname = \"orders\"\n\n[dependencies]\nomnia-sdk.workspace = true\n";
+    let unlinted = "[package]\nname = \"orders\"\nlints.workspace = true\n\n[dependencies]\nomnia-sdk.workspace = true\n";
     let written = [
         ("crates/orders/Cargo.toml", unlinted),
         ("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n"),
@@ -1035,8 +1035,8 @@ async fn omnia_stem_without_workspace_lints() {
         1,
         [edit_files(&[(
             "crates/orders/Cargo.toml",
-            "name = \"orders\"\n",
-            "name = \"orders\"\nlints.workspace = true\n",
+            "lints.workspace = true\n",
+            "\n[lints]\nworkspace = true\n",
         )])],
     );
 
@@ -1050,7 +1050,7 @@ async fn omnia_stem_without_workspace_lints() {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
     assert!(
-        text(&project, "crates/orders/Cargo.toml").contains("lints.workspace = true"),
+        text(&project, "crates/orders/Cargo.toml").contains("[lints]\nworkspace = true"),
         "the manifest inherits the lints"
     );
 }

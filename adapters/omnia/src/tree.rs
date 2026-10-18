@@ -329,19 +329,22 @@ fn is_ident_char(ch: char) -> bool {
 }
 
 // Whether a manifest inherits the workspace's lints, as `[lints]` holding
-// `workspace = true` or the dotted `lints.workspace = true`.
+// `workspace = true` or a top-level `lints.workspace = true`.
 fn inherits_lints(manifest: &str) -> bool {
-    let mut in_lints = false;
+    let mut table: Option<&str> = None;
     for line in manifest.lines() {
         let line = line.split('#').next().unwrap_or_default().trim();
-        if let Some(table) = line.strip_prefix('[') {
-            in_lints = table.trim_end_matches(']').trim() == "lints";
+        if let Some(header) = line.strip_prefix('[') {
+            table = Some(header.strip_suffix(']').map_or("", str::trim));
             continue;
         }
         let Some((key, value)) = line.split_once('=') else { continue };
         let key = key.trim();
         let value = value.trim();
-        if value == "true" && (in_lints && key == "workspace" || key == "lints.workspace") {
+        if value == "true"
+            && (table == Some("lints") && key == "workspace"
+                || table.is_none() && key == "lints.workspace")
+        {
             return true;
         }
     }
