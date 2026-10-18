@@ -1664,6 +1664,66 @@ async fn omnia_topic_unnamed() {
     assert!(table.contains("ORDER_PLACED") && !table.contains("ORDER_RETURNED"), "{table}");
 }
 
+// A crate a stem's manifest names that no module or test of the stem spells
+// is compiled for nothing, so the verdict is refused with the dependency
+// named at its line, while a crate a module uses, one a test alone uses, and
+// one of the layout's fixed lines pass, and a mention in a comment counts for
+// nothing. Removing the line is the repair.
+#[tokio::test]
+async fn omnia_dependency_unused() {
+    let project = omnia_tree().await;
+    let unused = "uuid.workspace = true\n";
+    let manifest = format!(
+        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
+         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
+         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
+         chrono.workspace = true\nquick-xml = {{ version = \"0.37\", features = \
+         [\"serialize\"] }}\nhttp.workspace = true\n{unused}"
+    );
+    project.write("crates/orders/Cargo.toml", &manifest);
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Reads orders.\n\n/// When an order was read.\n#[must_use]\npub fn read_at() -> \
+         chrono::DateTime<chrono::Utc> {\n    chrono::Utc::now()\n}\n\n/// An order read from \
+         its wire form.\n///\n/// # Errors\n///\n/// `bad_request` for a payload that does not \
+         parse.\npub fn parse(payload: &[u8]) -> omnia_sdk::Result<Order> {\n    \
+         quick_xml::de::from_reader(payload).map_err(|error| omnia_sdk::bad_request!(\"order: \
+         {error}\"))\n}\n\n// An id is the caller's, never a `uuid` minted here.\n/// An \
+         order.\n#[derive(serde::Deserialize)]\npub struct Order {\n    /// Its id.\n    pub id: \
+         String,\n}\n",
+    );
+    project.write(
+        "crates/orders/tests/reading.rs",
+        "//! The `orders` stem's reading.\n\n#[tokio::test]\nasync fn an_order_is_read() {\n    \
+         let request = http::Request::builder().body(()).expect(\"a request\");\n    \
+         drop(request);\n}\n",
+    );
+    let model = Scripted::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let unused_at = line_of(&manifest, "uuid.workspace");
+    for line in [
+        "a stem's manifest names the crates its files use and nothing more".to_owned(),
+        format!(
+            "crates/orders/Cargo.toml:{unused_at}: dependency `uuid` is used by no file of \
+             `crates/orders/`"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    for absent in ["chrono", "quick-xml", "http", "serde_json"] {
+        assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
+    }
+    let manifest = text(&project, "crates/orders/Cargo.toml");
+    assert!(manifest.contains("chrono") && !manifest.contains("uuid"), "{manifest}");
+}
+
 fn line_of(text: &str, needle: &str) -> usize {
     text.lines()
         .position(|line| line.contains(needle))
