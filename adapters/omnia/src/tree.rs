@@ -15,7 +15,7 @@ use omnia_template::Manifest;
 use crate::scaffold::Scaffold;
 
 const MAX_DIFF_LINES: usize = 24;
-// The lead of a marker the scaffold lays, in a handler's or a function's
+// The lead of a marker the scaffold writes, in a handler's or a function's
 // body as in a test's.
 const MARKER: &str = "todo!(\"REQ-";
 
@@ -86,7 +86,7 @@ impl<'a> Tree<'a> {
         Ok(findings)
     }
 
-    // A crate the turn laid is one of the slice's stems' or none of the
+    // A crate the turn wrote is one of the slice's stems' or none of the
     // tree's; `crates/start/` is the process rule's.
     fn split_stems(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
         let stems: Vec<&str> = scaffold.stems().collect();
@@ -105,14 +105,15 @@ impl<'a> Tree<'a> {
             lines.push(split.map_or_else(
                 || {
                     format!(
-                        "`crates/{dir}/` is laid for `{dir}`, which is no stem of this slice ({})",
+                        "`crates/{dir}/` is written for `{dir}`, which is no stem of this slice \
+                         ({})",
                         stems.iter().map(|stem| format!("`{stem}`")).collect::<Vec<_>>().join(", ")
                     )
                 },
                 |stem| {
                     format!(
-                        "`crates/{dir}/` is laid for `{dir}`, the head of the stem `{stem}`, whose \
-                         crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
+                        "`crates/{dir}/` is written for `{dir}`, the head of the stem `{stem}`, \
+                         whose crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
                         stem.replace('-', "_")
                     )
                 },
@@ -122,8 +123,8 @@ impl<'a> Tree<'a> {
             return Ok(None);
         }
         Ok(Some(format!(
-            "a slice lays modules under the crates of its own stems alone, and a stem is one \
-             word and is never split at its hyphen into a crate and a part: lay each module \
+            "a slice writes modules under the crates of its own stems alone, and a stem is one \
+             word and is never split at its hyphen into a crate and a part: write each module \
              under `crates/<stem>/src/<part>.rs` for the stem its requirements lead with, remove \
              every file under the other directory through `delete`, and drop its lines from the \
              root `Cargo.toml` through `edit_files`:\n{}",
@@ -151,9 +152,9 @@ impl<'a> Tree<'a> {
         }
         Some(format!(
             "a covered requirement is implemented, so no marker of its stands: fill each \
-             `todo!(\"REQ-..\")` the adapter laid for a covered requirement through `edit_files` \
-             — a handler's body with its `let _ = (input, context);` line dropped, a function's \
-             body — or leave the requirement out of `covered`:\n{}",
+             `todo!(\"REQ-..\")` the adapter scaffolded for a covered requirement through \
+             `edit_files` — a handler's body with its `let _ = (input, context);` line dropped, \
+             a function's body — or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
     }
@@ -196,9 +197,9 @@ impl<'a> Tree<'a> {
         }
         Ok(Some(format!(
             "a covered requirement's scenarios are tests that run and pass: each scenario of a \
-             covered requirement is the `#[tokio::test]` the adapter laid for it in the part's \
-             test file, filled, with its `#[ignore = ..]` line removed; fill each through \
-             `edit_files`, or leave the requirement out of `covered`:\n{}",
+             covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
+             part's test file, filled, with its `#[ignore = ..]` line removed; fill each \
+             through `edit_files`, or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         )))
     }
@@ -234,15 +235,15 @@ impl<'a> Tree<'a> {
         for file in drift.files() {
             let finding = if self.lacks(file.path) {
                 format!(
-                    "`{}` is a static file of the template the tree lacks; lay it whole through \
+                    "`{}` is a static file of the template the tree lacks; write it whole through \
                      `write_files`, as the template spells it:\n{}",
                     file.path,
                     template(file.path)?
                 )
             } else if file.lines.len() > MAX_DIFF_LINES {
                 format!(
-                    "`{}` is a static file of the template and differs from it in {} lines; lay it \
-                     whole through `write_files`, as the template spells it:\n{}",
+                    "`{}` is a static file of the template and differs from it in {} lines; write \
+                     it whole through `write_files`, as the template spells it:\n{}",
                     file.path,
                     file.lines.len(),
                     template(file.path)?
@@ -268,8 +269,8 @@ impl<'a> Tree<'a> {
         }
         let finding = if self.lacks(Manifest::PATH) {
             format!(
-                "the tree lacks the root `{}`; lay it whole through `write_files` as the template \
-                 spells it, then add each stem's line to its two lists:\n{}",
+                "the tree lacks the root `{}`; write it whole through `write_files` as the \
+                 template spells it, then add each stem's line to its two lists:\n{}",
                 Manifest::PATH,
                 template(Manifest::PATH)?
             )
@@ -367,7 +368,7 @@ pub fn read(file: &Path) -> Result<String, Error> {
 fn template(path: &str) -> Result<&'static str, Error> {
     omnia_template::entry(path)
         .map(|entry| entry.body)
-        .ok_or_else(|| server_error!("the template lays no `{path}`"))
+        .ok_or_else(|| server_error!("the template holds no `{path}`"))
 }
 
 pub fn refusal(err: &omnia_template::Error) -> Error {

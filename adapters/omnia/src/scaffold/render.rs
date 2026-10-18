@@ -1,12 +1,12 @@
-//! Renders the files a scaffold lays and places the lines it adds to the lists.
+//! Renders the files a scaffold writes and places the lines it adds to the lists.
 
 use std::fmt::Write as _;
 
 use super::names::{escape, flat};
 use super::{Function, Handler, Stem, Type, route};
 
-// The template's `rustfmt.toml` width, so a laid line the formatter would
-// break is laid broken.
+// The template's `rustfmt.toml` width, so a scaffolded line the formatter
+// would break is written broken.
 const MAX_WIDTH: usize = 100;
 const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
 const ROUTES_ANCHOR: &str = "// one entry per part with routes, each added at the end";

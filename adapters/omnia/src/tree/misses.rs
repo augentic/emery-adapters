@@ -38,7 +38,7 @@ impl Tree<'_> {
              never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
              design spells the call, stores it under the same key with a TTL, and answers what it \
              fetched, never an empty collection; repair each read named through `edit_files`, \
-             laying the fetch in the same function:\n{}",
+             writing the fetch in the same function:\n{}",
             lines.join("\n")
         ))
     }

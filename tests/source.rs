@@ -384,7 +384,7 @@ fn unsurveyed(turns: &[String]) {
 
 // One document, one subject at its title: the survey turn opens first, over
 // the document's outline, and the one seam is told the subject, the lines
-// it spans, the stem, and the id its claims lead with, the document laid.
+// it spans, the stem, and the id its claims lead with, the document inlined.
 #[tokio::test]
 async fn documentation() {
     let project = scratch();
@@ -415,7 +415,7 @@ async fn documentation() {
     );
     assert!(
         turns[0].contains("### `docs/orders.md` (3 lines)"),
-        "the document is laid: {}",
+        "the document is inlined: {}",
         turns[0]
     );
 }
@@ -425,7 +425,7 @@ async fn documentation() {
 // where it opens when it has no heading — and never a file that does not;
 // from the accepted anchors the code derives each subject's span and lead,
 // and the one seam within the budget is held to every stem, the document
-// placed under no subject named as context and laid for no call.
+// placed under no subject named as context and inlined for no call.
 #[tokio::test]
 async fn documentation_subjects() {
     let project = scratch();
@@ -525,8 +525,11 @@ async fn documentation_subjects() {
         ),
         "the unreached document is context: {turn}"
     );
-    assert!(turn.contains("### `joining.md` (3 lines)"), "a subject's document is laid: {turn}");
-    assert!(!turn.contains("### `README.md`"), "an unreached document is laid for no call: {turn}");
+    assert!(turn.contains("### `joining.md` (3 lines)"), "a subject's document is inlined: {turn}");
+    assert!(
+        !turn.contains("### `README.md`"),
+        "an unreached document is inlined for no call: {turn}"
+    );
 }
 
 // A page whose rule names a product in passing: the requirement that quotes
@@ -638,7 +641,7 @@ async fn documentation_stems() {
         );
         assert!(
             !turn.contains(&format!("### `{other}.md`")),
-            "the other stem's document is not laid: {turn}"
+            "the other stem's document is not inlined: {turn}"
         );
     }
 }
@@ -807,10 +810,10 @@ async fn documentation_no_documents() {
     DOCUMENTATION.prompted(&model, 1);
 }
 
-// Every module is laid out in the turn, and nothing else is.
-fn laid(turn: &str, modules: &[&str], refused: &[&str]) {
+// Every module is inlined into the turn, and nothing else is.
+fn inlined(turn: &str, modules: &[&str], refused: &[&str]) {
     for module in modules {
-        assert!(turn.contains(&format!("### `{module}` (")), "`{module}` is laid out: {turn}");
+        assert!(turn.contains(&format!("### `{module}` (")), "`{module}` is inlined: {turn}");
     }
     for file in refused {
         assert!(!turn.contains(file), "`{file}` is not a module: {turn}");
@@ -968,7 +971,7 @@ fn app_inventory() -> String {
 
 // A workspace opens one survey turn before it is mined, and the inline value
 // none. A tree whose modules fit within the SDK's inline budget is one extract
-// over every module, laid into the turn, told every surface the survey named
+// over every module, inlined into the turn, told every surface the survey named
 // and held to every stem; the conventional entry is the bootstrap when no
 // manifest names one, and the caller's `start` leads the surfaces. Each
 // surface line carries what the code read at its anchor — the registration,
@@ -1005,7 +1008,7 @@ async fn typescript() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
+    inlined(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
     assert!(turns[0].contains("1|import express from \"express\";"), "numbered: {}", turns[0]);
 }
 
@@ -1042,7 +1045,7 @@ async fn typescript_stem() {
 // surfaces reach: the routes' seam reaches the service and the store from the
 // router, never the entry; the bootstrap's reaches the router it mounts and
 // stops there — and each surface line says so. A module past the budget is
-// listed, the rest laid.
+// listed, the rest inlined.
 #[tokio::test]
 async fn typescript_closure() {
     let project = scratch();
@@ -1059,7 +1062,7 @@ async fn typescript_closure() {
     let start = turn_for(&turns, "start");
     assert_eq!(surfaces(start), [("start", "src/index.ts", "start")]);
     assert!(start.contains("; id `start`; reaches `src/routes.ts`."), "{start}");
-    laid(start, &["src/index.ts", "src/routes.ts"], &["src/orders.ts", "src/db.ts"]);
+    inlined(start, &["src/index.ts", "src/routes.ts"], &["src/orders.ts", "src/db.ts"]);
     let orders = turn_for(&turns, "POST /api/orders");
     assert_eq!(
         surfaces(orders),
@@ -1072,7 +1075,7 @@ async fn typescript_closure() {
         orders.contains("; id `orders.post`; reaches `src/orders.ts`, `src/db.ts`."),
         "{orders}"
     );
-    laid(orders, &["src/routes.ts", "src/orders.ts"], &["src/index.ts"]);
+    inlined(orders, &["src/routes.ts", "src/orders.ts"], &["src/index.ts"]);
     assert!(orders.contains("- `src/db.ts`"), "the store past the budget is listed: {orders}");
 }
 
@@ -1117,7 +1120,7 @@ async fn typescript_constructed() {
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let start = turn_for(&turns, "start");
     assert_eq!(surfaces(start), [("start", "src/start.ts", "start")]);
-    laid(start, &["src/start.ts", "src/main.ts"], &[]);
+    inlined(start, &["src/start.ts", "src/main.ts"], &[]);
     assert!(
         start.contains("- `src/stops.ts`"),
         "the service the entry constructs is the bootstrap's to reach: {start}"
@@ -1126,7 +1129,7 @@ async fn typescript_constructed() {
     assert_eq!(surfaces(message), [("message consumer", "src/main.ts", "message")]);
     let note = ": registered L13 in `Main.start`; handler L13; through `kafkajs`; id `message`;";
     assert!(message.contains(note), "the registration is read in its class: {message}");
-    laid(message, &["src/main.ts"], &["src/start.ts"]);
+    inlined(message, &["src/main.ts"], &["src/start.ts"]);
     assert!(message.contains("- `src/stops.ts`"), "the handler reaches the service too: {message}");
 }
 
@@ -1176,7 +1179,7 @@ async fn typescript_bootstrap() {
 
 // The survey over the committed `cli-jobs` fixture, the tree the eval case of
 // that name runs over, answered as the eval expects it: within the budget, so
-// one seam lays every module; the bootstrap the manifest's `main` names, four
+// one seam inlines every module; the bootstrap the manifest's `main` names, four
 // commands registered at module level, a schedule registered inside a
 // function, and a worker. The code reads each anchor for what registers
 // there — the chain's `command` literal, the schedule's constant, the
@@ -1229,7 +1232,7 @@ async fn typescript_fixture_cli_jobs() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &[
             "src/cli.ts",
@@ -1246,11 +1249,11 @@ async fn typescript_fixture_cli_jobs() {
     );
 }
 
-// The `express-orders` bootstrap's closure in the order the survey lays it:
+// The `express-orders` bootstrap's closure in the order the survey inlines it:
 // the entry, then every module it imports breadth-first — the three routers
 // it mounts reached and stopped at, the services and stores it constructs
 // followed. The postcode table is where the SDK's budget runs out, so the
-// two modules after it are listed rather than laid.
+// two modules after it are listed rather than inlined.
 const EXPRESS_START: [&str; 20] = [
     "src/server.ts",
     "src/config.ts",
@@ -1273,7 +1276,7 @@ const EXPRESS_START: [&str; 20] = [
     "src/schemas/orders.ts",
     "src/services/pricing.ts",
 ];
-const EXPRESS_LAID: usize = 18;
+const EXPRESS_INLINED: usize = 18;
 
 // The `orders` router's closure, from its entry.
 const EXPRESS_ORDERS: [&str; 14] = [
@@ -1305,11 +1308,11 @@ const EXPRESS_CUSTOMERS: [&str; 6] = [
 
 // The survey over the committed `express-orders` fixture, answered as the
 // eval expects it: past the budget, so one seam per stem. The bootstrap's
-// seam lays its closure in import order up to where the budget runs out and
-// lists the rest; each router's seam lays its own closure and nothing of the
-// entry's. Every route's stem is the code's, read from its path under the
-// router's mount, and each is told apart by its verb and the path past the
-// resource.
+// seam inlines its closure in import order up to where the budget runs out
+// and lists the rest; each router's seam inlines its own closure and nothing
+// of the entry's. Every route's stem is the code's, read from its path under
+// the router's mount, and each is told apart by its verb and the path past
+// the resource.
 #[tokio::test]
 async fn typescript_fixture_express_orders() {
     let project = scratch();
@@ -1349,10 +1352,10 @@ async fn typescript_fixture_express_orders() {
         start.contains(&format!("; id `start`; reaches {}.", reached.join(", "))),
         "the bootstrap reaches the tree in import order: {start}"
     );
-    laid(start, &EXPRESS_START[..EXPRESS_LAID], &[]);
-    for listed in &EXPRESS_START[EXPRESS_LAID..] {
+    inlined(start, &EXPRESS_START[..EXPRESS_INLINED], &[]);
+    for listed in &EXPRESS_START[EXPRESS_INLINED..] {
         assert!(start.contains(&format!("- `{listed}`\n")), "`{listed}` is listed: {start}");
-        assert!(!start.contains(&format!("### `{listed}`")), "`{listed}` is not laid: {start}");
+        assert!(!start.contains(&format!("### `{listed}`")), "`{listed}` is not inlined: {start}");
     }
 
     let orders = turn_for(&turns, "GET /api/orders");
@@ -1376,7 +1379,7 @@ async fn typescript_fixture_express_orders() {
     ] {
         assert!(orders.contains(note), "{note} is in the brief: {orders}");
     }
-    laid(
+    inlined(
         orders,
         &EXPRESS_ORDERS,
         &["src/server.ts", "src/routes/health.ts", "src/routes/customers.ts", "src/middleware/"],
@@ -1391,7 +1394,7 @@ async fn typescript_fixture_express_orders() {
             ("PUT /api/customers/:id/tier", "src/routes/customers.ts", "customers"),
         ]
     );
-    laid(
+    inlined(
         customers,
         &EXPRESS_CUSTOMERS,
         &["src/server.ts", "src/services/orders.ts", "src/routes/orders.ts"],
@@ -1409,7 +1412,7 @@ async fn typescript_fixture_express_orders() {
         health.contains("id `health.get-ready`; reaches nothing beyond its entry."),
         "the probes reach no module: {health}"
     );
-    laid(health, &["src/routes/health.ts"], &["src/server.ts", "src/config.ts"]);
+    inlined(health, &["src/routes/health.ts"], &["src/server.ts", "src/config.ts"]);
 }
 
 // The commands, the worker, and the tree's own bus of a CLI: what the code
@@ -1497,7 +1500,7 @@ async fn typescript_callbacks() {
 // name its surfaces from: the manifest, the bootstrap, every call outside a
 // handler that hands a function to something a package provides — with the
 // literal that led it and the package — and the production modules; the
-// manifest and the modules that locate a surface are laid into it whole.
+// manifest and the modules that locate a surface are inlined into it whole.
 #[tokio::test]
 async fn typescript_survey_facts() {
     let project = scratch();
@@ -1530,7 +1533,7 @@ async fn typescript_survey_facts() {
     let at = |file: &str| {
         survey
             .find(&format!("### `{file}` ("))
-            .unwrap_or_else(|| panic!("`{file}` is laid: {survey}"))
+            .unwrap_or_else(|| panic!("`{file}` is inlined: {survey}"))
     };
     assert!(
         at("package.json") < at("src/cli.ts") && at("src/cli.ts") < at("src/worker.ts"),
@@ -1541,7 +1544,7 @@ async fn typescript_survey_facts() {
 }
 
 // An upstream API client and a secret retriever the bootstrap alone
-// constructs and hands on are mechanisms, not surfaces: the facts lay no
+// constructs and hands on are mechanisms, not surfaces: the facts carry no
 // section offering them, the survey names the route alone, and both modules
 // sit in `start`'s closure under the note that claims the bootstrap for what
 // those it serves observe and leaves its readiness to the design.
@@ -1627,7 +1630,7 @@ async fn emery_typescript_bootstrap_clients() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &["src/index.ts", "src/config.ts", "src/secrets.ts", "src/rates.ts", "src/routes.ts"],
         &[],
@@ -2616,14 +2619,14 @@ async fn typescript_paths() {
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "GET /api/orders/:id");
     assert_eq!(surfaces(orders), [("GET /api/orders/:id", "src/routes/orders.ts", "orders")]);
-    laid(orders, &["src/routes/orders.ts"], &["src/server.ts"]);
+    inlined(orders, &["src/routes/orders.ts"], &["src/server.ts"]);
     assert!(orders.contains("- `src/services/orders.ts`"), "reached by alias: {orders}");
     assert!(!turn_for(&turns, "start").contains("services/orders.ts"), "{turns:?}");
 }
 
 // Tests, declarations, dependencies, build output, and dot entries are not
 // modules: what they register is no surface, and — a test stating nothing
-// included — they are neither laid nor listed.
+// included — they are neither inlined nor listed.
 #[tokio::test]
 async fn typescript_non_production() {
     const REFUSED: [&str; 9] = [
@@ -2652,7 +2655,7 @@ async fn typescript_non_production() {
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(surfaces(&turns[0]).len(), 3, "the app's three surfaces alone: {}", turns[0]);
     assert!(!turns[0].contains("/refused"), "nothing refused registers: {}", turns[0]);
-    laid(&turns[0], &["src/index.ts"], &REFUSED);
+    inlined(&turns[0], &["src/index.ts"], &REFUSED);
 }
 
 // An Express service whose one handler decides: a guard, a switch, a throw,
@@ -2868,7 +2871,7 @@ async fn typescript_steps() {
 // under its suites, each scenario under its feature, listed at its line in
 // the seam whose modules the test imports — a feature through the step
 // modules beside it, a test importing no module of the tree in every seam
-// — and the test file itself follows the seam's modules, laid or listed as
+// — and the test file itself follows the seam's modules, inlined or listed as
 // they are; a skipped case states nothing.
 #[tokio::test]
 async fn typescript_stated() {
@@ -2933,7 +2936,7 @@ async fn typescript_stated() {
         "the orders test imports no module of `start`: {start}"
     );
     assert!(!start.contains("orders.feature"), "{start}");
-    laid(start, &["src/index.ts", "src/routes.ts", "test/health.test.ts"], &[]);
+    inlined(start, &["src/index.ts", "src/routes.ts", "test/health.test.ts"], &[]);
 }
 
 // The service imports a module the tree does not hold and loads another by
@@ -2942,7 +2945,7 @@ async fn typescript_stated() {
 // entry, listed after the store past the budget — and the brief says what
 // could not be followed and why the list runs on. The bootstrap's seam,
 // whose modules import nothing unresolved, is not widened. Within the
-// budget every module is laid already, so the brief says only what could
+// budget every module is inlined already, so the brief says only what could
 // not be followed.
 #[tokio::test]
 async fn typescript_unresolved() {
@@ -2969,19 +2972,19 @@ async fn typescript_unresolved() {
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
+    inlined(orders, &["src/routes.ts", "src/orders.ts"], &[]);
     let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
     let index = orders.find("- `src/index.ts`\n").expect("the entry follows the closure");
     assert!(db < index, "the rest of the directory is listed after the closure: {orders}");
     assert!(
         orders.contains(&format!(
-            "{UNFOLLOWED} The modules after the closure are the rest of `src`, laid so what \
+            "{UNFOLLOWED} The modules after the closure are the rest of `src`, placed so what \
              these name is still within reach; read them for that alone."
         )),
         "the brief says what could not be followed and why the list runs on: {orders}"
     );
     let start = turn_for(&turns, "start");
-    laid(start, &["src/index.ts", "src/routes.ts"], &["src/orders.ts", "src/db.ts"]);
+    inlined(start, &["src/index.ts", "src/routes.ts"], &["src/orders.ts", "src/db.ts"]);
     assert!(!start.contains("could not follow"), "nothing of `start` is unresolved: {start}");
 
     // within the budget
@@ -2992,7 +2995,7 @@ async fn typescript_unresolved() {
     let model = TYPESCRIPT.mined(&project, &app_inventory(), 1).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
-    laid(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
+    inlined(&turns[0], &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts"], &[]);
     assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
     assert!(!turns[0].contains("rest of `src`"), "nothing was widened: {}", turns[0]);
 }
@@ -3000,7 +3003,7 @@ async fn typescript_unresolved() {
 // A load by a computed name whose literal lead spells a directory of the
 // tree widens the seam to that directory alone: its modules follow the
 // closure, in path order, and the brief names the directory the load
-// spells; a module beside the loader is not laid for it.
+// spells; a module beside the loader is not inlined for it.
 #[tokio::test]
 async fn typescript_dynamic() {
     const ORDERS: &str = "import { pool } from \"./db\";\n\nexport async function \
@@ -3023,20 +3026,20 @@ async fn typescript_dynamic() {
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["src/routes.ts", "src/orders.ts"], &[]);
+    inlined(orders, &["src/routes.ts", "src/orders.ts"], &[]);
     let db = orders.find("- `src/db.ts`\n").expect("the store past the budget is listed");
     let rural = orders.find("- `src/plugins/rural.ts`\n").expect("the plugins follow the closure");
     let urban = orders.find("- `src/plugins/urban.ts`\n").expect("in path order");
-    assert!(db < rural && rural < urban, "the directory the load spells is laid last: {orders}");
+    assert!(db < rural && rural < urban, "the directory the load spells is inlined last: {orders}");
     assert!(
         !orders.contains("- `src/index.ts`\n"),
-        "a module beside the loader is not laid for a load spelling another directory: {orders}"
+        "a module beside the loader is not inlined for a load spelling another directory: {orders}"
     );
     assert!(
         orders.contains(
             "The caller could not follow every import: `src/orders.ts` loads a module of \
              `src/plugins` by a computed name at L8. What these name is in none of the lists \
-             above. The modules after the closure are the rest of `src/plugins`, laid so what \
+             above. The modules after the closure are the rest of `src/plugins`, placed so what \
              these name is still within reach; read them for that alone."
         ),
         "the brief names the directory the load spells: {orders}"
@@ -3046,7 +3049,7 @@ async fn typescript_dynamic() {
 // A production module importing a test helper the keep set aside is
 // followed to a module the survey skips, not to nothing: the seam is not
 // widened for it, the brief says nothing could not be followed, and the
-// helper is laid among neither the modules nor the stated tests.
+// helper is inlined among neither the modules nor the stated tests.
 #[tokio::test]
 async fn typescript_skipped_import() {
     let project = scratch();
@@ -3069,17 +3072,17 @@ async fn typescript_skipped_import() {
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["src/routes.ts", "src/orders.ts"], &["src/index.ts"]);
+    inlined(orders, &["src/routes.ts", "src/orders.ts"], &["src/index.ts"]);
     assert!(orders.contains("- `src/db.ts`\n"), "the store past the budget is listed: {orders}");
     assert!(
         !orders.contains("could not follow"),
         "the helper is skipped, not unresolved: {orders}"
     );
-    assert!(!orders.contains("test/helpers.ts"), "a skipped helper is laid nowhere: {orders}");
+    assert!(!orders.contains("test/helpers.ts"), "a skipped helper is inlined nowhere: {orders}");
 }
 
 // A `.json` a module imports by path is a data file of the seam: named in the
-// brief with the module reading it, laid directly after the first module
+// brief with the module reading it, inlined directly after the first module
 // importing it when small, and a file a `criterion` may cite a value in —
 // while a `requirement` there is at no anchor and comes back.
 #[tokio::test]
@@ -3116,23 +3119,24 @@ async fn typescript_data() {
     let turn = &seen[1].messages[0];
     assert!(
         turn.contains(
-            "Data files these modules name by path, each with the modules reading it, laid after \
-             the first module naming it — a large one after every module:\n\n- `src/zones.json` \
+            "Data files these modules name by path, each with the modules reading it, placed \
+             after the first module naming it — a large one after every module:\n\n- \
+             `src/zones.json` \
              — named by `src/orders.ts`"
         ),
         "the data file is named with its reader: {turn}"
     );
-    laid(
+    inlined(
         turn,
         &["src/index.ts", "src/routes.ts", "src/orders.ts", "src/db.ts", "src/zones.json"],
         &[],
     );
-    let reader = turn.find("### `src/orders.ts`").expect("the reading module is laid");
-    let data_start = turn.find("### `src/zones.json`").expect("the data file is laid");
-    let next = turn.find("### `src/db.ts`").expect("the module after the reader is laid");
+    let reader = turn.find("### `src/orders.ts`").expect("the reading module is inlined");
+    let data_start = turn.find("### `src/zones.json`").expect("the data file is inlined");
+    let next = turn.find("### `src/db.ts`").expect("the module after the reader is inlined");
     assert!(
         reader < data_start && data_start < next,
-        "a small data file is laid directly after the module naming it: {turn}"
+        "a small data file is inlined directly after the module naming it: {turn}"
     );
     assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
     let exchanges = checked(&model);
@@ -3145,7 +3149,7 @@ async fn typescript_data() {
     assert_eq!(exchanges[1].outcome, Ok(String::new()), "the criterion in data is accepted");
 }
 
-// *.config.* files are production modules: laid beside the app's own.
+// *.config.* files are production modules: inlined beside the app's own.
 #[tokio::test]
 async fn typescript_config_module() {
     let project = scratch();
@@ -3158,7 +3162,7 @@ async fn typescript_config_module() {
     let model = TYPESCRIPT.mined(&project, &app_inventory(), 1).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
-    laid(&turns[0], &["vite.config.ts", "src/index.ts"], &[]);
+    inlined(&turns[0], &["vite.config.ts", "src/index.ts"], &[]);
 }
 
 // A tree of one production module cuts no finer than itself: one extract
@@ -3243,12 +3247,12 @@ async fn typescript_no_surface() {
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
     assert!(turns[0].contains("No surface was found"), "{}", turns[0]);
     assert!(turns[0].contains("the one stem `shared-helpers`"), "{}", turns[0]);
-    laid(&turns[0], &["src/lib/config.ts", "src/lib/db.ts"], &[]);
+    inlined(&turns[0], &["src/lib/config.ts", "src/lib/db.ts"], &[]);
 }
 
 // Past the budget, a tree with no surface is one extract per top-level
 // directory beneath `src/`, under the directory's name, the root's own
-// modules joined to the first; a directory's seam lays its own modules and
+// modules joined to the first; a directory's seam inlines its own modules and
 // no other's.
 #[tokio::test]
 async fn typescript_no_surface_directories() {
@@ -3278,10 +3282,10 @@ async fn typescript_no_surface_directories() {
     };
     let lib = seam("lib");
     assert!(lib.contains("`src/lib/`, with the root's own modules"), "{lib}");
-    laid(lib, &["src/index.ts", "src/lib/config.ts"], &["src/util/format.ts"]);
+    inlined(lib, &["src/index.ts", "src/lib/config.ts"], &["src/util/format.ts"]);
     assert!(lib.contains("- `src/lib/db.ts`"), "the store past the budget is listed: {lib}");
     let util = seam("util");
-    laid(util, &["src/util/format.ts"], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
+    inlined(util, &["src/util/format.ts"], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
 }
 
 // A FastAPI service the way one is written: the entry includes two routers
@@ -3333,7 +3337,7 @@ fn py_app_inventory() -> String {
 
 // A Python workspace opens one survey turn before it is mined, and the
 // inline value none. A tree whose modules fit within the SDK's inline budget
-// is one extract over every module, laid into the turn, told every surface
+// is one extract over every module, inlined into the turn, told every surface
 // the survey named and held to every stem; the conventional entry — a
 // package's `main.py` constructing the application at load — is the
 // bootstrap when no script names one, and the caller's `start` leads the
@@ -3376,7 +3380,7 @@ async fn python() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &[
             "app/main.py",
@@ -3423,7 +3427,7 @@ async fn python_stem() {
 // surfaces reach: the orders routes' seam reaches the service and the store
 // from the router, never the entry; the bootstrap's reaches the routers it
 // includes and stops there; the health route's reaches nothing — and each
-// surface line says so. A module past the budget is listed, the rest laid.
+// surface line says so. A module past the budget is listed, the rest inlined.
 #[tokio::test]
 async fn python_closure() {
     let project = scratch();
@@ -3444,7 +3448,7 @@ async fn python_closure() {
         start.contains("; id `start`; reaches `app/routers/orders.py`, `app/routers/health.py`."),
         "{start}"
     );
-    laid(
+    inlined(
         start,
         &["app/main.py", "app/routers/orders.py", "app/routers/health.py"],
         &["app/services/orders.py", "app/db.py"],
@@ -3462,11 +3466,11 @@ async fn python_closure() {
         orders.contains("; id `orders.post`; reaches `app/services/orders.py`, `app/db.py`."),
         "{orders}"
     );
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
+    inlined(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
     assert!(orders.contains("- `app/db.py`"), "the store past the budget is listed: {orders}");
     let health = turn_for(&turns, "GET /health");
     assert!(health.contains("This call mines the surface under the stem `health` alone:"));
-    laid(health, &["app/routers/health.py"], &["app/main.py", "app/routers/orders.py"]);
+    inlined(health, &["app/routers/health.py"], &["app/main.py", "app/routers/orders.py"]);
 }
 
 // The bootstrap is the first entry that runs something: the module a
@@ -3563,7 +3567,7 @@ async fn python_bootstrap() {
 }
 
 // An upstream API client and a secret retriever the bootstrap alone
-// constructs and hands on are mechanisms, not surfaces: the facts lay no
+// constructs and hands on are mechanisms, not surfaces: the facts carry no
 // section offering them, the survey names the route alone, and both modules
 // sit in `start`'s closure under the note that claims the bootstrap for what
 // those it serves observe and leaves its readiness to the design.
@@ -3655,7 +3659,7 @@ async fn emery_python_bootstrap_clients() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &[
             "quotes/main.py",
@@ -3915,7 +3919,7 @@ async fn python_string_imports() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &[
             "manage.py",
@@ -3936,9 +3940,9 @@ async fn python_string_imports() {
         "the application's tests state behaviours: {}",
         turns[0]
     );
-    let last_module = turns[0].find("### `shop/__init__.py`").expect("the modules are laid");
-    let tests = turns[0].find("### `orders/tests.py`").expect("the tests are laid");
-    assert!(last_module < tests, "a `tests.py` is laid after the modules, never among them");
+    let last_module = turns[0].find("### `shop/__init__.py`").expect("the modules are inlined");
+    let tests = turns[0].find("### `orders/tests.py`").expect("the tests are inlined");
+    assert!(last_module < tests, "a `tests.py` is inlined after the modules, never among them");
 }
 
 // A Flask service built by a factory: the server constructs the application
@@ -4462,7 +4466,7 @@ async fn python_registrations_patch() {
 // function to something a package provides — with the package and the
 // class the receiver was constructed as — every `def` under a package's
 // decorator, what the entry modules export, and the production modules;
-// the manifest and the modules that locate a surface are laid into it
+// the manifest and the modules that locate a surface are inlined into it
 // whole. A function handed to the tree's own class, a wrapper, a lifecycle
 // hook, or a hook keyword is no fact.
 #[tokio::test]
@@ -4507,7 +4511,7 @@ async fn python_survey_facts() {
     let at = |file: &str| {
         survey
             .find(&format!("### `{file}` ("))
-            .unwrap_or_else(|| panic!("`{file}` is laid: {survey}"))
+            .unwrap_or_else(|| panic!("`{file}` is inlined: {survey}"))
     };
     assert!(
         at("pyproject.toml") < at("src/ledger/cli.py")
@@ -5477,7 +5481,7 @@ async fn python_anchors_declared() {
 // over several values, each scenario under its feature, listed at its line
 // in the seam whose modules the test imports — a feature through the step
 // modules beside it, a test importing no module of the tree in every seam
-// — and the test file itself follows the seam's modules, laid or listed as
+// — and the test file itself follows the seam's modules, inlined or listed as
 // they are; a skipped test states nothing.
 #[tokio::test]
 async fn python_stated() {
@@ -5539,7 +5543,7 @@ async fn python_stated() {
         "the orders test imports no module of `start`: {start}"
     );
     assert!(!start.contains("orders.feature"), "{start}");
-    laid(start, &["app/main.py", "app/routers/orders.py", "tests/test_health.py"], &[]);
+    inlined(start, &["app/main.py", "app/routers/orders.py", "tests/test_health.py"], &[]);
 }
 
 // An import under `if TYPE_CHECKING:` is a declaration's: the module it
@@ -5574,7 +5578,7 @@ async fn python_type_checking() {
 
     let turns = PYTHON.surveyed(&model, 3);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/audit.py"]);
+    inlined(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/audit.py"]);
     assert!(orders.contains("- `app/db.py`"), "the store is reached: {orders}");
     assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
     assert!(!orders.contains("TYPE_CHECKING`"), "the guard decides nothing: {orders}");
@@ -5622,7 +5626,7 @@ async fn python_type_checking_star() {
 
     let turns = PYTHON.surveyed(&model, 2);
     let orders = turn_for(&turns, "GET /api/orders/{order_id}");
-    laid(orders, &["app/routers/orders.py"], &["app/audit.py"]);
+    inlined(orders, &["app/routers/orders.py"], &["app/audit.py"]);
     assert!(orders.contains("- `app/store/__init__.py`"), "the store is reached: {orders}");
     assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
     let start = turn_for(&turns, "start");
@@ -5677,7 +5681,7 @@ async fn python_relative_typing_name() {
         ),
         "{orders}"
     );
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &[]);
+    inlined(orders, &["app/routers/orders.py", "app/services/orders.py"], &[]);
     assert!(orders.contains("- `app/services/types.py`"), "the module is listed: {orders}");
     assert!(!orders.contains("could not follow"), "the import is followed: {orders}");
 }
@@ -5688,7 +5692,7 @@ async fn python_relative_typing_name() {
 // since `app/services/` holds the service alone, so the entry is not listed
 // — and the brief says what could not be followed and nothing of a list
 // that does not run on. The bootstrap's seam, whose modules import nothing
-// unresolved, is not widened. Within the budget every module is laid
+// unresolved, is not widened. Within the budget every module is inlined
 // already — the package `__init__.py` files no closure holds among them —
 // so the brief says only what could not be followed there too.
 #[tokio::test]
@@ -5717,7 +5721,7 @@ async fn python_unresolved() {
 
     let turns = PYTHON.surveyed(&model, 3);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
+    inlined(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
     assert!(orders.contains("- `app/db.py`\n"), "the store past the budget is listed: {orders}");
     assert!(
         orders.contains(&format!("{UNFOLLOWED}\n")),
@@ -5726,7 +5730,7 @@ async fn python_unresolved() {
     );
     assert!(!orders.contains("after the closure"), "the package holds nothing more: {orders}");
     let start = turn_for(&turns, "start");
-    laid(start, &["app/main.py", "app/routers/orders.py"], &["app/services/orders.py"]);
+    inlined(start, &["app/main.py", "app/routers/orders.py"], &["app/services/orders.py"]);
     assert!(!start.contains("could not follow"), "nothing of `start` is unresolved: {start}");
 
     // within the budget
@@ -5737,19 +5741,19 @@ async fn python_unresolved() {
     let model = PYTHON.mined(&project, &py_app_inventory(), 1).await;
 
     let turns = PYTHON.surveyed(&model, 1);
-    laid(&turns[0], &["app/main.py", "app/routers/orders.py", "app/services/orders.py"], &[]);
+    inlined(&turns[0], &["app/main.py", "app/routers/orders.py", "app/services/orders.py"], &[]);
     assert!(turns[0].contains(UNFOLLOWED), "{}", turns[0]);
     assert!(!turns[0].contains("after the closure"), "nothing was widened: {}", turns[0]);
 }
 
 // The survey over the committed `click-jobs` fixture — the tree the eval of
 // that name runs over, answered as the eval expects it: within the budget,
-// so one seam lays every module; the bootstrap the manifest's console script
+// so one seam inlines every module; the bootstrap the manifest's console script
 // names, four commands under the group, a schedule registered inside a
 // function, and two tasks under a package's decorator. The code reads each
 // anchor for what declares there — the command's literal, the task's dotted
 // name by its first segment — and the seed script no surface reaches is
-// laid with the rest.
+// inlined with the rest.
 #[tokio::test]
 async fn python_fixture_click_jobs() {
     let project = scratch();
@@ -5810,7 +5814,7 @@ async fn python_fixture_click_jobs() {
     ] {
         assert!(turns[0].contains(note), "{note} is in the brief: {}", turns[0]);
     }
-    laid(
+    inlined(
         &turns[0],
         &[
             "src/ledger/cli.py",
@@ -5836,11 +5840,11 @@ async fn python_fixture_click_jobs() {
     }
 }
 
-// The `fastapi-routers` bootstrap's closure in the order the survey lays it:
+// The `fastapi-routers` bootstrap's closure in the order the survey inlines it:
 // the entry, then what it imports breadth-first — the three routers it
 // includes reached and stopped at, the shipping client one of them constructs
 // at load followed into the postcode table, which is where the SDK's budget
-// runs out, so the table is listed rather than laid.
+// runs out, so the table is listed rather than inlined.
 const FASTAPI_START: [&str; 9] = [
     "app/main.py",
     "app/settings.py",
@@ -5852,10 +5856,10 @@ const FASTAPI_START: [&str; 9] = [
     "app/services/shipping.py",
     "app/data/postcodes.py",
 ];
-const FASTAPI_START_LAID: usize = 8;
+const FASTAPI_START_INLINED: usize = 8;
 
-// The `orders` router's closure, from its entry; the rates table is laid
-// after `pricing.py`, which names it, the table ends the laid run, and the
+// The `orders` router's closure, from its entry; the rates table is inlined
+// after `pricing.py`, which names it, the table ends the inlined run, and the
 // two models after it are listed with the tests.
 const FASTAPI_ORDERS: [&str; 19] = [
     "app/routers/orders.py",
@@ -5878,7 +5882,7 @@ const FASTAPI_ORDERS: [&str; 19] = [
     "app/models/customer.py",
     "app/models/order.py",
 ];
-const FASTAPI_ORDERS_LAID: usize = 16;
+const FASTAPI_ORDERS_INLINED: usize = 16;
 
 // The `customers` router's closure, from its entry.
 const FASTAPI_CUSTOMERS: [&str; 12] = [
@@ -5936,21 +5940,22 @@ fn reaches(id: &str, closure: &[&str]) -> String {
     format!("; id `{id}`; reaches {}.", reached.join(", "))
 }
 
-// The leading `laid` files of a closure are laid whole and the rest listed.
-fn laid_then_listed(turn: &str, closure: &[&str], laid_count: usize, refused: &[&str]) {
-    laid(turn, &closure[..laid_count], refused);
-    for listed in &closure[laid_count..] {
+// The leading `inlined_count` files of a closure are inlined whole and the
+// rest listed.
+fn inlined_then_listed(turn: &str, closure: &[&str], inlined_count: usize, refused: &[&str]) {
+    inlined(turn, &closure[..inlined_count], refused);
+    for listed in &closure[inlined_count..] {
         assert!(turn.contains(&format!("- `{listed}`\n")), "`{listed}` is listed: {turn}");
-        assert!(!turn.contains(&format!("### `{listed}`")), "`{listed}` is not laid: {turn}");
+        assert!(!turn.contains(&format!("### `{listed}`")), "`{listed}` is not inlined: {turn}");
     }
 }
 
 // A router's seam in `fastapi-routers`: its surfaces alone, the first's line
 // whole — its `def`, its decorator, its package, and its closure — the ids
-// the others are told apart by, and its closure laid from its entry for as
+// the others are told apart by, and its closure inlined from its entry for as
 // long as the budget holds, with nothing of the rest of the tree.
 fn fastapi_router(
-    turn: &str, stem: &str, first: &str, ids: &[&str], closure: &[&str], laid_count: usize,
+    turn: &str, stem: &str, first: &str, ids: &[&str], closure: &[&str], inlined_count: usize,
     refused: &[&str],
 ) {
     assert_eq!(surfaces(turn), fastapi_named(stem));
@@ -5959,17 +5964,18 @@ fn fastapi_router(
     for id in &ids[1..] {
         assert!(turn.contains(&format!("id `{id}`;")), "`{id}` is in the brief: {turn}");
     }
-    laid_then_listed(turn, closure, laid_count, refused);
+    inlined_then_listed(turn, closure, inlined_count, refused);
 }
 
 // The second committed fixture pin: a FastAPI service past the inline budget,
 // cut one seam per stem — the bootstrap's closure stopping at every router's
-// module and reaching what each constructs at load, each router's seam laying
-// the union of its surfaces' closures with the entry first, the `.json` the
-// pricing module reads by a computed path named after them, and a table too
-// large to lay ending the laid run where it falls. Every route's stem is the
-// code's, read from its router's prefix under the include's, and each is told
-// apart by its verb and the path past the resource.
+// module and reaching what each constructs at load, each router's seam
+// inlining the union of its surfaces' closures with the entry first, the
+// `.json` the pricing module reads by a computed path named after them, and a
+// table too large to inline ending the inlined run where it falls. Every
+// route's stem is the code's, read from its router's prefix under the
+// include's, and each is told apart by its verb and the path past the
+// resource.
 #[tokio::test]
 async fn python_fixture_fastapi_routers() {
     let project = scratch();
@@ -5998,10 +6004,10 @@ async fn python_fixture_fastapi_routers() {
         start.contains(&reaches("start", &FASTAPI_START)),
         "the bootstrap stops at each router and reaches what it constructs: {start}"
     );
-    laid_then_listed(
+    inlined_then_listed(
         start,
         &FASTAPI_START,
-        FASTAPI_START_LAID,
+        FASTAPI_START_INLINED,
         &["app/services/orders.py", "app/repositories/", "app/schemas/", "pyproject.toml"],
     );
 
@@ -6018,7 +6024,7 @@ async fn python_fixture_fastapi_routers() {
             "orders.post-order-id-transitions",
         ],
         &FASTAPI_ORDERS,
-        FASTAPI_ORDERS_LAID,
+        FASTAPI_ORDERS_INLINED,
         &["app/main.py", "app/routers/health.py", "app/routers/customers.py", "pyproject.toml"],
     );
     for note in [
@@ -6030,11 +6036,11 @@ async fn python_fixture_fastapi_routers() {
     ] {
         assert!(orders.contains(note), "{note} is in the brief: {orders}");
     }
-    let pricing = orders.find("### `app/services/pricing.py`").expect("the reader is laid");
-    let rates = orders.find("### `app/data/rates.json` (10 lines)").expect("the table is laid");
-    let after = orders.find("### `app/db.py`").expect("the module after the reader is laid");
-    assert!(pricing < rates && rates < after, "the table is laid after its reader: {orders}");
-    assert!(!orders.contains("- `app/data/rates.json`\n"), "the data file is laid: {orders}");
+    let pricing = orders.find("### `app/services/pricing.py`").expect("the reader is inlined");
+    let rates = orders.find("### `app/data/rates.json` (10 lines)").expect("the table is inlined");
+    let after = orders.find("### `app/db.py`").expect("the module after the reader is inlined");
+    assert!(pricing < rates && rates < after, "the table is inlined after its reader: {orders}");
+    assert!(!orders.contains("- `app/data/rates.json`\n"), "the data file is inlined: {orders}");
 
     fastapi_router(
         turn_for(&turns, "POST /api/v1/customers"),
@@ -6058,7 +6064,7 @@ async fn python_fixture_fastapi_routers() {
     );
     // a test with no import into the tree is stated to every seam; one whose
     // imports resolve into a seam's files is stated there alone
-    laid(health, &["tests/test_api.py"], &[]);
+    inlined(health, &["tests/test_api.py"], &[]);
 }
 
 // A module loaded by a literal dotted name is followed into the closure as
@@ -6066,7 +6072,7 @@ async fn python_fixture_fastapi_routers() {
 // package, cannot be, so the seam is widened to the package the load
 // spells — the f-string's dotted lead, the package whose `__path__` is
 // walked — and the brief names that package where the load is spelled,
-// every import of it followed; a module beside the loader is not laid for
+// every import of it followed; a module beside the loader is not inlined for
 // a load spelling another package.
 #[tokio::test]
 async fn python_dynamic() {
@@ -6113,13 +6119,13 @@ async fn python_dynamic() {
     assert!(rural < urban, "the rest of the package is listed after the closure: {orders}");
     assert!(
         !orders.contains("- `app/main.py`\n"),
-        "a module beside the loader is not laid for a load spelling another package: {orders}"
+        "a module beside the loader is not inlined for a load spelling another package: {orders}"
     );
     assert!(
         orders.contains(
             "The caller could not follow every import: `app/services/orders.py` loads a module of \
              `app/plugins` by a computed name at L11, L12. What these name is in none of the \
-             lists above. The modules after the closure are the rest of `app/plugins`, laid so \
+             lists above. The modules after the closure are the rest of `app/plugins`, placed so \
              what these name is still within reach; read them for that alone."
         ),
         "the brief names the package the loads spell: {orders}"
@@ -6132,7 +6138,7 @@ async fn python_dynamic() {
 // A production module importing a test helper the keep set aside is
 // followed to a module the survey skips, not to nothing: the seam is not
 // widened for it, the brief says nothing could not be followed, and the
-// helper is laid among neither the modules nor the stated tests.
+// helper is inlined among neither the modules nor the stated tests.
 #[tokio::test]
 async fn python_skipped_import() {
     let project = scratch();
@@ -6157,17 +6163,20 @@ async fn python_skipped_import() {
 
     let turns = PYTHON.surveyed(&model, 3);
     let orders = turn_for(&turns, "POST /api/orders");
-    laid(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
+    inlined(orders, &["app/routers/orders.py", "app/services/orders.py"], &["app/main.py"]);
     assert!(orders.contains("- `app/db.py`\n"), "the store past the budget is listed: {orders}");
     assert!(
         !orders.contains("could not follow"),
         "the helper is skipped, not unresolved: {orders}"
     );
-    assert!(!orders.contains("tests/factories.py"), "a skipped helper is laid nowhere: {orders}");
+    assert!(
+        !orders.contains("tests/factories.py"),
+        "a skipped helper is inlined nowhere: {orders}"
+    );
 }
 
 // A `.json` a module names by path is a data file of the seam: named in the
-// brief with the module reading it, laid directly after that module when
+// brief with the module reading it, inlined directly after that module when
 // it is small and after every module when it is large, and a file a
 // `criterion` may cite a value in — while a `requirement` there is at no
 // anchor and comes back.
@@ -6185,7 +6194,7 @@ async fn python_data() {
          dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
     );
     project.write("app/data/zones.json", "{\n  \"rural\": 650,\n  \"urban\": 0\n}\n");
-    // a generated table past the 8 KB a data file is laid beside its module within
+    // a generated table past the 8 KB a data file is inlined beside its module within
     let tariffs: Vec<String> = (0..800).map(|i| format!("  \"{i}\": {}", i * 7)).collect();
     project.write("app/data/tariffs.json", format!("{{\n{}\n}}\n", tariffs.join(",\n")));
     let cited = serde_json::json!({
@@ -6209,14 +6218,14 @@ async fn python_data() {
     let turn = &seen[1].messages[0];
     assert!(
         turn.contains(
-            "Data files these modules name by path, each with the modules reading it, laid after \
-             the first module naming it — a large one after every module:\n\n- \
+            "Data files these modules name by path, each with the modules reading it, placed \
+             after the first module naming it — a large one after every module:\n\n- \
              `app/data/zones.json` — named by `app/services/orders.py`\n- `app/data/tariffs.json` \
              — named by `app/services/orders.py`"
         ),
         "the data files are named with their reader: {turn}"
     );
-    laid(
+    inlined(
         turn,
         &["app/main.py", "app/services/orders.py", "app/data/zones.json", "app/data/tariffs.json"],
         &[],
@@ -6228,9 +6237,9 @@ async fn python_data() {
     let large = at("app/data/tariffs.json");
     assert!(
         reader < small && small < last_module,
-        "the small data file is laid directly after the module naming it: {turn}"
+        "the small data file is inlined directly after the module naming it: {turn}"
     );
-    assert!(last_module < large, "the large data file is laid after every module: {turn}");
+    assert!(last_module < large, "the large data file is inlined after every module: {turn}");
     assert!(turn.contains("2|  \"rural\": 650,"), "numbered: {turn}");
     let exchanges = checked(&model);
     let correction = exchanges[0].outcome.as_ref().expect_err("a requirement in data is refused");
@@ -6276,13 +6285,13 @@ async fn python_data_beside_module() {
         "the module of the file's stem is reached through no string: {}",
         turns[0]
     );
-    laid(&turns[0], &["app/services/orders.py", "config.py", "config.toml"], &[]);
+    inlined(&turns[0], &["app/services/orders.py", "config.py", "config.toml"], &[]);
 }
 
 // Tests, stubs, fixture and build configuration, migrations, caches,
 // environments, build output, documentation, and dot entries are not
 // modules: what they register is no surface, and — a test stating nothing
-// included — they are neither laid nor listed; `manage.py` is a module,
+// included — they are neither inlined nor listed; `manage.py` is a module,
 // and the bootstrap. The packaging `setup.py` is the root's alone: one
 // beneath a package is a module like any other.
 #[tokio::test]
@@ -6322,7 +6331,7 @@ async fn python_non_production() {
     assert_eq!(surfaces.len(), 4, "the app's four surfaces alone: {}", turns[0]);
     assert_eq!(surfaces[0], ("start", "manage.py", "start"), "{}", turns[0]);
     assert!(!turns[0].contains("/refused"), "nothing refused registers: {}", turns[0]);
-    laid(&turns[0], &["manage.py", "app/main.py", "app/setup.py"], &REFUSED);
+    inlined(&turns[0], &["manage.py", "app/main.py", "app/setup.py"], &REFUSED);
     assert!(!turns[0].contains("### `setup.py` ("), "the root's `setup.py` is not a module");
 }
 
@@ -6395,13 +6404,13 @@ async fn python_no_surface() {
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
     assert!(turns[0].contains("No surface was found"), "{}", turns[0]);
     assert!(turns[0].contains("the one stem `acme-shared-helpers`"), "{}", turns[0]);
-    laid(&turns[0], &["src/helpers/config.py", "src/helpers/db.py"], &[]);
+    inlined(&turns[0], &["src/helpers/config.py", "src/helpers/db.py"], &[]);
 }
 
 // Past the budget, a tree with no surface is one extract per directory
 // beneath its one top-level package under `src/`, under the directory's
 // name, the package's own modules joined to the first; a directory's seam
-// lays its own modules and no other's.
+// inlines its own modules and no other's.
 #[tokio::test]
 async fn python_no_surface_directories() {
     let project = scratch();
@@ -6440,7 +6449,7 @@ async fn python_no_surface_directories() {
     };
     let lib = seam("lib");
     assert!(lib.contains("`src/helpers/lib/`, with the root's own modules"), "{lib}");
-    laid(
+    inlined(
         lib,
         &["src/helpers/version.py", "src/helpers/lib/config.py"],
         &["src/helpers/util/format.py"],
@@ -6450,7 +6459,7 @@ async fn python_no_surface_directories() {
         "the store past the budget is listed: {lib}"
     );
     let util = seam("util");
-    laid(
+    inlined(
         util,
         &["src/helpers/util/format.py"],
         &["src/helpers/version.py", "src/helpers/lib/config.py", "src/helpers/lib/db.py"],

@@ -20,7 +20,7 @@
 # rather than a function, and the one registration the facts list is the
 # `on` hook inside the producer's options in `start.ts`, which makes the
 # bootstrap the one locating module — so the surface is the model's to find
-# in the modules laid whole, which is what the case measures of the survey.
+# in the modules inlined whole, which is what the case measures of the survey.
 # Beside the sources sits `reference/`, a trimmed copy of the hand-written
 # omnia guest the two were ported into — one crate per service, the topic
 # constant the one thing they share — which a `--build --target omnia` run

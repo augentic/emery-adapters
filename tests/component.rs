@@ -24,7 +24,7 @@ const CLAIM: &str =
 const REPORT: &str =
     r#"{"covered": ["REQ-001"], "written": ["src/orders/index.ts", "src/index.ts"]}"#;
 const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/orders.rs", "crates/orders/tests/orders.rs"]}"#;
-// The handler and test markers the omnia adapter lays for the slice the
+// The handler and test markers the omnia adapter scaffolds for the slice the
 // driver hands it, and the bodies the scripted turn puts in their place.
 const OMNIA_HANDLER_MARKER: &str =
     "    let _ = (input, context);\n    todo!(\"REQ-001 orders.create: the handler\")\n";
@@ -204,7 +204,7 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the merge rules; the init lays the root manifests in
+// The metadata lowers the merge rules; the init scaffolds the root manifests in
 // the lent tree with no turn, the build writes the mount through
 // `write_files`, its turns carry the worker grant, and its report and the
 // verdict lift back to the driver.
@@ -244,13 +244,13 @@ async fn emery_node() {
     );
 }
 
-// The metadata lowers the seven rules in order; the init lays the template
-// in the lent tree with no turn, the build lays the slice's skeleton from
-// the typed slice the driver lowered — the stem's crate and its lines in
-// the seeded lists — before its turn, which fills the handler and the test
-// through `edit_files`, its turns carry the worker grant, and its report
-// and the verdict lift back to the driver, the verify's check finding the
-// static files standing as the template spells them.
+// The metadata lowers the seven rules in order; the init scaffolds the
+// template in the lent tree with no turn, the build scaffolds the slice's
+// skeleton from the typed slice the driver lowered — the stem's crate and
+// its lines in the seeded lists — before its turn, which fills the handler
+// and the test through `edit_files`, its turns carry the worker grant, and
+// its report and the verdict lift back to the driver, the verify's check
+// finding the static files standing as the template spells them.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
@@ -288,12 +288,16 @@ async fn emery_omnia() {
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
     granted::<emery_omnia::Adapter>(&seen);
     assert!(
-        seen[0].messages[0].contains("What the adapter laid for this slice before this turn:"),
-        "the brief carries the laid section: {}",
+        seen[0].messages[0]
+            .contains("What the adapter scaffolded for this slice before this turn:"),
+        "the brief carries the scaffold section: {}",
         seen[0].messages[0]
     );
     for path in ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs"] {
-        assert!(project.read(path).is_some(), "the tree holds `{path}`, laid through the lend");
+        assert!(
+            project.read(path).is_some(),
+            "the tree holds `{path}`, scaffolded through the lend"
+        );
     }
     let text = |path: &str| {
         String::from_utf8(project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`")))
@@ -302,12 +306,12 @@ async fn emery_omnia() {
     let module = text("crates/orders/src/orders.rs");
     assert!(
         module.contains(OMNIA_HANDLER_FILLED) && !module.contains(OMNIA_HANDLER_MARKER),
-        "the handler the guest laid holds the body the turn filled: {module}"
+        "the handler the guest scaffolded holds the body the turn filled: {module}"
     );
     let tests = text("crates/orders/tests/orders.rs");
     assert!(
         tests.contains(OMNIA_TEST_FILLED) && !tests.contains("#[ignore"),
-        "the test the guest laid is filled and run: {tests}"
+        "the test the guest scaffolded is filled and run: {tests}"
     );
     assert!(
         text("src/routes.rs").contains("    let router = router.merge(orders::router());\n"),

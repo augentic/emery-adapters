@@ -1,4 +1,4 @@
-//! Lays a slice's skeleton before its turn: the stem's crate, the part, its tests, and its lines in every list.
+//! Scaffolds a slice's skeleton before its turn: the stem's crate, the part, its tests, and its lines in every list.
 
 mod names;
 mod render;
@@ -25,7 +25,7 @@ pub struct Scaffold {
     lines: Vec<Line>,
 }
 
-// What a check reads of one scenario the scaffold laid a test for.
+// What a check reads of one scenario the scaffold wrote a test for.
 pub struct Expected<'a> {
     pub path: &'a str,
     pub id: &'a str,
@@ -164,13 +164,13 @@ impl Scaffold {
         })
     }
 
-    pub fn lay(&self, root: &Path) -> Result<Vec<String>, Error> {
-        let mut laid = Vec::new();
+    pub fn write(&self, root: &Path) -> Result<Vec<String>, Error> {
+        let mut written = Vec::new();
         for stem in &self.stems {
             for kind in [Kind::Manifest, Kind::Entry, Kind::Module, Kind::Tests] {
                 if let Some(file) = stem.file(kind).filter(|file| !file.held) {
                     create(root, &file.path, &stem.render(kind))?;
-                    laid.push(file.path.clone());
+                    written.push(file.path.clone());
                 }
             }
         }
@@ -194,9 +194,9 @@ impl Scaffold {
                 }
             }
             fs::write(&file, text).map_err(|err| server_error!("writing `{path}`: {err}"))?;
-            laid.push(path.to_owned());
+            written.push(path.to_owned());
         }
-        Ok(laid)
+        Ok(written)
     }
 
     pub fn brief(&self) -> String {
@@ -208,9 +208,9 @@ impl Scaffold {
         if !self.start.is_empty() {
             let _ = writeln!(
                 text,
-                "The `start` stem ({}): the seed and the host are `start`, so nothing was laid for \
-                 it; cover what they satisfy and leave the rest out, as the guardrails' table \
-                 says.\n",
+                "The `start` stem ({}): the seed and the host are `start`, so nothing was \
+                 scaffolded for it; cover what they satisfy and leave the rest out, as the \
+                 guardrails' table says.\n",
                 self.start.join(", ")
             );
         }
@@ -463,12 +463,14 @@ impl Stem {
             Some(tests) => {
                 let _ = writeln!(
                     text,
-                    "- `{}`: laid, one ignored test per scenario. Fill each and remove its \
+                    "- `{}`: scaffolded, one ignored test per scenario. Fill each and remove its \
                      `#[ignore = ..]` line.",
                     tests.path
                 );
             }
-            None => text.push_str("- No scenario states a test, so no test file was laid.\n"),
+            None => {
+                text.push_str("- No scenario states a test, so no test file was scaffolded.\n");
+            }
         }
         let own = self.lines();
         let added = own
@@ -495,8 +497,8 @@ impl Stem {
     fn brief_markers(&self, text: &mut String) {
         if self.module.held || self.tests.as_ref().is_some_and(|tests| tests.held) {
             text.push_str(
-                "The markers below are the ones a fresh scaffold lays; a held file holds whatever \
-                 stands in it.\n\n",
+                "The markers below are the ones a fresh scaffold writes; a held file holds \
+                 whatever stands in it.\n\n",
             );
         }
         text.push_str("Markers, in fill order:\n\n");
@@ -505,8 +507,8 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `pub struct {} {{}}` in `{}`: the design type `{}`. Lay its fields from \
-                 the signature in its doc.",
+                "{count}. `pub struct {} {{}}` in `{}`: the design type `{}`. Declare its fields \
+                 from the signature in its doc.",
                 design_type.name, self.module.path, design_type.key
             );
         }
@@ -559,7 +561,7 @@ impl Stem {
 }
 
 const HELD: &str =
-    "The tree already held it, so nothing was laid over it; read it for what stands.";
+    "The tree already held it, so nothing was written over it; read it for what stands.";
 
 impl File {
     const fn at(path: String) -> Self {
@@ -571,7 +573,7 @@ impl File {
             Ok(meta) if meta.is_file() => true,
             Ok(_) => {
                 return Err(bad_request!(
-                    "a directory or a link stands at `{}`, where the slice's scaffold lays a file",
+                    "a directory or a link stands at `{}`, where the slice's scaffold writes a file",
                     self.path
                 ));
             }
@@ -582,7 +584,7 @@ impl File {
     }
 
     const fn standing(&self) -> &'static str {
-        if self.held { "held" } else { "laid" }
+        if self.held { "held" } else { "scaffolded" }
     }
 }
 

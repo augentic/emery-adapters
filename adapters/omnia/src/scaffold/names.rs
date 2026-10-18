@@ -1,4 +1,4 @@
-//! Spells the identifiers a scaffold lays from what the slice spells.
+//! Spells the identifiers a scaffold writes from what the slice spells.
 
 use std::collections::BTreeSet;
 

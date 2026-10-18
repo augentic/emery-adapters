@@ -2,9 +2,9 @@
 # enters `app.main`, which mounts three `APIRouter`s under `/api/v1` and at
 # the root, a middleware, and four exception handlers; the tree's module
 # text exceeds `INLINE_BYTES` (a generated postcode table carries most of
-# it), so the survey cuts one seam per stem, each laying the surfaces under
+# it), so the survey cuts one seam per stem, each carrying the surfaces under
 # it and the union of their closures, with the `rates.json` the pricing
-# module reads by path laid after the modules as a data file. Mirrors
+# module reads by path placed after the modules as a data file. Mirrors
 # `express-orders`.
 
 [[source]]

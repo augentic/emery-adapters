@@ -38,11 +38,12 @@ impl Tree<'_> {
         let mut findings = Vec::new();
         if !start.is_empty() {
             findings.push(format!(
-                "`crates/start/` is laid for `start`, which the seed and the host are and no crate \
-                 of the tree ever is: a deployment setting a handler reads is a `pub(crate) \
+                "`crates/start/` is written for `start`, which the seed and the host are and no \
+                 crate of the tree ever is: a deployment setting a handler reads is a `pub(crate) \
                  const` of the part that reads it, a cross-cutting rule is a `pub fn` of the \
                  stem that owns it, a stated health route is its own stem's, and how the source \
-                 readied itself, loaded its credentials or tables, or shut down is laid nowhere; \
+                 readied itself, loaded its credentials or tables, or shut down is written \
+                 nowhere; \
                  remove every file named under `crates/start` through `delete` and drop any \
                  `start` line from the root `Cargo.toml` through `edit_files`:\n{}",
                 start.join("\n")

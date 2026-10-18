@@ -6,12 +6,12 @@
 //! verdict, and runs `cargo clippy`, `cargo test`, and the `wasm32-wasip2`
 //! check at each slice and wave.
 //!
-//! Before a slice's turn, the adapter lays the slice's skeleton from the
+//! Before a slice's turn, the adapter scaffolds the slice's skeleton from the
 //! typed slice: the stem's crate where the tree lacks it, the part with a
 //! handler per route the requirements state and a function per requirement
 //! stating none, an ignored test per scenario, and the stem's lines in every
-//! list. The turn fills the markers it laid, and a covered requirement whose
-//! marker or ignored test still stands is refused for correction.
+//! list. The turn fills the markers it scaffolded, and a covered requirement
+//! whose marker or ignored test still stands is refused for correction.
 
 mod scaffold;
 mod tree;
@@ -58,18 +58,18 @@ impl TargetAdapter for Adapter {
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {
             Task::Init(ctx) => {
-                let laid = omnia_template::lay(Path::new(ctx.workspace))
+                let scaffolded = omnia_template::scaffold(Path::new(ctx.workspace))
                     .map_err(|err| tree::refusal(&err))?;
-                tracing::info!(laid = laid.len(), "laid the guest template");
+                tracing::info!(scaffolded = scaffolded.len(), "scaffolded the guest template");
                 Ok(Outcome::Initialised)
             }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
                 let scaffold = Scaffold::plan(ctx.slice, root)?;
-                let laid = scaffold.lay(root)?;
-                tracing::info!(laid = laid.len(), "laid the slice's skeleton");
+                let written = scaffold.write(root)?;
+                tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
                 let brief = scaffold.brief();
-                let ctx = ctx.with_laid(&brief);
+                let ctx = ctx.with_scaffold(&brief);
                 emery_sdk::target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })
