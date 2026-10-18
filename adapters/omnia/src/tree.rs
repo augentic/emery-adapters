@@ -9,11 +9,9 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use emery_sdk::target::Report;
-use emery_sdk::{Error, bad_request, server_error, tracing};
+use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
 
-const IGNORE: &str = ".gitignore";
 const COMMON: &str = "crates/common/src/";
 const CATALOG: &str = "crates/common/src/config.rs";
 const MAX_DIFF_LINES: usize = 24;
@@ -221,32 +219,6 @@ impl Stems {
     }
 }
 
-// `seed` skips existing files, so replace the engine's initial `.gitignore` with the template's.
-pub fn restore_ignore(root: &Path, slice: &str) -> Result<bool, Error> {
-    let body = template(IGNORE)?;
-    let path = root.join(IGNORE);
-    let current = match fs::symlink_metadata(&path) {
-        Ok(meta) if meta.is_file() => {
-            fs::read(&path).map_err(|err| server_error!("reading `{IGNORE}`: {err}"))?
-        }
-        Ok(_) => return Err(bad_request!("a directory or symbolic link stands at `{IGNORE}`")),
-        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(false),
-        Err(err) => return Err(server_error!("reading `{IGNORE}`: {err}")),
-    };
-    if current == body.as_bytes() {
-        return Ok(false);
-    }
-    fs::write(&path, body).map_err(|err| server_error!("writing `{IGNORE}`: {err}"))?;
-    tracing::debug!(%slice, "the root ignore file put back as the template spells it");
-    Ok(true)
-}
-
-pub fn record_ignore(report: &mut Report) {
-    if let Err(at) = report.written.binary_search_by(|path| path.as_str().cmp(IGNORE)) {
-        report.written.insert(at, IGNORE.to_owned());
-    }
-}
-
 fn read(file: &Path) -> Result<String, Error> {
     fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
 }
@@ -257,7 +229,7 @@ fn template(path: &str) -> Result<&'static str, Error> {
         .ok_or_else(|| server_error!("the template lays no `{path}`"))
 }
 
-fn refusal(err: &omnia_template::Error) -> Error {
+pub fn refusal(err: &omnia_template::Error) -> Error {
     match err {
         omnia_template::Error::Occupied { .. } => bad_request!("{err}"),
         _ => server_error!("{err}"),

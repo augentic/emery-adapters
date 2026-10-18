@@ -1,18 +1,23 @@
 //! Verifies what every shipped target adapter declares and does, natively.
 //!
 //! Each target's `Adapter` is called as the component's export calls it, over
-//! a scratch tree it writes through the SDK's `write_files` and `edit_files`
-//! tools and a strict model script. Assertions use what the adapter declares and what the slice
+//! a scratch tree its initialisation lays into and its turns write through
+//! the SDK's `write_files` and `edit_files` tools under a strict model
+//! script. Assertions use what the adapter declares and what the slice
 //! carries rather than SDK prompt wording; the turn's shape, the tool, and the
 //! gates are the SDK's, asserted in its own suite. The component boundary
 //! itself is `component.rs`'s.
 
 #![cfg(not(target_arch = "wasm32"))]
 
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::os::unix::fs::symlink;
+use std::path::Path;
 
 use emery_sdk::target::{
-    Base, Context, MergeStrategy, Report, Slice, TargetAdapter, Verdict, VerifyContext, Worker,
+    Base, BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task,
+    Verdict, VerifyContext, Worker,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -38,8 +43,8 @@ const TYPESCRIPT_WRITTEN: [(&str, &str); 5] = [
 ];
 
 const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs", "crates/common/src/routes/http.rs", "Cargo.toml", "src/routes.rs", "tests/routes.rs"]}"#;
-// The same slice's report over a tree that held the seed already, so it
-// names its stem's files alone.
+// The same slice's report where its turn edited no list, so it names its
+// stem's files alone.
 const OMNIA_STEM_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
 // The lines the omnia slice adds to the seed's lists, each after the anchor
 // the seeded file holds: the path table's constant, the route list's
@@ -62,6 +67,14 @@ const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo tes
 // A pin of the root manifest and the edit a turn might put to it.
 const OMNIA_PIN: &str = "omnia-sdk = \"0.36.0\"\n";
 const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.37.0\"\n";
+
+// The three root files the node target's initialisation lays, as the crate
+// embeds them.
+const NODE_SEED: [(&str, &str); 3] = [
+    (".gitignore", include_str!("../adapters/node/seed/.gitignore")),
+    ("package.json", include_str!("../adapters/node/seed/package.json")),
+    ("tsconfig.json", include_str!("../adapters/node/seed/tsconfig.json")),
+];
 
 // The files the one scripted `write_files` call lays for the omnia target: a
 // part of the `orders` stem as a module of the stem's crate, with the stem's
@@ -98,6 +111,19 @@ impl<A: TargetAdapter> Shipped<A> {
         }
     }
 
+    // One initialisation of `project`, as the component's export puts it
+    // before any slice builds into the tree.
+    async fn init(&self, project: &Scratch) -> Result<(), Error> {
+        let ctx = InitContext {
+            adapter_id: self.name,
+            workspace: root(project),
+        };
+        match A::run(Task::<Scripted>::Init(ctx)).await? {
+            Outcome::Initialised => Ok(()),
+            outcome => panic!("an init answers an initialised tree, not {outcome}"),
+        }
+    }
+
     // One build of the slice into `project`, as the component's export puts it.
     async fn build(&self, project: &Scratch, model: &Scripted) -> Result<Report, Error> {
         self.build_slice(project, model, &slice()).await
@@ -107,14 +133,17 @@ impl<A: TargetAdapter> Shipped<A> {
     async fn build_slice(
         &self, project: &Scratch, model: &Scripted, slice: &Slice,
     ) -> Result<Report, Error> {
-        let ctx = Context {
+        let ctx = BuildContext {
             adapter_id: self.name,
             slice,
             workspace: root(project),
             worker: &A::WORKER,
             model,
         };
-        A::build(&ctx).await
+        match A::run(Task::Build(ctx)).await? {
+            Outcome::Built(report) => Ok(report),
+            outcome => panic!("a build answers a report, not {outcome}"),
+        }
     }
 
     // One verification of `project`, as the component's export puts it.
@@ -125,7 +154,10 @@ impl<A: TargetAdapter> Shipped<A> {
             worker: &A::WORKER,
             model,
         };
-        A::verify(&ctx).await
+        match A::run(Task::Verify(ctx)).await? {
+            Outcome::Verified(verdict) => Ok(verdict),
+            outcome => panic!("a verify answers a verdict, not {outcome}"),
+        }
     }
 
     // The grant the adapter's `WORKER` puts on a turn, as the script records it.
@@ -138,19 +170,22 @@ impl<A: TargetAdapter> Shipped<A> {
         body(self.docs, path).unwrap_or_else(|| panic!("`{path}` is in `{}`'s PROSE", self.name))
     }
 
-    // One build laying `written` through one `write_files` call, then the
-    // `edits` through one `edit_files` call, and answering `report`, then one
-    // verify passing, with what every target shares asserted: the build turn
-    // opens under the embedded `build.md` with the tree lent and both write
-    // tools beside the reference tools, its brief carrying the slice; what the
-    // model wrote through the tools is what the tree holds and the report
-    // names; the verify turn opens under `verify.md` over the same tree, both
-    // tools declared for its repairs; each turn carries the adapter's worker
-    // grant. Answers the tree, for what the target's own lists must hold.
+    // One initialisation of an empty tree, then one build laying `written`
+    // through one `write_files` call, then the `edits` through one
+    // `edit_files` call, and answering `report`, then one verify passing,
+    // with what every target shares asserted: the init puts no turn; the
+    // build turn opens under the embedded `build.md` with the tree lent and
+    // both write tools beside the reference tools, its brief carrying the
+    // slice; what the model wrote through the tools is what the tree holds
+    // and the report names; the verify turn opens under `verify.md` over the
+    // same tree, both tools declared for its repairs; each turn carries the
+    // adapter's worker grant. Answers the tree, for what the target's own
+    // layout must hold.
     async fn built(
         &self, written: &[(&str, &str)], edits: &[(&str, &str, &str)], report: &str,
     ) -> Scratch {
         let project = scratch();
+        self.init(&project).await.expect("init over the empty tree");
         let mut calls = vec![write_files(written)];
         if !edits.is_empty() {
             calls.push(edit_files(edits));
@@ -168,7 +203,7 @@ impl<A: TargetAdapter> Shipped<A> {
         assert!(verdict.passed, "the scripted verdict passes");
 
         let seen = model.seen();
-        assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
+        assert_eq!(seen.len(), 2, "the init opens none, the build one completion, the verify one");
         let build = &seen[0];
         assert!(
             build
@@ -368,10 +403,20 @@ fn root(project: &Scratch) -> &str {
     project.path().to_str().expect("a UTF-8 scratch root")
 }
 
+// The three root files are laid by the initialisation, before the slice's
+// turn, and the slice lays its own directory and lines beside them,
+// reporting none of the root.
 #[tokio::test]
 async fn node() {
     let project = NODE.built(&TYPESCRIPT_WRITTEN, &[], TYPESCRIPT_REPORT).await;
 
+    for (path, content) in NODE_SEED {
+        assert_eq!(
+            project.read(path).as_deref(),
+            Some(content.as_bytes()),
+            "the tree holds `{path}` as the initialisation laid it"
+        );
+    }
     assert_eq!(
         project.read("src/index.ts").as_deref(),
         Some("export * as orders from \"./orders/index.ts\";\n".as_bytes()),
@@ -381,6 +426,44 @@ async fn node() {
         project.read("src/orders/index.ts").as_deref(),
         Some("export * as reading from \"./reading/index.ts\";\n".as_bytes()),
         "the stem's list holds the part's one line"
+    );
+}
+
+// The initialisation lays each root file the tree lacks and nothing over
+// what it holds: a held manifest stands as it is, a link at a root path is
+// left standing, and a tree initialised once is changed by nothing after.
+#[tokio::test]
+async fn node_init() {
+    let project = scratch();
+    project.write("package.json", "{ \"name\": \"held\" }\n");
+    symlink("../outside", project.path().join(".gitignore")).expect("laying the link");
+
+    NODE.init(&project).await.expect("init over the held tree");
+
+    assert_eq!(
+        project.read("tsconfig.json").as_deref(),
+        Some(NODE_SEED[2].1.as_bytes()),
+        "the file the tree lacked is laid as the crate embeds it"
+    );
+    assert_eq!(
+        project.read("package.json").as_deref(),
+        Some(b"{ \"name\": \"held\" }\n".as_slice()),
+        "a held manifest stands"
+    );
+    assert_eq!(
+        std::fs::read_link(project.path().join(".gitignore")).expect("the link stands").to_str(),
+        Some("../outside"),
+        "a link at a root path is left standing"
+    );
+    assert_eq!(
+        files_under(project.path()),
+        ["package.json", "tsconfig.json"].map(str::to_owned).into()
+    );
+
+    NODE.init(&project).await.expect("init over the initialised tree");
+    assert_eq!(
+        files_under(project.path()),
+        ["package.json", "tsconfig.json"].map(str::to_owned).into()
     );
 }
 
@@ -435,10 +518,11 @@ async fn node_verify() {
     NODE.failed(&project, TYPESCRIPT_FAILED).await;
 }
 
-// The seed is laid before the slice's turn where the tree lacks it and
-// counted as the slice's: the slice lays its stem's files and adds its lines
+// The seed is laid by the initialisation, before the slice's turn, and is
+// none of the slice's: the slice lays its stem's files and adds its lines
 // to the seeded lists in place, the path table, the route list, the route
-// rung, and the root manifest's two lists among them.
+// rung, and the root manifest's two lists among them, every other file of
+// the seed standing as the template spells it.
 #[tokio::test]
 async fn omnia() {
     let edits = [
@@ -459,16 +543,16 @@ async fn omnia() {
     let project = OMNIA.built(&OMNIA_WRITTEN, &edits, OMNIA_REPORT).await;
 
     let edited: Vec<&str> = edits.iter().map(|(path, _, _)| *path).collect();
-    for seed in emery_omnia::seed() {
-        let held = project.read(&seed.path);
-        if edited.contains(&seed.path.as_ref()) {
-            assert!(held.is_some(), "the tree holds the seeded list `{}`", seed.path);
+    for entry in omnia_template::ENTRIES {
+        let held = project.read(entry.path);
+        if edited.contains(&entry.path) {
+            assert!(held.is_some(), "the tree holds the seeded list `{}`", entry.path);
         } else {
             assert_eq!(
                 held.as_deref(),
-                Some(seed.content.as_bytes()),
-                "the tree holds the seed `{}` as declared",
-                seed.path
+                Some(entry.body.as_bytes()),
+                "the tree holds the seed `{}` as the template spells it",
+                entry.path
             );
         }
     }
@@ -509,85 +593,56 @@ fn text(project: &Scratch, path: &str) -> String {
     String::from_utf8(bytes).expect("UTF-8")
 }
 
-// A tree that already holds the seed keeps it: the seed lays none, and the
-// slice's brief is told of none. The root ignore file is the one exception,
-// since the adapter puts it back before the turn whatever the tree held,
-// and reports it.
+// A tree that already holds a file of the seed keeps it, the root ignore
+// file included, since the initialisation lays what the tree lacks and
+// nothing over what it holds; a slice built over it names no file of the
+// seed it did not edit.
 #[tokio::test]
-async fn omnia_seeded() {
+async fn omnia_init_held() {
     let project = scratch();
-    for seed in emery_omnia::seed() {
-        if seed.path == "Cargo.toml" {
-            project.write(&seed.path, seed.content.as_bytes());
+    for entry in omnia_template::ENTRIES {
+        if entry.path == "Cargo.toml" {
+            project.write(entry.path, entry.body.as_bytes());
         } else {
-            project.write(&seed.path, "# held\n");
+            project.write(entry.path, "# held\n");
         }
     }
-    let model = Scripted::answering([OMNIA_STEM_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
 
-    let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
-    model.assert_exhausted();
+    OMNIA.init(&project).await.expect("init over the held tree");
 
-    for seed in emery_omnia::seed() {
-        let expected = if seed.path == "Cargo.toml" || seed.path == ".gitignore" {
-            seed.content.as_bytes()
-        } else {
-            b"# held\n"
-        };
+    for entry in omnia_template::ENTRIES {
+        let expected = if entry.path == "Cargo.toml" { entry.body.as_bytes() } else { b"# held\n" };
         assert_eq!(
-            project.read(&seed.path).as_deref(),
+            project.read(entry.path).as_deref(),
             Some(expected),
-            "`{}` stands as the tree held it, the ignore file as the seed spells it",
-            seed.path
+            "`{}` stands as the tree held it",
+            entry.path
         );
     }
-    let mut written = OMNIA_WRITTEN.map(|(path, _)| path.to_owned()).to_vec();
-    written.insert(0, ".gitignore".to_owned());
-    assert_eq!(
-        report.written, written,
-        "the report names the stem's files, the ignore file put back, and no seed the tree held"
-    );
-}
 
-// The repository the engine lays holds a one-line ignore file at its root
-// commit, which the seed never writes over: the template's is put in its
-// place before the turn, so the build output the checks write is kept out
-// of the slice's commit, and the file is reported as the slice's.
-#[tokio::test]
-async fn omnia_ignore_restored() {
-    let project = scratch();
-    project.write(".gitignore", ".emery/\n");
-    let model = Scripted::answering([OMNIA_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
-
-    let report = OMNIA.build(&project, &model).await.expect("build over the laid repository");
+    let model = Scripted::answering([OMNIA_STEM_REPORT]).calling(0, [write_files(&OMNIA_WRITTEN)]);
+    let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
-
-    assert_eq!(text(&project, ".gitignore"), omnia_seed(".gitignore"), "the template's stands");
-    assert!(
-        omnia_seed(".gitignore").lines().any(|line| line == "target/"),
-        "the template's ignore file keeps the build output out of the tree"
+    assert_eq!(
+        report.written,
+        OMNIA_WRITTEN.map(|(path, _)| path.to_owned()),
+        "the report names the stem's files and no file of the seed"
     );
-    assert!(
-        report.written.iter().any(|path| path == ".gitignore"),
-        "the file put back is reported: {:?}",
-        report.written
-    );
-    let seen = model.seen();
-    assert!(
-        !seen[0].messages[0].contains(".gitignore"),
-        "the brief names no ignore file laid, since the tree held one: {}",
-        seen[0].messages[0]
-    );
+    assert_eq!(text(&project, ".gitignore"), "# held\n", "the build lays no file of the seed");
 }
 
-// The seed is every file of the layout outside `crates/<stem>/`, each at a
-// path the SDK lays, declared once, the root manifest pinning omnia at one
-// version so a bump is one edit.
-#[test]
-fn omnia_seed_files() {
-    let seed = emery_omnia::seed();
-    let paths: std::collections::BTreeSet<&str> =
-        seed.iter().map(|seed| seed.path.as_ref()).collect();
+// The initialisation lays every file of the layout outside `crates/<stem>/`
+// into an empty tree, each at a path the engine seals, the root manifest
+// pinning omnia at one version so a bump is one edit; the template's ignore
+// file keeps the build output and the engine's own directory out of a
+// commit.
+#[tokio::test]
+async fn omnia_init_files() {
+    let project = scratch();
+
+    OMNIA.init(&project).await.expect("init over the empty tree");
+
+    let paths = files_under(project.path());
     assert_eq!(
         paths,
         [
@@ -623,13 +678,23 @@ fn omnia_seed_files() {
             "tests/messaging.rs",
             "tests/routes.rs",
         ]
+        .map(str::to_owned)
         .into_iter()
         .collect()
     );
-    assert_eq!(paths.len(), seed.len(), "a seed path is declared once");
-    for seed in &seed {
-        emery_sdk::beneath(&seed.path)
-            .unwrap_or_else(|bad| panic!("the seed path `{}` {bad}", seed.path));
+    for path in &paths {
+        emery_sdk::beneath(path).unwrap_or_else(|bad| panic!("the seed path `{path}` {bad}"));
+        assert_eq!(
+            project.read(path).as_deref(),
+            Some(omnia_seed(path).as_bytes()),
+            "`{path}` is laid as the template spells it"
+        );
+    }
+    for rule in ["target/", ".emery/"] {
+        assert!(
+            omnia_seed(".gitignore").lines().any(|line| line == rule),
+            "the template's ignore file holds `{rule}`"
+        );
     }
 
     let manifest = omnia_seed("Cargo.toml");
@@ -707,7 +772,7 @@ fn omnia_worker() {
 
 #[tokio::test]
 async fn omnia_verify() {
-    OMNIA.failed(&omnia_tree(), OMNIA_FAILED).await;
+    OMNIA.failed(&omnia_tree().await, OMNIA_FAILED).await;
 }
 
 // A verify whose repair changed a static file, over a tree that lacks
@@ -717,7 +782,7 @@ async fn omnia_verify() {
 // tree as the template spells it.
 #[tokio::test]
 async fn omnia_static_drift_refused() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     std::fs::remove_file(project.path().join("examples/runtime.rs")).expect("the seed laid it");
     let entry = omnia_seed("src/lib.rs");
     let first = entry.lines().next().expect("the entry opens with a line");
@@ -757,7 +822,7 @@ async fn omnia_static_drift_refused() {
 // accepted report carries the manifest with the stem's lines kept.
 #[tokio::test]
 async fn omnia_manifest_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let edits = [
         (
             "Cargo.toml",
@@ -800,7 +865,7 @@ async fn omnia_manifest_refused() {
 // answered, a stem's tests unread, and the modules removed are the repair.
 #[tokio::test]
 async fn omnia_verify_simulated_host() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     project.write("crates/start/Cargo.toml", "[package]\nname = \"start\"\n");
     project.write("crates/start/src/lib.rs", "//! The `start` stem.\n");
     project.write(
@@ -873,7 +938,7 @@ async fn omnia_verify_simulated_host() {
 // and the accepted report names what the tree still holds.
 #[tokio::test]
 async fn omnia_build_process_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let looped = "    let mut attempt = 0;\n    loop {\n        attempt += 1;\n        match \
                   fetch(provider).await {\n            Ok(stops) => return Ok(stops),\n            \
                   Err(error) if attempt < 3 => tracing::warn!(\"retry loop {error}\"),\n            \
@@ -953,7 +1018,7 @@ async fn omnia_build_process_refused() {
 // handler, loader, or miss inside it is asked to be wired or edited in place.
 #[tokio::test]
 async fn omnia_build_start_crate_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let start_path = "start = { path = \"crates/start\" }\n";
     let start_crate = "start.workspace = true\n";
     let env_line = "pub const ENV: &str = \"ENV\";\n";
@@ -1058,7 +1123,7 @@ async fn omnia_build_start_crate_refused() {
 // the accepted report names the module.
 #[tokio::test]
 async fn omnia_build_wrappers_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let wrapped = "#[derive(Debug, Clone, Deserialize)]\npub struct StopsResponse {\n    \
                    #[serde(default)]\n    pub data: Vec<Stop>,\n}\n\n#[derive(Deserialize)]\n\
                    struct AllocationsResponse {\n    data: Allocations,\n}\n";
@@ -1123,7 +1188,7 @@ async fn omnia_build_wrappers_refused() {
 // module.
 #[tokio::test]
 async fn omnia_build_empty_miss_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let empty = "    let cached = StateStore::get(provider, RATES_KEY).await?;\n    let table = \
                  match cached {\n        Some(bytes) => {\n            let decoded: HashMap<String, \
                  u32> = serde_json::from_slice(&bytes).unwrap_or_default();\n            \
@@ -1198,7 +1263,7 @@ async fn omnia_build_empty_miss_refused() {
 // names the module.
 #[tokio::test]
 async fn omnia_build_crate_private_miss_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let empty = "    let cached = StateStore::get(provider, ZONES_KEY).await?;\n    let table = \
                  match cached {\n        Some(bytes) => {\n            let decoded: Vec<String> = \
                  serde_json::from_slice(&bytes)?;\n            tracing::debug!(entries = \
@@ -1260,7 +1325,7 @@ async fn omnia_build_crate_private_miss_refused() {
 // accepted report names the module.
 #[tokio::test]
 async fn omnia_build_tail_miss_refused() {
-    let project = scratch();
+    let project = omnia_tree().await;
     let tail = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        return \
                 Ok(serde_json::from_slice(&bytes)?);\n    }\n    Ok(HashMap::new())\n";
     let fetched = "    if let Some(bytes) = StateStore::get(provider, FEES_KEY).await? {\n        \
@@ -1342,7 +1407,7 @@ async fn omnia_build_tail_miss_refused() {
 // the root manifest, and the accepted report names what the tree holds.
 #[tokio::test]
 async fn omnia_build_stem_split() {
-    let project = scratch();
+    let project = omnia_tree().await;
     project.write("crates/shipment/Cargo.toml", "[package]\nname = \"shipment\"\n");
     project.write("crates/shipment/src/lib.rs", "//! The `shipment` stem.\n");
     let slice = slice_for(
@@ -1448,7 +1513,7 @@ async fn omnia_build_stem_split() {
 // constants removed, are the repair.
 #[tokio::test]
 async fn omnia_tables_held() {
-    let (project, http, topics, routes) = omnia_tables_tree();
+    let (project, http, topics, routes) = omnia_tables_tree().await;
     let orders_statement = "    let router = router.route(\n        \
                             common::routes::http::ORDERS,\n        \
                             omnia_sdk::api::http::get(orders::reading::list_orders),\n    );\n";
@@ -1522,7 +1587,7 @@ async fn omnia_tables_held() {
 // Removing the constant is the repair.
 #[tokio::test]
 async fn omnia_setting_unread() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     let env_line = "pub const ENV: &str = \"ENV\";\n";
     let unread = "\n/// Minutes between refreshes of the rate table.\npub const \
                   RATES_REFRESH_MINUTES: &str = \"RATES_REFRESH_MINUTES\";\n";
@@ -1585,8 +1650,8 @@ const BILLED_ENTRY: &str = "    common::routes::topic::ORDER_BILLED,\n";
 // `ORDER_RETURNED` named nowhere, and `ORDER_BILLED` listed by the rung
 // alone. Answers the tree with the texts of the path table, the topic
 // table, and the route list, for the lines a finding names.
-fn omnia_tables_tree() -> (Scratch, String, String, String) {
-    let project = omnia_tree();
+async fn omnia_tables_tree() -> (Scratch, String, String, String) {
+    let project = omnia_tree().await;
     let http = format!(
         "{OMNIA_PATH_ANCHOR}{OMNIA_PATH_LINE}\n/// List the orders.\npub const ORDERS: &str = \
          \"/orders\";\n"
@@ -1650,7 +1715,7 @@ fn line_of(text: &str, needle: &str) -> usize {
 // whatever its tests spell.
 #[tokio::test]
 async fn omnia_verify_stem_clean() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     project.write(
         "crates/orders/src/reading.rs",
         "//! Reads orders.\n\n/// The key of an order.\n#[must_use]\npub fn key(id: &str) -> String {\n    format!(\"orders/{id}\")\n}\n",
@@ -1675,7 +1740,7 @@ async fn omnia_verify_stem_clean() {
 // is the repair.
 #[tokio::test]
 async fn omnia_handler_unlisted() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     project.write(
         "src/routes.rs",
         omnia_seed("src/routes.rs")
@@ -1734,7 +1799,7 @@ async fn omnia_handler_unlisted() {
 // it.
 #[tokio::test]
 async fn omnia_handler_named_as_method() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     project.write(
         "src/routes.rs",
         omnia_seed("src/routes.rs")
@@ -1791,7 +1856,7 @@ async fn omnia_handler_named_as_method() {
 // by a route function no statement calls is still reached by nothing.
 #[tokio::test]
 async fn omnia_handler_behind_route_function() {
-    let project = omnia_tree();
+    let project = omnia_tree().await;
     let listing = "    let router = router.route(common::routes::http::ORDERS, orders::placing::place_order_route());\n";
     project.write(
         "src/routes.rs",
@@ -1831,24 +1896,36 @@ async fn omnia_handler_behind_route_function() {
     assert!(!correction.contains("`place_order`"), "`place_order` is no finding: {correction}");
 }
 
-// A tree holding every file of the seed, as an integrated tree does once a
-// slice has built, since the adapter holds the static files to the template
-// at every verify.
-fn omnia_tree() -> Scratch {
+// A tree holding every file of the seed, as the engine's holds it once the
+// adapter has initialised the repository and before any slice builds.
+async fn omnia_tree() -> Scratch {
     let project = scratch();
-    for seed in emery_omnia::seed() {
-        project.write(&seed.path, seed.content.as_bytes());
-    }
+    OMNIA.init(&project).await.expect("init over the empty tree");
     project
 }
 
 fn omnia_seed(path: &str) -> String {
-    emery_omnia::seed()
-        .into_iter()
-        .find(|seed| seed.path == path)
-        .unwrap_or_else(|| panic!("the seed lays `{path}`"))
-        .content
-        .into_owned()
+    omnia_template::entry(path).unwrap_or_else(|| panic!("the seed lays `{path}`")).body.to_owned()
+}
+
+// Every regular file beneath `root`, root-relative, in path order; a link
+// is none.
+fn files_under(root: &Path) -> BTreeSet<String> {
+    fn walk(root: &Path, dir: &Path, files: &mut BTreeSet<String>) {
+        for entry in std::fs::read_dir(dir).expect("a readable directory") {
+            let path = entry.expect("a readable entry").path();
+            let kind = std::fs::symlink_metadata(&path).expect("a readable entry").file_type();
+            if kind.is_dir() {
+                walk(root, &path, files);
+            } else if kind.is_file() {
+                let relative = path.strip_prefix(root).expect("beneath the root");
+                files.insert(relative.to_str().expect("a UTF-8 path").to_owned());
+            }
+        }
+    }
+    let mut files = BTreeSet::new();
+    walk(root, root, &mut files);
+    files
 }
 
 // The seed's root manifest with the `orders` stem's line in each list.

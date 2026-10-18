@@ -1,0 +1,15 @@
+{
+  "name": "app",
+  "private": true,
+  "type": "module",
+  "workspaces": ["src/*", "src/*/*"],
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "node --test --test-force-exit --test-timeout=5000 'test/**/*.test.ts'",
+    "start": "node src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "^5.8"
+  }
+}

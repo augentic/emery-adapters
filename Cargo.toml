@@ -23,6 +23,8 @@ emery-python = { path = "adapters/python" }
 emery-typescript = { path = "adapters/typescript" }
 emery-node = { path = "adapters/node" }
 emery-omnia = { path = "adapters/omnia" }
+omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
+# omnia-template = { path = "../omnia-exemplar/templates/guest" }
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true

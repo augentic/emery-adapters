@@ -1121,6 +1121,7 @@ dependencies = [
  "emery-typescript",
  "omnia",
  "omnia-sdk",
+ "omnia-template",
  "omnia-test",
  "omnia-wasi-model",
  "omnia-wasi-otel",

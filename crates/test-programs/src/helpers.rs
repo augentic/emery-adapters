@@ -1,4 +1,5 @@
-use emery_sdk::target::{Slice, Target};
+use emery_sdk::target::Slice;
+use emery_sdk::target::capability::Target;
 use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
 use serde_json::json;
 

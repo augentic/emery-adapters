@@ -50,7 +50,7 @@ The `start` stem is where a specification read from a process keeps what that pr
 | answered a health or readiness route a requirement states by method and path | that route in its own stem's crate (`crates/health/`), never under `crates/start/` | covered by the slice that owns that stem |
 | enforced a rule every route obeys — authentication, a body limit, a request log | a `pub fn` in `crates/common/` or the stem that owns the rule, called at the top of the handlers it guards | covered, with the handlers' tests |
 
-So a slice under `start` never lays `crates/start/` and never adds `start` to `Cargo.toml`: at most it adds a deployment setting a handler stem reads to `crates/common/src/config.rs`, reports the seed files its brief named laid, and covers the rows that say so, leaving credential retrievers, rotation watchers, client construction, table prefetch, signals, periodic jobs, and lifecycle types out of `covered` with no module laid.
+So a slice under `start` never lays `crates/start/` and never adds `start` to `Cargo.toml`: at most it adds a deployment setting a handler stem reads to `crates/common/src/config.rs` and covers the rows that say so, leaving credential retrievers, rotation watchers, client construction, table prefetch, signals, periodic jobs, and lifecycle types out of `covered` with no module laid.
 
 ## Errors
 

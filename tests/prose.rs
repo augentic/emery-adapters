@@ -146,9 +146,37 @@ fn emery_python() {
     surveying(emery_python::PROSE);
 }
 
+// The three root files the init lays are fenced in `layout.md` as what the
+// tree holds, so the file the crate embeds and the fence the model reads are
+// held to one body.
 #[test]
 fn emery_node() {
     target_corpus(emery_node::PROSE, "node");
+
+    let layout = body(emery_node::PROSE, "references/layout.md").expect("the layout is listed");
+    for (file, laid) in [
+        ("package.json", include_str!("../adapters/node/seed/package.json")),
+        ("tsconfig.json", include_str!("../adapters/node/seed/tsconfig.json")),
+        (".gitignore", include_str!("../adapters/node/seed/.gitignore")),
+    ] {
+        let fenced = fenced_after(layout, &format!("`{file}`:"));
+        assert_eq!(
+            laid.trim_end_matches('\n'),
+            fenced,
+            "`layout.md` fences `{file}` as `adapters/node/seed/{file}` spells it"
+        );
+    }
+}
+
+// The body of the first fence after `label`'s line, whatever its language tag.
+fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
+    let (_, section) = doc
+        .split_once(&format!("\n{label}\n"))
+        .unwrap_or_else(|| panic!("the document carries no `{label}` line"));
+    let (_, fenced) = section.split_once("```").expect("the label is followed by a fence");
+    let (_, body) = fenced.split_once('\n').expect("the fence opens on a line of its own");
+    let (body, _) = body.split_once("\n```").expect("the fence closes");
+    body
 }
 
 #[test]
