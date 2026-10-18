@@ -1,7 +1,4 @@
-//! Drives one adapter through the `source-adapter` world under the omnia
-//! runtime and asserts what the host sees: the metadata, the evidence over a
-//! lent workspace and an inline value, a refusal's class, or the echoed
-//! answer.
+//! Guest driver exercising a source adapter's `metadata` and `extract` exports.
 
 #![cfg(target_arch = "wasm32")]
 

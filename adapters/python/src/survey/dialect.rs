@@ -1,7 +1,4 @@
-//! What the SDK's lookups read of Python.
-//!
-//! One [`Dialect`], data rather than code, passed to each lookup that reads
-//! one.
+//! Python dialect configuration.
 
 use emery_sdk::survey::route::Spelling;
 use emery_sdk::survey::{ClassSyntax, Dialect};
@@ -54,11 +51,7 @@ pub static DIALECT: Dialect = Dialect {
     ],
     listeners: &[],
     lifecycle_events: &[],
-    // `patch` by its spelling whole: the same name on an application, a
-    // router, or an HTTP client is a verb.
     mocking: &["patch", "mock.patch", "unittest.mock.patch", "mocker.patch"],
-    // Django's admin site among them: it serves what it registers on the
-    // source's behalf, by call or by decorator.
     lifecycle: &[
         "signal.signal",
         "atexit.register",
@@ -158,15 +151,12 @@ pub static DIALECT: Dialect = Dialect {
     enum_bases: &["Enum", "Flag"],
     class_syntax: ClassSyntax::INDENTED,
     described: "a test's docstring or name under its class's",
-    // A pattern spells a wildcard, a brace, a `<converter>`, or a regex.
     route: Spelling {
         pattern: &['*', '{', '(', '[', '<', '?', '\\'],
         param_name,
     },
 };
 
-// `<int:pk>` and `(?P<pk>\d+)` are `pk`; `{id}` and `:id` are `id`; any
-// other segment is as written.
 fn param_name(segment: &str) -> &str {
     if let Some(inner) = segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}')) {
         return inner.split_once(':').map_or(inner, |(name, _)| name);

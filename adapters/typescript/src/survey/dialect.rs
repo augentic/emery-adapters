@@ -1,7 +1,4 @@
-//! What the SDK's lookups read of TypeScript and JavaScript.
-//!
-//! One [`Dialect`], data rather than code, passed to each lookup that reads
-//! one.
+//! TypeScript and JavaScript dialect configuration.
 
 use emery_sdk::survey::route::Spelling;
 use emery_sdk::survey::{ClassSyntax, Dialect};
@@ -112,8 +109,6 @@ pub static DIALECT: Dialect = Dialect {
     enum_bases: &[],
     class_syntax: ClassSyntax::BRACED,
     described: "a case's title under its suites'",
-    // A parameter is `:id`; a pattern spells a wildcard, a regex group, or a
-    // bracketed segment.
     route: Spelling {
         pattern: &['*', '{', '(', '['],
         param_name: |segment| segment.trim_start_matches(':'),

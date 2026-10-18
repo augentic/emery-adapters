@@ -1,6 +1,4 @@
-//! Divides a documentation tree into independently mined seams: by the
-//! subjects the model names in it, from the outline code read of every
-//! document, or by its directories where it names none.
+//! Divides a documentation tree into seams by surveyed subject or directory.
 
 mod model;
 mod structure;
@@ -27,19 +25,14 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> 
 }
 
 const MIN_SIZE: usize = 2;
-
-// Over this, a directory is partitioned one level deeper, so it cannot hold a
-// run behind one turn.
 const MAX_SIZE: usize = 16;
 
-// The directory cut, where no subject leads the seams.
 fn directories(root: &str) -> Result<Vec<Seam>, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let seams: Vec<Seam> = partition("", files).into_iter().map(Seam::files).collect();
     Ok(if seams.len() < 2 { vec![Seam::whole()] } else { seams })
 }
 
-// `prefix` is `""` at the root and ends in `/` beneath it.
 fn partition(prefix: &str, files: Vec<String>) -> Vec<Vec<String>> {
     // bucket by the next path segment
     let mut groups: BTreeMap<Option<String>, Vec<String>> = BTreeMap::new();

@@ -25,7 +25,7 @@ A source adapter is one Rust crate that ships as one Wasm component exporting th
 | Target                      | Builds                                                                                                                                                          |
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `adapters/node` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
-| `adapters/omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, `#[tokio::test]` tests per scenario over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
+| `adapters/omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, each stem's `router()` and `topics(..)` composed from its parts and merged by the root, `#[tokio::test]` tests per scenario driving those routers over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
 
 ## Rust-only loop
 

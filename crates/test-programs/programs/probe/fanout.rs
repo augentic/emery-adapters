@@ -1,5 +1,4 @@
-//! A `source-adapter` probe that mines two seams at once, so the suite can
-//! hold the host to keeping one guest's completions pending together.
+//! Probe adapter mining two seams concurrently.
 
 #![cfg(target_arch = "wasm32")]
 

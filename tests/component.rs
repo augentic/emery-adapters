@@ -1,10 +1,4 @@
-//! Verifies every shipped component through its world under the omnia runtime.
-//!
-//! One scenario per component, over what a native call cannot show: the
-//! export, the lift and lower of the input and the answer, the metadata, the
-//! lend resolved against the mount, and the parser running as a guest. What
-//! each adapter decides is `source.rs`'s and `target.rs`'s, natively; the
-//! boundary's own rules are `probe.rs`'s.
+//! Exercises every shipped adapter component under the Omnia WebAssembly runtime.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -200,15 +194,16 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the fresh base and the merge rules; the build writes
-// the mount through `write_files`, its turns carry the worker grant, and its
-// report and the verdict lift back to the driver.
+// The metadata lowers the merge rules; the init lays the root manifests in
+// the lent tree with no turn, the build writes the mount through
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["metadata", "fresh", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &["metadata", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
         ScriptedModel::default(),
     )
     .await;
@@ -224,7 +219,7 @@ async fn emery_node() {
     let model = support::build(test_programs::TARGET_EMERY_NODE, &project, &[], model).await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
+    assert_eq!(seen.len(), 2, "the init opens none, the build one completion, the verify one");
     led(&seen[0], emery_node::PROSE, "build.md");
     led(&seen[1], emery_node::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
@@ -232,15 +227,18 @@ async fn emery_node() {
     for path in ["src/orders/index.ts", "src/index.ts"] {
         assert!(project.read(path).is_some(), "the tree holds `{path}` written through the lend");
     }
+    assert_eq!(
+        project.read("package.json").as_deref(),
+        Some(include_bytes!("../adapters/node/seed/package.json").as_slice()),
+        "the root manifest reached the host's tree through the init"
+    );
 }
 
-// The metadata lowers the fresh base and the eleven rules in order; the
-// build lays the seed in the lent tree before its turn and writes a stem's
-// list through `write_files`, its turns carry the worker grant, and its
-// report and the verdict lift back to the driver. The ignore file is held
-// as the engine lays it in a repository of its own, so the build's one write
-// before its turn rewrites a file through the guest, which a native call
-// cannot show, and the verify's check then finds the static files standing.
+// The metadata lowers the seven rules in order; the init lays the template
+// in the lent tree with no turn, the build writes a stem's list through
+// `write_files`, its turns carry the worker grant, and its report and the
+// verdict lift back to the driver, the verify's check finding the static
+// files standing as the template spells them.
 #[tokio::test]
 async fn emery_omnia() {
     support::build(
@@ -248,16 +246,11 @@ async fn emery_omnia() {
         &scratch(),
         &[
             "metadata",
-            "fresh",
             "Cargo.lock=ours",
             "Cargo.toml=union",
-            "clippy.toml=union",
             "src/routes.rs=union",
             "src/messaging.rs=union",
-            "tests/routes.rs=union",
-            "tests/messaging.rs=union",
-            "crates/common/src/routes/*.rs=union",
-            "crates/common/src/config.rs=union",
+            "crates/common/src/topic.rs=union",
             "crates/*/Cargo.toml=union",
             "crates/*/src/lib.rs=union",
         ],
@@ -266,7 +259,6 @@ async fn emery_omnia() {
     .await;
 
     let project = scratch();
-    project.write(".gitignore", ".emery/\n");
     let written = serde_json::json!({ "files": [
         { "path": "crates/orders/src/lib.rs", "content": "//! The `orders` stem.\n\npub mod reading;\n" },
     ]})
@@ -277,7 +269,7 @@ async fn emery_omnia() {
     let model = support::build(test_programs::TARGET_EMERY_OMNIA, &project, &[], model).await;
 
     let seen = model.seen();
-    assert_eq!(seen.len(), 2, "the build opens one completion, the verify one");
+    assert_eq!(seen.len(), 2, "the init opens none, the build one completion, the verify one");
     led(&seen[0], emery_omnia::PROSE, "build.md");
     led(&seen[1], emery_omnia::PROSE, "verify.md");
     assert!(seen.iter().all(|request| request.workspace.is_some()), "the mount is lent to both");
@@ -286,26 +278,18 @@ async fn emery_omnia() {
         project.read("crates/orders/src/lib.rs").is_some(),
         "the tree holds the stem's list written through the lend"
     );
-    let template = emery_omnia::seed();
     let seeded = |path: &str| {
-        template
-            .iter()
-            .find(|seed| seed.path == path)
-            .unwrap_or_else(|| panic!("`{path}` is a seed"))
+        omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.as_bytes()
     };
-    assert_eq!(
-        project.read("src/routes.rs").as_deref(),
-        Some(seeded("src/routes.rs").content.as_bytes()),
-        "the seed reached the host's tree through the lend before the turn"
-    );
+    for path in ["src/routes.rs", ".gitignore"] {
+        assert_eq!(
+            project.read(path).as_deref(),
+            Some(seeded(path)),
+            "`{path}` reached the host's tree through the init, as the template spells it"
+        );
+    }
     assert!(
         project.read(".github/workflows/ci.yaml").is_some(),
         "a seed under a hidden directory reached the host's tree"
-    );
-    assert_eq!(
-        project.read(".gitignore").as_deref(),
-        Some(seeded(".gitignore").content.as_bytes()),
-        "the build put the held ignore file back as the template spells it, and the verify \
-         accepted it standing"
     );
 }

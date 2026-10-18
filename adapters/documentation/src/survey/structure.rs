@@ -1,13 +1,7 @@
-//! Reads a document's structure by hand — headings, fences, front matter,
-//! and the blocks between them — for the outline the survey lays.
-//!
-//! The reader is a line scanner over the Markdown and Gherkin the documents
-//! an adapter meets are written in; it is not a parser, and what it cannot
-//! place reads as a paragraph.
+//! Scans Markdown and Gherkin documents into headings and block spans.
 
 use emery_sdk::survey::Lines;
 
-// What one document's lines hold.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Outline {
     pub lines: u32,
@@ -15,18 +9,13 @@ pub struct Outline {
     pub blocks: Vec<Block>,
 }
 
-// One heading: an ATX or setext heading, or a Gherkin keyword line.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Heading {
-    // `1` for a document's title.
     pub level: u8,
-    // 1-based line number.
     pub line: u32,
-    // With the heading marks stripped.
     pub text: String,
 }
 
-// One block of a document and the inclusive lines it spans.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Block {
     pub kind: Kind,
@@ -43,7 +32,6 @@ pub enum Kind {
     Heading,
     Fence,
     FrontMatter,
-    // A thematic break, a table's header and delimiter rows, or an HTML block.
     Other,
 }
 
@@ -80,7 +68,6 @@ impl Outline {
     }
 }
 
-// The first non-blank line of a document and its 1-based number.
 pub fn opening_line(text: &str) -> Option<(u32, &str)> {
     text.lines()
         .enumerate()
@@ -92,7 +79,6 @@ fn line_number(index: usize) -> u32 {
     u32::try_from(index).unwrap_or(u32::MAX)
 }
 
-// A Gherkin document opens with `Feature:`, past any tags and comments.
 fn gherkin(lines: &[&str]) -> bool {
     lines
         .iter()
@@ -101,7 +87,6 @@ fn gherkin(lines: &[&str]) -> bool {
         .is_some_and(|line| line.starts_with("Feature:"))
 }
 
-// A block being read, from its first line.
 struct Open {
     kind: Kind,
     start: u32,
@@ -160,8 +145,6 @@ impl<'a> Reader<'a> {
         atx_heading(line).or_else(|| self.gherkin.then(|| gherkin_heading(line)).flatten())
     }
 
-    // Front matter is a `---` on the first line through the next `---` or
-    // `...` line; returns the index to read on from.
     fn front_matter(&mut self) -> usize {
         if self.lines.first().is_none_or(|line| line.trim_end() != "---") {
             return 0;
@@ -175,8 +158,6 @@ impl<'a> Reader<'a> {
         close + 1
     }
 
-    // A fence runs to the closing mark of the same character at least as
-    // long, or to the end of the document; returns the index to read on from.
     fn fence(&mut self, open: usize, mark: &str) -> usize {
         let close = self.lines.iter().enumerate().skip(open + 1).find_map(|(index, line)| {
             let trimmed = line.trim();
@@ -188,8 +169,6 @@ impl<'a> Reader<'a> {
         end + 1
     }
 
-    // A line of prose: a step, a quote line, a list item, or the start or
-    // continuation of a paragraph, an item, or a quote.
     fn text_line(&mut self, line: &str, number: u32) {
         if self.gherkin && gherkin_step(line) {
             self.close(number - 1);
@@ -219,7 +198,6 @@ impl<'a> Reader<'a> {
                 if line.trim_start().starts_with('<') { Kind::Other } else { Kind::Paragraph };
             self.open = Some(Open { kind, start: number });
         }
-        // otherwise the line continues the open paragraph, item, or quote
     }
 
     const fn open_paragraph(&self) -> bool {
@@ -232,8 +210,6 @@ impl<'a> Reader<'a> {
         )
     }
 
-    // A delimiter row under a one-line paragraph holding `|` makes that
-    // paragraph a table's header: both become one `Other` block.
     fn close_table_header(&mut self, number: u32) -> bool {
         let Some(Open {
             kind: Kind::Paragraph,
@@ -250,7 +226,6 @@ impl<'a> Reader<'a> {
         true
     }
 
-    // The open paragraph becomes a heading of `level` with the underline.
     fn setext(&mut self, level: u8, number: u32) {
         let Some(Open { start, .. }) = self.open.take() else { return };
         let text = self.line(start).trim();
@@ -274,7 +249,6 @@ impl<'a> Reader<'a> {
             .unwrap_or_default()
     }
 
-    // Closes the open block at `end`, when one is open.
     fn close(&mut self, end: u32) {
         if let Some(Open { kind, start }) = self.open.take() {
             self.block(kind, start, end.max(start));
@@ -289,7 +263,6 @@ impl<'a> Reader<'a> {
     }
 }
 
-// Up to three spaces of indentation, then the rest.
 fn unindented(line: &str) -> Option<&str> {
     let spaces = line.len() - line.trim_start_matches(' ').len();
     (spaces <= 3).then(|| &line[spaces..])
@@ -320,8 +293,6 @@ fn atx_heading(line: &str) -> Option<(u8, &str)> {
     Some((u8::try_from(hashes).unwrap_or(6), text))
 }
 
-// `Feature:`, `Rule:`, `Background:`, `Scenario:`, `Scenario Outline:`,
-// `Examples:` lines head what follows them as a heading does.
 fn gherkin_heading(line: &str) -> Option<(u8, &str)> {
     let (keyword, text) = line.trim().split_once(':')?;
     let level = match keyword.trim() {
@@ -354,7 +325,6 @@ fn list_item(line: &str) -> bool {
     bullet || ordered
 }
 
-// `| --- | :---: |` and the like: every cell dashes, with optional colons.
 fn delimiter_row(line: &str) -> bool {
     let trimmed = line.trim();
     if !trimmed.contains('-') || !trimmed.contains('|') {
@@ -368,7 +338,6 @@ fn delimiter_row(line: &str) -> bool {
     })
 }
 
-// `===` or `---` under a paragraph line; level 1 for `=`, 2 for `-`.
 fn setext_underline(line: &str) -> Option<u8> {
     let rest = unindented(line)?.trim_end();
     let mark = rest.chars().next()?;
@@ -378,7 +347,6 @@ fn setext_underline(line: &str) -> Option<u8> {
     Some(if mark == '=' { 1 } else { 2 })
 }
 
-// `---`, `***`, `___`, spaces between allowed, three marks at the least.
 fn thematic_break(trimmed: &str) -> bool {
     let mut marks = trimmed.chars().filter(|c| !c.is_whitespace());
     let Some(mark) = marks.next() else { return false };

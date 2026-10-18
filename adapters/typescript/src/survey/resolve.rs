@@ -1,16 +1,4 @@
-//! Locates modules: the manifest's entries and where each import leads.
-//!
-//! A relative specifier is probed the way the compiler probes it: as
-//! written, then with each source extension, then as a directory's `index`.
-//! The `baseUrl` and `paths` of `tsconfig.json` resolve the aliases a bare
-//! specifier may spell, and a bare specifier no mapping answers is a
-//! package. A relative or aliased specifier the tree does not answer is
-//! `Unresolved`, never dropped, so the survey can say what it could not
-//! follow and widen what it lays; one reaching a test module the keep set
-//! aside is `Skipped`, known and followed nowhere. A load by a computed
-//! name is settled to the directory its literal head leads into. Each
-//! module's imports are settled once the tree is read and carried on the
-//! module.
+//! Resolves TypeScript and JavaScript module imports and `package.json` entries.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -23,27 +11,18 @@ use emery_sdk::unique;
 use super::EXTENSIONS;
 use super::parse::Module;
 
-// The build outputs a manifest may point at in place of their sources.
 const OUTPUT_DIRS: &[&str] = &["dist", "build", "lib", "out"];
 
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
-    // The test modules the keep set aside, which a production module may
-    // still import.
     tests: BTreeSet<String>,
     data: BTreeSet<String>,
-    // Root-relative, `""` for the root itself.
     base_url: Option<String>,
-    // Each `paths` pattern with its targets, relative to `base_url` or the
-    // root.
     paths: Vec<(String, Vec<String>)>,
 }
 
 impl Resolver {
-    // Over the parsed tree's modules, data files, and the test modules the
-    // keep set aside, which an import may still reach. One relative
-    // `extends` of `tsconfig.json` is followed where it can be read.
     pub fn new(parsed: &code::Parsed<Module>) -> Self {
         let mut resolver = Self {
             modules: parsed.modules.keys().cloned().collect(),
@@ -86,10 +65,8 @@ impl Resolver {
         }
     }
 
-    // `None` only for an absolute specifier, which names nothing of the tree.
-    // A bare specifier matching a `paths` pattern other than the catch-all
-    // `*` is aliased, so one the mapping does not answer is `Unresolved`
-    // rather than a package.
+    // A bare specifier matching a non-`*` `paths` pattern is aliased, so an
+    // unmatched target resolves as `Unresolved` rather than a package.
     fn resolve(&self, from: &str, specifier: &str) -> Option<Target> {
         if specifier.starts_with('/') {
             return None;
@@ -128,8 +105,6 @@ impl Resolver {
         Some(Target::Package(specifier.to_owned()))
     }
 
-    // `src/server.ts` as written, or `dist/server.js` mapped back to its
-    // source.
     pub fn entry(&self, hint: &str) -> Option<String> {
         let hint = normalize("", hint.trim())?;
         if let Some(found) = self.probe(&hint) {
@@ -146,8 +121,6 @@ impl Resolver {
         candidates.iter().find_map(|candidate| self.probe(candidate))
     }
 
-    // A module first, else a data file as written or with the `.json` a
-    // `require` may leave off, else a test module the keep set aside.
     fn file(&self, candidate: &str) -> Option<Target> {
         if let Some(module) = self.probe(candidate) {
             return Some(Target::Module(module));
@@ -164,8 +137,6 @@ impl Resolver {
     }
 }
 
-// As written, with a source extension in place of the one it has or lacks,
-// or as a directory's `index`.
 fn probe(among: &BTreeSet<String>, candidate: &str) -> Option<String> {
     if among.contains(candidate) {
         return Some(candidate.to_owned());
@@ -191,7 +162,6 @@ fn probe(among: &BTreeSet<String>, candidate: &str) -> Option<String> {
     None
 }
 
-// What the pattern's `*` stood for, or the empty string for an exact match.
 fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
     match pattern.split_once('*') {
         Some((prefix, suffix)) => {
@@ -201,10 +171,6 @@ fn alias<'s>(pattern: &str, specifier: &'s str) -> Option<&'s str> {
     }
 }
 
-// Comments and trailing commas removed. When `follow`, the file's own
-// `compilerOptions` are laid over the ones a readable relative `extends`
-// supplies; the base itself is read without following. Anything unreadable
-// is ignored.
 fn tsconfig(root: &Path, path: &str, follow: bool) -> Option<Value> {
     let text = std::fs::read_to_string(root.join(path)).ok()?;
     let mut config: Value = serde_json::from_str(&strip_jsonc(&text)).ok()?;
@@ -234,8 +200,6 @@ fn tsconfig(root: &Path, path: &str, follow: bool) -> Option<Value> {
     Some(config)
 }
 
-// Removes `//` and `/* */` comments outside strings and the trailing commas
-// JSON forbids but `tsconfig.json` allows.
 fn strip_jsonc(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
@@ -297,7 +261,6 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    // An absent or unreadable manifest is empty.
     pub fn read(root: &Path) -> Self {
         let Some(value) = std::fs::read_to_string(root.join("package.json"))
             .ok()
@@ -330,7 +293,6 @@ impl Manifest {
         }
     }
 
-    // What the facts say of the manifest, and the modules its entries name.
     pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
         let mut says: Vec<String> = Vec::new();
         if let Some(name) = &self.name {
@@ -357,8 +319,6 @@ impl Manifest {
         }
     }
 
-    // In manifest order, once each: `main`, `bin`, then the sources the
-    // `start` and `dev` scripts run.
     fn entries(&self, resolver: &Resolver) -> Vec<String> {
         let scripts = ["start", "dev"].into_iter().flat_map(|script| {
             self.scripts.get(script).into_iter().flat_map(|command| {

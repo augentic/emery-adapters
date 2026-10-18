@@ -1,9 +1,4 @@
-//! Provides the runtime harness shared by component suites.
-//!
-//! The harness runs a component behind the `source_extract` driver, or a
-//! target behind the `builder_build` driver, with a scripted host model.
-//! [`Barrier`] can hold completions until a required number of requests are
-//! pending together.
+//! Shared runtime test harness for component and probe suites.
 
 #![expect(dead_code, reason = "shared by suites that each use a subset")]
 
@@ -180,9 +175,10 @@ pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], mod
 
 /// Runs the target driver in the mode `args` names against `adapter`.
 ///
-/// `project` is mounted writable as `.`, since a build writes the lent tree
-/// through the adapter's `write_files` tool. A clean exit and an exactly
-/// consumed script are required; the model's record is returned.
+/// `project` is mounted writable as `.`, since an init lays the layout in
+/// the lent tree and a build writes it through the adapter's `write_files`
+/// tool. A clean exit and an exactly consumed script are required; the
+/// model's record is returned.
 ///
 /// # Panics
 ///

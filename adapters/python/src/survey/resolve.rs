@@ -1,21 +1,4 @@
-//! Locates modules: the manifest's scripts and where each import leads.
-//!
-//! An absolute import is probed as the interpreter probes it, beneath each
-//! root the tree lays its packages under: the root itself, `src/`, and the
-//! directory above every top-level package. A relative import climbs from
-//! the importing module's directory by its dots. A string spelling a dotted
-//! path (`"orders.urls"`, `"app.main:serve"`) is probed as an absolute
-//! import is; one spelling a data file's name (`"config.toml"`) names the
-//! file alone.
-//!
-//! What the tree does not answer is a package, third-party and standard
-//! library alike, unless its first segment is a package of the tree's own.
-//! That import is `Target::Unresolved`, never dropped, so the survey can say
-//! what it could not follow and widen what it lays; one reaching a test
-//! module the keep set aside is `Target::Skipped`, known and followed
-//! nowhere. A load by a computed name is settled to the directory its
-//! literal head or the walked package leads into. Imports are settled once,
-//! after the tree is read, and carried on the module.
+//! Resolves Python module imports and manifest script entries.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -29,22 +12,13 @@ use super::parse::Module;
 #[derive(Debug)]
 pub struct Resolver {
     modules: BTreeSet<String>,
-    // The test modules the keep set aside, which a production module may
-    // still import.
     tests: BTreeSet<String>,
     data: BTreeSet<String>,
-    // Root-relative, `""` for the root itself.
     roots: Vec<String>,
-    // The first segment of every absolute import the tree should answer:
-    // its top-level packages and modules, and the manifest's name.
     owned: BTreeSet<String>,
 }
 
 impl Resolver {
-    // Over the parsed tree's modules, data files, and the test modules the
-    // keep set aside, which an import may still reach. A top-level package
-    // is one whose parent directory is no package. `owned` is the manifest's
-    // name, when it has one.
     pub fn new(parsed: &code::Parsed<Module>, owned: Option<&str>) -> Self {
         let modules: BTreeSet<String> = parsed.modules.keys().cloned().collect();
         let packages: BTreeSet<&str> =
@@ -53,7 +27,6 @@ impl Resolver {
         let mut owned: BTreeSet<String> =
             owned.map(|name| name.replace('-', "_")).into_iter().collect();
 
-        // the roots and the owned names, from the top-level packages
         for package in &packages {
             let (parent, name) = package.rsplit_once('/').unwrap_or(("", package));
             if packages.contains(parent) {
@@ -67,7 +40,6 @@ impl Resolver {
             }
         }
 
-        // the owned names from the top-level modules
         for path in &modules {
             let file = path.strip_prefix("src/").unwrap_or(path);
             if !file.contains('/')
@@ -86,7 +58,6 @@ impl Resolver {
         }
     }
 
-    // A literal import is kept only where the tree answers it.
     pub fn settle(&self, module: &mut Module) {
         let from = module.path.clone();
         for import in &mut module.imports {
@@ -110,8 +81,7 @@ impl Resolver {
         }
     }
 
-    // `name` is what a `from` import takes. An import of a namespace package
-    // binds no module and is `None`.
+    // An import of a namespace package binds no module and returns `None`.
     fn resolve(&self, from: &str, specifier: &str, name: Option<&str>) -> Option<Target> {
         let unresolved = || Some(Target::Unresolved(specifier.to_owned()));
         let dots = specifier.len() - specifier.trim_start_matches('.').len();
@@ -153,15 +123,6 @@ impl Resolver {
         Some(Target::Package(first.to_owned()))
     }
 
-    // What a string spells, probed in order:
-    // - a module at the dotted path whole, then less its last segment where
-    //   that names an attribute (`orders.apps.OrdersConfig`); never where
-    //   the last segment is a data file's extension, which spells a file
-    // - a data file at the path from the module's directory, then from the
-    //   root
-    // - a bare file name joined onto a path the code computes
-    //   (`Path(__file__).parent / "data" / "rates.json"`), as the one data
-    //   file of that name in the tree
     fn literal(&self, from: &str, value: &str) -> Option<Target> {
         if let Some((path, last)) = value.rsplit_once('.')
             && !value.contains('/')
@@ -203,8 +164,6 @@ impl Resolver {
         self.roots.iter().find_map(|root| self.module_at(&join(root, &path), None))
     }
 
-    // A candidate led by `*/` matches any top-level package: `*/__main__.py`
-    // is the first `<package>/__main__.py` beneath a root.
     pub fn first(&self, candidates: &[&str]) -> Option<String> {
         candidates.iter().find_map(|candidate| {
             let Some(rest) = candidate.strip_prefix("*/") else {
@@ -229,7 +188,6 @@ impl Resolver {
         })
     }
 
-    // `name` is probed as a submodule first, as the interpreter probes it.
     fn module_at(&self, base: &str, name: Option<&str>) -> Option<String> {
         if let Some(name) = name
             && let Some(found) = file_or_init(&self.modules, &join(base, name))
@@ -239,7 +197,6 @@ impl Resolver {
         file_or_init(&self.modules, base)
     }
 
-    // `module_at`, over the test modules the keep set aside.
     fn test_at(&self, base: &str, name: Option<&str>) -> Option<String> {
         if let Some(name) = name
             && let Some(found) = file_or_init(&self.tests, &join(base, name))
@@ -249,9 +206,6 @@ impl Resolver {
         file_or_init(&self.tests, base)
     }
 
-    // The directory a computed load leads into: the package the dotted name
-    // it spells is, beneath the first root holding one, else the package
-    // that name is imported as.
     fn scope(&self, imports: &[code::Import], spelled: &str) -> Option<String> {
         let path = spelled.replace('.', "/");
         if let Some(base) =
@@ -263,7 +217,6 @@ impl Resolver {
         target.module()?.strip_suffix("/__init__.py").map(str::to_owned)
     }
 
-    // A namespace package: a directory of modules with no `__init__`.
     fn holds_package(&self, base: &str) -> bool {
         if base.is_empty() {
             return false;
@@ -293,13 +246,10 @@ fn join(dir: &str, path: &str) -> String {
 #[derive(Debug, Default)]
 pub struct Manifest {
     pub name: Option<String>,
-    // By script name, each the `module:function` it runs.
     pub scripts: BTreeMap<String, String>,
 }
 
 impl Manifest {
-    // `pyproject.toml` first, then `setup.cfg` for what it leaves unsaid. An
-    // absent or unreadable manifest is empty.
     pub fn read(root: &Path) -> Self {
         let mut manifest = Self::default();
         if let Ok(text) = std::fs::read_to_string(root.join("pyproject.toml")) {
@@ -337,7 +287,6 @@ impl Manifest {
         manifest
     }
 
-    // What the facts say of the manifest, and the modules its scripts name.
     pub fn summary(&self, resolver: &Resolver) -> code::Manifest {
         let mut says: Vec<String> = Vec::new();
         if let Some(name) = &self.name {
@@ -358,7 +307,6 @@ impl Manifest {
         }
     }
 
-    // In script order, once each, with the function each target names.
     pub fn targets(&self, resolver: &Resolver) -> Vec<(String, Option<String>)> {
         unique(self.scripts.values().filter_map(|target| {
             let module = resolver.entry(target)?;
@@ -368,10 +316,6 @@ impl Manifest {
     }
 }
 
-// A hand reader for the string keys of TOML and INI sections. A quoted
-// string is unquoted, a bare INI value kept as written, and indented
-// continuation lines joined with newlines. Arrays and tables are skipped,
-// so a manifest it misreads is at worst a manifest it does not read.
 fn sections(text: &str) -> BTreeMap<String, BTreeMap<String, String>> {
     let mut sections: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
     let mut current: Option<String> = None;

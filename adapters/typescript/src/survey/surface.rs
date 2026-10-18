@@ -1,22 +1,4 @@
-//! Recognises what TypeScript and JavaScript alone decide of a tree's surfaces.
-//!
-//! A surface is where control enters from outside the process: the
-//! bootstrap the manifest names, a handler handed to something a package
-//! provides, a method under a package's decorator, or, in a library, what
-//! the entry module exports. The SDK's pipeline lays the facts, puts the
-//! survey turn, holds the answer to the tree, and cuts the seams; what it
-//! asks of this adapter is what the language decides — where each import
-//! leads, what the manifest declares, what a test states, which entry runs
-//! when the tree loads, what a call hands, where routers are mounted, and
-//! what the code says at an anchor the survey accepted: the stem a route or
-//! literal spells, the id that tells the surface from the others under its
-//! stem, a class's methods, and the modules the surface reaches.
-//!
-//! The rules read shapes, never a framework's name: a call handed a
-//! function, a decorator with a literal, an export. The one exception
-//! spells names. A decorator among those the data model lists as shaping a
-//! handler (`Decorated::registering`) does not register it, which keeps a
-//! verb decorator beneath one of them the surface.
+//! Recognises TypeScript and JavaScript surfaces and derives their metadata.
 
 use std::collections::BTreeMap;
 
@@ -33,18 +15,12 @@ use super::DIALECT;
 use super::parse::Module;
 use super::resolve::{self, Resolver};
 
-// Looked for in this order when the manifest names no entry.
 const BOOTSTRAPS: &[&str] =
     &["src/index.ts", "src/main.ts", "index.ts", "main.ts", "src/server.ts", "src/app.ts"];
 
 const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options", "all"];
-
-// Methods that mount what they are handed: `use` a router under a path, any
-// of them a loader over a directory. A route registered in a mounted module
-// is read under its mount.
 const MOUNTING: &[&str] = &["use", "register", "mount", "plugin"];
 
-// What the adapter recognises of a tree, over its resolver and manifest.
 #[derive(Debug)]
 pub struct TypeScript {
     resolver: Resolver,
@@ -52,8 +28,6 @@ pub struct TypeScript {
 }
 
 impl TypeScript {
-    // The manifest read and the resolver built over the parsed tree, before
-    // any import is settled.
     pub fn new(parsed: &Parsed<Module>) -> Self {
         Self {
             resolver: Resolver::new(parsed),
@@ -61,7 +35,6 @@ impl TypeScript {
         }
     }
 
-    // Kebab-cased; none for an inline function.
     fn named_handler(&self, tree: &Tree<Self>, module: &Module, call: &Call) -> Option<String> {
         call.args
             .iter()
@@ -70,9 +43,6 @@ impl TypeScript {
             .and_then(|arg| kebab(arg.root.as_ref()?.last()?))
     }
 
-    // The stem its route or literal spells. What tells it apart is the
-    // handler handed by name, else the route's verb and path past the
-    // resource, else the registering method.
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
     ) -> Derived {
@@ -129,12 +99,8 @@ impl Recogniser for TypeScript {
         module.statements()
     }
 
-    // The first entry that runs something, probed in this order:
-    // - the entries the manifest names
-    // - the conventional entries the tree holds
-    // An entry runs by a module-level call whose value is discarded, or an
-    // import for its effect. One that only declares and exports is a
-    // library's: a `main` naming the barrel while `start` runs the server.
+    // An entry that only declares and exports is a library barrel rather than a
+    // bootstrap.
     fn bootstrap<'t>(&self, tree: &'t Tree<Self>) -> Option<Bootstrap<'t, Module>> {
         let conventional =
             BOOTSTRAPS.iter().filter_map(|candidate| self.resolver.first(&[candidate]));
@@ -159,9 +125,6 @@ impl Recogniser for TypeScript {
         })
     }
 
-    // A function, an object or call carrying one, or a name bound to a
-    // function in the tree: declared here, imported from a module of the
-    // tree, or a member of a namespace import (`handlers.list`).
     fn handler(&self, tree: &Tree<Self>, module: &Module, arg: &Arg, frames: &[u32]) -> bool {
         if arg.function {
             return true;
@@ -207,15 +170,6 @@ impl Recogniser for TypeScript {
         }
     }
 
-    // The route prefix each module's routes sit under:
-    // - `app.use("/api", ordersRouter(..))` gives `routes/orders.ts` `/api`
-    // - a loader registered over a directory of the tree
-    //   (`app.register(autoload, { dir: join(__dirname, "routes") })`) gives
-    //   each module beneath it the path of its directory from there, under
-    //   the loader's `prefix` option where it names one, so
-    //   `routes/api/auth/index.ts` is `/api/auth` and `routes/home.ts` sits
-    //   at the root
-    // The first mount read of a module stands.
     fn mounts(&self, tree: &Tree<Self>) -> BTreeMap<String, String> {
         let mut mounts = BTreeMap::new();
         for module in tree.modules.values() {
@@ -260,8 +214,6 @@ impl Recogniser for TypeScript {
         mounts
     }
 
-    // The registration, decorated class, decorated method, or export at
-    // `lines` is read, the first of those found.
     fn derive(
         &self, tree: &Tree<Self>, module: &Module, lines: Lines, name: &str, stem: &str,
     ) -> Derived {
@@ -286,15 +238,11 @@ impl Recogniser for TypeScript {
     }
 }
 
-// Under the module's `mount`. A verb's literal is a path only when it leads
-// with a slash.
 fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {
     let path = literal.filter(|literal| literal.starts_with('/'))?;
     VERBS.contains(&method).then(|| route::join(mount, path))
 }
 
-// The stem its registering decorator's prefix spells, its name, and its
-// decorated methods.
 fn at_decorated_class(tree: &Tree<TypeScript>, module: &Module, class: &Decorated) -> Derived {
     let name = class.class.as_deref().unwrap_or_default();
     let route = route::join(class.literal.as_deref().unwrap_or(""), "");
@@ -318,8 +266,6 @@ fn at_decorated_class(tree: &Tree<TypeScript>, module: &Module, class: &Decorate
     }
 }
 
-// The stem its route or literal spells under the class's prefix, and the
-// method's name.
 fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Decorated) -> Derived {
     let class = decorated.class.as_deref().unwrap_or_default();
     let member = decorated.member.as_deref().unwrap_or_default();
@@ -335,8 +281,6 @@ fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Dec
     }
 }
 
-// The export's name joined with the segments a file-routed module's path
-// spells past its stem, and a class's public methods.
 fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &str) -> Derived {
     let local = export.local.as_deref().unwrap_or(&export.name);
     let display = if export.name == "default" { module_stem(module) } else { export.name.clone() };
@@ -367,13 +311,11 @@ fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &s
     }
 }
 
-// As the code spells it, for a note: `Controller("orders")`.
 fn spelled(decorated: &Decorated) -> String {
     let argument = decorated.literal.as_ref().map(|l| format!("(\"{l}\")")).unwrap_or_default();
     format!("{}{argument}", decorated.name.join("."))
 }
 
-// The package a decorator comes from, as a note; none for the tree's own.
 fn through(module: &Module, decorated: &Decorated) -> Option<String> {
     let package = module.package(decorated.name.first()?)?;
     Some(format!("through `{package}`"))
@@ -388,8 +330,6 @@ fn noted(methods: &[(String, Lines)]) -> Option<String> {
     Some(format!("methods {}", listed.join(", ")))
 }
 
-// The class decorator that registers the class and carries its prefix
-// (`@Controller("orders")`), never one that documents it (`@ApiTags("Users")`).
 fn class_prefix<'m>(module: &'m Module, class: Option<&str>) -> Option<&'m Decorated> {
     module
         .decorated
@@ -398,8 +338,6 @@ fn class_prefix<'m>(module: &'m Module, class: Option<&str>) -> Option<&'m Decor
         .find(|d| d.registering(&DIALECT))
 }
 
-// A verb decorator's path under the class's prefix, by the route rule;
-// another's literal, by its first word; none where it spells neither.
 fn decorated_stem(module: &Module, decorated: &Decorated) -> Option<String> {
     let verb = decorated.name.last()?.to_ascii_lowercase();
     if VERBS.contains(&verb.as_str()) {
@@ -412,8 +350,6 @@ fn decorated_stem(module: &Module, decorated: &Decorated) -> Option<String> {
     }
 }
 
-// The registering decorator of a class whose declaration starts within
-// `lines`: an anchor at the class, or the module alone.
 fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
     module
         .decorated
@@ -434,7 +370,6 @@ fn registering_methods(module: &Module) -> impl Iterator<Item = &Decorated> {
     module.decorated.iter().filter(|d| d.member.is_some() && d.registering(&DIALECT))
 }
 
-// A function or class before a value.
 fn export_at(module: &Module, lines: Lines) -> Option<&Export> {
     let starts = |export: &&Export| lines.holds(module.declared_at(export).start);
     let exports = || module.exports.iter();
@@ -452,9 +387,6 @@ fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
         .find(|export| module.declared_at(export).holds(lines.start))
 }
 
-// The directory segments past the one that spells `stem`, a parameter by its
-// bare name, a group by nothing: `app/api/orders/[id]/route.ts` under
-// `orders` spells `id`. None when no segment spells the stem.
 fn file_routed(path: &str, stem: &str) -> Vec<String> {
     let dirs: Vec<&str> = path
         .rsplit_once('/')
@@ -473,7 +405,6 @@ fn file_routed(path: &str, stem: &str) -> Vec<String> {
         .collect()
 }
 
-// The public methods and getters of the class `name`, each with its lines.
 fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
     module
         .class(name)

@@ -1,5 +1,4 @@
-//! Walks one module's syntax tree into its `Module`: the one file that names
-//! a parser type.
+//! Walks one module's syntax tree into its `Module`.
 
 use std::borrow::Cow;
 
@@ -30,21 +29,11 @@ use oxc_span::{GetSpan, SourceType, Span};
 use super::Module;
 use crate::survey::DIALECT;
 
-// A binding's initializer is kept as its head: its first line, cut to this
-// many characters — a literal, a default, a small expression a criterion
-// could quote. A decision's text is cut the same way.
 const INIT_TEXT: usize = 160;
-
-// The calls that defer or repeat what they are handed: a decision about
-// when the code runs.
 const TIMERS: &[&str] =
     &["setTimeout", "setInterval", "setImmediate", "schedule", "scheduleJob", "cron", "every"];
-
-// The calls that return their literal argument as a value, so `Number(3000)`
-// spells a value as `3000` does.
 const WRAPPERS: &[&str] = &["Number", "String", "Boolean", "BigInt", "parseInt", "parseFloat"];
 
-// Exports unsettled and `text` unset; `Module::parse` finishes both.
 pub fn read(path: &str, text: &str) -> Module {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(path).unwrap_or_else(|_| SourceType::ts());
@@ -84,25 +73,14 @@ struct Walker<'s> {
     frames: Vec<Frame>,
     classes: Vec<String>,
     next_frame: u32,
-    // How many argument lists enclose the node being walked, within the
-    // current function body.
     arg_nesting: usize,
-    // For each call being walked, whether a function among its arguments is
-    // a handler, so its body runs one depth in.
     positions: Vec<bool>,
-    // The call an expression statement discards the value of.
     discarded: Option<Span>,
-    // The call an `await` waits on.
     awaited: Option<Span>,
-    // The call whose value a declaration binds to a name.
     bound: Option<Span>,
-    // The calls a further, non-structural call in their chain is made on.
     chained: Vec<Span>,
-    // The name the next function frame takes: a variable's, a method's.
     pending_name: Option<String>,
     constructor: bool,
-    // The keyword of the declaration whose declarators are being walked,
-    // which a table's text leads with.
     keyword: Option<&'static str>,
 }
 
@@ -131,12 +109,10 @@ impl<'s> Walker<'s> {
         self.text.get(start as usize..end as usize).unwrap_or("")
     }
 
-    // The first line of `span`, cut as an initializer's head is.
     fn excerpt(&self, span: Span) -> String {
         first_line(self.slice(span.start, span.end))
     }
 
-    // `Init::Other` and no head for no initializer.
     fn initializer(&self, value: Option<&Expression<'_>>) -> (Init, Option<String>) {
         value.map_or((Init::Other, None), |value| {
             (classify(value), Some(self.excerpt(value.span())))
@@ -422,8 +398,6 @@ impl<'s> Walker<'s> {
         });
     }
 
-    // A load by a computed name, with the directory its literal lead spells
-    // where it spells one.
     fn dynamic(&mut self, source: Option<&Expression<'_>>, span: Span) {
         let lines = self.lines(span);
         self.module.dynamic.push(Dynamic {
@@ -867,8 +841,6 @@ fn hidden(accessibility: Option<TSAccessibility>, key: &str) -> bool {
         || key.starts_with('#')
 }
 
-// The class a class extends, by the last name of what it is written over:
-// one base at most.
 fn bases(class: &Class<'_>) -> Vec<String> {
     class
         .heritage
@@ -878,8 +850,6 @@ fn bases(class: &Class<'_>) -> Vec<String> {
         .collect()
 }
 
-// The string a called argument's own arguments lead with, or an array's
-// first element: `routes` for `loadRoutes("routes")`.
 fn inner(expr: &Expression<'_>) -> Option<String> {
     let leading = |arguments: &[Argument<'_>]| {
         arguments.first().and_then(|a| a.as_expression()).and_then(string_value)
@@ -894,13 +864,10 @@ fn inner(expr: &Expression<'_>) -> Option<String> {
     }
 }
 
-// The path a type annotation names, `Kafka.Consumer` for `: Kafka.Consumer`.
 fn typed(annotation: Option<&TSTypeAnnotation<'_>>) -> Option<Vec<String>> {
     type_path(&annotation?.type_annotation)
 }
 
-// The expression under the wrappers that change nothing about what it is:
-// parentheses and TypeScript's casts, within a chain too.
 fn bare<'a, 'b>(expr: &'b Expression<'a>) -> &'b Expression<'a> {
     match expr {
         Expression::ParenthesizedExpression(e) => bare(&e.expression),
@@ -917,8 +884,6 @@ fn bare<'a, 'b>(expr: &'b Expression<'a>) -> &'b Expression<'a> {
     }
 }
 
-// What is called under the wrappers that change nothing about it: the bare
-// expression, `await`, `void`, and `!`.
 enum Core<'a, 'b> {
     Call(&'b CallExpression<'a>),
     New(&'b NewExpression<'a>),
@@ -944,7 +909,6 @@ fn core<'a, 'b>(expr: &'b Expression<'a>) -> Core<'a, 'b> {
     }
 }
 
-// A function, under the wrappers `core` sees through.
 fn is_function(expr: &Expression<'_>) -> bool {
     matches!(
         core(expr),
@@ -952,9 +916,6 @@ fn is_function(expr: &Expression<'_>) -> bool {
     )
 }
 
-// What an initializer is: a function first, whatever it reads; then an
-// environment read, whatever it does with it; then a pattern, a value over
-// literals, a call or construction by what it is handed, a reference.
 fn classify(expr: &Expression<'_>) -> Init {
     if is_function(expr) {
         return Init::Function;
@@ -975,16 +936,12 @@ fn classify(expr: &Expression<'_>) -> Init {
     }
 }
 
-// A call or construction is a definition when it is handed something spelled
-// in place and no function, a construction otherwise.
 fn invoked(arguments: &[Argument<'_>]) -> Init {
     let mut exprs = arguments.iter().filter_map(Argument::as_expression);
     let spelled = exprs.clone().any(spelled);
     if spelled && !exprs.any(fn_valued) { Init::Definition } else { Init::Construction }
 }
 
-// A literal, or an expression over literals: arithmetic, an array or object
-// holding literals, a template, a wrapper call such as `Number(..)`.
 fn literal(expr: &Expression<'_>) -> bool {
     match bare(expr) {
         Expression::BooleanLiteral(_)
@@ -1025,10 +982,6 @@ fn literal(expr: &Expression<'_>) -> bool {
     }
 }
 
-// An object or array written out as settings are: at least one property or
-// element a literal, every other one a name, a member path, an inline
-// function, or settings again — never a call, a construction, or a spread,
-// which make it a construction or a derivation.
 fn settings(expr: &Expression<'_>) -> bool {
     fn plain(expr: &Expression<'_>) -> bool {
         match bare(expr) {
@@ -1065,9 +1018,6 @@ fn settings(expr: &Expression<'_>) -> bool {
     any && all
 }
 
-// An object or array written out as data: every property or element a
-// literal, a name, a member path, or data again — never a call, a function,
-// or a spread, which make it wiring or a derivation.
 fn table(expr: &Expression<'_>) -> bool {
     fn datum(expr: &Expression<'_>) -> bool {
         match bare(expr) {
@@ -1089,8 +1039,6 @@ fn table(expr: &Expression<'_>) -> bool {
     }
 }
 
-// An object or array with no entry, which a module fills as it runs: a
-// registry or a cache, not data a build could read.
 fn empty(expr: &Expression<'_>) -> bool {
     match bare(expr) {
         Expression::ObjectExpression(object) => object.properties.is_empty(),
@@ -1099,7 +1047,6 @@ fn empty(expr: &Expression<'_>) -> bool {
     }
 }
 
-// A wrapper call over literals: `Number(3000)`, `parseInt("10", 10)`.
 fn wraps(call: &CallExpression<'_>) -> bool {
     matches!(&call.callee, Expression::Identifier(id) if WRAPPERS.contains(&id.name.as_str()))
         && !call.arguments.is_empty()
@@ -1110,8 +1057,6 @@ fn all_literal(arguments: &[Argument<'_>]) -> bool {
     arguments.iter().all(|argument| argument.as_expression().is_some_and(literal))
 }
 
-// An argument spelled in place — a literal, or an object, array, or template
-// written out whatever it holds — rather than passed by name.
 fn spelled(expr: &Expression<'_>) -> bool {
     match bare(expr) {
         Expression::ArrayExpression(_)
@@ -1129,7 +1074,6 @@ fn is_regexp(callee: &Expression<'_>) -> bool {
     matches!(callee, Expression::Identifier(id) if id.name.as_str() == "RegExp")
 }
 
-// Whether an expression reads `process.env` anywhere within it.
 fn reads_env(expr: &Expression<'_>) -> bool {
     struct Finder(bool);
 
@@ -1150,8 +1094,6 @@ fn reads_env(expr: &Expression<'_>) -> bool {
     finder.0
 }
 
-// An initializer's first line, cut to `INIT_TEXT` characters, `…` marking
-// what is cut or continues below.
 fn first_line(text: &str) -> String {
     let (first, more) = text.split_once('\n').map_or((text, false), |(first, _)| (first, true));
     let first = first.trim_end();
@@ -1162,8 +1104,6 @@ fn first_line(text: &str) -> String {
     }
 }
 
-// The call a chain continues from, when a callee is a member of one's
-// value: for `a.b().c()`, the span of `a.b()`.
 fn inner_call(callee_expr: &Expression<'_>) -> Option<Span> {
     let object = match bare(callee_expr) {
         Expression::StaticMemberExpression(member) => &member.object,
@@ -1180,8 +1120,6 @@ fn inner_call(callee_expr: &Expression<'_>) -> Option<Span> {
     }
 }
 
-// The callee of a call as a head and the members walked from it, each
-// marked when it is itself called along the way.
 fn callee(expr: &Expression<'_>) -> Option<Callee> {
     match bare(expr) {
         Expression::Identifier(id) => Some(Callee {
@@ -1225,7 +1163,6 @@ fn called(mut callee: Callee, arguments: &[Argument<'_>]) -> Callee {
     callee
 }
 
-// The identifier path an expression starts from, casts and calls stripped.
 fn head_path(expr: &Expression<'_>) -> Option<Vec<String>> {
     callee(expr).map(Callee::path)
 }
@@ -1240,8 +1177,6 @@ fn string_value(expr: &Expression<'_>) -> Option<String> {
     }
 }
 
-// The `path` a call's object-form first argument names where a literal
-// would stand: `Controller({ path: "users", version: "1" })` is `users`.
 fn object_path(expr: &Expression<'_>) -> Option<String> {
     let Expression::CallExpression(call) = bare(expr) else { return None };
     let Expression::ObjectExpression(object) = bare(call.arguments.first()?.as_expression()?)
@@ -1256,10 +1191,6 @@ fn object_path(expr: &Expression<'_>) -> Option<String> {
     })
 }
 
-// The string-valued properties of an object written in place, each by its
-// dotted key path, nested objects flattened: `{ dir: join(__dirname,
-// "routes"), options: { prefix: "/api" } }` is `dir` and `options.prefix`.
-// Nothing for anything but an object.
 fn properties(expr: &Expression<'_>) -> Vec<Property> {
     fn collect(object: &ObjectExpression<'_>, prefix: &str, out: &mut Vec<Property>) {
         for property in &object.properties {
@@ -1292,9 +1223,6 @@ fn properties(expr: &Expression<'_>) -> Vec<Property> {
     out
 }
 
-// A path spelled from the module's own directory, as the segments past it:
-// `join(__dirname, "a", "b")` or `path.resolve(import.meta.dirname, "a")`
-// over string literals, `${__dirname}/a`, or `__dirname + "/a"`.
 fn module_relative(expr: &Expression<'_>) -> Option<String> {
     match bare(expr) {
         Expression::CallExpression(call) => {
@@ -1323,9 +1251,6 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
     }
 }
 
-// The relative directory a computed specifier leads with: `` `./plugins/${name}` ``
-// spells `./plugins`, `"./plugins/" + name` the same. None where the lead
-// spells no directory of the tree.
 fn literal_head(expr: &Expression<'_>) -> Option<String> {
     let lead = match bare(expr) {
         Expression::TemplateLiteral(template) => {
@@ -1343,7 +1268,6 @@ fn literal_head(expr: &Expression<'_>) -> Option<String> {
     Some(dir.to_owned())
 }
 
-// `__dirname`, or `import.meta.dirname`: the directory of the module itself.
 fn is_module_dir(expr: &Expression<'_>) -> bool {
     match bare(expr) {
         Expression::Identifier(id) => id.name == "__dirname",
@@ -1355,9 +1279,6 @@ fn is_module_dir(expr: &Expression<'_>) -> bool {
     }
 }
 
-// A function, an object with a function-valued property or a method, or a
-// call — not a structural one, so `items.map(fn)` is a value — passing one
-// of those.
 fn fn_valued(expr: &Expression<'_>) -> bool {
     match bare(expr) {
         Expression::FunctionExpression(_) | Expression::ArrowFunctionExpression(_) => true,

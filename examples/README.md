@@ -61,7 +61,7 @@ git -C .emery/vcs/repos/omnia checkout emery/<revision>
 
 The adapter builds into `.emery/vcs/repos/omnia` and labels the result `emery/<revision>`. It leaves this checkout unchanged and pushes nothing. Clone the branch, or push it from that repository.
 
-A `[target] repository` builds from a remote repository's default branch instead. The omnia adapter requires a fresh base and returns `base-not-fresh` when its root contains a directory.
+A `[target] repository` URL builds into a clone of that repository from its default branch instead, and `repository = "."` into this checkout's own repository from its sealed head. The init lays only the files of the layout the tree lacks, so a held project's files stand; a repository that is not an omnia guest is better left for the laid one.
 
 Build and verify run `cargo` with access to crates.io, `~/.rustup`, and `~/.cargo/bin`. If a turn exceeds `CURSOR_TIMEOUT_SECS`, use smaller slices or raise the limit for that run.
 

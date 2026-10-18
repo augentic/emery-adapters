@@ -121,7 +121,7 @@ A test drives an HTTP application through a server listening on port `0` and `fe
 
 ## The manifests
 
-The three root manifests are written byte for byte as below by any slice that finds them missing, so two slices laying them at once lay the same file, and no slice edits one after: the root `package.json` names the toolchain and no package of the program's, and nothing is ever added to it, not a dependency and not a script. Its `workspaces` makes each module's directory, and each part's, a package of its own, so the packages a directory's files import are named in that directory's own `package.json`, a file only its slice writes. `npm install` at the root installs every such manifest's packages into the root `node_modules`, where every file of the tree resolves them, and two slices never write one manifest.
+The three root manifests are laid byte for byte as below when the repository is initialised, before any slice builds, so every slice finds them in the tree and no slice writes or edits one: the root `package.json` names the toolchain and no package of the program's, and nothing is ever added to it, not a dependency and not a script. Its `workspaces` makes each module's directory, and each part's, a package of its own, so the packages a directory's files import are named in that directory's own `package.json`, a file only its slice writes. `npm install` at the root installs every such manifest's packages into the root `node_modules`, where every file of the tree resolves them, and two slices never write one manifest.
 
 `package.json`:
 
@@ -197,6 +197,6 @@ The engine merges each slice's commit into the integrated tree under these rules
 | --- | --- | --- |
 | `package-lock.json` | the integrated side kept | the next `npm install` regenerates it |
 | `src/index.ts`, every `index.ts` | both sides' lines kept | each is a list of independent lines |
-| everything else | a conflict | the slice is rebuilt over the merged tree |
+| everything else | the model combines both sides | the slice re-merges with the result |
 
-A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own directories never conflict. The root `package.json` is everything else on purpose: it is static, every slice that lays it lays the same bytes, and a directory's packages are in a manifest of its own, so no manifest is ever written by two slices. A slice that writes under another's directory, or into `src/start/` to be reached, is the one conflict the layout leaves possible, and it is the slice's to avoid.
+A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own directories never conflict. The root `package.json` is everything else on purpose: it is static, laid once when the repository was initialised and written by no slice, and a directory's packages are in a manifest of its own, so no manifest is ever written by two slices. A slice that writes under another's directory, or into `src/start/` to be reached, is the one conflict the layout leaves possible: a file both slices wrote is handed to a model turn to combine, and one it cannot combine ends the run, so it is the slice's to avoid.

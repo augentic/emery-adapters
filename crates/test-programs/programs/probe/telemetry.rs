@@ -1,5 +1,4 @@
-//! A `source-adapter` probe that opens one span of its own before answering,
-//! so the suite can see it exported beside the SDK's boundary span.
+//! Probe adapter that emits a tracing span during extraction.
 
 #![cfg(target_arch = "wasm32")]
 

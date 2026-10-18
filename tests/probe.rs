@@ -1,6 +1,4 @@
-//! Drives the fixture adapters under the omnia runtime for the `source-adapter`
-//! boundary itself: the lift and lower, the refusal classes, the claim gate,
-//! the fan-out, and the telemetry a guest exports.
+//! Exercises `source-adapter` boundary behaviour using fixture probe components.
 
 #![cfg(not(target_arch = "wasm32"))]
 

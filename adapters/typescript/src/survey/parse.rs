@@ -1,12 +1,4 @@
-//! Reads one module into the facts the survey decides from.
-//!
-//! A `Module` is the SDK's [`code::Module`], filled by the parser confined
-//! to `walk`, so the rules in `surface` never name a syntax-tree type and a
-//! parser swap touches one file. A module the parser cannot read is still a
-//! `Module`, read as far as the parser got with `parsed` false, so one
-//! broken file never fails a run. Where each import leads is settled once
-//! the tree is read (`Resolver::settle`) and carried on the import. A test
-//! module is read the same way, for the cases it states.
+//! Parses one TypeScript or JavaScript module into the SDK's code model.
 
 use std::collections::BTreeSet;
 use std::ops::{Deref, DerefMut};
@@ -17,13 +9,8 @@ use emery_sdk::survey::tests::Statement;
 
 mod walk;
 
-// The calls a test framework groups cases under, and the ones that state a
-// case; `context` and `specify` are mocha's spellings.
 const SUITES: &[&str] = &["describe", "context", "suite"];
 const CASES: &[&str] = &["it", "test", "specify"];
-
-// The modifiers a suite or case still runs under; `skip`, `todo`, and
-// `each` state nothing the run holds.
 const RUNS: &[&str] = &["only", "concurrent", "sequential"];
 
 #[derive(Debug, Default)]
@@ -46,7 +33,6 @@ impl DerefMut for Module {
 }
 
 impl Module {
-    // `path` is root-relative. Imports are the resolver's to settle.
     pub fn parse(path: &str, text: String) -> Self {
         let mut module = walk::read(path, &text);
         module.settle_exports();
@@ -58,9 +44,6 @@ impl Module {
         module
     }
 
-    // Each case led by a string, under the suites whose bodies enclose it,
-    // outermost first. A skipped, pending, or parameterised one states
-    // nothing the run holds.
     pub fn statements(&self) -> Vec<Statement> {
         let runs = |call: &Call| {
             call.callee.head_call.is_none()
@@ -100,8 +83,6 @@ impl Module {
             .collect()
     }
 
-    // An `export { local as name }` list names a binding declared elsewhere
-    // in the module; its kind is that binding's.
     fn settle_exports(&mut self) {
         let code::Module {
             exports,
@@ -126,7 +107,6 @@ impl Module {
             }
         }
 
-        // mark the declared types and classes exported
         let exported: BTreeSet<&str> =
             exports.iter().map(|export| export.local.as_deref().unwrap_or(&export.name)).collect();
         for decl in types {

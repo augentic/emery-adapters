@@ -72,11 +72,47 @@ impl From<anyhow::Error> for HttpError   // 500, or the omnia_sdk::Error it wrap
 impl IntoResponse for HttpError
 ```
 
-The router is axum's over the client state: `axum::Router<Client<P>>`, built with `Router::new()`, `.route(path, method_router)`, and finished once by `.with_state(Client::new(owner, provider))`, which the root's route list does; a module builds no router of its own. The crate re-exports `axum`, `http`, `bytes`, `http_body`, `anyhow`, and `tracing` at its root, so a module names them as `omnia_sdk::axum::..` or through its own stem's manifest.
+The router is axum's over the client state: `axum::Router<Client<P>>`, built with `Router::new()` and `.route(path, method_router)` in a part's `routes()`, folded onto the stem's by `common::routers`, merged onto the root's by `Router::merge`, and finished once by `.with_state(Client::new(owner, provider))`, which the root's route list does. The crate re-exports `axum`, `http`, `bytes`, `http_body`, `anyhow`, and `tracing` at its root, so a module names them as `omnia_sdk::axum::..` or through its own stem's manifest.
+
+```rust
+// axum::Router<S>
+pub fn new() -> Self
+pub fn route(self, path: &str, method_router: MethodRouter<S>) -> Self
+    // panics where the path is already routed under a method of `method_router`
+pub fn merge<R>(self, other: R) -> Self where R: Into<Router<S>>
+    // panics where the two routers serve one path under one method
+pub fn with_state<S2>(self, state: S) -> Router<S2>
+
+// tower::ServiceExt, for a test over the finished router
+fn oneshot(self, req: Request) -> Oneshot<Self, Request>   // one request, answered as a `Response`
+// axum::body
+pub async fn to_bytes<T>(body: T, limit: usize) -> Result<Bytes, T::Error>
+```
+
+## The composition — `common`
+
+The two folds a stem's entry composes its parts with, as the template's `common` declares them:
+
+```rust
+pub fn routers<P, const N: usize>(parts: [Router<Client<P>>; N]) -> Router<Client<P>>
+where
+    P: Send + Sync + 'static,
+    // the parts' routers merged onto one, in order; none merges to `Router::new()`
+
+pub type Topics<P> = fn(messaging::Router<P>, &str) -> messaging::Router<P>;
+
+pub const fn topics<P: Send + Sync + 'static>(router: messaging::Router<P>, env: &str) -> Registering<'_, P>
+impl<P: Send + Sync + 'static> Registering<'_, P> {
+    pub fn parts<const N: usize>(self, parts: [Topics<P>; N]) -> messaging::Router<P>
+    // each part's `topics` called in order over the router and the environment; none answers the router as it came
+}
+```
+
+A part's `routes` is `fn() -> axum::Router<Client<P>>` and its `topics` is a `Topics<P>`, so the entry names the first called, `placing::routes(),`, and the second bare, `placing::topics,`.
 
 ## Messaging — `omnia_sdk::api::messaging`
 
-An exact-topic router over the same handlers, which the root's topic list builds and the guest's messaging export dispatches each delivery through:
+An exact-topic router over the same handlers, which the root's topic list builds, each stem's `topics(..)` registers its parts' topics on, and the guest's messaging export dispatches each delivery through:
 
 ```rust
 pub struct Router<P: Send + Sync + 'static> { .. }
@@ -113,8 +149,8 @@ pub enum DeliveryError {
 impl std::error::Error for DeliveryError
 ```
 
-- The handler of a topic is a `Handler<P, I>` as a route's is: `pub async fn on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()>`, its output dropped once it answers `Ok`. A failure is `DeliveryError::Rejected` with the error displayed, which the host reads as a failed delivery.
-- `handle` matches the delivery's topic exactly, so the list registers each topic under its qualified name, `config::topic_for(&env, <suffix>)`, and a delivery from another environment is `UnhandledTopic`.
+- The handler of a topic is a `Handler<P, I>` as a route's is: `pub(crate) async fn on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()>`, its output dropped once it answers `Ok`. A failure is `DeliveryError::Rejected` with the error displayed, which the host reads as a failed delivery and a test matches on.
+- `handle` matches the delivery's topic exactly, so a part's `topics(..)` registers each topic under its qualified name, `config::topic_for(env, <suffix>)`, and a delivery from another environment is `UnhandledTopic`.
 - The delivery's `metadata` fills the handler's `Metadata`: `request-id`, `correlation-id`, and `causation-id`, matched case-insensitively, a request id minted where none arrived.
 - `omnia_sdk::api::messaging::handle(&router, message)` is the `wasm32` adapter from the WIT message to a `Delivery`, which the guest's export calls and nothing else does.
 
@@ -169,7 +205,7 @@ impl<P: Send + Sync + 'static> Client<P> {
 impl<P: Send + Sync + 'static> Clone for Client<P>
 ```
 
-`Client::new(owner, provider).call(handler, input, &Metadata::default()).await` is how a test calls a handler with no router: the call builds the handler's `Context` over the client's provider and runs it under a `handler` span, as the two routers do.
+`Client::call` is how the two routers run a handler: the call builds the handler's `Context` over the client's provider and runs it under a `handler` span. A test reaches a handler through the stem's `router()` or `topics(..)` over `Client::new("test", provider)`, since the handler is `pub(crate)`, as [testing](testing.md) spells it.
 
 ## Errors — `omnia_sdk`
 
@@ -200,7 +236,7 @@ A provider call answers `anyhow::Result<T>`; `?` on it inside an `omnia_sdk::Res
 
 ## The capabilities — `omnia_sdk`
 
-Every trait is re-exported at the crate root, every method answers `anyhow::Result` through `impl Future<Output = ..> + Send`, and the production provider implements each over WASI on `wasm32` with an empty `impl`. The nine the layout's `Capabilities` bound names:
+Every trait is re-exported at the crate root, every method answers `anyhow::Result` through `impl Future<Output = ..> + Send`, and the production provider implements each over WASI on `wasm32` with an empty `impl`. The nine `common::Capabilities` names:
 
 ```rust
 pub trait Config: Send + Sync {

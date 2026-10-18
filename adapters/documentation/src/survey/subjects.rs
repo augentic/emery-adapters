@@ -1,5 +1,4 @@
-//! The subject survey: what code reads of the tree before the one turn, and
-//! the seams it cuts from the subjects the model names.
+//! Reads a documentation workspace and cuts its surveyed subjects into seams.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -11,18 +10,12 @@ use emery_sdk::{Error, INLINE_BYTES, Seam, SourceContent, SourceInput, serde_jso
 use super::model::Subject;
 use super::structure::Outline;
 
-// What an input is to the survey.
 pub enum Preparation<'i> {
-    // an inline value, mined whole and never surveyed
     Value,
-    // a workspace, its documents read
     Workspace(Prepared<'i>),
 }
 
 impl<'i> Preparation<'i> {
-    // Reads the workspace: every file the directory cut would list that reads as
-    // text is a document, with its outline. A file that does not — an image
-    // beside the documents — is no document and no module.
     pub fn read(input: &'i SourceInput) -> Result<Self, Error> {
         let SourceContent::Workspace(root) = &input.content else {
             return Ok(Self::Value);
@@ -44,15 +37,12 @@ impl<'i> Preparation<'i> {
     }
 }
 
-// A workspace read for the survey: the source name, the workspace root, and
-// every document of the tree in path order.
 pub struct Prepared<'i> {
     pub source: &'i str,
     pub root: &'i str,
     pub documents: Vec<Document>,
 }
 
-// One document: its root-relative path, its text, and its structure.
 pub struct Document {
     pub path: String,
     pub text: String,
@@ -68,9 +58,6 @@ impl Prepared<'_> {
         self.documents.iter().find(|doc| doc.path == path)
     }
 
-    // Cuts the seams from the subjects the model named: one seam over every
-    // subject's document within the inline budget, one per stem past it, and
-    // the directory cut — told no subject was found — when it named none.
     pub fn seams(&self, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
         let source = self.source();
         let subjects = self.subjects(inventory);
@@ -94,8 +81,6 @@ impl Prepared<'_> {
                 .collect());
         }
 
-        // the tree's size decides the cut, as the SDK's code survey sums every
-        // module: one call within the inline budget, one per stem past it
         let size: usize = self.documents.iter().map(|doc| doc.text.len()).sum();
         let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
         let stems: Vec<&str> = {
@@ -130,8 +115,6 @@ const UNSURVEYED: &str = "No subject was found in this tree: the survey named no
                           rule where it is stated, under the domain noun the documents spell for \
                           what it governs — and lead every id with that noun.";
 
-// What every seam of a surveyed tree is told: the tree, every stem the
-// subjects carry, and the documents the survey placed under no subject.
 struct Cut<'a> {
     prepared: &'a Prepared<'a>,
     stems: &'a [&'a str],
@@ -139,9 +122,6 @@ struct Cut<'a> {
 }
 
 impl Cut<'_> {
-    // One seam: over the documents the subjects anchor in, in path order,
-    // held to `stem` or to every stem, led by the subjects and the rules
-    // of the turn.
     fn seam(&self, subjects: &[&Subject], stem: Option<&str>) -> Seam {
         let files: Vec<String> = self
             .prepared
@@ -162,9 +142,6 @@ impl Cut<'_> {
         }
     }
 
-    // The brief: the subjects and their spans, the documents under no
-    // subject, the other stems where the seam is one of several, and the
-    // anchor rule.
     fn text(&self, subjects: &[&Subject], files: &[String], stem: Option<&str>) -> String {
         let source = self.prepared.source();
         let plural = |n: usize, one: &'static str, many: &'static str| {
@@ -251,8 +228,7 @@ impl Cut<'_> {
     }
 }
 
-// The `surveyed` trace line the eval reads, in the shape the SDK logs
-// for a parsed tree: each subject's name, entry, stem, span, and lead.
+// Matches the `surveyed` trace event shape that `evals` reads.
 fn trace_subjects(source: &str, subjects: &[Subject]) {
     if !tracing::enabled!(tracing::Level::TRACE) {
         return;
