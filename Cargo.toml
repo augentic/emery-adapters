@@ -23,8 +23,7 @@ emery-python = { path = "adapters/python" }
 emery-typescript = { path = "adapters/typescript" }
 emery-node = { path = "adapters/node" }
 emery-omnia = { path = "adapters/omnia" }
-omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
-# omnia-template = { path = "../omnia-exemplar/templates/guest" }
+omnia-template.workspace = true
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -91,6 +90,8 @@ omnia-wasi-otel = "0.37.0"
 
 emery-prose = "0.38.0"
 emery-sdk = "0.38.0"
+omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
+# omnia-template = { path = "../omnia-exemplar/templates/guest" }
 test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]
