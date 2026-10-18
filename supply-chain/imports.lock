@@ -568,6 +568,11 @@ version = "0.259.0"
 when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
+[[publisher.wasm-metadata]]
+version = "0.262.0"
+when = "2026-10-13"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wasmparser]]
 version = "0.253.0"
 when = "2026-07-07"
@@ -915,9 +920,19 @@ version = "0.62.0"
 when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
+[[publisher.wit-bindgen]]
+version = "0.63.0"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+
 [[publisher.wit-bindgen-core]]
 version = "0.62.0"
 when = "2026-09-10"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+
+[[publisher.wit-bindgen-core]]
+version = "0.63.0"
+when = "2026-10-14"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-bindgen-rust]]
@@ -925,9 +940,19 @@ version = "0.62.0"
 when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
+[[publisher.wit-bindgen-rust]]
+version = "0.63.0"
+when = "2026-10-14"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+
 [[publisher.wit-bindgen-rust-macro]]
 version = "0.62.0"
 when = "2026-09-10"
+trusted-publisher = "github:bytecodealliance/wit-bindgen"
+
+[[publisher.wit-bindgen-rust-macro]]
+version = "0.63.0"
+when = "2026-10-14"
 trusted-publisher = "github:bytecodealliance/wit-bindgen"
 
 [[publisher.wit-component]]
@@ -950,6 +975,11 @@ version = "0.259.0"
 when = "2026-09-10"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
+[[publisher.wit-component]]
+version = "0.262.0"
+when = "2026-10-13"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
 [[publisher.wit-parser]]
 version = "0.253.0"
 when = "2026-07-07"
@@ -968,6 +998,11 @@ trusted-publisher = "github:bytecodealliance/wasm-tools"
 [[publisher.wit-parser]]
 version = "0.259.0"
 when = "2026-09-10"
+trusted-publisher = "github:bytecodealliance/wasm-tools"
+
+[[publisher.wit-parser]]
+version = "0.262.0"
+when = "2026-10-13"
 trusted-publisher = "github:bytecodealliance/wasm-tools"
 
 [audits.augentic.audits]

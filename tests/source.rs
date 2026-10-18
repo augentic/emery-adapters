@@ -1,10 +1,4 @@
-//! Verifies what every shipped source adapter decides, natively.
-//!
-//! Each adapter's `Adapter` is called as the component's export calls it,
-//! over a scratch tree and a strict model script, and the turns it opened are
-//! read back. Assertions use adapter-owned source data rather than SDK prompt
-//! wording. The component boundary itself is `component.rs`'s; shared SDK and
-//! boundary behaviour is `probe.rs`'s.
+//! Tests each shipped source adapter natively against a scripted model.
 
 #![cfg(not(target_arch = "wasm32"))]
 

@@ -1,6 +1,4 @@
-//! The reference comparison: the hand-written omnia guest a case names,
-//! which a build through `omnia` is measured against, and whose recorded
-//! fixtures the built guest is driven through as a behavioural oracle.
+//! Compares `omnia` builds against a case's vendored reference guest and replay fixtures.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};

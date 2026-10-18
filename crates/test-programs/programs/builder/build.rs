@@ -1,9 +1,4 @@
-//! Drives one target adapter through the `target-adapter` world under the
-//! omnia runtime and asserts what the host sees: the metadata's merge
-//! rules, or the three tasks over the lent workspace in the order the engine
-//! puts them — the initialisation answered as such, the report of one build
-//! held to the report gate and to the tree, and the verdict of one
-//! verification held to its gate.
+//! Guest driver exercising a target adapter's `metadata` and `run` exports.
 
 #![cfg(target_arch = "wasm32")]
 

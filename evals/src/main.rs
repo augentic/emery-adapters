@@ -1,24 +1,8 @@
-//! Grades the shipped components end to end over the live model.
+//! Live evaluation runner for shipped source and target adapters.
 //!
-//! Operator-invoked, never CI. Each case under `evals/cases/` is staged as a
-//! project of its own beneath `target/eval/<card>/`, `<card>` the run's UTC
-//! start, and the scorecard is written to `target/eval/<card>.md`;
-//! `evals/README.md` is the reference for the cases, the environment, the
-//! columns, and the record the cards leave.
-//!
-//! - `cargo run -p evals -- [case|adapter..]` runs `emery specify` over each
-//!   case `EVAL_RUNS` times and grades what `emery show` reads back.
-//! - `--facts [case|adapter..]` lays each adapter's survey facts with no
-//!   turn spent.
-//! - `--build [--target <name>] [case|adapter..]` builds each committed plan
-//!   into a repository the engine lays through a target adapter and reads
-//!   what landed, the host's own checks beside the build's claims.
-//! - `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan an
-//!   earlier card committed again under this invocation's binary, target,
-//!   model, and width.
-//! - `--oracle <card> [case|adapter..]` drives the reference's fixtures
-//!   through the tree an earlier card's `omnia` build left, in an export
-//!   kept beside the run's files, with no turn spent and no build run.
+//! Stages cases from `evals/cases/` under `target/eval/<card>/`, runs
+//! `emery specify` and optional `emery build` passes, and writes the graded
+//! scorecard to `target/eval/<card>.md`. See `evals/README.md` for flags.
 
 #![expect(
     clippy::print_stdout,

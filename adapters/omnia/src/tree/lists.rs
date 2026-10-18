@@ -1,6 +1,4 @@
-//! Holds every stem's `router` and `topics` to the root list that merges it,
-//! and every topic of the shared table to a module that names it: the two
-//! wiring facts the compiler never sees, since both are `pub`.
+//! Checks that stem routers and topic constants are wired into the workspace.
 
 use emery_sdk::Error;
 

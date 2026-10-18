@@ -1,7 +1,4 @@
-//! The backstop for two known failure modes of the model, owned by the
-//! prompt and the eval rather than the layout: a constant-keyed
-//! `StateStore::get` whose miss is answered empty, and an HTTP response
-//! `Deserialize` struct wrapping the source client's `data` property.
+//! Checks for empty cache misses on constant `StateStore` keys and single-field `data` response wrappers.
 
 use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
 

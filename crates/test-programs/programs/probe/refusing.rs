@@ -1,5 +1,4 @@
-//! A `source-adapter` probe that refuses every input as `bad_request`, so the
-//! suite can see a guest's typed refusal lift to its omnia class.
+//! Probe adapter that rejects every input with `bad_request`.
 
 #![cfg(target_arch = "wasm32")]
 

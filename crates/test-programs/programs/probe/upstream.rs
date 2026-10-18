@@ -1,5 +1,4 @@
-//! A `source-adapter` probe that fails every input as `bad_gateway`, so the
-//! suite can see an upstream failure lift to its omnia class.
+//! Probe adapter that fails every input with `bad_gateway`.
 
 #![cfg(target_arch = "wasm32")]
 

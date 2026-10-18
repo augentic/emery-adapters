@@ -1,9 +1,4 @@
-//! Provides the runtime harness shared by component suites.
-//!
-//! The harness runs a component behind the `source_extract` driver, or a
-//! target behind the `builder_build` driver, with a scripted host model.
-//! [`Barrier`] can hold completions until a required number of requests are
-//! pending together.
+//! Shared runtime test harness for component and probe suites.
 
 #![expect(dead_code, reason = "shared by suites that each use a subset")]
 

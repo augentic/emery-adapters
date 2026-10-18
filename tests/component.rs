@@ -1,10 +1,4 @@
-//! Verifies every shipped component through its world under the omnia runtime.
-//!
-//! One scenario per component, over what a native call cannot show: the
-//! export, the lift and lower of the input and the answer, the metadata, the
-//! lend resolved against the mount, and the parser running as a guest. What
-//! each adapter decides is `source.rs`'s and `target.rs`'s, natively; the
-//! boundary's own rules are `probe.rs`'s.
+//! Exercises every shipped adapter component under the Omnia WebAssembly runtime.
 
 #![cfg(not(target_arch = "wasm32"))]
 

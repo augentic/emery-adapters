@@ -1,8 +1,4 @@
-//! Verifies every shipped adapter's embedded prompt corpus.
-//!
-//! The checks run natively over each adapter's `PROSE` and its `prose/` tree.
-//! Runtime use of each embedded prompt is covered by `source.rs` and
-//! `target.rs`.
+//! Validates each shipped adapter's embedded `PROSE` table against its `prose/` directory.
 
 #![cfg(not(target_arch = "wasm32"))]
 

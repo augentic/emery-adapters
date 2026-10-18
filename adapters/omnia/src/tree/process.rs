@@ -1,6 +1,4 @@
-//! Holds every stem's modules to what `start` becomes: no `crates/start/`
-//! and no lifecycle function or type, since the seed and the host are the
-//! process the source was.
+//! Rejects `crates/start/` files and process-lifecycle functions or types in stem crates.
 
 use emery_sdk::Error;
 

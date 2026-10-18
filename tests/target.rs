@@ -1,12 +1,4 @@
-//! Verifies what every shipped target adapter declares and does, natively.
-//!
-//! Each target's `Adapter` is called as the component's export calls it, over
-//! a scratch tree its initialisation lays into and its turns write through
-//! the SDK's `write_files` and `edit_files` tools under a strict model
-//! script. Assertions use what the adapter declares and what the slice
-//! carries rather than SDK prompt wording; the turn's shape, the tool, and the
-//! gates are the SDK's, asserted in its own suite. The component boundary
-//! itself is `component.rs`'s.
+//! Tests each shipped target adapter natively against a scripted model.
 
 #![cfg(not(target_arch = "wasm32"))]
 
