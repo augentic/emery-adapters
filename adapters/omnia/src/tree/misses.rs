@@ -111,19 +111,17 @@ impl Tree<'_> {
 
 impl Module {
     // A refusal is read under one of the shapes `refusal_opened` names; each
-    // `Ok(())` in the arm's body or the block beneath the opener, to the
-    // first line back at the opener's indentation, answers it as processed.
+    // `Ok(())` on the opener's line past the opener, or in the block beneath
+    // it to the first line back at the opener's indentation, answers it as
+    // processed.
     fn swallowed_rejections(&self) -> Vec<String> {
         let all: Vec<&str> = self.code.lines().collect();
         let indent = |line: &str| line.len() - line.trim_start().len();
         let mut lines = Vec::new();
         for (index, line) in all.iter().enumerate() {
-            let Some(opened) = refusal_opened(line) else { continue };
-            let body = line.split_once("=>").map(|(_, body)| body.trim());
-            if let Some(body) = body
-                && !body.is_empty()
-                && !body.ends_with('{')
-            {
+            let Some((opened, body)) = refusal_opened(line) else { continue };
+            let body = body.trim();
+            if !body.is_empty() && !body.ends_with('{') {
                 if spells(body, UNIT) {
                     lines.push(format!(
                         "{}:{}: `Ok(())` answers the refusal the {opened} caught",
@@ -296,27 +294,54 @@ fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
     answering
 }
 
-// The shapes a refused `Result` is read under: a `let`-`else` over `Ok(..)`
+// The shapes a refused `Result` is read under — a `let`-`else` over `Ok(..)`
 // or over `.ok()`, an `Err(..)` arm, and an `if` over `is_err()` or
-// `let Err(..)`.
-fn refusal_opened(line: &str) -> Option<&'static str> {
+// `let Err(..)` — with what the line holds past the opener: the body where
+// the catch is written on one line, nothing where its block opens beneath.
+fn refusal_opened(line: &str) -> Option<(&'static str, &str)> {
     let text = line.trim();
-    if text.starts_with("let Ok(") && text.ends_with("else {") {
-        return Some("`let Ok(..) = .. else` block");
+    if text.starts_with("let Ok(")
+        && let Some((_, body)) = text.split_once("else {")
+    {
+        return Some(("`let Ok(..) = .. else` block", body));
     }
-    if text.starts_with("let Some(") && text.ends_with("else {") && text.contains(".ok()") {
-        return Some("`.ok() else` block");
+    if text.starts_with("let Some(")
+        && let Some((head, body)) = text.split_once("else {")
+        && head.contains(".ok()")
+    {
+        return Some(("`.ok() else` block", body));
     }
-    if text.starts_with("if ") && text.ends_with('{') && text.contains(".is_err()") {
-        return Some("`is_err()` branch");
+    if let Some(rest) = text.strip_prefix("if ") {
+        let (condition, body) = split_branch(rest);
+        if condition.contains(".is_err()") {
+            return Some(("`is_err()` branch", body));
+        }
+        if rest.starts_with("let Err(") {
+            return Some(("`if let Err(..)` branch", body));
+        }
     }
-    if text.starts_with("if let Err(") && text.ends_with('{') {
-        return Some("`if let Err(..)` branch");
-    }
-    if text.starts_with("Err(") && text.contains("=>") {
-        return Some("`Err(..) =>` arm");
+    if text.starts_with("Err(")
+        && let Some((_, body)) = text.split_once("=>")
+    {
+        return Some(("`Err(..) =>` arm", body));
     }
     None
+}
+
+// Splits an `if` line at the brace opening its block, the first `{` outside
+// the condition's own brackets; the body is empty where the block opens on
+// a later line.
+fn split_branch(text: &str) -> (&str, &str) {
+    let mut depth = 0_usize;
+    for (at, ch) in text.char_indices() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            '{' if depth == 0 => return (&text[..at], &text[at + 1..]),
+            _ => {}
+        }
+    }
+    (text, "")
 }
 
 // The name of a `const NAME: &str = "NAME";` line, the shape a part

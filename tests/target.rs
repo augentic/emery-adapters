@@ -1940,6 +1940,79 @@ async fn omnia_rejection_swallowed() {
     );
 }
 
+// A refusal caught and answered `Ok(())` on one line — the `let Ok(..) = ..
+// else { return Ok(()) };` the translation reference names, an `is_err()`
+// branch, and an `if let Err(..)` branch closed on their own line — is the
+// loss the block shapes are, so each is named at its line, while a one-line
+// `let Ok(()) = .. else` returning the error passes. Propagating the error
+// is the repair.
+#[tokio::test]
+async fn omnia_rejection_swallowed_on_one_line() {
+    let project = omnia_tree().await;
+    let invalid = "    let Ok(order) = validate(&input) else { return Ok(()) };\n";
+    let unstored = "    if remember(provider, &order).await.is_err() { return Ok(()); }\n";
+    let unsent = "    if let Err(error) = notify(provider, &order).await { \
+                  tracing::warn!(%error); return Ok(()); }\n";
+    let module = format!(
+        "//! Reads orders.\n\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{{HttpRequest, \
+         StateStore, bad_request}};\n\n/// An order as the wire carries \
+         it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    /// Its id.\n    pub id: \
+         String,\n}}\n\npub(crate) async fn on_placed<P: HttpRequest + StateStore>(\n    input: \
+         Order, context: Context<P>,\n) -> omnia_sdk::Result<()> {{\n    let provider = \
+         context.provider();\n{invalid}{unstored}{unsent}    let Ok(()) = audit(provider, \
+         &order).await else {{ return Err(bad_request!(\"unaudited\")) }};\n    Ok(())\n}}\n"
+    );
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write("crates/orders/src/reading.rs", &module);
+    let model = Scripted::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", invalid, "    let order = validate(&input)?;\n"),
+            ("crates/orders/src/reading.rs", unstored, "    remember(provider, &order).await?;\n"),
+            ("crates/orders/src/reading.rs", unsent, "    notify(provider, &order).await?;\n"),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    for line in [
+        "a delivery or a call the code refused is answered `Ok(())`, as processed".to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `let Ok(..) = .. \
+             else` block caught",
+            line_of(&module, "let Ok(order)")
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `is_err()` branch \
+             caught",
+            line_of(&module, ".is_err() {")
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{}: `Ok(())` answers the refusal the `if let Err(..)` \
+             branch caught",
+            line_of(&module, "if let Err(error)")
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/orders/src/reading.rs:").count(),
+        3,
+        "a one-line `let Ok(()) = .. else` returning the error and the handler's own tail are \
+         no finding: {correction}"
+    );
+    let repaired = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        repaired.contains("let order = validate(&input)?;")
+            && repaired.contains("notify(provider, &order).await?;")
+            && !repaired.contains("return Ok(())"),
+        "{repaired}"
+    );
+}
+
 // A setting whose name spells `FORMAT` reads a parser's syntax from the
 // deployment, so the verdict is refused with the setting named at its
 // line, while the settings beside it and a format constant holding the
