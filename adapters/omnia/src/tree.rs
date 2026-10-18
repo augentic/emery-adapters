@@ -1,8 +1,8 @@
 //! Holds the lent tree to the layout's rules before a report or verdict is accepted.
 
+mod lists;
 mod misses;
-mod simulated;
-mod wiring;
+mod process;
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -12,26 +12,22 @@ use std::path::{Path, PathBuf};
 use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
 
-const COMMON: &str = "crates/common/src/";
-const CATALOG: &str = "crates/common/src/config.rs";
 const MAX_DIFF_LINES: usize = 24;
 
 struct Module {
     path: String,
-    name: String,
     code: String,
 }
 
 impl Module {
     fn read(root: &Path, file: &Path) -> Result<Self, Error> {
         let path = relative(root, file);
-        let name = module_path(&path);
         let code = uncommented(&read(file)?);
-        Ok(Self { path, name, code })
+        Ok(Self { path, code })
     }
 
     fn is_common(&self) -> bool {
-        self.path.starts_with(COMMON)
+        self.path.starts_with("crates/common/")
     }
 }
 
@@ -70,12 +66,12 @@ impl<'a> Tree<'a> {
     fn check_common(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.manifest_drift()?);
-        findings.extend(self.simulated_host()?);
+        findings.extend(self.process()?);
+        findings.extend(self.stem_lints()?);
+        findings.extend(self.stems_merged()?);
+        findings.extend(self.unnamed_topics()?);
         findings.extend(self.empty_misses());
         findings.extend(self.response_wrappers());
-        findings.extend(self.unwired_tables()?);
-        findings.extend(self.unlisted_handlers()?);
-        findings.extend(self.unread_settings()?);
         Ok(findings)
     }
 
@@ -105,6 +101,31 @@ impl<'a> Tree<'a> {
              stem's manifest and module list beside it, remove every file under the split \
              directory through `delete`, and put the stem's two lines in the root `Cargo.toml` \
              in place of the head's through `edit_files`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
+    // The workspace's lints are the host boundary, and they reach a crate
+    // through its `[lints]` table alone.
+    fn stem_lints(&self) -> Result<Option<String>, Error> {
+        let mut lines = Vec::new();
+        for dir in crates(self.root)? {
+            if dir == "common" || is_start_stem(&dir) {
+                continue;
+            }
+            let path = format!("crates/{dir}/Cargo.toml");
+            let file = self.root.join(&path);
+            if file.is_file() && !inherits_lints(&read(&file)?) {
+                lines.push(path);
+            }
+        }
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "a stem's manifest carries `[lints]` with `workspace = true`, since the workspace's \
+             lints are the host boundary and reach a crate through that table alone; add the \
+             table through `edit_files`:\n{}",
             lines.join("\n")
         )))
     }
@@ -240,17 +261,6 @@ fn relative(root: &Path, file: &Path) -> String {
     file.strip_prefix(root).unwrap_or(file).display().to_string()
 }
 
-fn module_path(path: &str) -> String {
-    let rest = path.strip_prefix("crates/").unwrap_or(path);
-    let rest = rest.strip_suffix(".rs").unwrap_or(rest);
-    let Some((stem, module)) = rest.split_once("/src/") else {
-        return rest.replace(['-', '/'], "_");
-    };
-    let stem = stem.replace('-', "_");
-    let module = module.strip_suffix("/mod").unwrap_or(module);
-    if module == "lib" { stem } else { format!("{stem}::{}", module.replace('/', "::")) }
-}
-
 fn uncommented(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
@@ -318,6 +328,26 @@ fn is_ident_char(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
 
+// Whether a manifest inherits the workspace's lints, as `[lints]` holding
+// `workspace = true` or the dotted `lints.workspace = true`.
+fn inherits_lints(manifest: &str) -> bool {
+    let mut in_lints = false;
+    for line in manifest.lines() {
+        let line = line.split('#').next().unwrap_or_default().trim();
+        if let Some(table) = line.strip_prefix('[') {
+            in_lints = table.trim_end_matches(']').trim() == "lints";
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else { continue };
+        let key = key.trim();
+        let value = value.trim();
+        if value == "true" && (in_lints && key == "workspace" || key == "lints.workspace") {
+            return true;
+        }
+    }
+    false
+}
+
 fn is_ident(name: &str) -> bool {
     !name.is_empty() && name.chars().all(is_ident_char)
 }
@@ -354,12 +384,14 @@ fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
 }
 
 fn is_start_crate(dir: &Path) -> bool {
-    dir.file_name().and_then(|name| name.to_str()).is_some_and(|name| {
-        name == "start"
-            || name
-                .strip_prefix("start")
-                .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
-    })
+    dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
+}
+
+fn is_start_stem(name: &str) -> bool {
+    name == "start"
+        || name
+            .strip_prefix("start")
+            .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
 }
 
 fn start_files(root: &Path) -> Result<Vec<String>, Error> {

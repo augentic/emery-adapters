@@ -1,10 +1,10 @@
 //! Builds each slice of a plan into an Omnia guest in Rust, and verifies the integrated tree.
 //!
 //! Initialises the repository with the guest template of [`omnia_template`],
-//! builds each stem as a member crate wired into the root component's HTTP
-//! and messaging routers, holds the tree to the layout and host-boundary
-//! rules before accepting a report or verdict, and runs `cargo clippy`,
-//! `cargo test`, and the `wasm32-wasip2` check at each slice and wave.
+//! builds each stem as a member crate whose routers the root component
+//! merges, holds the tree to the layout's rules before accepting a report or
+//! verdict, and runs `cargo clippy`, `cargo test`, and the `wasm32-wasip2`
+//! check at each slice and wave.
 
 mod tree;
 
@@ -23,13 +23,9 @@ impl TargetAdapter for Adapter {
     const MERGE_RULES: &'static [MergeRule] = &[
         MergeRule::ours("Cargo.lock"),
         MergeRule::union("Cargo.toml"),
-        MergeRule::union("clippy.toml"),
         MergeRule::union("src/routes.rs"),
         MergeRule::union("src/messaging.rs"),
-        MergeRule::union("tests/routes.rs"),
-        MergeRule::union("tests/messaging.rs"),
-        MergeRule::union("crates/common/src/routes/*.rs"),
-        MergeRule::union("crates/common/src/config.rs"),
+        MergeRule::union("crates/common/src/topic.rs"),
         MergeRule::union("crates/*/Cargo.toml"),
         MergeRule::union("crates/*/src/lib.rs"),
     ];

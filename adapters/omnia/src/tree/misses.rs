@@ -1,5 +1,7 @@
-//! Holds every constant-keyed `StateStore::get` to a cache-aside load and
-//! every HTTP response `Deserialize` struct to the wire's root.
+//! The backstop for two known failure modes of the model, owned by the
+//! prompt and the eval rather than the layout: a constant-keyed
+//! `StateStore::get` whose miss is answered empty, and an HTTP response
+//! `Deserialize` struct wrapping the source client's `data` property.
 
 use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
 

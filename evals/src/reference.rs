@@ -282,10 +282,19 @@ impl Shape {
         }
         let dependencies = named.difference(&packages).cloned().collect();
 
-        // the catalogs
+        // the settings: the catalog where a tree keeps one, and the per-part
+        // constants spelled as their own names where the layout declares them
         let common = root.join("crates/common/src");
-        let config = str_consts(&read_or_empty(&common.join("config.rs")));
-        let mut topics = str_consts(&read_or_empty(&common.join("routes/topic.rs")));
+        let mut config = str_consts(&read_or_empty(&common.join("config.rs")));
+        for path in rust.iter().filter(|path| path.starts_with("crates/")) {
+            config.extend(setting_consts(&fs::read_to_string(root.join(path))?));
+        }
+
+        // the topic table, wherever the tree's shape keeps it
+        let mut topics = str_consts(&read_or_empty(&common.join("topic.rs")));
+        if topics.is_empty() {
+            topics = str_consts(&read_or_empty(&common.join("routes/topic.rs")));
+        }
         if topics.is_empty() {
             topics = str_consts(&module_block(&read_or_empty(&common.join("routes.rs")), "topic"));
         }
@@ -325,6 +334,19 @@ fn str_consts(text: &str) -> BTreeSet<String> {
         .filter_map(|line| line.split_once("= \""))
         .filter_map(|(_, rest)| rest.split_once('"'))
         .map(|(literal, _)| literal.to_owned())
+        .collect()
+}
+
+// The name of every `const NAME: &str = "NAME";` line of `text`: a setting
+// as a part declares it, its value its own name.
+fn setting_consts(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .filter_map(|line| line.split_once("const "))
+        .filter_map(|(_, rest)| rest.split_once(':'))
+        .filter_map(|(name, rest)| {
+            let literal = rest.split_once("= \"")?.1.split_once('"')?.0;
+            (literal == name.trim()).then(|| literal.to_owned())
+        })
         .collect()
 }
 
@@ -1384,6 +1406,13 @@ oracle-shared /stops, /routes?all=true
         let text = "pub const ENV: &str = \"ENV\";\n/// doc\npub const URL: &str = \"BLOCK_MGT_URL\";\npub const N: u32 = 3;\n";
         let consts = str_consts(text);
         assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["BLOCK_MGT_URL", "ENV"]);
+    }
+
+    #[test]
+    fn setting_consts_of_a_part() {
+        let text = "// Where the upstream answers.\npub(crate) const RATES_URL: &str = \"RATES_URL\";\npub(crate) const ORDERS: &str = \"/orders\";\nconst TTL: u64 = 600;\npub const KEY: &str = \"orders/rates\";\n";
+        let consts = setting_consts(text);
+        assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["RATES_URL"]);
     }
 
     #[test]

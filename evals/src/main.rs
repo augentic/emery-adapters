@@ -2753,9 +2753,7 @@ impl Target {
                 "examples/runtime.rs",
                 "crates/common/Cargo.toml",
                 "crates/common/src/lib.rs",
-                "crates/common/src/routes.rs",
-                "crates/common/src/routes/http.rs",
-                "crates/common/src/routes/topic.rs",
+                "crates/common/src/topic.rs",
                 "crates/common/src/config.rs",
                 "Makefile",
                 "mise.toml",
@@ -2888,14 +2886,12 @@ impl Target {
     }
 
     // Every module the layout's lists do not reach, sorted: a handler module
-    // `crates/<stem>/src/<part>.rs` no statement of the route list or the
-    // topic list names as `<stem>::<part>::`, a stem crate `crates/<stem>/`
-    // no Rust file outside it names as `<stem>::`, a constant of the path
-    // table no statement of the route list names, a constant of the topic
-    // table neither a statement of the topic list nor a stem's module names,
-    // or a stem's or a part's `index.ts` the list above it does not
-    // re-export. A module's own tests pass without the list, so the checks
-    // cannot see it.
+    // `crates/<stem>/src/<part>.rs` whose stem's entry names neither its
+    // `routes()` nor its `topics`, a stem crate `crates/<stem>/` neither root
+    // list merges and no Rust file outside it names as `<stem>::`, a
+    // constant of the topic table no stem's module names, or a stem's or a
+    // part's `index.ts` the list above it does not re-export. A module's own
+    // tests pass without the list, so the checks cannot see it.
     fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
         let mut unreached = Vec::new();
         match self {
@@ -2925,37 +2921,6 @@ impl Target {
                     code_lines(&fs::read_to_string(export.join(ROUTE_LIST)).unwrap_or_default());
                 let topics =
                     code_lines(&fs::read_to_string(export.join(TOPIC_LIST)).unwrap_or_default());
-                let statements = format!("{routes}{topics}");
-                let mut modules = Vec::new();
-                let crates = export.join("crates");
-                for stem in directories(&crates)? {
-                    if stem == "common" {
-                        continue;
-                    }
-                    let src = crates.join(&stem).join("src");
-                    if !src.is_dir() {
-                        continue;
-                    }
-                    for entry in fs::read_dir(&src)? {
-                        let path = entry?.path();
-                        let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
-                            continue;
-                        };
-                        if path.extension().is_none_or(|ext| ext != "rs") {
-                            continue;
-                        }
-                        let text = code_lines(&fs::read_to_string(&path)?);
-                        if part != "lib" && text.contains("Context<") {
-                            let call = format!("{}::{part}::", stem.replace('-', "_"));
-                            if !statements.contains(&call) {
-                                unreached.push(format!("crates/{stem}/src/{part}.rs"));
-                            }
-                        }
-                        modules.push(text);
-                    }
-                }
-
-                // a stem crate nothing outside it names
                 let mut paths = Vec::new();
                 files_under(export, export, "target", &mut paths)?;
                 let mut sources = Vec::new();
@@ -2966,31 +2931,57 @@ impl Target {
                     sources
                         .push((path.as_str(), code_lines(&fs::read_to_string(export.join(path))?)));
                 }
+                let mut modules = Vec::new();
+                let crates = export.join("crates");
                 for stem in directories(&crates)? {
-                    if stem == "common" || !crates.join(&stem).join("Cargo.toml").is_file() {
+                    if stem == "common" {
                         continue;
                     }
-                    let own = format!("crates/{stem}/");
+                    let src = crates.join(&stem).join("src");
+                    if !src.is_dir() {
+                        continue;
+                    }
                     let name = stem.replace('-', "_");
-                    if !sources
-                        .iter()
-                        .any(|(path, text)| !path.starts_with(&own) && names_crate(text, &name))
+                    let entry =
+                        code_lines(&fs::read_to_string(src.join("lib.rs")).unwrap_or_default());
+
+                    // a stem neither list merges and nothing outside it names
+                    let own = format!("crates/{stem}/");
+                    let merged = spells_word(&routes, &format!("{name}::router"))
+                        || spells_word(&topics, &format!("{name}::topics"));
+                    if !merged
+                        && crates.join(&stem).join("Cargo.toml").is_file()
+                        && !sources
+                            .iter()
+                            .any(|(path, text)| !path.starts_with(&own) && names_crate(text, &name))
                     {
                         unreached.push(own);
                     }
-                }
 
-                let http = fs::read_to_string(export.join(PATH_TABLE)).unwrap_or_default();
-                for (name, _) in constants(&http) {
-                    if !spells_word(&routes, &format!("routes::http::{name}")) {
-                        unreached.push(format!("{PATH_TABLE}#{name}"));
+                    // a handler module the entry's arrays do not name
+                    for entry_path in fs::read_dir(&src)? {
+                        let path = entry_path?.path();
+                        let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
+                            continue;
+                        };
+                        if path.extension().is_none_or(|ext| ext != "rs") {
+                            continue;
+                        }
+                        let text = code_lines(&fs::read_to_string(&path)?);
+                        if part != "lib"
+                            && text.contains("Context<")
+                            && !spells_word(&entry, &format!("{part}::routes"))
+                            && !spells_word(&entry, &format!("{part}::topics"))
+                        {
+                            unreached.push(format!("crates/{stem}/src/{part}.rs"));
+                        }
+                        modules.push(text);
                     }
                 }
+
                 let topic = fs::read_to_string(export.join(TOPIC_TABLE)).unwrap_or_default();
                 for (name, _) in constants(&topic) {
-                    if !spells_word(&topics, &format!("routes::topic::{name}"))
-                        && !modules.iter().any(|text| spells_word(text, &name))
-                    {
+                    if !modules.iter().any(|text| spells_word(text, &name)) {
                         unreached.push(format!("{TOPIC_TABLE}#{name}"));
                     }
                 }
@@ -3000,55 +2991,74 @@ impl Target {
         Ok(unreached)
     }
 
-    // Every route the tree's lists register, in list order: for `omnia`,
-    // each `.route(<path>, <method>(<handler>))` statement of the route list,
-    // attributed to the handler's module `crates/<stem>/src/<part>.rs`, the
-    // path read from the path table's constant it names, and the method each
-    // route fn, or `MethodFilter`, in its second argument spells. The
-    // TypeScript layout registers routes on an app a slice is handed, which
-    // no one file spells, so it lists none.
+    // Every route the tree registers, in tree order: for `omnia`, each
+    // `.route(<path>, <method>(<handler>))` of a part's `routes()`,
+    // attributed to the part's module `crates/<stem>/src/<part>.rs`, the
+    // path read from the constant the module declares or a literal, and the
+    // method each route fn, or `MethodFilter`, in its second argument
+    // spells; a `.route(..)` over a topic is none. The TypeScript layout
+    // registers routes on an app a slice is handed, which no one file
+    // spells, so it lists none.
     fn routes(self, export: &Path) -> Vec<(String, String, String)> {
         let mut routes = Vec::new();
         if self == Self::Node {
             return routes;
         }
-        let list = fs::read_to_string(export.join(ROUTE_LIST)).unwrap_or_default();
-        let table = fs::read_to_string(export.join(PATH_TABLE)).unwrap_or_default();
-        for statement in registered(&list, &table) {
-            let module = statement.handler.map_or_else(
-                || ROUTE_LIST.to_owned(),
-                |(stem, part)| {
-                    let hyphenated = stem.replace('_', "-");
-                    let dir = if export.join("crates").join(&stem).is_dir() || hyphenated == stem {
-                        stem
-                    } else {
-                        hyphenated
-                    };
-                    format!("crates/{dir}/src/{part}.rs")
-                },
-            );
-            for method in statement.methods {
-                routes.push((module.clone(), method, statement.path.clone()));
+        let crates = export.join("crates");
+        let Ok(mut stems) = directories(&crates) else {
+            return routes;
+        };
+        stems.sort();
+        for stem in stems {
+            if stem == "common" {
+                continue;
+            }
+            let src = crates.join(&stem).join("src");
+            let Ok(entries) = fs::read_dir(&src) else {
+                continue;
+            };
+            let mut parts: Vec<PathBuf> =
+                entries.filter_map(Result::ok).map(|e| e.path()).collect();
+            parts.sort();
+            for path in parts {
+                let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
+                    continue;
+                };
+                if part == "lib" || path.extension().is_none_or(|ext| ext != "rs") {
+                    continue;
+                }
+                let text = fs::read_to_string(&path).unwrap_or_default();
+                let module = format!("crates/{stem}/src/{part}.rs");
+                for statement in registered(&text, &text) {
+                    if statement.topic {
+                        continue;
+                    }
+                    for method in statement.methods {
+                        routes.push((module.clone(), method, statement.path.clone()));
+                    }
+                }
             }
         }
         routes
     }
 }
 
-// The omnia layout's two root lists and the two tables of `common` they
-// name constants of.
+// The omnia layout's two root lists and the topic table of `common`.
 const ROUTE_LIST: &str = "src/routes.rs";
 const TOPIC_LIST: &str = "src/messaging.rs";
-const PATH_TABLE: &str = "crates/common/src/routes/http.rs";
-const TOPIC_TABLE: &str = "crates/common/src/routes/topic.rs";
+const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
 
-// Each `pub const <NAME>: &str = "<text>";` of a table, in order, with the
-// text it spells.
+// Each `pub const <NAME>: &str = "<text>";` or `pub(crate) const ..` of a
+// file, in order, with the text it spells.
 fn constants(table: &str) -> Vec<(String, String)> {
     table
         .lines()
         .filter_map(|line| {
-            let (name, rest) = line.trim().strip_prefix("pub const ")?.split_once(':')?;
+            let line = line.trim();
+            let declaration = line
+                .strip_prefix("pub const ")
+                .or_else(|| line.strip_prefix("pub(crate) const "))?;
+            let (name, rest) = declaration.split_once(':')?;
             let text = literal(rest.split_once('=')?.1.trim().strip_suffix(';')?.trim())?;
             Some((name.trim().to_owned(), text.to_owned()))
         })
@@ -3096,23 +3106,20 @@ fn spells_word(text: &str, word: &str) -> bool {
     false
 }
 
-// One `.route(<path>, <method>(<handler>))` statement of a root list: the
-// handler as `(<stem>, <part>)`, read from the first path of three or more
-// segments in the second argument that leads with neither `omnia_sdk`,
-// `common`, `axum`, nor `messaging`, none where it spells no such path; the
-// path, a literal or the table's constant the first argument names by its
-// last segment, `?` where it is neither; and the methods the second
-// argument spells, one per route fn (`get(..)`) or `MethodFilter::<M>`, `?`
-// where it spells none.
+// One `.route(<path>, <method>(<handler>))` statement of a list: whether it
+// registers a topic, its first argument qualified through `topic_for` or
+// `topic`; the path, a literal or the table's constant the first argument
+// names by its last segment, `?` where it is neither; and the methods the
+// second argument spells, one per route fn (`get(..)`) or
+// `MethodFilter::<M>`, `?` where it spells none.
 struct Registered {
-    handler: Option<(String, String)>,
+    topic: bool,
     path: String,
     methods: Vec<String>,
 }
 
-// Each statement of a root list, in order.
+// Each statement of a list, in order.
 fn registered(list: &str, table: &str) -> Vec<Registered> {
-    const WIRING: [&str; 4] = ["omnia_sdk", "common", "axum", "messaging"];
     let constants = constants(table);
     let mut routes = Vec::new();
     let mut from = 0;
@@ -3135,41 +3142,15 @@ fn registered(list: &str, table: &str) -> Vec<Registered> {
             })
             .unwrap_or("?")
             .to_owned();
-        let handler = paths_in(second)
-            .into_iter()
-            .find(|segments| segments.len() >= 3 && !WIRING.contains(&segments[0]))
-            .map(|segments| (segments[0].to_owned(), segments[1].to_owned()));
+        let topic = first.contains("topic_for(") || first.contains("topic(");
         let mut methods = methods_in(second);
         if methods.is_empty() {
             methods.push("?".to_owned());
         }
-        routes.push(Registered {
-            handler,
-            path,
-            methods,
-        });
+        routes.push(Registered { topic, path, methods });
         from = close;
     }
     routes
-}
-
-// Every `a::b::c` path an expression spells, each as its segments.
-fn paths_in(expression: &str) -> Vec<Vec<&str>> {
-    let mut paths = Vec::new();
-    let mut at = 0;
-    while let Some(found) = expression[at..].find(|c: char| c.is_ascii_alphabetic() || c == '_') {
-        let start = at + found;
-        let end = expression[start..]
-            .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == ':'))
-            .map_or(expression.len(), |len| start + len);
-        let segments: Vec<&str> =
-            expression[start..end].split("::").filter(|s| !s.is_empty()).collect();
-        if segments.len() > 1 {
-            paths.push(segments);
-        }
-        at = end;
-    }
-    paths
 }
 
 // The offset of the `)` closing a call whose `(` is just before `text`,
@@ -6135,6 +6116,11 @@ mod tests {
     // whatever the stem's spelling; one neither names is listed, as is a
     // table constant its list does not name; `lib.rs`, a module with no
     // handler, and `common` itself are passed over.
+    // A handler module is reached through its stem's entry, which names its
+    // `routes()` or its `topics`, and its stem through the root lists, which
+    // merge its `router()` and register its `topics(..)`; a crate nothing
+    // merges and its own tests alone name is unreached, a topic constant no
+    // module names is unreached, and a module with no handler is passed over.
     #[test]
     fn omnia_modules_unreached_by_the_lists() {
         let root = scratch(
@@ -6142,42 +6128,34 @@ mod tests {
             &[
                 (
                     "src/routes.rs",
-                    "    let router = axum::Router::new();\n    let router = router.route(\n        \
-                     common::routes::http::HEALTH,\n        \
-                     omnia_sdk::api::http::get(start::health_api::ready),\n    );\n    \
-                     let router = router.route(\n        common::routes::http::ORDER_ITEMS,\n        \
-                     omnia_sdk::api::http::get(order_items::reading::list),\n    );\n    \
+                    "    let router = axum::Router::new();\n    \
+                     let router = router.merge(order_items::router());\n    \
+                     let router = router.merge(health::router());\n    \
                      router.with_state(Client::new(OWNER, provider))\n",
                 ),
                 (
                     "src/messaging.rs",
-                    "    let router = router.route(\n        \
-                     config::topic_for(&env, common::routes::topic::ITEM_PLACED),\n        \
-                     messaging::consume(order_items::fulfilment::on_placed),\n    );\n",
+                    "    let router = messaging::Router::new(Client::new(OWNER, provider));\n    \
+                     let router = order_items::topics(router, &env);\n    \
+                     let router = health::topics(router, &env);\n",
                 ),
                 (
-                    "crates/common/src/routes/http.rs",
-                    "//! Paths.\n\n/// Health.\npub const HEALTH: &str = \"/health\";\n\
-                     /// Items.\npub const ORDER_ITEMS: &str = \"/order-items\";\n\
-                     /// Unwired.\npub const ORPHAN: &str = \"/orphan\";\n",
-                ),
-                (
-                    "crates/common/src/routes/topic.rs",
+                    "crates/common/src/topic.rs",
                     "//! Topics.\n\n/// Placed.\npub const ITEM_PLACED: &str = \"items-placed.v1\";\n\
                      /// Shipped.\npub const ITEM_SHIPPED: &str = \"items-shipped.v1\";\n\
                      /// Unwired.\npub const ITEM_LOST: &str = \"items-lost.v1\";\n",
                 ),
                 ("crates/common/src/config.rs", "pub async fn env(provider: &impl Config) {}\n"),
-                ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
-                ("crates/start/src/lib.rs", "pub mod health_api;\n"),
-                (
-                    "crates/start/src/health_api.rs",
-                    "pub async fn ready<P>(input: Q, context: Context<P>) -> Result<()> {}\n",
-                ),
                 ("crates/order-items/Cargo.toml", "[package]\nname = \"order-items\"\n"),
                 (
                     "crates/order-items/src/lib.rs",
-                    "pub mod fulfilment;\npub mod placing;\npub mod reading;\n",
+                    "pub mod fulfilment;\npub mod placing;\npub mod reading;\n\n\
+                     pub fn router<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     common::routers([\n        // one entry per part with routes\n        \
+                     reading::routes(),\n    ])\n}\n\n\
+                     pub fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
+                     common::topics(router, env).parts([\n        // one entry per part with topics\n        \
+                     fulfilment::topics,\n    ])\n}\n",
                 ),
                 ("crates/key-vault/Cargo.toml", "[package]\nname = \"key-vault\"\n"),
                 ("crates/key-vault/src/lib.rs", "pub mod secrets;\n"),
@@ -6191,21 +6169,23 @@ mod tests {
                 ),
                 (
                     "crates/order-items/src/reading.rs",
-                    "pub async fn list<P>(input: Q, context: Context<P>) -> Result<Vec<Item>> {}\n",
+                    "pub(crate) async fn list<P>(input: Q, context: Context<P>) -> Result<Vec<Item>> {}\n",
                 ),
                 (
                     "crates/order-items/src/fulfilment.rs",
-                    "pub async fn on_placed<P>(input: Item, context: Context<P>) -> Result<()> {\n    \
-                     let _ = common::routes::topic::ITEM_SHIPPED;\n}\n",
+                    "pub(crate) async fn on_placed<P>(input: Item, context: Context<P>) -> Result<()> {\n    \
+                     let _ = topic::ITEM_SHIPPED;\n    let _ = topic::ITEM_PLACED;\n}\n",
                 ),
                 (
                     "crates/order-items/src/placing.rs",
-                    "pub async fn place<P>(input: Place, context: Context<P>) -> Result<Item> {}\n",
+                    "pub(crate) async fn place<P>(input: Place, context: Context<P>) -> Result<Item> {}\n",
                 ),
                 ("crates/order-items/src/types.rs", "pub struct Item;\n"),
+                ("crates/health/Cargo.toml", "[package]\nname = \"health\"\n"),
+                ("crates/health/src/lib.rs", "pub mod health;\n"),
                 (
                     "crates/health/src/health.rs",
-                    "pub async fn live<P>(input: Q, context: Context<P>) -> Result<()> {}\n",
+                    "pub(crate) async fn live<P>(input: Q, context: Context<P>) -> Result<()> {}\n",
                 ),
             ],
         );
@@ -6214,8 +6194,7 @@ mod tests {
         assert_eq!(
             unreached,
             [
-                "crates/common/src/routes/http.rs#ORPHAN",
-                "crates/common/src/routes/topic.rs#ITEM_LOST",
+                "crates/common/src/topic.rs#ITEM_LOST",
                 "crates/health/src/health.rs",
                 "crates/key-vault/",
                 "crates/order-items/src/placing.rs",
@@ -6224,46 +6203,58 @@ mod tests {
         );
     }
 
-    // Each `.route(` statement of the route list is one entry per method its
-    // second argument spells, attributed to the handler's module through the
-    // stem's directory however the stem is spelled, the path read from the
-    // table's constant it names or a literal, a stem's own route fn spelling
-    // no method; a route is a probe when the slice owning the module, found
-    // by the module's spelling of its name, has no requirement stating a
-    // method and path in its body or scenarios, and a module no merged slice
-    // owns is no probe.
+    // Each `.route(` of a part's `routes()` is one entry per method its
+    // second argument spells, attributed to the part's module, the path read
+    // from the constant the module declares or a literal, a route fn of the
+    // part's own spelling no method, a `.route(` over a topic none; a route is
+    // a probe when the slice owning the module, found by the module's
+    // spelling of its name, has no requirement stating a method and path in
+    // its body or scenarios, and a module no merged slice owns is no probe.
     #[test]
     fn omnia_routes_per_module() {
         let root = scratch(
             "omnia-routes",
             &[
                 (
-                    "src/routes.rs",
-                    "//! The route list.\n\npub fn router<P: Capabilities>(provider: P) -> axum::Router {\n    \
-                     let router = axum::Router::new();\n    \
-                     let router = router.route(\n        common::routes::http::ORDER,\n        \
-                     omnia_sdk::api::http::get(orders::reading::get_order),\n    );\n    \
-                     let router = router.route(\n        common::routes::http::ORDER,\n        \
-                     omnia_sdk::api::http::delete(orders::reading::cancel_order),\n    );\n    \
-                     let router = router.route(common::routes::http::ORDERS, omnia_sdk::api::http::get(orders::reading::list_orders));\n    \
-                     let router = router.route(common::routes::http::ORDERS, orders::placing::place_order_route());\n    \
-                     let router = router.route(\n        common::routes::http::LAYERING,\n        \
-                     omnia_sdk::api::http::get(architecture::architecture::describe),\n    );\n    \
-                     let router = router.route(\"/health/ready\", omnia_sdk::api::http::get(health::health::ready));\n    \
-                     let router = router.route(common::routes::http::ORDER_ITEMS, omnia_sdk::api::http::get(order_items::order_items::list));\n    \
-                     let router = router.route(\n        common::routes::http::LIFECYCLE,\n        \
-                     omnia_sdk::api::http::get(start::application_bootstrap::lifecycle),\n    );\n    \
-                     router.with_state(Client::new(OWNER, provider))\n}\n",
+                    "crates/orders/src/reading.rs",
+                    "pub(crate) const ORDER: &str = \"/orders/{id}\";\n\
+                     pub(crate) const ORDERS: &str = \"/orders\";\n\n\
+                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new()\n        .route(ORDER, get(get_order))\n        \
+                     .route(ORDER, delete(cancel_order))\n        \
+                     .route(ORDERS, get(list_orders))\n}\n",
                 ),
                 (
-                    "crates/common/src/routes/http.rs",
-                    "//! Paths.\n\n/// One order.\npub const ORDER: &str = \"/orders/{id}\";\n\
-                     /// Orders.\npub const ORDERS: &str = \"/orders\";\n\
-                     /// Layering.\npub const LAYERING: &str = \"/architecture/layering\";\n\
-                     /// Items.\npub const ORDER_ITEMS: &str = \"/order-items\";\n\
-                     /// Lifecycle.\npub const LIFECYCLE: &str = \"/bootstrap/lifecycle\";\n",
+                    "crates/orders/src/placing.rs",
+                    "pub(crate) const ORDERS: &str = \"/orders\";\n\n\
+                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new().route(ORDERS, place_order_route())\n}\n\n\
+                     pub(crate) fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
+                     router.route(config::topic_for(env, topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n",
                 ),
-                ("crates/order-items/src/order_items.rs", ""),
+                (
+                    "crates/architecture/src/architecture.rs",
+                    "pub(crate) const LAYERING: &str = \"/architecture/layering\";\n\n\
+                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new().route(LAYERING, get(describe))\n}\n",
+                ),
+                (
+                    "crates/health/src/health.rs",
+                    "pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new().route(\"/health/ready\", get(ready))\n}\n",
+                ),
+                (
+                    "crates/order-items/src/order_items.rs",
+                    "pub(crate) const ORDER_ITEMS: &str = \"/order-items\";\n\n\
+                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new().route(ORDER_ITEMS, get(list))\n}\n",
+                ),
+                (
+                    "crates/start/src/application_bootstrap.rs",
+                    "pub(crate) const LIFECYCLE: &str = \"/bootstrap/lifecycle\";\n\n\
+                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+                     axum::Router::new().route(LIFECYCLE, get(lifecycle))\n}\n",
+                ),
             ],
         );
         let routes_read = Target::Omnia.routes(&root);
@@ -6299,13 +6290,13 @@ mod tests {
             .map(|route| (route.module, route.method, route.path, route.probe))
             .collect();
         let expected = [
-            ("crates/orders/src/reading.rs", "GET", "/orders/{id}", false),
-            ("crates/orders/src/reading.rs", "DELETE", "/orders/{id}", false),
-            ("crates/orders/src/reading.rs", "GET", "/orders", false),
-            ("crates/orders/src/placing.rs", "?", "/orders", false),
             ("crates/architecture/src/architecture.rs", "GET", "/architecture/layering", true),
             ("crates/health/src/health.rs", "GET", "/health/ready", false),
             ("crates/order-items/src/order_items.rs", "GET", "/order-items", false),
+            ("crates/orders/src/placing.rs", "?", "/orders", false),
+            ("crates/orders/src/reading.rs", "GET", "/orders/{id}", false),
+            ("crates/orders/src/reading.rs", "DELETE", "/orders/{id}", false),
+            ("crates/orders/src/reading.rs", "GET", "/orders", false),
             ("crates/start/src/application_bootstrap.rs", "GET", "/bootstrap/lifecycle", true),
         ];
         let expected: Vec<(String, String, String, bool)> = expected
@@ -6560,7 +6551,7 @@ mod tests {
             "examples/runtime.rs",
             ".github/workflows/ci.yaml",
             "supply-chain/config.toml",
-            "crates/common/src/routes/http.rs",
+            "crates/common/src/topic.rs",
             "crates/common/src/config.rs",
             "crates/orders/Cargo.toml",
             "crates/orders/src/reading.rs",

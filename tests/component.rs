@@ -240,7 +240,7 @@ async fn emery_node() {
     );
 }
 
-// The metadata lowers the fresh base and the eleven rules in order; the init
+// The metadata lowers the fresh base and the seven rules in order; the init
 // lays the template in the lent tree with no turn, the build writes a stem's
 // list through `write_files`, its turns carry the worker grant, and its
 // report and the verdict lift back to the driver, the verify's check finding
@@ -255,13 +255,9 @@ async fn emery_omnia() {
             "fresh",
             "Cargo.lock=ours",
             "Cargo.toml=union",
-            "clippy.toml=union",
             "src/routes.rs=union",
             "src/messaging.rs=union",
-            "tests/routes.rs=union",
-            "tests/messaging.rs=union",
-            "crates/common/src/routes/*.rs=union",
-            "crates/common/src/config.rs=union",
+            "crates/common/src/topic.rs=union",
             "crates/*/Cargo.toml=union",
             "crates/*/src/lib.rs=union",
         ],
