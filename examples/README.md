@@ -12,8 +12,6 @@ Run from the repository root. `emery` mounts that directory as the project, and 
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge) on `PATH`. [Install](#installing-cursor-sdk-bridge).
 3. `CURSOR_API_KEY` in `.env`, or `export CURSOR_API_KEY=<key>`.
 
-
-
 ### Build adapters and copy to cache
 
 ```bash
@@ -29,8 +27,6 @@ done
 
 set -a; source .env; set +a
 ```
-
-
 
 ## Specify
 
@@ -52,9 +48,6 @@ Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [d
 ```bash
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-# OR (to prevent laptop sleeping)
-caffeinate -i cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
-
 # swith to HEAD to view the build in `.emery/vcs/repos/omnia`
 git -C .emery/vcs/repos/omnia checkout emery/<revision>
 ```
@@ -74,13 +67,11 @@ export RUST_LOG="omnia_core=off,emery_sdk=trace"
 export CURSOR_SDK_BRIDGE_LOG=1
 ```
 
-
 | Level | Corrections                                                            |
 | ----- | ---------------------------------------------------------------------- |
 | bare  | `attempts` on the `completion` line                                    |
 | `-v`  | Each finding: a `path` outside the seam's anchors, an id off its stems |
 | `-vv` | The correction the model reads, and the accepted evidence as JSON      |
-
 
 `RUST_LOG=emery_sdk=debug` shows the findings on their own.
 
@@ -100,14 +91,12 @@ Completions are quiet between log lines. An `in progress` line every 15s means t
 
 Wall time varies. Pin `CURSOR_MODEL` when comparing prompts. Current numbers are in the [eval](../evals/README.md).
 
-
 | Variable                 | Default | Effect                                                                                                           |
 | ------------------------ | ------- | ---------------------------------------------------------------------------------------------------------------- |
 | `CURSOR_TIMEOUT_SECS`    | 600     | Cap per completion, build turns included. A seam that hits it should be cut finer; a build turn, sliced smaller. |
 | `CURSOR_INACTIVITY_SECS` | 120     | Cancels a stream silent while waiting on the bridge.                                                             |
 | `CURSOR_MAX_AGENTS`      | 4       | Live bridge agents. Further completions queue.                                                                   |
 | `CURSOR_MODEL`           | `auto`  | Model for every completion.                                                                                      |
-
 
 What a build's worker can reach is the target adapter's grant. A `~/` root the home lacks is skipped. The proxy admits only the hosts that grant names.
 
