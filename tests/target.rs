@@ -8,8 +8,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task, Verdict,
-    VerifyContext,
+    BuildContext, Grant, InitContext, MergeStrategy, Outcome, Report, Slice, TargetAdapter, Task,
+    Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, body};
 use omnia_sdk::model::ToolCall;
@@ -157,7 +157,7 @@ impl<A: TargetAdapter> Shipped<A> {
             adapter_id: self.name,
             slice,
             workspace: root(project),
-            worker: &A::WORKER,
+            grants: A::metadata().grants,
             model,
         };
         match A::run(Task::Build(ctx)).await? {
@@ -171,7 +171,7 @@ impl<A: TargetAdapter> Shipped<A> {
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
-            worker: &A::WORKER,
+            grants: A::metadata().grants,
             model,
         };
         match A::run(Task::Verify(ctx)).await? {
@@ -180,9 +180,9 @@ impl<A: TargetAdapter> Shipped<A> {
         }
     }
 
-    // The grant the adapter's `WORKER` puts on a turn, as the script records it.
+    // The grant the adapter's `grants` put on a turn, as the script records it.
     fn granted() -> Option<SeenWorker> {
-        A::WORKER.grant().map(SeenWorker::from)
+        Grant::union(A::metadata().grants).map(SeenWorker::from)
     }
 
     // The prompt at `path` as this build compiled it in.
@@ -492,7 +492,8 @@ async fn node_init() {
 // manifest under none.
 #[test]
 fn node_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::metadata()
+        .rules
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();
@@ -510,12 +511,13 @@ fn node_rules() {
 
 // What a build's or verify's worker reaches beyond the tree, as the grant the
 // turns carry: the npm registry, a Node installed beneath the home by nvm,
-// Volta, or fnm, and Volta's root named for it. The grant is asserted rather
-// than the reaches, so the adapter may regroup them while any widening shows.
+// Volta, or fnm, and Volta's root named for it. The union is asserted rather
+// than the grants, so the adapter may regroup them while any widening shows.
 #[test]
 fn node_worker() {
+    let grants = emery_node::Adapter::metadata().grants;
     assert_eq!(
-        emery_node::Adapter::WORKER.grant().map(SeenWorker::from),
+        Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
             egress: vec!["registry.npmjs.org".to_owned()],
             read: vec![
@@ -527,7 +529,7 @@ fn node_worker() {
         }),
         "the worker grant the adapter's turns carry"
     );
-    assert_eq!(emery_node::Adapter::WORKER.findings(), Vec::<String>::new());
+    assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
 #[tokio::test]
@@ -746,7 +748,8 @@ async fn omnia_init_files() {
 // path under none, the entry `src/lib.rs` among them.
 #[test]
 fn omnia_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::MERGE_RULES
+    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::metadata()
+        .rules
         .iter()
         .map(|rule| (rule.paths.as_ref(), rule.strategy))
         .collect();
@@ -772,7 +775,8 @@ fn omnia_rules() {
 // list the template adds or drops moves the rules with it.
 #[test]
 fn omnia_rules_follow_template() {
-    let union: Vec<&str> = emery_omnia::Adapter::MERGE_RULES
+    let union: Vec<&str> = emery_omnia::Adapter::metadata()
+        .rules
         .iter()
         .filter(|rule| rule.strategy == MergeStrategy::Union)
         .map(|rule| rule.paths.as_ref())
@@ -811,12 +815,13 @@ fn omnia_rules_follow_template() {
 // What a build's or verify's worker reaches beyond the tree, as the grant the
 // turns carry: the crates.io index and its downloads, the toolchain and the
 // binaries beneath the home, never `~/.cargo` whole, and `RUSTUP_HOME` named
-// for it. The grant is asserted rather than the reaches, so the adapter may
+// for it. The union is asserted rather than the grants, so the adapter may
 // regroup them while any widening shows.
 #[test]
 fn omnia_worker() {
+    let grants = emery_omnia::Adapter::metadata().grants;
     assert_eq!(
-        emery_omnia::Adapter::WORKER.grant().map(SeenWorker::from),
+        Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
             egress: vec!["index.crates.io".to_owned(), "static.crates.io".to_owned()],
             read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
@@ -824,7 +829,7 @@ fn omnia_worker() {
         }),
         "the worker grant the adapter's turns carry"
     );
-    assert_eq!(emery_omnia::Adapter::WORKER.findings(), Vec::<String>::new());
+    assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
 #[tokio::test]

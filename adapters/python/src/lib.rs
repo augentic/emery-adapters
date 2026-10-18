@@ -13,13 +13,15 @@
 
 mod survey;
 
-use emery_sdk::{Context, Error, Evidence, Model, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Error, Evidence, Metadata, Model, SourceAdapter, SourceKind};
 
 /// The adapter implementation.
 pub struct Adapter;
 
 impl SourceAdapter for Adapter {
-    const KIND: SourceKind = SourceKind::Behaviour;
+    fn metadata() -> Metadata {
+        Metadata { kind: SourceKind::Behaviour }
+    }
 
     async fn extract<P: Model>(ctx: &Context<'_, P>) -> Result<Evidence, Error> {
         let survey = survey::survey(ctx).await?;
