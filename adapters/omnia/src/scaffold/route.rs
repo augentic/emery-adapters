@@ -1,19 +1,22 @@
 //! Reads the route a requirement states: `METHOD /path` in its statement or a scenario's `when`.
 
-use emery_sdk::target::{Requirement, Route};
+use emery_sdk::target::Requirement;
 
 // The methods `omnia_sdk::api::http` has a route function for, each with
 // that function.
 const METHODS: [(&str, &str); 5] =
     [("DELETE", "delete"), ("GET", "get"), ("PATCH", "patch"), ("POST", "post"), ("PUT", "put")];
 
-// The route the requirement carries, else the first its statement spells,
-// else the first a scenario's `when` spells; a method the SDK has no route
-// function for is none.
+// A route as the statement or a scenario spells it, `METHOD /path`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct Route {
+    pub(super) method: String,
+    pub(super) path: String,
+}
+
+// The first route the statement spells, else the first a scenario's `when`
+// spells; a method the SDK has no route function for is none.
 pub(super) fn of(requirement: &Requirement) -> Option<Route> {
-    if let Some(route) = &requirement.route {
-        return normalised(&route.method, &route.path);
-    }
     requirement
         .statement
         .iter()

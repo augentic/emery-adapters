@@ -218,6 +218,7 @@ impl<A: TargetAdapter> Shipped<A> {
             workspace: root(project),
             grants: A::metadata().grants,
             model,
+            laid: None,
         };
         match A::run(Task::Build(ctx)).await? {
             Outcome::Built(report) => Ok(report),
@@ -434,8 +435,6 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
             id: format!("REQ-{:03}", index + 1),
             subject: (*subject).to_owned(),
             statement: vec![format!("The behaviour `{subject}` states.")],
-            route: None,
-            topic: None,
             scenarios: Vec::new(),
         })
         .collect();

@@ -10,11 +10,12 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::Path;
 
-use emery_sdk::target::{DesignType, Requirement, Route, Scenario, Slice};
+use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
 use emery_sdk::{Error, bad_request, server_error};
 
 use self::names::{Names, escape, flat, number, pascal, screaming, snake};
 use self::render::Place;
+use self::route::Route;
 use crate::tree;
 
 pub struct Scaffold {

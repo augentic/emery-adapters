@@ -25,8 +25,6 @@ pub fn slice() -> Slice {
             id: "REQ-001".to_owned(),
             subject: "orders.create".to_owned(),
             statement: vec!["POST /orders creates an order from at least one item.".to_owned()],
-            route: None,
-            topic: None,
             scenarios: vec![Scenario {
                 name: "An order is created".to_owned(),
                 given: vec!["an item".to_owned()],

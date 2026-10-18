@@ -69,7 +69,8 @@ impl TargetAdapter for Adapter {
                 let laid = scaffold.lay(root)?;
                 tracing::info!(laid = laid.len(), "laid the slice's skeleton");
                 let brief = scaffold.brief();
-                emery_sdk::target::build(&ctx, PROSE, Some(&brief), |report| {
+                let ctx = ctx.with_laid(&brief);
+                emery_sdk::target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })
                 .await
