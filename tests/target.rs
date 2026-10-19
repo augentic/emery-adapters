@@ -11,7 +11,7 @@ use emery_sdk::target::{
     BuildContext, DesignType, Grant, InitContext, MergeStrategy, Outcome, Report, Requirement,
     Scenario, Slice, TargetAdapter, Task, Verdict, VerifyContext,
 };
-use emery_sdk::{Doc, Error, Route, body};
+use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
 use omnia_test::SeenWorker;
 use omnia_test::guest::Scripted;
@@ -409,7 +409,7 @@ fn slice() -> Slice {
 fn omnia_slice() -> Slice {
     let mut slice = slice_for("orders-reading", &["orders.read"]);
     slice.requirements[0].statement = vec!["Answers the order by its id.".to_owned()];
-    slice.requirements[0].route = Some(routed("GET", "/orders/{id}"));
+    slice.requirements[0].trigger = Some(routed("GET", "/orders/{id}"));
     slice.requirements[0].scenarios = vec![Scenario {
         name: "An order is returned by its id".to_owned(),
         given: vec!["an order 42".to_owned()],
@@ -437,8 +437,7 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
             subject: (*subject).to_owned(),
             statement: vec![format!("The behaviour `{subject}` states.")],
             scenarios: Vec::new(),
-            route: None,
-            topic: None,
+            trigger: None,
         })
         .collect();
     let spec = requirements
@@ -468,11 +467,11 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
 }
 
 // The typed route a requirement carries, as the engine lowers it.
-fn routed(method: &str, path: &str) -> Route {
-    Route {
+fn routed(method: &str, path: &str) -> Trigger {
+    Trigger::Http(Route {
         method: method.to_owned(),
         path: path.to_owned(),
-    }
+    })
 }
 
 // The edit that fills the function the adapter scaffolded for the default slice.
@@ -973,7 +972,7 @@ async fn omnia_scaffold_held_stem() {
     slice.name = "orders-paying".to_owned();
     slice.requirements[0].subject = "orders.pay".to_owned();
     slice.requirements[0].statement = vec!["Settles the order.".to_owned()];
-    slice.requirements[0].route = Some(routed("POST", "/orders/{id}/pay"));
+    slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/pay"));
     slice.requirements[0].scenarios[0].name = "An order is paid".to_owned();
     slice.types = Vec::new();
     slice.brief = vec!["Pays an order.".to_owned()];
@@ -1051,7 +1050,7 @@ async fn omnia_scaffold_twins() {
         ("DELETE", "DELETE /orders/{id} removes the order."),
     ]) {
         requirement.statement = vec![statement.to_owned()];
-        requirement.route = Some(routed(method, "/orders/{id}"));
+        requirement.trigger = Some(routed(method, "/orders/{id}"));
         requirement.scenarios = vec![Scenario {
             name: "The order is answered".to_owned(),
             given: Vec::new(),
@@ -1146,7 +1145,7 @@ async fn omnia_scaffold_no_route() {
         "- No scenario states a test, so no test file was scaffolded.",
         "1. `todo!(\"REQ-001 orders.get-id.return-order: the behaviour\")` in \
          `crates/orders/src/reading.rs`: the function `get_id_return_order`, since the \
-         requirement states no route and no topic. Give it the signature the behaviour needs \
+         requirement states no route and no message. Give it the signature the behaviour needs \
          and write the body.",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
@@ -1163,7 +1162,7 @@ async fn omnia_route_typed() {
     let project = omnia_tree().await;
     let mut slice = slice_for("orders-items", &["orders.items", "orders.lines", "orders.sum"]);
     slice.requirements[0].statement = vec!["Adding an item appends it to the order.".to_owned()];
-    slice.requirements[0].route = Some(routed("POST", "/orders/{id}/items"));
+    slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/items"));
     slice.requirements[0].scenarios = vec![Scenario {
         name: "An item is added".to_owned(),
         given: vec!["an order 42".to_owned()],
@@ -1174,7 +1173,7 @@ async fn omnia_route_typed() {
     slice.requirements[1].statement =
         vec!["PATCH /orders/:orderId/lines/:lineId changes a line's quantity.".to_owned()];
     slice.requirements[2].statement = vec!["Sums the order.".to_owned()];
-    slice.requirements[2].route = Some(routed("HEAD", "/orders/{id}/sum"));
+    slice.requirements[2].trigger = Some(routed("HEAD", "/orders/{id}/sum"));
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1208,7 +1207,7 @@ async fn omnia_scaffold_start_routed() {
     let project = omnia_tree().await;
     let mut slice = slice_for("start", &["start.health-live", "start.refuse-without-secret"]);
     slice.requirements[0].statement = vec!["Answers that the process is live.".to_owned()];
-    slice.requirements[0].route = Some(routed("GET", "/health/live"));
+    slice.requirements[0].trigger = Some(routed("GET", "/health/live"));
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1267,7 +1266,7 @@ async fn omnia_scaffold_topic() {
         &["orders.cancel", "orders.cancel.refuse-paid", "orders.count"],
     );
     for requirement in &mut slice.requirements[..2] {
-        requirement.topic = Some("orders.cancel-requested".to_owned());
+        requirement.trigger = Some(Trigger::Message("orders.cancel-requested".to_owned()));
     }
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
@@ -1341,7 +1340,7 @@ async fn omnia_scaffold_topic_declared() {
     let table = format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs"));
     project.write("crates/common/src/topic.rs", table.as_bytes());
     let mut slice = slice_for("orders-placing", &["orders.on-placed"]);
-    slice.requirements[0].topic = Some("order-placed".to_owned());
+    slice.requirements[0].trigger = Some(Trigger::Message("order-placed".to_owned()));
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("the second slice's turn");

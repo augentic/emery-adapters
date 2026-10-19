@@ -401,7 +401,7 @@ impl Stem {
             let suffix = format!("_{}", number(&requirement.id));
             if let Some(route) = route::of(requirement) {
                 group(&mut routed, route, requirement);
-            } else if let Some(topic) = requirement.topic.as_deref().filter(|t| !t.is_empty()) {
+            } else if let Some(topic) = route::message(requirement) {
                 group(&mut consumed, topic, requirement);
             } else {
                 let tail = tail(&requirement.subject);
@@ -721,7 +721,7 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. `todo!(\"{}\")` in `{}`: the function `{}`, since the requirement \
-                 states no route and no topic. Give it the signature the behaviour needs and \
+                 states no route and no message. Give it the signature the behaviour needs and \
                  write the body.",
                 escape(&function.marker),
                 self.module.path,

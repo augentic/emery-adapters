@@ -3541,10 +3541,10 @@ fn slice_of<'a>(slices: &'a [Integrated], module: &str) -> Option<&'a Integrated
 }
 
 // Whether any of the requirements `ids` name, among `requirements`, states
-// an HTTP surface: the typed `route` the engine lowers from the survey's
-// contract, else a method in capitals followed by a path, `GET
-// /orders/{id}`, in backticks or bare, in its body or in a scenario's
-// given, when, then, or and, which an older revision spells it by.
+// an HTTP surface: the typed `trigger` the engine lowers from the survey's
+// contract where it is an `http` route, else a method in capitals followed
+// by a path, `GET /orders/{id}`, in backticks or bare, in its body or in a
+// scenario's given, when, then, or and, which an older revision spells it by.
 fn states_route(ids: &[String], requirements: &[Value]) -> bool {
     const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
     let texts = |value: &Value| -> Vec<String> {
@@ -3562,7 +3562,7 @@ fn states_route(ids: &[String], requirements: &[Value]) -> bool {
             requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
         })
         .collect();
-    if named.iter().any(|requirement| requirement["route"]["method"].is_string()) {
+    if named.iter().any(|requirement| requirement["trigger"]["http"]["method"].is_string()) {
         return true;
     }
     named
@@ -6280,9 +6280,10 @@ mod tests {
         ];
         let spec = serde_json::json!([
             {"id": "REQ-001", "body": ["`GET /orders/{id}` answers the order."]},
-            {"id": "REQ-002", "body": ["A client places an order."], "route": {"method": "POST", "path": "/orders"},
+            {"id": "REQ-002", "body": ["A client places an order."],
+             "trigger": {"http": {"method": "POST", "path": "/orders"}},
              "scenarios": [{"when": "an order is placed with valid fields", "then": "201"}]},
-            {"id": "REQ-003", "body": ["Controllers never import repositories directly."], "route": null},
+            {"id": "REQ-003", "body": ["Controllers never import repositories directly."], "trigger": null},
             {"id": "REQ-004", "body": ["Items are listed."], "scenarios": [{"given": ["GET /order-items is called"]}]},
             {"id": "REQ-005", "body": ["The application enables shutdown hooks."]},
         ]);

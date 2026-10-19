@@ -1,6 +1,8 @@
 use emery_sdk::target::capability::Target;
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput};
+use emery_sdk::{
+    AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput, Trigger,
+};
 use serde_json::json;
 
 /// The source name every probe input carries.
@@ -33,11 +35,10 @@ pub fn slice() -> Slice {
                 then: "the order is answered".to_owned(),
                 and: Vec::new(),
             }],
-            route: Some(Route {
+            trigger: Some(Trigger::Http(Route {
                 method: "POST".to_owned(),
                 path: "/orders".to_owned(),
-            }),
-            topic: None,
+            })),
         }],
         types: vec![DesignType {
             key: "orders.Order".to_owned(),

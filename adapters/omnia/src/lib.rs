@@ -8,7 +8,7 @@
 //!
 //! Before a slice's turn, the adapter scaffolds the slice's skeleton from the
 //! typed slice: the stem's crate where the tree lacks it, the part with a
-//! handler per route the requirements carry, a consumer per topic, and a
+//! handler per route the requirements carry, a consumer per message, and a
 //! function per requirement carrying neither, an ignored test per scenario,
 //! and the stem's lines in every list. A `start` requirement carrying a
 //! route is laid under the crate of the stem its route's resource names. The

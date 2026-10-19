@@ -141,19 +141,21 @@ impl<A: SourceAdapter> Shipped<A> {
     }
 
     // The `contract` claims the adapter joins by its own reading: over the
-    // workspace, one per surface serving a route — the surface's id, the
-    // route as the SDK spells it, the anchor of its registration — and no
-    // other; over `inline`, none, since a value is never surveyed.
+    // workspace, one per surface with a trigger — the surface's id, the
+    // extra the trigger is carried as and the trigger as the SDK spells it,
+    // the anchor of its registration — and no other; over `inline`, none,
+    // since a value is never surveyed.
     async fn contracts(
-        &self, project: &Scratch, inline: &str, routed: &[(&str, &str, &str)], model: Scripted,
+        &self, project: &Scratch, inline: &str, triggered: &[(&str, &str, &str, &str)],
+        model: Scripted,
     ) -> Scripted {
         let evidence = self.accepted(&workspace(project), &model).await;
         check_evidence(&evidence);
-        assert_eq!(routes(&evidence), routed, "the surfaces serving a route, and no other");
+        assert_eq!(triggers(&evidence), triggered, "the surfaces with a trigger, and no other");
 
         let evidence = self.accepted(&value(inline), &model).await;
         check_evidence(&evidence);
-        assert!(routes(&evidence).is_empty(), "a value serves no route");
+        assert!(triggers(&evidence).is_empty(), "a value has no trigger");
         model.assert_exhausted();
         model
     }
@@ -238,21 +240,25 @@ fn declared(evidence: &Evidence) -> Vec<&str> {
     names
 }
 
-// The `contract` claims' ids, routes, and anchors, sorted by id.
-fn routes(evidence: &Evidence) -> Vec<(&str, &str, &str)> {
-    let mut routes: Vec<(&str, &str, &str)> = evidence
+// The `contract` claims' ids, the extra each carries its trigger as with the
+// trigger, and anchors, sorted by id.
+fn triggers(evidence: &Evidence) -> Vec<(&str, &str, &str, &str)> {
+    let mut triggers: Vec<(&str, &str, &str, &str)> = evidence
         .claims
         .iter()
         .filter(|claim| claim.kind == ClaimKind::Contract)
         .map(|claim| {
             let id = claim.id.as_deref().expect("a contract carries its surface's id");
-            let route = claim.extras.get("route").and_then(|r| r.as_str());
+            let (key, value) = ["route", "message"]
+                .into_iter()
+                .find_map(|key| Some((key, claim.extras.get(key)?.as_str()?)))
+                .expect("a contract carries its trigger");
             let path = claim.path.as_deref().expect("a contract is anchored at its surface");
-            (id, route.expect("a contract carries its route"), path)
+            (id, key, value, path)
         })
         .collect();
-    routes.sort_unstable();
-    routes
+    triggers.sort_unstable();
+    triggers
 }
 
 // The survey answer a surveying workspace's first turn is scripted with:
@@ -2364,8 +2370,68 @@ async fn typescript_contracts() {
             &project,
             "export const pool = \"o-1\";\n",
             &[
-                ("orders.find-order", "GET /api/orders/{id}", "src/routes.ts#L9"),
-                ("orders.post", "POST /api/orders", "src/routes.ts#L6-L8"),
+                ("orders.find-order", "route", "GET /api/orders/{id}", "src/routes.ts#L9"),
+                ("orders.post", "route", "POST /api/orders", "src/routes.ts#L6-L8"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A handler subscribed to a message by name — through `subscribe`, a
+// listener whose event is no lifecycle's, or a method under a message
+// decorator — carries the message as its trigger, anchored at the
+// subscription under the surface's id; a listener on a stream's payload
+// event (`message`) names no message, so its surface carries none.
+#[tokio::test]
+async fn typescript_contracts_messaged() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"events\",\"main\":\"src/main.ts\"}\n"),
+            (
+                "src/main.ts",
+                "import { Kafka } from \"kafkajs\";\nimport { Bus } from \"bus\";\nimport { \
+                 onCancel } from \"./cancel\";\nimport { onRaw } from \"./raw\";\nimport { \
+                 onPaid } from \"./paid\";\n\nconst consumer = new Kafka().consumer();\n\
+                 consumer.subscribe(\"orders.cancel-requested\", onCancel);\n\
+                 consumer.on(\"message\", onRaw);\nconst bus = new Bus();\nbus.on(\"invoice:paid\", \
+                 onPaid);\n",
+            ),
+            ("src/cancel.ts", "export function onCancel(raw: string) {\n  return raw;\n}\n"),
+            ("src/raw.ts", "export function onRaw(raw: string) {\n  return raw;\n}\n"),
+            ("src/paid.ts", "export function onPaid(id: string) {\n  return id;\n}\n"),
+            (
+                "src/events.controller.ts",
+                "import { Controller } from \"@nestjs/common\";\nimport { EventPattern, Payload } \
+                 from \"@nestjs/microservices\";\n\n@Controller()\nexport class EventsController \
+                 {\n  @EventPattern(\"invoices.settled\")\n  settled(@Payload() input: unknown) \
+                 {\n    return input;\n  }\n}\n",
+            ),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("cancel consumer", "src/main.ts#L8", "cancel"),
+            ("raw listener", "src/main.ts#L9", "raw"),
+            ("paid listener", "src/main.ts#L11", "paid"),
+            ("settled event", "src/events.controller.ts#L6-L9", "invoices"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.cancel");
+
+    let model = TYPESCRIPT
+        .contracts(
+            &project,
+            "export const pool = \"o-1\";\n",
+            &[
+                ("invoices", "message", "invoices.settled", "src/events.controller.ts#L6-L9"),
+                ("orders", "message", "orders.cancel-requested", "src/main.ts#L8"),
+                ("paid", "message", "invoice:paid", "src/main.ts#L11"),
             ],
             Scripted::answering([&survey, &answer, &answer]),
         )
@@ -2396,8 +2462,8 @@ async fn typescript_contracts_decorated() {
             &project,
             "export const pool = \"o-1\";\n",
             &[
-                ("orders.create", "POST /orders", "src/orders.controller.ts#L14-L17"),
-                ("orders.find", "GET /orders/{id}", "src/orders.controller.ts#L8-L12"),
+                ("orders.create", "route", "POST /orders", "src/orders.controller.ts#L14-L17"),
+                ("orders.find", "route", "GET /orders/{id}", "src/orders.controller.ts#L8-L12"),
             ],
             Scripted::answering([&survey, &answer, &answer]),
         )
@@ -5046,9 +5112,14 @@ async fn python_contracts() {
             &project,
             "POOL = \"o-1\"\n",
             &[
-                ("auth", "POST /auth/login", "app/auth/routes.py#L6-L8"),
-                ("orders.get-order-id", "GET /orders/{order_id}", "app/orders/routes.py#L11-L13"),
-                ("orders.post", "POST /orders", "app/orders/routes.py#L6-L8"),
+                ("auth", "route", "POST /auth/login", "app/auth/routes.py#L6-L8"),
+                (
+                    "orders.get-order-id",
+                    "route",
+                    "GET /orders/{order_id}",
+                    "app/orders/routes.py#L11-L13",
+                ),
+                ("orders.post", "route", "POST /orders", "app/orders/routes.py#L6-L8"),
             ],
             Scripted::answering([&survey, &answer, &answer]),
         )
@@ -5102,8 +5173,60 @@ async fn python_contracts_registered() {
             &project,
             "POOL = \"o-1\"\n",
             &[
-                ("orders.create", "POST /orders", "app/server.py#L7"),
-                ("orders.update", "PATCH /orders/{id}", "app/server.py#L8"),
+                ("orders.create", "route", "POST /orders", "app/server.py#L7"),
+                ("orders.update", "route", "PATCH /orders/{id}", "app/server.py#L8"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A `def` under a subscribing decorator — a broker's `subscriber`, a
+// socket's `on` — carries the message it is subscribed to as its trigger,
+// anchored at the `def`; one under `on` for a connection event (`connect`)
+// is no message, so its surface carries none, and a task's name is the
+// function's, so a task carries none either.
+#[tokio::test]
+async fn python_contracts_messaged() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("pyproject.toml", "[project]\nname = \"events\"\n"),
+            ("app/__init__.py", ""),
+            (
+                "app/main.py",
+                "import socketio\nfrom celery import Celery\nfrom faststream.kafka import \
+                 KafkaBroker\n\nfrom .cancel import on_cancel\n\nsio = socketio.Server()\n\
+                 broker = KafkaBroker()\ncelery = Celery()\n\n\n@sio.on(\"connect\")\ndef \
+                 connected(sid, environ):\n    return None\n\n\n@sio.on(\"chat\")\ndef chat(sid, \
+                 data):\n    return on_cancel(data)\n\n\n@broker.subscriber(\"orders.cancel-\
+                 requested\")\ndef cancel(body):\n    return on_cancel(body)\n\n\n\
+                 @celery.task\ndef nightly():\n    return None\n",
+            ),
+            ("app/cancel.py", "def on_cancel(data):\n    return data\n"),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("connected", "app/main.py#L12-L14", "connect"),
+            ("chat", "app/main.py#L17-L19", "chat"),
+            ("cancel consumer", "app/main.py#L22-L24", "cancel"),
+            ("nightly task", "app/main.py#L27-L29", "nightly"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.cancel");
+
+    let model = PYTHON
+        .contracts(
+            &project,
+            "POOL = \"o-1\"\n",
+            &[
+                ("chat", "message", "chat", "app/main.py#L17-L19"),
+                ("orders", "message", "orders.cancel-requested", "app/main.py#L22-L24"),
             ],
             Scripted::answering([&survey, &answer, &answer]),
         )

@@ -9,7 +9,7 @@ use emery_sdk::survey::code::{
 use emery_sdk::survey::resolve::{Target, normalize};
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
-use emery_sdk::{Route, kebab, unique};
+use emery_sdk::{Route, Trigger, kebab, unique};
 
 use super::DIALECT;
 use super::parse::Module;
@@ -20,6 +20,12 @@ const BOOTSTRAPS: &[&str] =
 
 const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options", "all"];
 const MOUNTING: &[&str] = &["use", "register", "mount", "plugin"];
+// The methods, beside the dialect's listeners, that register a handler for a
+// message by name; and the decorators that do.
+const SUBSCRIBING: &[&str] = &["subscribe", "consume"];
+const MESSAGE_DECORATORS: &[&str] = &["MessagePattern", "EventPattern", "SubscribeMessage"];
+// A stream's payload events, which name the arrival and not the message.
+const GENERIC_EVENTS: &[&str] = &["message", "data"];
 
 #[derive(Debug)]
 pub struct TypeScript {
@@ -80,15 +86,27 @@ impl TypeScript {
             lines: call.lines,
             detail,
             closure: tree.reaches(module, call.lines, &call.frames, call.class.as_deref()),
-            route: route.as_deref().and_then(|route| typed_route(method, route)),
+            trigger: route
+                .as_deref()
+                .map_or_else(|| typed_message(method, literal), |route| typed_route(method, route)),
         }
     }
 }
 
 // The route a registration serves, typed, where its verb is one HTTP
 // method: `all`, and a path the grammar refuses, leave the surface unrouted.
-fn typed_route(verb: &str, path: &str) -> Option<Route> {
-    Route::parse(&format!("{verb} {path}")).ok()
+fn typed_route(verb: &str, path: &str) -> Option<Trigger> {
+    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
+}
+
+// The message a registration subscribes its handler to, typed, where its
+// method listens or subscribes by name: a lifecycle event, a stream's payload
+// event, and a name the grammar refuses leave the surface with no trigger.
+fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
+    let name = literal.filter(|name| !name.starts_with('/'))?;
+    let subscribing = DIALECT.listeners.contains(&method) || SUBSCRIBING.contains(&method);
+    let named = !DIALECT.lifecycle_events.contains(&name) && !GENERIC_EVENTS.contains(&name);
+    (subscribing && named).then(|| Trigger::message(name).ok()).flatten()
 }
 
 impl Recogniser for TypeScript {
@@ -270,7 +288,7 @@ fn at_decorated_class(tree: &Tree<TypeScript>, module: &Module, class: &Decorate
         lines: class.lines,
         detail,
         closure: tree.reaches(module, class.lines, &[], class.class.as_deref()),
-        route: None,
+        trigger: None,
     }
 }
 
@@ -290,8 +308,19 @@ fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Dec
         lines: decorated.lines,
         detail,
         closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
-        route: routed.as_ref().and_then(|(verb, route)| typed_route(verb, route)),
+        trigger: routed
+            .as_ref()
+            .map_or_else(|| decorated_message(decorated), |(verb, route)| typed_route(verb, route)),
     }
+}
+
+// The message a method under a message decorator consumes, typed.
+fn decorated_message(decorated: &Decorated) -> Option<Trigger> {
+    let name = decorated.name.last()?;
+    MESSAGE_DECORATORS
+        .contains(&name.as_str())
+        .then(|| Trigger::message(decorated.literal.as_deref()?).ok())
+        .flatten()
 }
 
 fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &str) -> Derived {
@@ -321,7 +350,7 @@ fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &s
         lines: declared,
         detail,
         closure: tree.reaches(module, declared, &[], class),
-        route: None,
+        trigger: None,
     }
 }
 

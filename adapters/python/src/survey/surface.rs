@@ -8,7 +8,7 @@ use emery_sdk::survey::code::{
 };
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
-use emery_sdk::{Route, kebab, push_unique, unique};
+use emery_sdk::{Route, Trigger, kebab, push_unique, unique};
 
 use super::DIALECT;
 use super::parse::{self, Module};
@@ -60,6 +60,12 @@ const PREFIXED: &[&str] = &["APIRouter", "Blueprint", "Router"];
 // hands the method to its view, and a websocket serves none, so neither
 // types a route.
 const DEFAULT_GET: &[&str] = &["route", "api_route", "add_api_route", "add_url_rule", "add_route"];
+// The methods and decorators that register a handler for a message by name:
+// a subscription, a consumer, a socket event. A task is none, since its name
+// is the function's and no message's.
+const SUBSCRIBING: &[&str] = &["subscribe", "subscriber", "consume", "basic_consume", "on"];
+// The events a socket's `on` hears about the connection, never a caller.
+const CONNECTION_EVENTS: &[&str] = &["connect", "disconnect", "connect_error", "error", "message"];
 
 #[derive(Debug)]
 pub struct Python {
@@ -225,7 +231,10 @@ impl Python {
             lines: call.lines,
             detail,
             closure,
-            route: route.as_deref().and_then(|route| typed_route(method, methods_keyword, route)),
+            trigger: route.as_deref().map_or_else(
+                || typed_message(method, literal),
+                |route| typed_route(method, methods_keyword, route),
+            ),
         }
     }
 }
@@ -517,11 +526,20 @@ fn verb_of(method: &str, methods: Option<&str>) -> String {
 // The route a registration serves, typed, where its method is certain: a
 // verb, or a `DEFAULT_GET` registration read with its `methods` keyword; a
 // `trace`, and a path the grammar refuses, leave the surface unrouted.
-fn typed_route(method: &str, methods: Option<&str>, path: &str) -> Option<Route> {
+fn typed_route(method: &str, methods: Option<&str>, path: &str) -> Option<Trigger> {
     if !(VERBS.contains(&method) || DEFAULT_GET.contains(&method)) {
         return None;
     }
-    Route::parse(&format!("{} {path}", verb_of(method, methods))).ok()
+    Route::parse(&format!("{} {path}", verb_of(method, methods))).ok().map(Trigger::Http)
+}
+
+// The message a registration or decorator subscribes its handler to, typed,
+// where its method is one of `SUBSCRIBING`: a connection event, and a name
+// the grammar refuses, leave the surface with no trigger.
+fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
+    let name = literal.filter(|name| !name.starts_with('/'))?;
+    let subscribing = SUBSCRIBING.contains(&method) && !CONNECTION_EVENTS.contains(&name);
+    subscribing.then(|| Trigger::message(name).ok()).flatten()
 }
 
 fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
@@ -543,7 +561,7 @@ fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
         lines,
         detail,
         closure: tree.reaches(module, lines, &[], class.map(|_| "Command")),
-        route: None,
+        trigger: None,
     })
 }
 
@@ -568,7 +586,7 @@ fn at_decorated_class(tree: &Tree<Python>, module: &Module, class: &Decorated) -
         lines: class.lines,
         detail,
         closure: tree.reaches(module, class.lines, &[], Some(name)),
-        route: None,
+        trigger: None,
     }
 }
 
@@ -607,9 +625,10 @@ fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated)
         lines: decorated.lines,
         detail,
         closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
-        route: route
-            .as_deref()
-            .and_then(|route| typed_route(&method, decorated.keyword("methods"), route)),
+        trigger: route.as_deref().map_or_else(
+            || typed_message(&method, decorated.literal.as_deref()),
+            |route| typed_route(&method, decorated.keyword("methods"), route),
+        ),
     }
 }
 
@@ -636,7 +655,7 @@ fn at_export(tree: &Tree<Python>, module: &Module, export: &Export) -> Derived {
         lines: declared,
         detail,
         closure: tree.reaches(module, declared, &[], class),
-        route: None,
+        trigger: None,
     }
 }
 

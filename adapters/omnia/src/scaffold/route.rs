@@ -1,8 +1,9 @@
-//! Reads the typed route a requirement carries, and the stem its resource names.
+//! Reads the typed trigger a requirement carries: the route the SDK serves,
+//! the message it consumes, and the stem a route's resource names.
 
-use emery_sdk::Route;
 use emery_sdk::survey::route::Spelling;
 use emery_sdk::target::Requirement;
+use emery_sdk::{Route, Trigger};
 
 // The methods `omnia_sdk::api::http` has a route function for, each with
 // that function.
@@ -20,7 +21,20 @@ const TYPED: Spelling = Spelling {
 // for its method; a `HEAD` or `OPTIONS` route is none, so the requirement
 // scaffolds a function.
 pub(super) fn of(requirement: &Requirement) -> Option<&Route> {
-    requirement.route.as_ref().filter(|route| METHODS.iter().any(|(name, _)| *name == route.method))
+    match &requirement.trigger {
+        Some(Trigger::Http(route)) if METHODS.iter().any(|(name, _)| *name == route.method) => {
+            Some(route)
+        }
+        _ => None,
+    }
+}
+
+// The message the requirement consumes, where its trigger is one.
+pub(super) fn message(requirement: &Requirement) -> Option<&str> {
+    match &requirement.trigger {
+        Some(Trigger::Message(name)) => Some(name),
+        _ => None,
+    }
 }
 
 pub(super) fn function(method: &str) -> &'static str {
