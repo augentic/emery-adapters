@@ -22,19 +22,30 @@ const TYPED: Spelling = Spelling {
 // scaffolds a function.
 pub(super) fn of(requirement: &Requirement) -> Option<&Route> {
     match &requirement.trigger {
-        Some(Trigger::Http(route)) if METHODS.iter().any(|(name, _)| *name == route.method) => {
+        Some(Trigger::Http(route))
+            if METHODS.iter().any(|(name, _)| *name == route.method)
+                && Route::parse(&route.to_string()).is_ok_and(|parsed| parsed == *route) =>
+        {
             Some(route)
         }
         _ => None,
     }
 }
 
-// The message the requirement consumes, where its trigger is one.
+// The message the requirement consumes, where its trigger is a topic token;
+// a name outside the charset scaffolds a function.
 pub(super) fn message(requirement: &Requirement) -> Option<&str> {
     match &requirement.trigger {
-        Some(Trigger::Message(name)) => Some(name),
+        Some(Trigger::Message(name)) if is_topic(name) => Some(name),
         _ => None,
     }
+}
+
+fn is_topic(name: &str) -> bool {
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
 }
 
 pub(super) fn function(method: &str) -> &'static str {

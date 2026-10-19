@@ -1255,7 +1255,8 @@ async fn omnia_scaffold_start_routed() {
 // handler over the delivery's input with its marker, the constant added at
 // the end of the topic table with its doc, the entry's topics array
 // holding the part, and the brief naming each; two requirements of one
-// topic share the consumer.
+// topic share the consumer, and a message name outside the topic charset
+// scaffolds a function instead.
 #[tokio::test]
 async fn omnia_scaffold_topic() {
     let project = omnia_tree().await;
@@ -1267,6 +1268,8 @@ async fn omnia_scaffold_topic() {
     for requirement in &mut slice.requirements[..2] {
         requirement.trigger = Some(Trigger::Message("orders.cancel-requested".to_owned()));
     }
+    slice.requirements[2].trigger =
+        Some(Trigger::Message("orders\";#[test]fn/**/injected(){}//".to_owned()));
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");

@@ -157,7 +157,7 @@ pub fn module(stem: &Stem) -> String {
     if !stem.handlers.is_empty() {
         text.push_str("\n// The paths the part serves.\n");
         for (constant, path) in &stem.paths {
-            let _ = writeln!(text, "pub(crate) const {constant}: &str = \"{path}\";");
+            let _ = writeln!(text, "pub(crate) const {constant}: &str = \"{}\";", escape(path));
         }
         text.push('\n');
         text.push_str(&routes(stem));
@@ -341,16 +341,17 @@ fn backticks(line: &str) -> usize {
 }
 
 fn handler(handler: &Handler) -> String {
-    let route = format!("{} {}", handler.route.method, handler.route.path);
+    let route = escape(&format!("{} {}", handler.route.method, handler.route.path));
     let mut text = format!("/// The input of `{route}`.\n#[derive(Debug, Deserialize)]\n");
     if handler.params.is_empty() {
         let _ = writeln!(text, "pub struct {} {{}}\n", handler.input);
     } else {
         let _ = writeln!(text, "pub struct {} {{", handler.input);
         for param in &handler.params {
-            let _ = writeln!(text, "    /// The `{}` path parameter.", param.wire);
+            let wire = escape(&param.wire);
+            let _ = writeln!(text, "    /// The `{wire}` path parameter.");
             if param.field != param.wire {
-                let _ = writeln!(text, "    #[serde(rename = \"{}\")]", param.wire);
+                let _ = writeln!(text, "    #[serde(rename = \"{wire}\")]");
             }
             let _ = writeln!(text, "    pub {}: String,", param.field);
         }
@@ -382,7 +383,8 @@ fn signature(handler: &Handler) -> String {
 fn consumer(consumer: &Consumer) -> String {
     let mut text = format!(
         "/// A delivery of `{}`.\n#[derive(Debug, Deserialize)]\npub struct {} {{}}\n\n",
-        consumer.topic, consumer.input
+        escape(&consumer.topic),
+        consumer.input
     );
     for stated in &consumer.stated {
         let _ = writeln!(text, "// {} {}: {}", stated.id, stated.subject, stated.statement);

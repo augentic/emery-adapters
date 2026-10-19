@@ -542,11 +542,12 @@ impl Stem {
             ),
         ];
         for consumer in self.consumers.iter().filter(|consumer| !consumer.declared) {
+            let topic = escape(&consumer.topic);
             lines.push(Line::new(
                 TOPIC_TABLE,
                 format!(
-                    "\n/// The `{}` topic.\npub const {}: &str = \"{}\";",
-                    consumer.topic, consumer.constant, consumer.topic
+                    "\n/// The `{topic}` topic.\npub const {}: &str = \"{topic}\";",
+                    consumer.constant
                 ),
                 Place::FileEnd,
             ));

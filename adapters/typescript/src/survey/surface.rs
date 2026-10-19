@@ -103,10 +103,18 @@ fn typed_route(verb: &str, path: &str) -> Option<Trigger> {
 // method listens or subscribes by name: a lifecycle event, a stream's payload
 // event, and a name the grammar refuses leave the surface with no trigger.
 fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
-    let name = literal.filter(|name| !name.starts_with('/'))?;
+    let name = literal.filter(|name| is_message(name))?;
     let subscribing = DIALECT.listeners.contains(&method) || SUBSCRIBING.contains(&method);
     let named = !DIALECT.lifecycle_events.contains(&name) && !GENERIC_EVENTS.contains(&name);
     (subscribing && named).then(|| Trigger::message(name).ok()).flatten()
+}
+
+fn is_message(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
 }
 
 impl Recogniser for TypeScript {
@@ -317,10 +325,8 @@ fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Dec
 // The message a method under a message decorator consumes, typed.
 fn decorated_message(decorated: &Decorated) -> Option<Trigger> {
     let name = decorated.name.last()?;
-    MESSAGE_DECORATORS
-        .contains(&name.as_str())
-        .then(|| Trigger::message(decorated.literal.as_deref()?).ok())
-        .flatten()
+    let literal = decorated.literal.as_deref().filter(|name| is_message(name))?;
+    MESSAGE_DECORATORS.contains(&name.as_str()).then(|| Trigger::message(literal).ok()).flatten()
 }
 
 fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &str) -> Derived {

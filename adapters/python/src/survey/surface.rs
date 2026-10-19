@@ -539,9 +539,17 @@ fn typed_route(method: &str, methods: Option<&str>, path: &str) -> Option<Trigge
 // where its method is one of `SUBSCRIBING`: a connection event, and a name
 // the grammar refuses, leave the surface with no trigger.
 fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
-    let name = literal.filter(|name| !name.starts_with('/'))?;
+    let name = literal.filter(|name| is_message(name))?;
     let subscribing = SUBSCRIBING.contains(&method) && !CONNECTION_EVENTS.contains(&name);
     subscribing.then(|| Trigger::message(name).ok()).flatten()
+}
+
+fn is_message(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
 }
 
 fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
