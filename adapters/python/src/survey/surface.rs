@@ -173,7 +173,7 @@ impl Python {
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
     ) -> Derived {
-        let (method, literal) = call.registered(tree.led(module, call));
+        let (method, literal) = call.registered(tree.leading_literal(module, call));
         let literal = literal.as_deref();
         let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(
@@ -206,7 +206,7 @@ impl Python {
         if let Some(receiver) = tree.receiver(module, call) {
             detail.push(format!("through `{}`", receiver.package));
         }
-        let (methods, class) = match self.handed_class(tree, module, call) {
+        let (methods, class) = match self.class_run_by(tree, module, call) {
             Some((declaring, class)) => {
                 let methods: Vec<(String, Lines)> = view_methods(declaring, &class)
                     .into_iter()
@@ -325,7 +325,9 @@ impl Recogniser for Python {
         }
     }
 
-    fn class_handed(&self, tree: &Tree<Self>, module: &Module, arg: &Arg, frames: &[u32]) -> bool {
+    fn hands_bare_class(
+        &self, tree: &Tree<Self>, module: &Module, arg: &Arg, frames: &[u32],
+    ) -> bool {
         if arg.function || arg.called {
             return false;
         }
@@ -339,7 +341,7 @@ impl Recogniser for Python {
             .is_some_and(|export| export.kind == ExportKind::Class)
     }
 
-    fn handed_class<'t>(
+    fn class_run_by<'t>(
         &self, tree: &'t Tree<Self>, module: &'t Module, call: &Call,
     ) -> Option<(&'t Module, String)> {
         call.args.iter().filter(|arg| !arg.is_hook(&DIALECT)).find_map(|arg| {

@@ -23,7 +23,7 @@ mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
+use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Error, Model, tracing};
 
 use self::scaffold::Scaffold;
@@ -75,8 +75,11 @@ impl TargetAdapter for Adapter {
                 tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
                 let brief = scaffold.brief();
                 let paths = scaffold.paths();
-                let ctx = ctx.with_scaffold(&brief).with_scaffolded(&paths);
-                emery_sdk::target::build(&ctx, PROSE, |report| {
+                let ctx = ctx.with_scaffold(target::Scaffold {
+                    brief: &brief,
+                    paths: &paths,
+                });
+                target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })
                 .await
@@ -84,7 +87,7 @@ impl TargetAdapter for Adapter {
             }
             Task::Verify(ctx) => {
                 let root = Path::new(ctx.workspace);
-                emery_sdk::target::verify(&ctx, PROSE, |_| Tree::read(root)?.check_verify())
+                target::verify(&ctx, PROSE, |_| Tree::read(root)?.check_verify())
                     .await
                     .map(Outcome::Verified)
             }

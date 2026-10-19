@@ -1147,6 +1147,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "emery-lexicon"
+version = "0.39.0"
+
+[[package]]
 name = "emery-node"
 version = "0.14.0"
 dependencies = [
@@ -1183,6 +1187,7 @@ version = "0.39.0"
 dependencies = [
  "anyhow",
  "emery-adapter",
+ "emery-lexicon",
  "emery-prose",
  "futures",
  "omnia-sdk",

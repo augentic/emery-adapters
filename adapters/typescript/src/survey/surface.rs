@@ -52,7 +52,7 @@ impl TypeScript {
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
     ) -> Derived {
-        let (method, literal) = call.registered(tree.led(module, call));
+        let (method, literal) = call.registered(tree.leading_literal(module, call));
         let literal = literal.as_deref();
         let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(

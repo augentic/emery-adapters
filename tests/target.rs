@@ -219,7 +219,6 @@ impl<A: TargetAdapter> Shipped<A> {
             grants: A::metadata().grants,
             model,
             scaffold: None,
-            scaffolded: &[],
         };
         match A::run(Task::Build(ctx)).await? {
             Outcome::Built(report) => Ok(report),

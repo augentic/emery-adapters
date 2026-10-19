@@ -1,7 +1,7 @@
 use emery_sdk::target::capability::Target;
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
 use emery_sdk::{
-    AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput, Trigger,
+    Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput, SourceMetadata, Trigger,
 };
 use serde_json::json;
 
@@ -78,7 +78,7 @@ pub fn value(text: &str) -> SourceInput {
 /// # Panics
 ///
 /// Panics when `emery_version` is present and not an exact semver.
-pub fn check_metadata(metadata: &AdapterMetadata) {
+pub fn check_metadata(metadata: &SourceMetadata) {
     check_version(metadata.emery_version.as_deref());
 }
 
