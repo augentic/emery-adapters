@@ -1098,8 +1098,8 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "emery-adapter"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#00f08e43cf1a7a9b49f1f22c55cba4a8d037be8c"
+version = "0.39.0"
+source = "git+https://github.com/augentic/emery#76696836d373ab48dfc7ee2b9a94a24f73de30ae"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1111,7 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "emery-adapters"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-documentation",
  "emery-intent",
@@ -1135,41 +1135,48 @@ dependencies = [
 
 [[package]]
 name = "emery-documentation"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-intent"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
+name = "emery-lexicon"
+version = "0.39.0"
+source = "git+https://github.com/augentic/emery#76696836d373ab48dfc7ee2b9a94a24f73de30ae"
+
+[[package]]
 name = "emery-node"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-omnia"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "omnia-template",
+ "proc-macro2",
+ "syn 3.0.9",
 ]
 
 [[package]]
 name = "emery-prose"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#00f08e43cf1a7a9b49f1f22c55cba4a8d037be8c"
+version = "0.39.0"
+source = "git+https://github.com/augentic/emery#76696836d373ab48dfc7ee2b9a94a24f73de30ae"
 
 [[package]]
 name = "emery-python"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "ruff_python_ast",
@@ -1179,11 +1186,12 @@ dependencies = [
 
 [[package]]
 name = "emery-sdk"
-version = "0.38.0"
-source = "git+https://github.com/augentic/emery#00f08e43cf1a7a9b49f1f22c55cba4a8d037be8c"
+version = "0.39.0"
+source = "git+https://github.com/augentic/emery#76696836d373ab48dfc7ee2b9a94a24f73de30ae"
 dependencies = [
  "anyhow",
  "emery-adapter",
+ "emery-lexicon",
  "emery-prose",
  "futures",
  "omnia-sdk",
@@ -1196,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "emery-typescript"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "oxc_allocator",
@@ -1248,7 +1256,7 @@ dependencies = [
 
 [[package]]
 name = "evals"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "serde",
@@ -2636,7 +2644,7 @@ dependencies = [
 [[package]]
 name = "omnia-template"
 version = "0.1.0"
-source = "git+https://github.com/augentic/omnia-exemplar#7bf4b135e3ae3b0f6a37776f3fc1d15e93a438e9"
+source = "git+https://github.com/augentic/omnia-exemplar#718dc87719fed02095fbd4908865ad4c725adff4"
 
 [[package]]
 name = "omnia-test"
@@ -4634,7 +4642,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "futures",

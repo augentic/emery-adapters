@@ -142,7 +142,7 @@ fn emery_python() {
     surveying(emery_python::PROSE);
 }
 
-// The three root files the init lays are fenced in `layout.md` as what the
+// The three root files the init scaffolds are fenced in `layout.md` as what the
 // tree holds, so the file the crate embeds and the fence the model reads are
 // held to one body.
 #[test]
@@ -150,14 +150,14 @@ fn emery_node() {
     target_corpus(emery_node::PROSE, "node");
 
     let layout = body(emery_node::PROSE, "references/layout.md").expect("the layout is listed");
-    for (file, laid) in [
+    for (file, scaffolded) in [
         ("package.json", include_str!("../adapters/node/seed/package.json")),
         ("tsconfig.json", include_str!("../adapters/node/seed/tsconfig.json")),
         (".gitignore", include_str!("../adapters/node/seed/.gitignore")),
     ] {
         let fenced = fenced_after(layout, &format!("`{file}`:"));
         assert_eq!(
-            laid.trim_end_matches('\n'),
+            scaffolded.trim_end_matches('\n'),
             fenced,
             "`layout.md` fences `{file}` as `adapters/node/seed/{file}` spells it"
         );

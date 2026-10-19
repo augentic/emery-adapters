@@ -42,7 +42,7 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
 rust-version = "1.99"
-version = "0.13.0"
+version = "0.14.0"
 publish = false
 
 [workspace.lints.rust]
@@ -84,14 +84,15 @@ wasip3 = "0.9.0"
 
 omnia = { version = "0.37.0", default-features = false, features = ["jit"] }
 omnia-sdk = { version = "0.37.0", default-features = false }
+omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
+# omnia-template = { path = "../omnia-exemplar/templates/guest" }
 omnia-test = { version = "0.37.0", default-features = false }
 omnia-wasi-model = "0.37.0"
 omnia-wasi-otel = "0.37.0"
 
-emery-prose = "0.38.0"
-emery-sdk = "0.38.0"
-omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
-# omnia-template = { path = "../omnia-exemplar/templates/guest" }
+emery-prose = "0.39.0"
+emery-sdk = "0.39.0"
+
 test-programs = { path = "crates/test-programs" }
 
 [patch.crates-io]

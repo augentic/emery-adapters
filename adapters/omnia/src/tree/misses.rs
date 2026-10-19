@@ -1,29 +1,33 @@
 //! Checks for empty cache misses on constant `StateStore` keys, single-field
 //! `data` response wrappers, refusals answered `Ok(())`, and format settings.
 
-use super::{Module, Tree, is_ident, is_ident_char, spells, strip_vis};
+use syn::visit::{self, Visit};
+use syn::{
+    Arm, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst, ImplItemFn,
+    Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, Stmt, TraitItemFn,
+};
 
-const NOTHING: &[&str] = &[
-    "Vec::new()",
-    "HashMap::new()",
-    "BTreeMap::new()",
-    "HashSet::new()",
-    "BTreeSet::new()",
-    "vec![]",
-    "Default::default()",
+use super::syntax::{self, calls, derives, is_unit_ok, pat_leads, pat_names, path_ends};
+use super::{Module, Tree};
+
+// The calls that answer an empty collection, each with its spelling.
+const NOTHING: &[(&[&str], &str)] = &[
+    (&["Vec", "new"], "Vec::new()"),
+    (&["HashMap", "new"], "HashMap::new()"),
+    (&["BTreeMap", "new"], "BTreeMap::new()"),
+    (&["HashSet", "new"], "HashSet::new()"),
+    (&["BTreeSet", "new"], "BTreeSet::new()"),
+    (&["Default", "default"], "Default::default()"),
 ];
 
-const DEFAULTED: &[&str] = &[
-    ".unwrap_or_default()",
-    ".unwrap_or_else(Vec::new)",
-    ".unwrap_or_else(HashMap::new)",
-    ".unwrap_or_else(Default::default)",
-    ".unwrap_or(Vec::new())",
+const EMPTY_VEC: &str = "vec![]";
+
+// The arguments of `unwrap_or_else` that default a miss, each with its spelling.
+const DEFAULTED_WITH: &[(&[&str], &str)] = &[
+    (&["Vec", "new"], ".unwrap_or_else(Vec::new)"),
+    (&["HashMap", "new"], ".unwrap_or_else(HashMap::new)"),
+    (&["Default", "default"], ".unwrap_or_else(Default::default)"),
 ];
-
-const MISS_WINDOW: usize = 6;
-
-const UNIT: &str = "Ok(())";
 
 impl Tree<'_> {
     pub(super) fn empty_misses(&self) -> Option<String> {
@@ -38,7 +42,7 @@ impl Tree<'_> {
              never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
              design spells the call, stores it under the same key with a TTL, and answers what it \
              fetched, never an empty collection; repair each read named through `edit_files`, \
-             laying the fetch in the same function:\n{}",
+             writing the fetch in the same function:\n{}",
             lines.join("\n")
         ))
     }
@@ -110,289 +114,442 @@ impl Tree<'_> {
 }
 
 impl Module {
-    // A refusal is read under one of the shapes `refusal_opened` names; each
-    // `Ok(())` on the opener's line past the opener, or in the block beneath
-    // it to the first line back at the opener's indentation, answers it as
-    // processed.
     fn swallowed_rejections(&self) -> Vec<String> {
-        let all: Vec<&str> = self.code.lines().collect();
-        let indent = |line: &str| line.len() - line.trim_start().len();
-        let mut lines = Vec::new();
-        for (index, line) in all.iter().enumerate() {
-            let Some((opened, body)) = refusal_opened(line) else { continue };
-            let body = body.trim();
-            if !body.is_empty() && !body.ends_with('{') {
-                if spells(body, UNIT) {
-                    lines.push(format!(
-                        "{}:{}: `Ok(())` answers the refusal the {opened} caught",
-                        self.path,
-                        index + 1
-                    ));
-                }
-                continue;
-            }
-            let head = indent(line);
-            for (at, inner) in all.iter().enumerate().skip(index + 1) {
-                if inner.trim().is_empty() {
-                    continue;
-                }
-                if indent(inner) <= head {
-                    break;
-                }
-                if spells(inner, UNIT) {
-                    lines.push(format!(
-                        "{}:{}: `Ok(())` answers the refusal the {opened} at line {} caught",
-                        self.path,
-                        at + 1,
-                        index + 1
-                    ));
-                }
-            }
+        let mut swallowed = Swallowed {
+            module: self,
+            open: Vec::new(),
+            lines: Vec::new(),
+        };
+        if let Some(file) = self.file() {
+            swallowed.visit_file(file);
         }
-        lines
+        swallowed.lines
     }
 
-    fn format_settings(&self) -> Vec<(usize, &str)> {
-        self.code
-            .lines()
-            .enumerate()
-            .filter_map(|(index, line)| {
-                let name = setting_const(line)?;
-                name.split('_').any(|segment| segment == "FORMAT").then_some((index + 1, name))
-            })
-            .collect()
+    fn format_settings(&self) -> Vec<(usize, String)> {
+        let mut settings = Settings::default();
+        if let Some(file) = self.file() {
+            settings.visit_file(file);
+        }
+        settings.found
     }
 
     fn empty_misses(&self) -> Vec<String> {
-        let all: Vec<&str> = self.code.lines().collect();
-        let mut lines = Vec::new();
-        for (index, line) in all.iter().enumerate() {
-            if !constant_keyed(line) {
-                continue;
+        let mut functions = Functions {
+            module: self,
+            lines: Vec::new(),
+        };
+        if let Some(file) = self.file() {
+            functions.visit_file(file);
+        }
+        functions.lines
+    }
+
+    fn response_wrappers(&self) -> Vec<(usize, String)> {
+        let mut wrappers = Wrappers::default();
+        if let Some(file) = self.file() {
+            wrappers.visit_file(file);
+        }
+        wrappers.found
+    }
+}
+
+// A refusal is caught under one of the shapes `Catch::of_*` name; each
+// `Ok(())` within what the catch runs answers it as processed, once per
+// catch standing open around it.
+struct Swallowed<'m> {
+    module: &'m Module,
+    open: Vec<Catch>,
+    lines: Vec<String>,
+}
+
+struct Catch {
+    opened: &'static str,
+    line: usize,
+}
+
+impl Swallowed<'_> {
+    fn caught(&mut self, catch: Catch, body: impl FnOnce(&mut Self)) {
+        self.open.push(catch);
+        body(self);
+        self.open.pop();
+    }
+}
+
+impl<'ast> Visit<'ast> for Swallowed<'_> {
+    fn visit_item(&mut self, node: &'ast Item) {
+        let open = std::mem::take(&mut self.open);
+        visit::visit_item(self, node);
+        self.open = open;
+    }
+
+    fn visit_local(&mut self, node: &'ast Local) {
+        let Some(init) = &node.init else { return };
+        self.visit_expr(&init.expr);
+        let Some((_, diverge)) = &init.diverge else { return };
+        let opened = if pat_leads(&node.pat, "Ok") {
+            "`let Ok(..) = .. else` block"
+        } else if pat_leads(&node.pat, "Some") && calls(&init.expr, "ok") {
+            "`.ok() else` block"
+        } else {
+            return self.visit_expr(diverge);
+        };
+        let catch = Catch {
+            opened,
+            line: syntax::line(node.let_token.span),
+        };
+        self.caught(catch, |this| this.visit_expr(diverge));
+    }
+
+    fn visit_expr_if(&mut self, node: &'ast ExprIf) {
+        self.visit_expr(&node.cond);
+        let opened = match &*node.cond {
+            Expr::Let(bound) if pat_leads(&bound.pat, "Err") => Some("`if let Err(..)` branch"),
+            Expr::Let(_) => None,
+            cond if calls(cond, "is_err") => Some("`is_err()` branch"),
+            _ => None,
+        };
+        match opened {
+            Some(opened) => {
+                let catch = Catch {
+                    opened,
+                    line: syntax::line(node.if_token.span),
+                };
+                self.caught(catch, |this| this.visit_block(&node.then_branch));
             }
-            let end = function_end(&all, index);
-            for at in answering(&all, index, end) {
-                if let Some((spelling, what)) = empty(all[at]) {
-                    lines.push(format!(
-                        "{}:{}: {what} (`{spelling}`) after the read at line {}",
-                        self.path,
-                        at + 1,
-                        index + 1
-                    ));
-                }
+            None => self.visit_block(&node.then_branch),
+        }
+        if let Some((_, otherwise)) = &node.else_branch {
+            self.visit_expr(otherwise);
+        }
+    }
+
+    fn visit_arm(&mut self, node: &'ast Arm) {
+        if !pat_leads(&node.pat, "Err") {
+            return visit::visit_arm(self, node);
+        }
+        let catch = Catch {
+            opened: "`Err(..) =>` arm",
+            line: syntax::pat_line(&node.pat)
+                .unwrap_or_else(|| syntax::line(node.fat_arrow_token.spans[0])),
+        };
+        self.caught(catch, |this| this.visit_expr(&node.body));
+    }
+
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if is_unit_ok(node) {
+            let line = syntax::head_line(&node.func).unwrap_or_default();
+            for catch in &self.open {
+                let opener = if catch.line == line {
+                    String::new()
+                } else {
+                    format!(" at line {}", catch.line)
+                };
+                self.lines.push(format!(
+                    "{}:{line}: `Ok(())` answers the refusal the {}{opener} caught",
+                    self.module.path, catch.opened
+                ));
             }
         }
-        lines
-    }
-
-    fn response_wrappers(&self) -> Vec<(usize, &str)> {
-        let lines: Vec<&str> = self.code.lines().collect();
-        let mut found = Vec::new();
-        for (index, line) in lines.iter().enumerate() {
-            let Some(name) = opens_struct(line) else { continue };
-            if !derives_deserialize(&lines, index) {
-                continue;
-            }
-            let Some(end) = lines[index + 1..]
-                .iter()
-                .position(|line| line.trim_start().starts_with('}'))
-                .map(|offset| index + 1 + offset)
-            else {
-                continue;
-            };
-            let fields: Vec<&str> =
-                lines[index + 1..end].iter().filter_map(|line| field_name(line)).collect();
-            if fields == ["data"] {
-                found.push((index + 1, name));
-            }
-        }
-        found
+        visit::visit_expr_call(self, node);
     }
 }
 
-fn empty(line: &str) -> Option<(String, &'static str)> {
-    let text = line.trim();
-    let answer = match text.split_once("=>") {
-        Some((pattern, body)) => spells(pattern, "None").then(|| body.trim().trim_end_matches(',')),
-        None => Some(text),
-    };
-    let nothing = NOTHING.iter().find_map(|nothing| {
-        let returned = format!("return Ok({nothing})");
-        if line.contains(&returned) {
-            return Some(returned);
-        }
-        let answered = answer?;
-        let bare = answered.strip_prefix("Ok(").and_then(|rest| rest.strip_suffix(')'));
-        (answered == *nothing || bare == Some(*nothing))
-            .then(|| text.trim_end_matches(',').to_owned())
-    });
-    nothing.map(|spelling| (spelling, "a miss answered as no entries")).or_else(|| {
-        DEFAULTED
-            .iter()
-            .find(|defaulted| line.contains(*defaulted))
-            .map(|defaulted| ((*defaulted).to_owned(), "a miss defaulted"))
-    })
+#[derive(Default)]
+struct Settings {
+    found: Vec<(usize, String)>,
 }
 
-// Finds the closing `}` at the same indentation as the enclosing `fn`.
-fn function_end(lines: &[&str], index: usize) -> usize {
-    let Some(head) = lines[..=index].iter().rposition(|line| opens_fn(line)) else {
-        return lines.len().min(index + MISS_WINDOW);
-    };
-    let indent = lines[head].len() - lines[head].trim_start().len();
-    lines[index + 1..]
-        .iter()
-        .position(|line| line.len() - line.trim_start().len() == indent && line.trim() == "}")
-        .map_or(lines.len(), |offset| index + 1 + offset)
-}
-
-fn opens_fn(line: &str) -> bool {
-    let mut rest = strip_vis(line);
-    for qualifier in ["const ", "async ", "unsafe "] {
-        rest = rest.strip_prefix(qualifier).unwrap_or(rest);
-    }
-    rest.starts_with("fn ")
-}
-
-// Collects lines after the read that handle a miss, skipping `Some(..)` hit branches.
-fn answering(lines: &[&str], index: usize, end: usize) -> Vec<usize> {
-    let indent = |line: &str| line.len() - line.trim_start().len();
-    let mut answering = Vec::new();
-    let mut hit: Option<usize> = None;
-    let mut let_else: Option<usize> = None;
-    for (at, line) in lines.iter().enumerate().take(end).skip(index) {
-        let text = line.trim_start();
-        if text.is_empty() {
-            continue;
-        }
-        if let Some(head) = hit {
-            if indent(line) > head || text == "{" {
-                continue;
-            }
-            hit = None;
-            if text.starts_with('}') {
-                continue;
-            }
-        }
-        if let_else.is_some_and(|head| indent(line) == head && text.starts_with('}')) {
-            break;
-        }
-        let arm =
-            (text.starts_with("Some(") || text.starts_with("Ok(Some(")) && text.contains("=>");
-        if arm || text.starts_with("if let Some(") {
-            hit = Some(indent(line));
-            continue;
-        }
-        answering.push(at);
-        if text.starts_with("let Some(") {
-            if text.ends_with("};") {
-                break;
-            }
-            let_else = Some(indent(line));
+impl Settings {
+    fn setting(&mut self, line: usize, name: &syn::Ident, expr: &Expr) {
+        let Expr::Lit(literal) = expr else { return };
+        let Lit::Str(value) = &literal.lit else { return };
+        let name = name.to_string();
+        if value.value() == name && name.split('_').any(|segment| segment == "FORMAT") {
+            self.found.push((line, name));
         }
     }
-    answering
 }
 
-// The shapes a refused `Result` is read under — a `let`-`else` over `Ok(..)`
-// or over `.ok()`, an `Err(..)` arm, and an `if` over `is_err()` or
-// `let Err(..)` — with what the line holds past the opener: the body where
-// the catch is written on one line, nothing where its block opens beneath.
-fn refusal_opened(line: &str) -> Option<(&'static str, &str)> {
-    let text = line.trim();
-    if text.starts_with("let Ok(")
-        && let Some((_, body)) = text.split_once("else {")
-    {
-        return Some(("`let Ok(..) = .. else` block", body));
+impl<'ast> Visit<'ast> for Settings {
+    fn visit_item_const(&mut self, node: &'ast ItemConst) {
+        self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
+        visit::visit_item_const(self, node);
     }
-    if text.starts_with("let Some(")
-        && let Some((head, body)) = text.split_once("else {")
-        && head.contains(".ok()")
-    {
-        return Some(("`.ok() else` block", body));
+
+    fn visit_impl_item_const(&mut self, node: &'ast ImplItemConst) {
+        self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
+        visit::visit_impl_item_const(self, node);
     }
-    if let Some(rest) = text.strip_prefix("if ") {
-        let (condition, body) = split_branch(rest);
-        if condition.contains(".is_err()") {
-            return Some(("`is_err()` branch", body));
-        }
-        if rest.starts_with("let Err(") {
-            return Some(("`if let Err(..)` branch", body));
-        }
-    }
-    if text.starts_with("Err(")
-        && let Some((_, body)) = text.split_once("=>")
-    {
-        return Some(("`Err(..) =>` arm", body));
-    }
-    None
 }
 
-// Splits an `if` line at the brace opening its block, the first `{` outside
-// the condition's own brackets; the body is empty where the block opens on
-// a later line.
-fn split_branch(text: &str) -> (&str, &str) {
-    let mut depth = 0_usize;
-    for (at, ch) in text.char_indices() {
-        match ch {
-            '(' | '[' => depth += 1,
-            ')' | ']' => depth = depth.saturating_sub(1),
-            '{' if depth == 0 => return (&text[..at], &text[at + 1..]),
-            _ => {}
+#[derive(Default)]
+struct Wrappers {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Wrappers {
+    fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
+        let Fields::Named(fields) = &node.fields else { return };
+        let data = fields.named.len() == 1
+            && fields
+                .named
+                .first()
+                .and_then(|field| field.ident.as_ref())
+                .is_some_and(|ident| ident == "data");
+        if data && derives(&node.attrs, "Deserialize") {
+            self.found.push((syntax::line(node.struct_token.span), node.ident.to_string()));
         }
     }
-    (text, "")
 }
 
-// The name of a `const NAME: &str = "NAME";` line, the shape a part
-// declares a setting in.
-fn setting_const(line: &str) -> Option<&str> {
-    let rest = strip_vis(line).strip_prefix("const ")?;
-    let (name, rest) = rest.split_once(':')?;
-    let name = name.trim();
-    let literal = rest.split_once("= \"")?.1.split_once('"')?.0;
-    (is_ident(name) && literal == name).then_some(name)
+// Each function body read for its misses on its own, nested functions
+// among them.
+struct Functions<'m> {
+    module: &'m Module,
+    lines: Vec<String>,
 }
 
-fn constant_keyed(line: &str) -> bool {
-    let Some(at) = line.find("StateStore::get(") else { return false };
-    let args = &line[at + "StateStore::get(".len()..];
-    let Some((_, key)) = args.split_once(',') else { return false };
-    let key = key.split(')').next().unwrap_or_default().trim().trim_start_matches('&').trim();
-    let name = key.rsplit("::").next().unwrap_or(key);
-    !name.is_empty()
-        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
-        && name.chars().any(|ch| ch.is_ascii_uppercase())
+impl Functions<'_> {
+    fn body(&mut self, block: &syn::Block) {
+        let mut misses = Misses {
+            module: self.module,
+            read: None,
+            closed: false,
+            lines: Vec::new(),
+        };
+        misses.visit_block(block);
+        self.lines.append(&mut misses.lines);
+    }
 }
 
-fn opens_struct(line: &str) -> Option<&str> {
-    let rest = strip_vis(line).strip_prefix("struct ")?;
-    let name = rest.split(|ch: char| !is_ident_char(ch)).next()?;
-    (!name.is_empty() && line.trim_end().ends_with('{')).then_some(name)
-}
+impl<'ast> Visit<'ast> for Functions<'_> {
+    fn visit_item_fn(&mut self, node: &'ast ItemFn) {
+        self.body(&node.block);
+        visit::visit_item_fn(self, node);
+    }
 
-fn derives_deserialize(lines: &[&str], index: usize) -> bool {
-    for line in lines[..index].iter().rev() {
-        let text = line.trim();
-        if text.is_empty() {
-            continue;
+    fn visit_impl_item_fn(&mut self, node: &'ast ImplItemFn) {
+        self.body(&node.block);
+        visit::visit_impl_item_fn(self, node);
+    }
+
+    fn visit_trait_item_fn(&mut self, node: &'ast TraitItemFn) {
+        if let Some(block) = &node.default {
+            self.body(block);
         }
-        if text.ends_with('}') || text.ends_with(';') || text.ends_with('{') {
-            return false;
+        visit::visit_trait_item_fn(self, node);
+    }
+}
+
+// From a read of the store under a constant key to the end of the function,
+// skipping what a hit runs — a `Some(..)` or `Ok(Some(..))` arm, an
+// `if let Some(..)` branch — and ending at a `let Some(..) = .. else`, past
+// which the hit alone runs, what answers a miss empty is a finding.
+struct Misses<'m> {
+    module: &'m Module,
+    read: Option<usize>,
+    closed: bool,
+    lines: Vec<String>,
+}
+
+impl Misses<'_> {
+    fn found(&mut self, line: usize, what: &str, spelling: &str) {
+        let Some(read) = self.read else { return };
+        self.lines.push(format!(
+            "{}:{line}: {what} (`{spelling}`) after the read at line {read}",
+            self.module.path
+        ));
+    }
+
+    fn answered(&mut self, line: usize, spelling: &str) {
+        self.found(line, "a miss answered as no entries", spelling);
+    }
+
+    fn defaulted(&mut self, line: usize, spelling: &str) {
+        self.found(line, "a miss defaulted", spelling);
+    }
+}
+
+impl<'ast> Visit<'ast> for Misses<'_> {
+    fn visit_item(&mut self, _: &'ast Item) {}
+
+    fn visit_stmt(&mut self, node: &'ast Stmt) {
+        if self.closed {
+            return;
         }
-        if spells(text, "Deserialize") {
-            return true;
+        if self.read.is_some()
+            && let Stmt::Expr(expr, _) = node
+            && let Some(spelling) = empty_answer(expr)
+        {
+            self.answered(syntax::head_line(expr).unwrap_or_default(), &spelling);
+            return;
+        }
+        visit::visit_stmt(self, node);
+    }
+
+    fn visit_expr(&mut self, node: &'ast Expr) {
+        if !self.closed {
+            visit::visit_expr(self, node);
         }
     }
-    false
+
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Some(line) = constant_keyed_read(node) {
+            self.read = Some(line);
+        }
+        visit::visit_expr_call(self, node);
+    }
+
+    fn visit_expr_return(&mut self, node: &'ast ExprReturn) {
+        if self.read.is_some()
+            && let Some(spelling) = node.expr.as_deref().and_then(empty_answer)
+        {
+            self.answered(syntax::line(node.return_token.span), &format!("return {spelling}"));
+            return;
+        }
+        visit::visit_expr_return(self, node);
+    }
+
+    // The receiver first, since a read defaulted where it is made,
+    // `StateStore::get(..).await?.unwrap_or_default()`, is the receiver.
+    fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+        visit::visit_expr_method_call(self, node);
+        if self.read.is_some()
+            && let Some(spelling) = defaulted(node)
+        {
+            self.defaulted(syntax::line(node.method.span()), spelling);
+        }
+    }
+
+    fn visit_arm(&mut self, node: &'ast Arm) {
+        if self.read.is_none() {
+            return visit::visit_arm(self, node);
+        }
+        if is_hit(&node.pat) {
+            return;
+        }
+        if pat_names(&node.pat, "None")
+            && let Some(spelling) = empty_answer(&node.body)
+        {
+            let arrow = syntax::line(node.fat_arrow_token.spans[0]);
+            let line = syntax::head_line(&node.body).unwrap_or(arrow);
+            let spelled = if line == arrow { self.module.spelled(line) } else { spelling };
+            self.answered(line, &spelled);
+            return;
+        }
+        visit::visit_arm(self, node);
+    }
+
+    fn visit_expr_if(&mut self, node: &'ast ExprIf) {
+        self.visit_expr(&node.cond);
+        let hit =
+            self.read.is_some() && matches!(&*node.cond, Expr::Let(bound) if is_hit(&bound.pat));
+        if !hit {
+            self.visit_block(&node.then_branch);
+        }
+        if let Some((_, otherwise)) = &node.else_branch {
+            self.visit_expr(otherwise);
+        }
+    }
+
+    fn visit_local(&mut self, node: &'ast Local) {
+        let Some(init) = &node.init else { return };
+        self.visit_expr(&init.expr);
+        let Some((_, diverge)) = &init.diverge else { return };
+        self.visit_expr(diverge);
+        if self.read.is_some() && pat_leads(&node.pat, "Some") {
+            self.closed = true;
+        }
+    }
 }
 
-fn field_name(line: &str) -> Option<&str> {
-    let rest = line.trim_start();
-    if rest.is_empty() || rest.starts_with('#') {
+// A `StateStore::get(.., KEY)` under a constant key, and the line it reads at.
+fn constant_keyed_read(call: &ExprCall) -> Option<usize> {
+    let Expr::Path(func) = &*call.func else { return None };
+    if !path_ends(&func.path, &["StateStore", "get"]) {
         return None;
     }
-    let (name, _) = strip_vis(rest).split_once(':')?;
-    let name = name.trim();
-    is_ident(name).then_some(name)
+    let mut key = call.args.iter().nth(1)?;
+    while let Expr::Reference(reference) = key {
+        key = &reference.expr;
+    }
+    let Expr::Path(key) = key else { return None };
+    let name = key.path.segments.last()?.ident.to_string();
+    let constant = name.chars().any(|ch| ch.is_ascii_uppercase())
+        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_');
+    constant.then(|| syntax::head_line(&call.func)).flatten()
+}
+
+// A `Some(..)` or `Ok(Some(..))` pattern, which the hit runs under.
+fn is_hit(pat: &Pat) -> bool {
+    if pat_leads(pat, "Some") {
+        return true;
+    }
+    match pat {
+        Pat::TupleStruct(tuple) if path_ends(&tuple.path, &["Ok"]) => {
+            tuple.elems.len() == 1
+                && tuple.elems.first().is_some_and(|inner| pat_leads(inner, "Some"))
+        }
+        Pat::Or(or) => or.cases.first().is_some_and(is_hit),
+        Pat::Paren(paren) => is_hit(&paren.pat),
+        _ => false,
+    }
+}
+
+// An empty collection, spelled as `NOTHING` has it.
+fn nothing(expr: &Expr) -> Option<&'static str> {
+    match expr {
+        Expr::Call(call) if call.args.is_empty() => {
+            let Expr::Path(func) = &*call.func else { return None };
+            NOTHING
+                .iter()
+                .find(|(tail, _)| path_ends(&func.path, tail))
+                .map(|(_, spelling)| *spelling)
+        }
+        Expr::Macro(mac) if path_ends(&mac.mac.path, &["vec"]) && mac.mac.tokens.is_empty() => {
+            Some(EMPTY_VEC)
+        }
+        _ => None,
+    }
+}
+
+// An empty collection answered bare or under `Ok(..)`, spelled.
+fn empty_answer(expr: &Expr) -> Option<String> {
+    if let Some(spelling) = nothing(expr) {
+        return Some(spelling.to_owned());
+    }
+    let Expr::Call(call) = expr else { return None };
+    let Expr::Path(func) = &*call.func else { return None };
+    if !path_ends(&func.path, &["Ok"]) || call.args.len() != 1 {
+        return None;
+    }
+    call.args.first().and_then(nothing).map(|spelling| format!("Ok({spelling})"))
+}
+
+// A method call that defaults a miss, spelled as `DEFAULTED_WITH` has it.
+fn defaulted(call: &ExprMethodCall) -> Option<&'static str> {
+    let arg = match call.args.len() {
+        0 => None,
+        1 => call.args.first(),
+        _ => return None,
+    };
+    if call.method == "unwrap_or_default" && arg.is_none() {
+        return Some(".unwrap_or_default()");
+    }
+    if call.method == "unwrap_or_else"
+        && let Some(Expr::Path(with)) = arg
+    {
+        return DEFAULTED_WITH
+            .iter()
+            .find(|(tail, _)| path_ends(&with.path, tail))
+            .map(|(_, spelling)| *spelling);
+    }
+    if call.method == "unwrap_or"
+        && let Some(with) = arg
+        && nothing(with) == Some("Vec::new()")
+    {
+        return Some(".unwrap_or(Vec::new())");
+    }
+    None
 }

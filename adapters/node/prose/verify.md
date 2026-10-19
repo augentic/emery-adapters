@@ -4,7 +4,7 @@ Verify the integrated project tree after a wave of slices has merged into it, re
 
 ## Inputs
 
-- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools, run the checks below in it, and repair what they find through this call's two tools: `edit_files` for a change within a file, each edit the one place its `find` matches and the text to put there, which is what a repair almost always is — a line added to a list file, a type's shape put back to the design's; `write_files` for a file laid whole, and a file removed through its `delete`. Then run the checks again. The shell runs the checks and nothing else: a file it writes is not a repair. What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
+- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools, run the checks below in it, and repair what they find through this call's two tools: `edit_files` for a change within a file, each edit the one place its `find` matches and the text to put there, which is what a repair almost always is — a line added to a list file, a type's shape put back to the design's; `write_files` for a file written whole, and a file removed through its `delete`. Then run the checks again. The shell runs the checks and nothing else: a file it writes is not a repair. What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
 
 Nothing outside `$WORKSPACE` is reachable.
 
@@ -21,7 +21,7 @@ A check that fails ends the sequence where it is useful: a tree that does not in
 
 ## Repairs
 
-A failure in the merged tree is the seam between two slices, and the repair is the smallest change that closes it: two slices typing one design type differently, one importing a module at a path the other did not lay, a list missing a line, a manifest missing a package a file imports, a test asserting what another slice's module no longer does. Repair it where the layout puts it — in the slice's own directory, its lines, its manifest, its test — and change nothing a passing check covers. Then run the checks again from the one that failed.
+A failure in the merged tree is the seam between two slices, and the repair is the smallest change that closes it: two slices typing one design type differently, one importing a module at a path the other did not write, a list missing a line, a manifest missing a package a file imports, a test asserting what another slice's module no longer does. Repair it where the layout puts it — in the slice's own directory, its lines, its manifest, its test — and change nothing a passing check covers. Then run the checks again from the one that failed.
 
 Leave what a repair would have to invent: a requirement no module implements, a test for a scenario the tree does not hold, a module the plan has a later wave land. A failure that remains after the repairs you can justify is reported, not patched over.
 

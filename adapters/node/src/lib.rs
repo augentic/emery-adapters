@@ -73,11 +73,11 @@ impl TargetAdapter for Adapter {
 pub static PROSE: &[emery_sdk::Doc] =
     emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
 
-// Lays each root file the tree lacks; one the tree holds, a file or a link,
-// stands as it is.
+// Scaffolds each root file the tree lacks; one the tree holds, a file or a
+// link, stands as it is.
 fn init(ctx: &InitContext<'_>) -> Result<(), Error> {
     let root = Path::new(ctx.workspace);
-    let mut laid = 0;
+    let mut scaffolded = 0;
 
     for (path, content) in FILES {
         let file = root.join(path);
@@ -89,14 +89,14 @@ fn init(ctx: &InitContext<'_>) -> Result<(), Error> {
             Ok(mut file) => {
                 file.write_all(content.as_bytes())
                     .map_err(|err| server_error!("writing `{path}`: {err}"))?;
-                laid += 1;
+                scaffolded += 1;
             }
             Err(err) if err.kind() == ErrorKind::AlreadyExists => {}
-            Err(err) => return Err(server_error!("laying `{path}`: {err}")),
+            Err(err) => return Err(server_error!("scaffolding `{path}`: {err}")),
         }
     }
 
-    tracing::info!(laid, "laid the root manifests");
+    tracing::info!(scaffolded, "scaffolded the root manifests");
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 # Documentation survey
 
-This prompt runs once per bound `documentation` source, before anything is extracted. The caller has read every document already: the message lists each one with its outline — its length, every heading at its line, whether its body holds lists, tables, steps, quotations, or code — and lays the documents into the message whole, every line numbered, as far as they fit. Your job: from the outlines and the documents, name each subject the tree documents, anchor it at the heading, or the first line, that introduces it, and give it the stem its requirements lead with; list each document that introduces no subject as `unreached`. You group nothing and extract nothing. The caller derives the rest from the anchors you name — the lines each subject spans, the id its claims lead with, the seams the [extract prompt](extract.md) mines, whose answers the engine reconciles with every other source's into the specification — see [From sources to a spec](reconciliation.md).
+This prompt runs once per bound `documentation` source, before anything is extracted. The caller has read every document already: the message lists each one with its outline — its length, every heading at its line, whether its body holds lists, tables, steps, quotations, or code — and inlines the documents into the message whole, every line numbered, as far as they fit. Your job: from the outlines and the documents, name each subject the tree documents, anchor it at the heading, or the first line, that introduces it, and give it the stem its requirements lead with; list each document that introduces no subject as `unreached`. You group nothing and extract nothing. The caller derives the rest from the anchors you name — the lines each subject spans, the id its claims lead with, the seams the [extract prompt](extract.md) mines, whose answers the engine reconciles with every other source's into the specification — see [From sources to a spec](reconciliation.md).
 
 The message is written in the caller's words for a source of code, and they map onto a documentation tree one to one: a *module* is a document; a *surface* is a subject; where a surface is *registered or declared* is where a subject is introduced — its heading, or its first line; *dead code* is a document that introduces no subject. Read every such word that way.
 
@@ -9,7 +9,7 @@ Everything this call needs is in this prompt and the message. The references `re
 ## Inputs
 
 - **The documents** — every document of the tree, in path order, each with its outline: its line count; each heading at its line with its level (`L11 ## Membership`); and whether it holds lists, tables, steps, quotations, or code blocks, or prose alone. A document with no heading shows the line it opens at and what that line says. An `anchor` names one of these documents and nothing else.
-- **The laid documents** — the leading documents laid out whole, every line led by its number: cite `#L<n>` from the numbers shown rather than reading them again. A document listed but not laid is read from `$SOURCE_DIR` only where its outline leaves its subject unclear.
+- **The laid documents** — the leading documents laid out whole, every line led by its number: cite `#L<n>` from the numbers shown rather than reading them again. A document listed but not inlined is read from `$SOURCE_DIR` only where its outline leaves its subject unclear.
 - **`$SOURCE_DIR`** — read-only view of the bound tree, the whole of it, for a document the message lists rather than lays out.
 
 Nothing outside the bound source is reachable; writes back into `$SOURCE_DIR` are denied.
@@ -83,7 +83,7 @@ A tool library's documentation, bound as the source `docs`. The message lists:
 > - `reference/glossary.md` — 61 lines; prose alone
 >   - L1 # Glossary
 
-and lays the five documents whole. `README.md` points at the other four and states nothing of its own; the glossary defines the words the rest use.
+and inlines the five documents whole. `README.md` points at the other four and states nothing of its own; the glossary defines the words the rest use.
 
 Resulting survey answer:
 
@@ -119,7 +119,7 @@ Five subjects. The guide and the policy each treat one subject throughout, so ea
 | Condition | Action |
 | --------- | ------ |
 | The tree is one document | Answer its subjects — one at its title where it treats one thing, one per section where it treats several. |
-| A document has no heading | Anchor its subject at the line it opens at, and read what it is about from the laid text. |
+| A document has no heading | Anchor its subject at the line it opens at, and read what it is about from the inlined text. |
 | One subject runs through several documents | Name it in each, at the heading introducing it there, under the one stem. |
 | A document's sections are about several things | One subject per section at its heading; the introduction before the first belongs to the first. |
 | A document's sections are the operations or states of one thing | One subject at the document's title, under the thing's noun; the sections are its parts. |

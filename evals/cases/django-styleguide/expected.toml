@@ -1,6 +1,6 @@
 # HackSoftware/Django-Styleguide-Example at a70ef43d (MIT), vendored by the
 # command in evals/README.md and gitignored: 128 production modules, ~115 KB,
-# past the 64 KB the survey lays into one message, so the tree is cut one
+# past the 64 KB the survey inlines into one message, so the tree is cut one
 # seam per stem — the `python` adapter's scale case. A Django project the
 # way the styleguide writes one: `manage.py` under its guard names
 # `config.django.base` by a string, the settings name `config.urls`, which

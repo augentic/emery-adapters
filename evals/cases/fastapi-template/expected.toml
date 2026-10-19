@@ -1,7 +1,7 @@
 # fastapi/full-stack-fastapi-template at cb740b65 (MIT), the repository's
 # `backend/` directory vendored by the command in evals/README.md and
 # gitignored: 20 production modules, ~37 KB, within the 64 KB the survey
-# lays into one message, so every module is laid into one seam. A FastAPI
+# inlines into one message, so every module is inlined into one seam. A FastAPI
 # service the way the framework's own template writes one: `app/main.py`
 # constructs `app = FastAPI(..)` at load with no guard and no console script
 # (the construction-at-load bootstrap on a real tree), mounts the API router

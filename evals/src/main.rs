@@ -29,7 +29,7 @@ use reference::Reference;
 
 const CASES: &str = "evals/cases";
 const LADDER: &str = "600/120,1200/240,2400/480";
-// A build's turn lays a slice and repairs its findings, so it runs at the
+// A build's turn writes a slice and repairs its findings, so it runs at the
 // ladder's second rung from the start rather than losing a slice to the
 // first.
 const BUILD_RUNG: &str = "1200/240";
@@ -842,13 +842,13 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
 }
 
 // The `[target] name` every staged project builds under, so the repository
-// the engine lays sits at `TARGET_REPO` whichever target the run names.
+// the engine creates sits at `TARGET_REPO` whichever target the run names.
 const TARGET_NAME: &str = "target";
 const TARGET_REPO: &str = ".emery/vcs/repos/target";
 
 // The `[target]` table of a staged project: the target's component staged
-// in the store, under the one name. Both targets lay a whole tree, so the
-// engine lays the repository beneath the project itself, one root commit
+// in the store, under the one name. Both targets scaffold a whole tree, so
+// the engine creates the repository beneath the project itself, one root commit
 // holding its ignore rule, and no URL is named.
 fn target_table(settings: &Settings, target: Target) -> io::Result<String> {
     let reference = settings.stage_component(target.name())?;
@@ -859,12 +859,12 @@ fn toml_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }
 
-// One host git over a repository the runner laid or reads, under an
+// One host git over a repository the runner created or reads, under an
 // identity of the runner's own so no operator configuration is needed;
 // its stdout trimmed, its stderr the error when it fails.
 #[expect(
     clippy::disallowed_types,
-    reason = "the eval lays and reads its repositories with the host's git"
+    reason = "the eval creates and reads its repositories with the host's git"
 )]
 fn git(at: &Path, args: &[&str]) -> io::Result<String> {
     let output = std::process::Command::new("git")
@@ -1903,7 +1903,7 @@ fn run(
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
 
 // One `emery build` of the revision the run committed, at the build rung,
-// into the repository the engine lays for the case, then the host's own
+// into the repository the engine creates for the case, then the host's own
 // pass over the tree it left; the build's log and envelope are kept as
 // `<tag>.build.stderr` / `<tag>.build.stdout`, the pass as
 // `<tag>.fidelity.md`.
@@ -1960,9 +1960,9 @@ fn build(
 
 // Builds the plan `run-1` of `case` committed under `card` again. The staged
 // project is copied whole under the new card, less the engine's clones and
-// working copies and the repository the earlier build laid, and its
+// working copies and the repository the earlier build created, and its
 // `emery.toml` gains a `[target]` table for this invocation's target, so the
-// engine lays a repository with no label afresh and builds every slice over
+// engine creates a repository with no label afresh and builds every slice over
 // its root; the run's specify is read back from the
 // files the earlier run kept, exactly as `run` read them, so the card's
 // specify columns repeat the source card's.
@@ -2106,7 +2106,7 @@ fn oracle(project: &Path, reference: &Reference) -> io::Result<(PathBuf, String)
     Ok((file, text))
 }
 
-// The tip of `tree` exported whole to `export`, laid fresh, and every path
+// The tip of `tree` exported whole to `export`, written fresh, and every path
 // the tip tracks.
 #[expect(clippy::disallowed_types, reason = "the eval unpacks the export with the host's `tar`")]
 fn export_tip(tree: &Tree, export: &Path) -> io::Result<Vec<String>> {
@@ -2176,7 +2176,7 @@ struct Failure {
 }
 
 // One commit on the build's first-parent chain: a slice's merge, read
-// from its trailers, a `Wave <k> verified` seal, or the root the engine laid.
+// from its trailers, a `Wave <k> verified` seal, or the root the engine created.
 #[derive(Debug, PartialEq, Eq)]
 struct Landed {
     commit: String,
@@ -2550,7 +2550,7 @@ fn failure(stderr: &str) -> Option<Failure> {
 
 // The chain the build left, read where it stands: the integration copy a
 // failed run leaves for inspection, else the label a landed run set in the
-// repository the engine laid. The project is staged once for every run of a
+// repository the engine created. The project is staged once for every run of a
 // case, so the copy standing may be an earlier run's, left by a build that
 // failed after cutting it, when this run's failed before it cut one: the
 // copy is this run's only where its chain holds a commit under this run's
@@ -2617,7 +2617,7 @@ fn chain(text: &str) -> Vec<Landed> {
 
 // --- the host's pass over the tree a build left ---
 
-// Where a build left its tree: the label in the repository the engine laid
+// Where a build left its tree: the label in the repository the engine created
 // once the run landed, else the integration copy's head a failed run
 // leaves, read only where its chain is this run's.
 enum Tree {
@@ -2702,7 +2702,7 @@ impl Target {
     }
 
     // A configuration file the checks find by walking up from the tree,
-    // laid empty at the export's root for the checks when the tree holds
+    // written empty at the export's root for the checks when the tree holds
     // none, so the export, which sits beneath this repository, is read
     // under the tree's own configuration as the worker under the fence
     // reads it, and never under this repository's.
@@ -2722,7 +2722,7 @@ impl Target {
     }
 
     // The root files the layout admits: for `omnia`, the template the adapter
-    // lays and the lockfile.
+    // scaffolds and the lockfile.
     const fn root_files(self) -> &'static [&'static str] {
         match self {
             Self::Node => &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"],
@@ -3541,9 +3541,10 @@ fn slice_of<'a>(slices: &'a [Integrated], module: &str) -> Option<&'a Integrated
 }
 
 // Whether any of the requirements `ids` name, among `requirements`, states
-// an HTTP surface: a method in capitals followed by a path, `GET
-// /orders/{id}`, in backticks or bare, in its body or in a scenario's
-// given, when, then, or and.
+// an HTTP surface: the typed `trigger` the engine lowers from the survey's
+// contract where it is an `http` route, else a method in capitals followed
+// by a path, `GET /orders/{id}`, in backticks or bare, in its body or in a
+// scenario's given, when, then, or and, which an older revision spells it by.
 fn states_route(ids: &[String], requirements: &[Value]) -> bool {
     const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
     let texts = |value: &Value| -> Vec<String> {
@@ -3555,11 +3556,17 @@ fn states_route(ids: &[String], requirements: &[Value]) -> bool {
             _ => Vec::new(),
         }
     };
-    requirements
+    let named: Vec<&Value> = requirements
         .iter()
         .filter(|requirement| {
             requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
         })
+        .collect();
+    if named.iter().any(|requirement| requirement["trigger"]["http"]["method"].is_string()) {
+        return true;
+    }
+    named
+        .into_iter()
         .flat_map(|requirement| {
             let mut lines = texts(&requirement["body"]);
             for scenario in requirement["scenarios"].as_array().into_iter().flatten() {
@@ -3808,14 +3815,16 @@ fn declared_tests(text: &str) -> Vec<String> {
 }
 
 // The test named by a scenario: one spelled exactly as it is, else one that
-// contains it or that it contains, both read without case; a short name is
-// never contained, since a word is not a scenario.
+// contains it or that it contains, both read as words — without case, every
+// run of non-alphanumeric characters one space, so `Per-probe budget` names
+// `per_probe_budget`; a short name is never contained, since a word is not a
+// scenario.
 fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
-    let scenario = scenario.trim().to_lowercase();
+    let scenario = words_of(scenario);
     if scenario.is_empty() {
         return None;
     }
-    let lowered: Vec<String> = tests.iter().map(|test| test.trim().to_lowercase()).collect();
+    let lowered: Vec<String> = tests.iter().map(|test| words_of(test)).collect();
     if lowered.contains(&scenario) {
         return Some(Named::Exact);
     }
@@ -3824,6 +3833,14 @@ fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
             || (scenario.len() >= 12 && test.contains(scenario.as_str()))
     });
     fuzzy.then_some(Named::Fuzzy)
+}
+
+fn words_of(text: &str) -> String {
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // Every file beneath `dir` as a `/`-separated path relative to `root`, the
@@ -3878,7 +3895,7 @@ fn emery(
     command.output()
 }
 
-// The survey facts a staged project's adapters lay, read from one run that
+// The survey facts a staged project's adapters render, read from one run that
 // spends no turn: the run fails at the first completion, after the facts
 // are logged.
 fn facts(project: &Path, settings: &Settings, case: &Case) -> io::Result<String> {
@@ -3920,7 +3937,7 @@ fn field<'l>(line: &'l str, key: &str) -> Option<&'l str> {
     rest.split_whitespace().next()
 }
 
-// An adapter's `survey facts` trace line carries the text laid before the
+// An adapter's `survey facts` trace line carries the text rendered before the
 // model as one JSON string at the end of the line, per source.
 fn survey_facts(stderr: &str) -> BTreeMap<String, String> {
     stderr
@@ -4693,7 +4710,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             .jobs
             .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
         format!(
-            " · each landed plan built through `{}` into a repository the engine laid under \
+            " · each landed plan built through `{}` into a repository the engine created under \
              {jobs} at {} (`EVAL_BUILD_RUNG`)",
             target.name(),
             settings.build_rung
@@ -6077,11 +6094,11 @@ mod tests {
         assert_eq!(named_by("an order is cancelled", &names), None);
     }
 
-    // A scratch tree of the test's own under the host's temp dir, laid from
+    // A scratch tree of the test's own under the host's temp dir, written from
     // `(path, text)` pairs and removed first where an earlier run left it.
     #[expect(
         clippy::disallowed_methods,
-        reason = "a unit test lays its tree under the host's temp dir"
+        reason = "a unit test writes its tree under the host's temp dir"
     )]
     fn scratch(name: &str, files: &[(&str, &str)]) -> PathBuf {
         let root = std::env::temp_dir().join(format!("emery-evals-{name}-{}", std::process::id()));
@@ -6192,8 +6209,9 @@ mod tests {
     // from the constant the module declares or a literal, a route fn of the
     // part's own spelling no method, a `.route(` over a topic none; a route is
     // a probe when the slice owning the module, found by the module's
-    // spelling of its name, has no requirement stating a method and path in
-    // its body or scenarios, and a module no merged slice owns is no probe.
+    // spelling of its name, has no requirement carrying a typed route or
+    // stating a method and path in its body or scenarios, and a module no
+    // merged slice owns is no probe.
     #[test]
     fn omnia_routes_per_module() {
         let root = scratch(
@@ -6263,8 +6281,9 @@ mod tests {
         let spec = serde_json::json!([
             {"id": "REQ-001", "body": ["`GET /orders/{id}` answers the order."]},
             {"id": "REQ-002", "body": ["A client places an order."],
-             "scenarios": [{"when": "POST /orders with valid fields", "then": "201"}]},
-            {"id": "REQ-003", "body": ["Controllers never import repositories directly."]},
+             "trigger": {"http": {"method": "POST", "path": "/orders"}},
+             "scenarios": [{"when": "an order is placed with valid fields", "then": "201"}]},
+            {"id": "REQ-003", "body": ["Controllers never import repositories directly."], "trigger": null},
             {"id": "REQ-004", "body": ["Items are listed."], "scenarios": [{"given": ["GET /order-items is called"]}]},
             {"id": "REQ-005", "body": ["The application enables shutdown hooks."]},
         ]);
@@ -6493,6 +6512,14 @@ mod tests {
     }
 
     #[test]
+    fn tests_named_across_separators() {
+        let names = vec!["per_probe_budget_is_enforced".to_owned(), "orders__are_paid".to_owned()];
+        assert_eq!(named_by("Per-probe budget is enforced", &names), Some(Named::Exact));
+        assert_eq!(named_by("Orders are paid, then shipped", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("Per-probe", &names), None);
+    }
+
+    #[test]
     fn layout_membership() {
         let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
         for path in [
@@ -6655,7 +6682,7 @@ mod tests {
             ]
         );
         let integrated = build.integrated();
-        assert_eq!(integrated.len(), 2, "the root the engine laid is no slice");
+        assert_eq!(integrated.len(), 2, "the root the engine created is no slice");
         assert_eq!(integrated[0].id, "SLICE-001");
         assert_eq!(integrated[1].name, "orders");
         assert_eq!(integrated[1].uncovered(), ["REQ-003"]);

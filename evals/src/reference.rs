@@ -87,7 +87,7 @@ impl Reference {
         Ok(found)
     }
 
-    // The harness laid into the export: the fixtures copied under
+    // The harness written into the export: the fixtures copied under
     // `oracle/`, the settings the harness reads, the dev-dependencies it
     // needs, and the test itself; `Err` names why it cannot run there.
     fn stage(&self, export: &Path, built: &Shape) -> io::Result<Result<usize, String>> {
@@ -748,12 +748,12 @@ impl Display for Oracle {
     }
 }
 
-// The test the eval lays into the built tree as `tests/reference_oracle.rs`,
+// The test the eval writes into the built tree as `tests/reference_oracle.rs`,
 // `__CRATE__` the root package's crate name: every fixture under `oracle/`
 // driven through the guest's messaging router over `omnia_test` doubles,
 // its outcome printed in the lines `Oracle::parse` reads.
 const HARNESS_SOURCE: &str = r#"//! The eval's reference oracle: every recorded fixture of the reference
-//! guest driven through this guest's messaging router. Laid by the eval
+//! guest driven through this guest's messaging router. Written by the eval
 //! into the exported tree and removed with it.
 
 use std::collections::{BTreeMap, BTreeSet};

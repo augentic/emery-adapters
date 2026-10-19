@@ -9,7 +9,7 @@ use emery_sdk::survey::code::{
 use emery_sdk::survey::resolve::{Target, normalize};
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
-use emery_sdk::{kebab, unique};
+use emery_sdk::{Route, Trigger, kebab, unique};
 
 use super::DIALECT;
 use super::parse::Module;
@@ -20,6 +20,12 @@ const BOOTSTRAPS: &[&str] =
 
 const VERBS: &[&str] = &["get", "post", "put", "patch", "delete", "head", "options", "all"];
 const MOUNTING: &[&str] = &["use", "register", "mount", "plugin"];
+// The methods, beside the dialect's listeners, that register a handler for a
+// message by name; and the decorators that do.
+const SUBSCRIBING: &[&str] = &["subscribe", "consume"];
+const MESSAGE_DECORATORS: &[&str] = &["MessagePattern", "EventPattern", "SubscribeMessage"];
+// A stream's payload events, which name the arrival and not the message.
+const GENERIC_EVENTS: &[&str] = &["message", "data"];
 
 #[derive(Debug)]
 pub struct TypeScript {
@@ -46,7 +52,7 @@ impl TypeScript {
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
     ) -> Derived {
-        let (method, literal) = call.registered(tree.led(module, call));
+        let (method, literal) = call.registered(tree.leading_literal(module, call));
         let literal = literal.as_deref();
         let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(
@@ -80,8 +86,35 @@ impl TypeScript {
             lines: call.lines,
             detail,
             closure: tree.reaches(module, call.lines, &call.frames, call.class.as_deref()),
+            trigger: route
+                .as_deref()
+                .map_or_else(|| typed_message(method, literal), |route| typed_route(method, route)),
         }
     }
+}
+
+// The route a registration serves, typed, where its verb is one HTTP
+// method: `all`, and a path the grammar refuses, leave the surface unrouted.
+fn typed_route(verb: &str, path: &str) -> Option<Trigger> {
+    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
+}
+
+// The message a registration subscribes its handler to, typed, where its
+// method listens or subscribes by name: a lifecycle event, a stream's payload
+// event, and a name the grammar refuses leave the surface with no trigger.
+fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
+    let name = literal.filter(|name| is_message(name))?;
+    let subscribing = DIALECT.listeners.contains(&method) || SUBSCRIBING.contains(&method);
+    let named = !DIALECT.lifecycle_events.contains(&name) && !GENERIC_EVENTS.contains(&name);
+    (subscribing && named).then(|| Trigger::message(name).ok()).flatten()
+}
+
+fn is_message(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
 }
 
 impl Recogniser for TypeScript {
@@ -263,6 +296,7 @@ fn at_decorated_class(tree: &Tree<TypeScript>, module: &Module, class: &Decorate
         lines: class.lines,
         detail,
         closure: tree.reaches(module, class.lines, &[], class.class.as_deref()),
+        trigger: None,
     }
 }
 
@@ -271,14 +305,28 @@ fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Dec
     let member = decorated.member.as_deref().unwrap_or_default();
     let mut detail = vec![format!("method `{class}.{member}` {}", decorated.lines)];
     detail.extend(through(module, decorated));
+    let routed = decorated_route(module, decorated);
     Derived {
-        stem: decorated_stem(module, decorated),
+        stem: routed.as_ref().map_or_else(
+            || decorated.literal.as_deref().and_then(route::literal_stem),
+            |(_, route)| DIALECT.route.stem(route),
+        ),
         discriminator: kebab(member),
         methods: Vec::new(),
         lines: decorated.lines,
         detail,
         closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
+        trigger: routed
+            .as_ref()
+            .map_or_else(|| decorated_message(decorated), |(verb, route)| typed_route(verb, route)),
     }
+}
+
+// The message a method under a message decorator consumes, typed.
+fn decorated_message(decorated: &Decorated) -> Option<Trigger> {
+    let name = decorated.name.last()?;
+    let literal = decorated.literal.as_deref().filter(|name| is_message(name))?;
+    MESSAGE_DECORATORS.contains(&name.as_str()).then(|| Trigger::message(literal).ok()).flatten()
 }
 
 fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &str) -> Derived {
@@ -308,6 +356,7 @@ fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &s
         lines: declared,
         detail,
         closure: tree.reaches(module, declared, &[], class),
+        trigger: None,
     }
 }
 
@@ -338,16 +387,18 @@ fn class_prefix<'m>(module: &'m Module, class: Option<&str>) -> Option<&'m Decor
         .find(|d| d.registering(&DIALECT))
 }
 
-fn decorated_stem(module: &Module, decorated: &Decorated) -> Option<String> {
+// The verb and the path a method's decorator registers under its class's
+// prefix, `@Get(':id')` under `@Controller('orders')`; `None` for a
+// decorator that is no verb.
+fn decorated_route(module: &Module, decorated: &Decorated) -> Option<(String, String)> {
     let verb = decorated.name.last()?.to_ascii_lowercase();
-    if VERBS.contains(&verb.as_str()) {
-        let prefix =
-            class_prefix(module, decorated.class.as_deref()).and_then(|d| d.literal.as_deref());
-        let route = route::join(prefix.unwrap_or(""), decorated.literal.as_deref().unwrap_or(""));
-        DIALECT.route.stem(&route)
-    } else {
-        decorated.literal.as_deref().and_then(route::literal_stem)
+    if !VERBS.contains(&verb.as_str()) {
+        return None;
     }
+    let prefix =
+        class_prefix(module, decorated.class.as_deref()).and_then(|d| d.literal.as_deref());
+    let route = route::join(prefix.unwrap_or(""), decorated.literal.as_deref().unwrap_or(""));
+    Some((verb, route))
 }
 
 fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {

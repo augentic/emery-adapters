@@ -48,7 +48,7 @@ impl Tree<'_> {
         Ok(Some(format!(
             "a stem's manifest names the crates its files use and nothing more, since a \
              dependency no module or test spells is compiled for nothing and hides the use the \
-             slice meant to lay: use the crate where the slice meant to, or remove its line \
+             slice meant to write: use the crate where the slice meant to, or remove its line \
              through `edit_files`:\n{}",
             lines.join("\n")
         )))
@@ -77,7 +77,7 @@ impl Tree<'_> {
         let mut lines = Vec::new();
         for module in &self.modules {
             let Some(stem) = module.entry_of() else { continue };
-            let ident = stem.replace('-', "_");
+            let ident = crate::scaffold::package(stem).replace('-', "_");
             if let Some(number) = module.exposes("router")
                 && !spells(&routes, &format!("{ident}::router"))
             {
@@ -150,7 +150,7 @@ impl Tree<'_> {
             let registers = own
                 .iter()
                 .any(|module| module.entry_of() == Some(stem.as_str()) && module.registers());
-            let ident = stem.replace('-', "_");
+            let ident = crate::scaffold::package(&stem).replace('-', "_");
             let reached =
                 others.iter().any(|module| !module.is_common() && reaches(&module.code, &ident));
             if registers || reached {
@@ -174,7 +174,7 @@ impl Tree<'_> {
              run: the trigger is the inbound stream the design's `## APIs and integrations` \
              lists for the stem — its bullet spells the topic and names the requirement its \
              deliveries set off — never a requirement at the registration, which the host owns; \
-             lay it through `edit_files`: the topic's constant at the end of `{TOPICS}`, \
+             add it through `edit_files`: the topic's constant at the end of `{TOPICS}`, \
              `.route(config::topic_for(env, topic::<NAME>), messaging::consume_with(<handler>, \
              <decode>))` in the part's `topics(..)` with the handler calling the earlier parts' \
              functions, and `<part>::topics,` at the end of the entry's array:\n{}",

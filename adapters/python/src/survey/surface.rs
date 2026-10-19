@@ -8,7 +8,7 @@ use emery_sdk::survey::code::{
 };
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
-use emery_sdk::{kebab, push_unique, unique};
+use emery_sdk::{Route, Trigger, kebab, push_unique, unique};
 
 use super::DIALECT;
 use super::parse::{self, Module};
@@ -54,6 +54,18 @@ const ROUTERS: &[&str] = &[
 ];
 const MOUNTING: &[&str] = &["register_blueprint", "include_router", "mount"];
 const PREFIXED: &[&str] = &["APIRouter", "Blueprint", "Router"];
+
+// The registrations that serve `GET` where no `methods` keyword states a
+// verb, as Flask's `route` and FastAPI's `api_route` do; a `path` or `url`
+// hands the method to its view, and a websocket serves none, so neither
+// types a route.
+const DEFAULT_GET: &[&str] = &["route", "api_route", "add_api_route", "add_url_rule", "add_route"];
+// The methods and decorators that register a handler for a message by name:
+// a subscription, a consumer, a socket event. A task is none, since its name
+// is the function's and no message's.
+const SUBSCRIBING: &[&str] = &["subscribe", "subscriber", "consume", "basic_consume", "on"];
+// The events a socket's `on` hears about the connection, never a caller.
+const CONNECTION_EVENTS: &[&str] = &["connect", "disconnect", "connect_error", "error", "message"];
 
 #[derive(Debug)]
 pub struct Python {
@@ -161,7 +173,7 @@ impl Python {
     fn at_registration(
         &self, tree: &Tree<Self>, module: &Module, call: &Call, stem: &str,
     ) -> Derived {
-        let (method, literal) = call.registered(tree.led(module, call));
+        let (method, literal) = call.registered(tree.leading_literal(module, call));
         let literal = literal.as_deref();
         let route = routed(tree.mount(&module.path), method, literal);
         let derived = route.as_deref().map_or_else(
@@ -194,7 +206,7 @@ impl Python {
         if let Some(receiver) = tree.receiver(module, call) {
             detail.push(format!("through `{}`", receiver.package));
         }
-        let (methods, class) = match self.handed_class(tree, module, call) {
+        let (methods, class) = match self.class_run_by(tree, module, call) {
             Some((declaring, class)) => {
                 let methods: Vec<(String, Lines)> = view_methods(declaring, &class)
                     .into_iter()
@@ -219,6 +231,10 @@ impl Python {
             lines: call.lines,
             detail,
             closure,
+            trigger: route.as_deref().map_or_else(
+                || typed_message(method, literal),
+                |route| typed_route(method, methods_keyword, route),
+            ),
         }
     }
 }
@@ -309,7 +325,9 @@ impl Recogniser for Python {
         }
     }
 
-    fn class_handed(&self, tree: &Tree<Self>, module: &Module, arg: &Arg, frames: &[u32]) -> bool {
+    fn hands_bare_class(
+        &self, tree: &Tree<Self>, module: &Module, arg: &Arg, frames: &[u32],
+    ) -> bool {
         if arg.function || arg.called {
             return false;
         }
@@ -323,7 +341,7 @@ impl Recogniser for Python {
             .is_some_and(|export| export.kind == ExportKind::Class)
     }
 
-    fn handed_class<'t>(
+    fn class_run_by<'t>(
         &self, tree: &'t Tree<Self>, module: &'t Module, call: &Call,
     ) -> Option<(&'t Module, String)> {
         call.args.iter().filter(|arg| !arg.is_hook(&DIALECT)).find_map(|arg| {
@@ -507,6 +525,58 @@ fn verb_of(method: &str, methods: Option<&str>) -> String {
         .unwrap_or_else(|| "get".to_owned())
 }
 
+// The single verb a literal `methods` argument names, `["POST"]` or
+// `('delete',)`; a list of two or a non-literal expression is none.
+fn single_verb(methods: &str) -> Option<String> {
+    let trimmed = methods.trim();
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .or_else(|| trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')))
+        .or_else(|| trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}')))
+        .unwrap_or(trimmed)
+        .trim();
+    let item = inner.strip_suffix(',').unwrap_or(inner).trim();
+    let word = item
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| item.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))?
+        .to_ascii_lowercase();
+    VERBS.contains(&word.as_str()).then_some(word)
+}
+
+// The route a registration serves, typed, where its method is certain: a
+// verb, or a `DEFAULT_GET` registration with no `methods` keyword or one
+// literal verb; a `trace`, and a path the grammar refuses, leave the
+// surface unrouted.
+fn typed_route(method: &str, methods: Option<&str>, path: &str) -> Option<Trigger> {
+    let verb = if VERBS.contains(&method) {
+        Some(method.to_owned())
+    } else if DEFAULT_GET.contains(&method) {
+        methods.map_or_else(|| Some("get".to_owned()), single_verb)
+    } else {
+        None
+    }?;
+    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
+}
+
+// The message a registration or decorator subscribes its handler to, typed,
+// where its method is one of `SUBSCRIBING`: a connection event, and a name
+// the grammar refuses, leave the surface with no trigger.
+fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
+    let name = literal.filter(|name| is_message(name))?;
+    let subscribing = SUBSCRIBING.contains(&method) && !CONNECTION_EVENTS.contains(&name);
+    subscribing.then(|| Trigger::message(name).ok()).flatten()
+}
+
+fn is_message(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
+}
+
 fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
     let (dir, file) = module.path.rsplit_once('/')?;
     if !dir.ends_with("management/commands") || file.starts_with('_') {
@@ -526,6 +596,7 @@ fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
         lines,
         detail,
         closure: tree.reaches(module, lines, &[], class.map(|_| "Command")),
+        trigger: None,
     })
 }
 
@@ -550,6 +621,7 @@ fn at_decorated_class(tree: &Tree<Python>, module: &Module, class: &Decorated) -
         lines: class.lines,
         detail,
         closure: tree.reaches(module, class.lines, &[], Some(name)),
+        trigger: None,
     }
 }
 
@@ -569,14 +641,12 @@ fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated)
         || group.clone().or_else(literal),
         |route| parent_stem(mount, module, decorated).or_else(|| DIALECT.route.stem(route)),
     );
+    let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
     let discriminator = match (&route, &stem) {
-        (Some(route), Some(stem)) => {
-            let method = decorated.name.last().map_or("", String::as_str).to_ascii_lowercase();
-            DIALECT
-                .route
-                .discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
-                .or_else(|| kebab(member))
-        }
+        (Some(route), Some(stem)) => DIALECT
+            .route
+            .discriminator(&verb_of(&method, decorated.keyword("methods")), route, stem)
+            .or_else(|| kebab(member)),
         (None, _) if group.is_some() => literal().or_else(|| kebab(member)),
         _ => decorated.literal.as_deref().and_then(literal_tail).or_else(|| kebab(member)),
     };
@@ -590,6 +660,10 @@ fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated)
         lines: decorated.lines,
         detail,
         closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
+        trigger: route.as_deref().map_or_else(
+            || typed_message(&method, decorated.literal.as_deref()),
+            |route| typed_route(&method, decorated.keyword("methods"), route),
+        ),
     }
 }
 
@@ -616,6 +690,7 @@ fn at_export(tree: &Tree<Python>, module: &Module, export: &Export) -> Derived {
         lines: declared,
         detail,
         closure: tree.reaches(module, declared, &[], class),
+        trigger: None,
     }
 }
 
