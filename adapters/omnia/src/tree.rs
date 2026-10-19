@@ -139,7 +139,7 @@ impl<'a> Tree<'a> {
             if dir == "common"
                 || is_start_stem(&dir)
                 || scaffold.existing().contains(&dir)
-                || stems.contains(&dir.as_str())
+                || stems.iter().any(|stem| crate::scaffold::crate_dir(stem) == dir)
             {
                 continue;
             }
@@ -166,10 +166,12 @@ impl<'a> Tree<'a> {
                     }
                 },
                 |stem| {
+                    let stem_dir = crate::scaffold::crate_dir(stem);
+                    let pkg = crate::scaffold::package(stem);
                     format!(
                         "`crates/{dir}/` is written for `{dir}`, the head of the stem `{stem}`, \
-                         whose crate is `crates/{stem}/` (package `{stem}`, path `{}`)",
-                        stem.replace('-', "_")
+                         whose crate is `crates/{stem_dir}/` (package `{pkg}`, path `{}`)",
+                        pkg.replace('-', "_")
                     )
                 },
             ));

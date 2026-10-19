@@ -1198,15 +1198,22 @@ async fn omnia_route_typed() {
 
 // A `start` requirement carrying a route is laid under the crate of the
 // stem its route's resource names, since a stated route is its own stem's:
-// the crate scaffolded as for any stem, the part named for the slice, the
-// handler over the route, the brief saying where it landed; a `start`
-// requirement carrying none stays set aside under the `start` note.
+// the crate scaffolded as for any stem (`crates/common-stem/` where the
+// resource is `common`, leaving `crates/common/` untouched), the part named
+// for the slice, the handler over the route, the brief saying where it
+// landed; a `start` requirement carrying none stays set aside under the
+// `start` note.
 #[tokio::test]
 async fn omnia_scaffold_start_routed() {
     let project = omnia_tree().await;
-    let mut slice = slice_for("start", &["start.health-live", "start.refuse-without-secret"]);
+    let mut slice = slice_for(
+        "start",
+        &["start.health-live", "start.common-info", "start.refuse-without-secret"],
+    );
     slice.requirements[0].statement = vec!["Answers that the process is live.".to_owned()];
     slice.requirements[0].trigger = Some(routed("GET", "/health/live"));
+    slice.requirements[1].statement = vec!["Answers the build's common metadata.".to_owned()];
+    slice.requirements[1].trigger = Some(routed("GET", "/common/info"));
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1217,6 +1224,23 @@ async fn omnia_scaffold_start_routed() {
         text(&project, "crates/health/Cargo.toml"),
         OMNIA_MANIFEST.replace("orders", "health"),
         "the route's stem has its crate"
+    );
+    assert_eq!(
+        text(&project, "crates/common-stem/Cargo.toml"),
+        OMNIA_MANIFEST
+            .replace("name = \"orders\"", "name = \"common-stem\"")
+            .replace("The `orders` stem", "The `common` stem"),
+        "a `common` resource lands in `crates/common-stem/`"
+    );
+    assert_eq!(
+        text(&project, "crates/common/Cargo.toml"),
+        omnia_seed("crates/common/Cargo.toml"),
+        "the shared `common` manifest stands"
+    );
+    assert_eq!(
+        text(&project, "crates/common/src/lib.rs"),
+        omnia_seed("crates/common/src/lib.rs"),
+        "the shared `common` entry stands"
     );
     let module = text(&project, "crates/health/src/start.rs");
     for carried in [
@@ -1233,18 +1257,29 @@ async fn omnia_scaffold_start_routed() {
         "the unrouted `start` requirement is scaffolded nowhere: {module}"
     );
     assert!(
-        text(&project, "src/routes.rs")
-            .contains("    let router = router.merge(health::router());\n"),
-        "the route list merges the route's stem"
+        text(&project, "crates/common-stem/src/start.rs")
+            .contains("pub(crate) const COMMON_INFO: &str = \"/common/info\";\n"),
+        "the `common-stem` part carries the route"
     );
+    let routes = text(&project, "src/routes.rs");
+    for merged in [
+        "    let router = router.merge(health::router());\n",
+        "    let router = router.merge(common_stem::router());\n",
+    ] {
+        assert!(routes.contains(merged), "the route list merges `{merged}`: {routes}");
+    }
     let brief = &model.seen()[0].messages[0];
     for carried in [
         "Stem `health`, part `start`:",
-        "The `start` stem (REQ-002): the seed and the host are `start`, so nothing was scaffolded \
+        "Stem `common`, part `start`:",
+        "The `start` stem (REQ-003): the seed and the host are `start`, so nothing was scaffolded \
          for it",
         "REQ-001 (`GET /health/live`), stated under `start`, is laid under `crates/health/`, the \
          stem its route's resource names, since a stated route is its own stem's and never \
          `start`'s.",
+        "REQ-002 (`GET /common/info`), stated under `start`, is laid under \
+         `crates/common-stem/`, the stem its route's resource names, since a stated route is its \
+         own stem's and never `start`'s.",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }

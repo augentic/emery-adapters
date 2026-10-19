@@ -37,6 +37,7 @@ pub struct Expected<'a> {
 
 struct Stem {
     name: String,
+    dir: String,
     package: String,
     part: String,
     doc: Vec<String>,
@@ -322,7 +323,9 @@ impl Scaffold {
                 text,
                 "{} (`{}`), stated under `start`, is laid under `crates/{}/`, the stem its route's \
                  resource names, since a stated route is its own stem's and never `start`'s.\n",
-                relaid.id, relaid.route, relaid.stem
+                relaid.id,
+                relaid.route,
+                crate_dir(&relaid.stem)
             );
         }
         text.trim_end().to_owned()
@@ -359,13 +362,15 @@ impl Stem {
             }
             _ => vec![format!("The `{part}` part of the `{name}` stem.")],
         };
-        let dir = format!("crates/{name}");
+        let dir = crate_dir(name);
+        let root = format!("crates/{dir}");
         Self {
             name: name.to_owned(),
+            dir: dir.to_owned(),
             package: package(name),
-            manifest: File::at(format!("{dir}/Cargo.toml")),
-            entry: File::at(format!("{dir}/src/lib.rs")),
-            module: File::at(format!("{dir}/src/{part}.rs")),
+            manifest: File::at(format!("{root}/Cargo.toml")),
+            entry: File::at(format!("{root}/src/lib.rs")),
+            module: File::at(format!("{root}/src/{part}.rs")),
             tests: None,
             part,
             doc,
@@ -432,7 +437,7 @@ impl Stem {
         }
 
         if !self.scenarios.is_empty() {
-            self.tests = Some(File::at(format!("crates/{}/tests/{}.rs", self.name, self.part)));
+            self.tests = Some(File::at(format!("crates/{}/tests/{}.rs", self.dir, self.part)));
         }
     }
 
@@ -526,7 +531,7 @@ impl Stem {
         let mut lines = vec![
             Line::new(
                 "Cargo.toml",
-                format!("{} = {{ path = \"crates/{}\" }}", self.package, self.name),
+                format!("{} = {{ path = \"crates/{}\" }}", self.package, self.dir),
                 Place::PathList,
             ),
             Line::new("Cargo.toml", format!("{}.workspace = true", self.package), Place::FileEnd),
@@ -879,9 +884,16 @@ fn part_of(slice: &str, stem: &str) -> String {
     snake(rest)
 }
 
+// The directory under `crates/` a stem's crate lives at: `common-stem` for
+// `common`, since `crates/common/` is the shared crate, and `<stem>`
+// otherwise.
+pub fn crate_dir(stem: &str) -> &str {
+    if stem == "common" { "common-stem" } else { stem }
+}
+
 // A stem named as a crate the root manifest pins, or as `common` or `guest`,
 // takes the package name `<stem>-stem`, so the names never collide.
-fn package(stem: &str) -> String {
+pub fn package(stem: &str) -> String {
     if stem == "common" || stem == "guest" || pinned(stem) {
         format!("{stem}-stem")
     } else {

@@ -77,7 +77,7 @@ impl Tree<'_> {
         let mut lines = Vec::new();
         for module in &self.modules {
             let Some(stem) = module.entry_of() else { continue };
-            let ident = stem.replace('-', "_");
+            let ident = crate::scaffold::package(stem).replace('-', "_");
             if let Some(number) = module.exposes("router")
                 && !spells(&routes, &format!("{ident}::router"))
             {
@@ -150,7 +150,7 @@ impl Tree<'_> {
             let registers = own
                 .iter()
                 .any(|module| module.entry_of() == Some(stem.as_str()) && module.registers());
-            let ident = stem.replace('-', "_");
+            let ident = crate::scaffold::package(&stem).replace('-', "_");
             let reached =
                 others.iter().any(|module| !module.is_common() && reaches(&module.code, &ident));
             if registers || reached {

@@ -525,14 +525,39 @@ fn verb_of(method: &str, methods: Option<&str>) -> String {
         .unwrap_or_else(|| "get".to_owned())
 }
 
+// The single verb a literal `methods` argument names, `["POST"]` or
+// `('delete',)`; a list of two or a non-literal expression is none.
+fn single_verb(methods: &str) -> Option<String> {
+    let trimmed = methods.trim();
+    let inner = trimmed
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .or_else(|| trimmed.strip_prefix('(').and_then(|s| s.strip_suffix(')')))
+        .or_else(|| trimmed.strip_prefix('{').and_then(|s| s.strip_suffix('}')))
+        .unwrap_or(trimmed)
+        .trim();
+    let item = inner.strip_suffix(',').unwrap_or(inner).trim();
+    let word = item
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .or_else(|| item.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')))?
+        .to_ascii_lowercase();
+    VERBS.contains(&word.as_str()).then_some(word)
+}
+
 // The route a registration serves, typed, where its method is certain: a
-// verb, or a `DEFAULT_GET` registration read with its `methods` keyword; a
-// `trace`, and a path the grammar refuses, leave the surface unrouted.
+// verb, or a `DEFAULT_GET` registration with no `methods` keyword or one
+// literal verb; a `trace`, and a path the grammar refuses, leave the
+// surface unrouted.
 fn typed_route(method: &str, methods: Option<&str>, path: &str) -> Option<Trigger> {
-    if !(VERBS.contains(&method) || DEFAULT_GET.contains(&method)) {
-        return None;
-    }
-    Route::parse(&format!("{} {path}", verb_of(method, methods))).ok().map(Trigger::Http)
+    let verb = if VERBS.contains(&method) {
+        Some(method.to_owned())
+    } else if DEFAULT_GET.contains(&method) {
+        methods.map_or_else(|| Some("get".to_owned()), single_verb)
+    } else {
+        None
+    }?;
+    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
 }
 
 // The message a registration or decorator subscribes its handler to, typed,

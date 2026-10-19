@@ -5130,8 +5130,8 @@ async fn python_contracts() {
 
 // A registration by a call named for its verb serves a typed route at the
 // call, a `{id}` parameter kept as spelled; a route a `path` or `url`
-// registers hands its method to the view, so it is left unrouted rather
-// than typed `GET`.
+// registers, or an `add_url_rule` whose `methods=` lists more than one verb
+// or is non-literal, is left unrouted rather than typed `GET`.
 #[tokio::test]
 async fn python_contracts_registered() {
     let project = scratch();
@@ -5141,9 +5141,11 @@ async fn python_contracts_registered() {
             ("app/__init__.py", ""),
             (
                 "app/server.py",
-                "from aiohttp import web\n\nfrom .handlers import create, update\n\napp = \
-                 web.Application()\napp.add_routes([\n    web.post(\"/orders\", create),\n    \
-                 web.patch(\"/orders/{id}\", update),\n])\n",
+                "from aiohttp import web\n\nfrom .handlers import create, update\n\nALLOWED = \
+                 [\"POST\"]\napp = web.Application()\napp.add_routes([\n    web.post(\"/orders\", \
+                 create),\n    web.patch(\"/orders/{id}\", update),\n])\n\
+                 app.add_url_rule(\"/multi\", view_func=create, methods=[\"GET\", \"POST\"])\n\
+                 app.add_url_rule(\"/dynamic\", view_func=create, methods=ALLOWED)\n",
             ),
             (
                 "app/handlers.py",
@@ -5160,8 +5162,10 @@ async fn python_contracts_registered() {
     );
     let survey = inventory(
         &[
-            ("POST /orders", "app/server.py#L7", "orders"),
-            ("PATCH /orders/{id}", "app/server.py#L8", "orders"),
+            ("POST /orders", "app/server.py#L8", "orders"),
+            ("PATCH /orders/{id}", "app/server.py#L9", "orders"),
+            ("multi", "app/server.py#L11", "multi"),
+            ("dynamic", "app/server.py#L12", "dynamic"),
             ("index", "app/urls.py#L6", "index"),
         ],
         &[],
@@ -5173,8 +5177,8 @@ async fn python_contracts_registered() {
             &project,
             "POOL = \"o-1\"\n",
             &[
-                ("orders.create", "route", "POST /orders", "app/server.py#L7"),
-                ("orders.update", "route", "PATCH /orders/{id}", "app/server.py#L8"),
+                ("orders.create", "route", "POST /orders", "app/server.py#L8"),
+                ("orders.update", "route", "PATCH /orders/{id}", "app/server.py#L9"),
             ],
             Scripted::answering([&survey, &answer, &answer]),
         )
