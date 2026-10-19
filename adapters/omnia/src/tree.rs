@@ -5,7 +5,7 @@ mod misses;
 mod process;
 mod syntax;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -101,6 +101,7 @@ impl<'a> Tree<'a> {
     pub fn check_build(&self, scaffold: &Scaffold, report: &Report) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.split_stems(scaffold)?);
+        findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.scenarios_tested(scaffold, &report.covered)?);
         findings.extend(self.check_common()?);
@@ -130,19 +131,27 @@ impl<'a> Tree<'a> {
         Ok(findings)
     }
 
+    // The crates the turn wrote that are no stem of the slice's and none the
+    // tree held; `crates/start/` is the process rule's.
+    fn foreign_crates(&self, scaffold: &Scaffold) -> Result<Vec<String>, Error> {
+        let stems: Vec<&str> = scaffold.stems().collect();
+        Ok(crates(self.root)?
+            .into_iter()
+            .filter(|dir| {
+                !(dir == "common"
+                    || is_start_stem(dir)
+                    || scaffold.existing().contains(dir)
+                    || stems.iter().any(|stem| crate::scaffold::crate_dir(stem) == dir))
+            })
+            .collect())
+    }
+
     // A crate the turn wrote is one of the slice's stems' or none of the
-    // tree's; `crates/start/` is the process rule's.
+    // tree's.
     fn split_stems(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
         let stems: Vec<&str> = scaffold.stems().collect();
         let mut lines = Vec::new();
-        for dir in crates(self.root)? {
-            if dir == "common"
-                || is_start_stem(&dir)
-                || scaffold.existing().contains(&dir)
-                || stems.iter().any(|stem| crate::scaffold::crate_dir(stem) == dir)
-            {
-                continue;
-            }
+        for dir in self.foreign_crates(scaffold)? {
             let split = stems.iter().find(|stem| {
                 stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
             });
@@ -198,6 +207,38 @@ impl<'a> Tree<'a> {
         Ok(Some(format!("{rule}:\n{}", lines.join("\n"))))
     }
 
+    // A file the turn added outside the slice's crates, beyond the files the
+    // tree held once the skeleton was written: a crate `split_stems` or the
+    // process rule names is that finding's, so one problem is one finding.
+    fn strays(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
+        let mut own: Vec<String> = scaffold
+            .stems()
+            .map(|stem| format!("crates/{}/", crate::scaffold::crate_dir(stem)))
+            .collect();
+        own.extend(self.foreign_crates(scaffold)?.into_iter().map(|dir| format!("crates/{dir}/")));
+        own.extend(
+            crates(self.root)?
+                .into_iter()
+                .filter(|dir| is_start_stem(dir))
+                .map(|dir| format!("crates/{dir}/")),
+        );
+        let lines: Vec<String> = listing(self.root)?
+            .difference(scaffold.listing())
+            .filter(|path| path.as_str() != "Cargo.lock")
+            .filter(|path| !own.iter().any(|dir| path.starts_with(dir.as_str())))
+            .map(|path| format!("{path}: written beside the slice"))
+            .collect();
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "a slice lands in its own stems' crates and the lines it adds to the lists, and \
+             nothing beside them: a file written elsewhere in the tree is a stray the engine \
+             would seal; remove each through `delete`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
     // The rules after this one read the syntax tree, so a module `syn`
     // refuses is reported here and read by none of them.
     fn unparsed(&self) -> Option<String> {
@@ -232,8 +273,8 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement is implemented, so no marker of its stands: fill each \
              `todo!(\"REQ-..\")` the adapter scaffolded for a covered requirement through \
-             `edit_files` — a handler's body with its `let _ = (input, context);` line dropped, \
-             a function's body — or leave the requirement out of `covered`:\n{}",
+             `edit_files` — a handler's body in place of its `let _ = (&input, &context);` line \
+             and the marker, a function's body — or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
     }
@@ -631,6 +672,36 @@ fn start_files(root: &Path) -> Result<Vec<String>, Error> {
         }
     }
     found.sort();
+    Ok(found)
+}
+
+// Every file of the tree, root-relative with `/` between segments, as a
+// commit would carry it: nothing under `.git` or `.emery`, and nothing
+// under the root's `target/`, which the checks fill.
+pub fn listing(root: &Path) -> Result<BTreeSet<String>, Error> {
+    let mut found = BTreeSet::new();
+    let mut pending = vec![root.to_path_buf()];
+    while let Some(dir) = pending.pop() {
+        for path in entries(&dir)? {
+            let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
+            if name == ".git" || name == ".emery" || (dir == root && name == "target") {
+                continue;
+            }
+            let meta = fs::symlink_metadata(&path)
+                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
+            if meta.is_dir() {
+                pending.push(path);
+            } else {
+                let relative: Vec<String> = path
+                    .strip_prefix(root)
+                    .unwrap_or(&path)
+                    .components()
+                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
+                    .collect();
+                found.insert(relative.join("/"));
+            }
+        }
+    }
     Ok(found)
 }
 

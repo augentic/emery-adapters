@@ -1,6 +1,7 @@
 //! Scaffolds a slice's skeleton before its turn: the stem's crate, the part, its tests, and its lines in every list.
 
 mod names;
+mod reference;
 mod render;
 mod route;
 
@@ -11,13 +12,18 @@ use std::io::{ErrorKind, Write};
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{Error, Route, bad_request, server_error};
+use emery_sdk::{Doc, Error, INLINE_BYTES, Route, bad_request, server_error};
 
 use self::names::{Names, escape, flat, number, pascal, screaming, snake};
+use self::reference::{Needs, Role, Shape};
 use self::render::Place;
 use crate::tree;
 
 const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
+// The lists a slice of `start` requirements alone may touch, guarded so a
+// `write_files` over one is a correction rather than a landed overwrite.
+const ROOT_LISTS: [&str; 4] = ["Cargo.toml", "src/routes.rs", "src/messaging.rs", TOPIC_TABLE];
+const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
 
 pub struct Scaffold {
     stems: Vec<Stem>,
@@ -25,6 +31,8 @@ pub struct Scaffold {
     relaid: Vec<Relaid>,
     existing: BTreeSet<String>,
     lines: Vec<Line>,
+    listing: BTreeSet<String>,
+    roles: BTreeSet<Role>,
 }
 
 // What a check reads of one scenario the scaffold wrote a test for.
@@ -64,6 +72,8 @@ enum Kind {
 struct File {
     path: String,
     held: bool,
+    // What the tree holds at the path, where it holds a file.
+    text: String,
 }
 
 struct Handler {
@@ -75,6 +85,9 @@ struct Handler {
     params: Vec<Param>,
     stated: Vec<Stated>,
     marker: String,
+    // The route function over `handle_with` scaffolded beside a `POST`
+    // handler, so another status is one token's edit.
+    route_fn: Option<String>,
 }
 
 struct Consumer {
@@ -108,6 +121,7 @@ struct Type {
     name: String,
     key: String,
     signature: String,
+    is_enum: bool,
 }
 
 struct Test {
@@ -117,6 +131,16 @@ struct Test {
     scenario: Scenario,
     ignore: String,
     marker: String,
+    act: Act,
+}
+
+// What a scenario's test acts through: the route or the topic its
+// requirement carries, or the provider alone for a function.
+#[derive(Clone)]
+enum Act {
+    Route(Route),
+    Topic(String),
+    Call,
 }
 
 // A `start` requirement laid under the crate of its route's resource.
@@ -156,21 +180,43 @@ struct Claims {
     tests: Names,
 }
 
+// How much of the brief the inlined texts may take: the files first, the
+// references after them, a text past the budget named by its path alone.
+struct Budget {
+    left: u64,
+}
+
 impl Default for Claims {
     fn default() -> Self {
         Self {
             values: Names::reserving(&[
-                "routes", "topics", "get", "post", "put", "patch", "delete",
+                "routes",
+                "topics",
+                "get",
+                "post",
+                "put",
+                "patch",
+                "delete",
+                "handle_with",
+                "decode_json",
             ]),
             types: Names::reserving(&[
                 "Capabilities",
                 "Client",
                 "Context",
+                "DecodeError",
                 "Deserialize",
+                "DeserializeOwned",
+                "IntoResponse",
+                "Json",
+                "MethodFilter",
+                "MethodRouter",
+                "RawRequest",
                 "Serialize",
+                "StatusCode",
             ]),
             constants: Names::default(),
-            tests: Names::default(),
+            tests: Names::reserving(&["provider", "send", "deliver"]),
         }
     }
 }
@@ -246,10 +292,12 @@ impl Scaffold {
             relaid,
             existing,
             lines,
+            listing: BTreeSet::new(),
+            roles: reference::roles(&slice.design),
         })
     }
 
-    pub fn write(&self, root: &Path) -> Result<Vec<String>, Error> {
+    pub fn write(&mut self, root: &Path) -> Result<Vec<String>, Error> {
         let mut written = Vec::new();
         for stem in &self.stems {
             for kind in [Kind::Manifest, Kind::Entry, Kind::Module, Kind::Tests] {
@@ -281,11 +329,13 @@ impl Scaffold {
             fs::write(&file, text).map_err(|err| server_error!("writing `{path}`: {err}"))?;
             written.push(path.to_owned());
         }
+        self.listing = tree::listing(root)?;
         Ok(written)
     }
 
-    // Every file the scaffold wrote or found, and every list it adds a
-    // line to, sorted: what the turn changes through `edit_files` alone.
+    // Every file the scaffold wrote or found, every list it adds a line to,
+    // and, for a slice that laid no stem, the root lists, sorted: what the
+    // turn changes through `edit_files` alone.
     pub fn paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
             .stems
@@ -298,25 +348,44 @@ impl Scaffold {
             })
             .chain(self.lines.iter().map(|line| line.path.clone()))
             .collect();
+        if self.stems.is_empty() {
+            paths.extend(ROOT_LISTS.iter().map(|path| (*path).to_owned()));
+        }
         paths.sort();
         paths.dedup();
         paths
     }
 
-    pub fn brief(&self) -> String {
+    // The files of the tree once the skeleton was written, which the check
+    // holds the tree to: a file beyond them outside the slice's crates is a
+    // stray.
+    pub const fn listing(&self) -> &BTreeSet<String> {
+        &self.listing
+    }
+
+    pub fn brief(&self, docs: &[Doc]) -> String {
+        let mut budget = Budget { left: INLINE_BYTES };
         let mut text = String::new();
         for stem in &self.stems {
-            stem.brief_files(&self.lines, &mut text);
+            stem.brief_files(&self.lines, &mut budget, &mut text);
             stem.brief_markers(&mut text);
         }
         if !self.start.is_empty() {
-            let _ = writeln!(
+            let _ = write!(
                 text,
                 "The `start` stem ({}): the seed and the host are `start`, so nothing was \
                  scaffolded for it; cover what they satisfy and leave the rest out, as the \
-                 guardrails' table says.\n",
+                 guardrails' table says.",
                 self.start.join(", ")
             );
+            if self.stems.is_empty() {
+                text.push_str(
+                    " The root lists (`Cargo.toml`, `src/routes.rs`, `src/messaging.rs`, \
+                     `crates/common/src/topic.rs`) are edited through `edit_files` where a \
+                     line is yours to add, never written.",
+                );
+            }
+            text.push_str("\n\n");
         }
         for relaid in &self.relaid {
             let _ = writeln!(
@@ -328,7 +397,82 @@ impl Scaffold {
                 crate_dir(&relaid.stem)
             );
         }
+        let _ = writeln!(
+            text,
+            "The check: once your edits are in, run `{}` in `$WORKSPACE` and read what it \
+             prints; repair what it reports through `edit_files` and run it again until it \
+             passes. Where its last step alone fails because no nightly toolchain is installed, \
+             the steps before it passed and the check is done.\n",
+            self.check()
+        );
+        self.brief_references(docs, &mut budget, &mut text);
         text.trim_end().to_owned()
+    }
+
+    // The one shell command the turn checks the tree with: the slice's
+    // packages under clippy and their tests, then the guest check and the
+    // formatter over the workspace.
+    pub fn check(&self) -> String {
+        if self.stems.is_empty() {
+            return CHECK.to_owned();
+        }
+        let packages: Vec<String> =
+            self.stems.iter().map(|stem| format!("-p {}", stem.package)).collect();
+        let packages = packages.join(" ");
+        format!(
+            "cargo clippy {packages} --all-targets -- -D warnings && cargo test {packages} && \
+             {CHECK}"
+        )
+    }
+
+    fn brief_references(&self, docs: &[Doc], budget: &mut Budget, text: &mut String) {
+        if self.stems.is_empty() {
+            return;
+        }
+        let mut shapes = BTreeSet::new();
+        for stem in &self.stems {
+            if !stem.handlers.is_empty() {
+                shapes.insert(Shape::Routes);
+            }
+            if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
+                shapes.insert(Shape::Encoded);
+            }
+            if !stem.consumers.is_empty() {
+                shapes.insert(Shape::Consumers);
+            }
+            if stem.tests.is_some() {
+                shapes.insert(Shape::Tests);
+            }
+            if !stem.types.is_empty() {
+                shapes.insert(Shape::Types);
+            }
+        }
+        let needs = Needs {
+            shapes,
+            roles: self.roles.clone(),
+        };
+        let mut quoted = String::new();
+        for passage in reference::passages(docs, &needs) {
+            let body = if passage.code {
+                render::fenced("rust", &passage.text)
+            } else {
+                format!("{}\n", passage.text)
+            };
+            let entry =
+                format!("From `{}`, under \"{}\":\n\n{body}\n", passage.source, passage.heading);
+            if !budget.fits(&entry) {
+                break;
+            }
+            quoted.push_str(&entry);
+        }
+        if quoted.is_empty() {
+            return;
+        }
+        text.push_str(
+            "What the references spell for these shapes, quoted; `read_doc` answers the rest of \
+             each document:\n\n",
+        );
+        text.push_str(&quoted);
     }
 
     pub fn stems(&self) -> impl Iterator<Item = &str> {
@@ -394,6 +538,7 @@ impl Stem {
             self.types.push(Type {
                 name: claims.types.claim(&pascal(last), &pascal(first)),
                 key: key.to_owned(),
+                is_enum: is_enum(&design_type.signature),
                 signature: design_type.signature.clone(),
             });
         }
@@ -404,10 +549,12 @@ impl Stem {
         let mut consumed: Vec<(&str, Vec<&Requirement>)> = Vec::new();
         for requirement in requirements {
             let suffix = format!("_{}", number(&requirement.id));
-            if let Some(route) = route::of(requirement) {
+            let act = if let Some(route) = route::of(requirement) {
                 group(&mut routed, route, requirement);
+                Act::Route(route.clone())
             } else if let Some(topic) = route::message(requirement) {
                 group(&mut consumed, topic, requirement);
+                Act::Topic(topic.to_owned())
             } else {
                 let tail = tail(&requirement.subject);
                 let base = if tail.is_empty() { snake(&self.name) } else { snake(tail) };
@@ -416,7 +563,8 @@ impl Stem {
                     marker: format!("{} {}: the behaviour", requirement.id, requirement.subject),
                     stated: Stated::of(requirement),
                 });
-            }
+                Act::Call
+            };
             for scenario in &requirement.scenarios {
                 let name = flat(&scenario.name);
                 self.scenarios.push(Test {
@@ -426,6 +574,7 @@ impl Stem {
                     scenario: scenario.clone(),
                     ignore: format!("{} {name}: unfilled", requirement.id),
                     marker: format!("{} {name}: arrange, act, assert", requirement.id),
+                    act: act.clone(),
                 });
             }
         }
@@ -457,6 +606,8 @@ impl Stem {
             self.paths.push((constant.clone(), route.path.clone()));
             constant
         };
+        let route_fn = (route.method == "POST")
+            .then(|| claims.values.claim(&format!("{name}_route"), &format!("_{suffix}")));
         let stated = stated_of(group);
         self.handlers.push(Handler {
             input: claims.types.claim(&format!("{title}Input"), &suffix),
@@ -473,6 +624,7 @@ impl Stem {
             route: route.clone(),
             marker: format!("{}: the handler", named(&stated)),
             stated,
+            route_fn,
         });
     }
 
@@ -523,6 +675,13 @@ impl Stem {
         }
     }
 
+    // The file's text as the tree holds it after the scaffold: what was
+    // written, or what was held.
+    fn text(&self, kind: Kind) -> Option<String> {
+        let file = self.file(kind)?;
+        Some(if file.held { file.text.clone() } else { self.render(kind) })
+    }
+
     // The stem's lines in the root lists, the constant of each topic the
     // slice declares in the table, and, where the tree holds its entry, the
     // part's lines in the entry's.
@@ -561,7 +720,7 @@ impl Stem {
             lines.push(Line::new(
                 &self.entry.path,
                 format!("pub mod {};", self.part),
-                Place::AfterLastPubMod,
+                Place::PubModList,
             ));
             if !self.handlers.is_empty() {
                 lines.push(Line::new(
@@ -581,13 +740,7 @@ impl Stem {
         lines
     }
 
-    fn brief_files(&self, lines: &[Line], text: &mut String) {
-        let standing = |own: &Line| {
-            lines
-                .iter()
-                .find(|line| line.path == own.path && line.text == own.text)
-                .map_or(Standing::Unanchored, |line| line.standing)
-        };
+    fn brief_files(&self, lines: &[Line], budget: &mut Budget, text: &mut String) {
         let _ = writeln!(text, "Stem `{}`, part `{}`:\n", self.name, self.part);
         let _ = writeln!(
             text,
@@ -612,7 +765,7 @@ impl Stem {
             listed(&entry_lines),
             if self.entry.held { "added to" } else { "in" }
         );
-        let _ = writeln!(
+        let _ = write!(
             text,
             "- `{}`: {}. {}",
             self.module.path,
@@ -623,43 +776,67 @@ impl Stem {
                 "Fill its markers, listed below, through `edit_files`."
             }
         );
+        self.brief_text(Kind::Module, budget, text);
         match &self.tests {
             Some(tests) if tests.held => {
-                let _ = writeln!(text, "- `{}`: held. {HELD}", tests.path);
+                let _ = write!(text, "- `{}`: held. {HELD}", tests.path);
+                self.brief_text(Kind::Tests, budget, text);
             }
             Some(tests) => {
-                let _ = writeln!(
+                let _ = write!(
                     text,
-                    "- `{}`: scaffolded, one ignored test per scenario. Fill each through \
-                     `edit_files` and remove its `#[ignore = ..]` line.",
+                    "- `{}`: scaffolded, the prelude and one ignored test per scenario, each \
+                     sending the request or the delivery its requirement carries. Fill each \
+                     test through `edit_files`, replacing the block listed below.",
                     tests.path
                 );
+                self.brief_text(Kind::Tests, budget, text);
             }
             None => {
                 text.push_str("- No scenario states a test, so no test file was scaffolded.\n");
             }
         }
+        self.brief_lines(lines, text);
+    }
+
+    // The stem's lines in the root lists and the topic table, each spelled,
+    // and the ones no anchor took.
+    fn brief_lines(&self, lines: &[Line], text: &mut String) {
+        let standing = |own: &Line| {
+            lines
+                .iter()
+                .find(|line| line.path == own.path && line.text == own.text)
+                .map_or(Standing::Unanchored, |line| line.standing)
+        };
         let own = self.lines();
-        let added = own
+        let root: Vec<&Line> =
+            own.iter().filter(|line| !line.path.starts_with("crates/")).collect();
+        let added = root.iter().any(|line| standing(line) == Standing::Add);
+        let spelled: Vec<String> = root
             .iter()
-            .filter(|line| !line.path.starts_with("crates/"))
-            .any(|line| standing(line) == Standing::Add);
+            .filter(|line| line.path != TOPIC_TABLE)
+            .map(|line| format!("`{}` in `{}`", line.text.trim(), line.path))
+            .collect();
         let _ = writeln!(
             text,
-            "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines {}.",
-            if added { "added" } else { "already held" }
+            "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines {}: {}.",
+            if added { "added" } else { "already held" },
+            spelled.join(", ")
         );
         for consumer in &self.consumers {
             let _ = writeln!(
                 text,
-                "- `{TOPIC_TABLE}`: the constant `{}` for the topic `{}` {}.",
+                "- `{TOPIC_TABLE}`: the constant `{}` for the topic `{}` {}: `pub const {}: &str = \
+                 \"{}\";`.",
                 consumer.constant,
                 consumer.topic,
                 if consumer.declared {
                     "already declared"
                 } else {
                     "added at the end of the table"
-                }
+                },
+                consumer.constant,
+                escape(&consumer.topic)
             );
         }
         for line in own.iter().filter(|line| standing(line) == Standing::Unanchored) {
@@ -674,6 +851,21 @@ impl Stem {
         text.push('\n');
     }
 
+    // The file's text under the budget, fenced after its line; its path
+    // alone past it.
+    fn brief_text(&self, kind: Kind, budget: &mut Budget, text: &mut String) {
+        let Some(held) = self.text(kind) else {
+            text.push('\n');
+            return;
+        };
+        let fenced = render::fenced("rust", &held);
+        if budget.fits(&fenced) {
+            let _ = write!(text, " Its text:\n\n{fenced}\n");
+        } else {
+            text.push_str(" Read it in the tree.\n");
+        }
+    }
+
     fn brief_markers(&self, text: &mut String) {
         if self.module.held || self.tests.as_ref().is_some_and(|tests| tests.held) {
             text.push_str(
@@ -681,57 +873,64 @@ impl Stem {
                  whatever stands in it.\n\n",
             );
         }
-        text.push_str("Markers, in fill order:\n\n");
+        text.push_str(
+            "Markers, in fill order, each one `edit_files` edit whose `find` is the block quoted \
+             under it:\n\n",
+        );
         let mut count = 0;
         for design_type in &self.types {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `pub struct {} {{}}` in `{}`: the design type `{}`. Declare its fields \
-                 from the signature in its doc.",
-                design_type.name, self.module.path, design_type.key
+                "{count}. `pub {} {{}}` in `{}`: the design type `{}`. Replace it with the {} the \
+                 signature in its doc spells, every field documented; drop `Eq` from its derives \
+                 where a field is a float.\n",
+                render::declaration(design_type),
+                self.module.path,
+                design_type.key,
+                if design_type.is_enum { "enum" } else { "struct" }
             );
         }
         for handler in &self.handlers {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `todo!(\"{}\")` in `{}`: the handler `{}` of `{}`. Fill `{}` and `{}` \
-                 with the wire's fields, write the body, and drop the `let _ = (input, \
-                 context);` line.",
-                escape(&handler.marker),
-                self.module.path,
+                "{count}. The handler `{}` of `{}` in `{}`: fill `{}` and `{}` with the wire's \
+                 fields, then replace this block with the body. {}\n\n{}",
                 handler.name,
                 handler.route,
+                self.module.path,
                 handler.input,
-                handler.output
+                handler.output,
+                handler.status_hint(),
+                render::fenced("rust", &render::stub(&handler.marker))
             );
         }
         for consumer in &self.consumers {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `todo!(\"{}\")` in `{}`: the consumer `{}` of the topic `{}`, registered \
-                 in the part's `topics(..)` under `topic::{}`. Fill `{}` with the delivery's \
-                 fields, write the body, and drop the `let _ = (input, context);` line.",
-                escape(&consumer.marker),
-                self.module.path,
+                "{count}. The consumer `{}` of the topic `{}` in `{}`, registered in the part's \
+                 `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, then \
+                 replace this block with the body.\n\n{}",
                 consumer.name,
                 consumer.topic,
+                self.module.path,
                 consumer.constant,
-                consumer.input
+                consumer.input,
+                render::fenced("rust", &render::stub(&consumer.marker))
             );
         }
         for function in &self.functions {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `todo!(\"{}\")` in `{}`: the function `{}`, since the requirement \
-                 states no route and no message. Give it the signature the behaviour needs and \
-                 write the body.",
-                escape(&function.marker),
+                "{count}. The function `{}` in `{}`, since the requirement states no route and no \
+                 message: give it the signature the behaviour needs and replace this block with \
+                 the body.\n\n{}",
+                function.name,
                 self.module.path,
-                function.name
+                render::fenced("rust", &render::marker_line(&function.marker))
             );
         }
         if let Some(tests) = &self.tests {
@@ -739,19 +938,18 @@ impl Stem {
                 count += 1;
                 let _ = writeln!(
                     text,
-                    "{count}. `todo!(\"{}\")` in `{}`: the test `{}`. Fill it and remove the \
-                     `#[ignore = \"{}\"]` line above it.",
-                    escape(&test.marker),
-                    tests.path,
+                    "{count}. The test `{}` in `{}`: replace this block with the filled test, its \
+                     `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
+                     laid, and the assertions the scenario states.\n\n{}",
                     test.name,
-                    escape(&test.ignore)
+                    tests.path,
+                    render::fenced("rust", &render::test_block(self, test))
                 );
             }
         }
         if count == 0 {
-            text.push_str("None: the slice states no requirement under this stem.\n");
+            text.push_str("None: the slice states no requirement under this stem.\n\n");
         }
-        text.push('\n');
     }
 }
 
@@ -760,12 +958,20 @@ const HELD: &str =
 
 impl File {
     const fn at(path: String) -> Self {
-        Self { path, held: false }
+        Self {
+            path,
+            held: false,
+            text: String::new(),
+        }
     }
 
     fn read(&mut self, root: &Path) -> Result<(), Error> {
-        self.held = match fs::symlink_metadata(root.join(&self.path)) {
-            Ok(meta) if meta.is_file() => true,
+        let file = root.join(&self.path);
+        self.held = match fs::symlink_metadata(&file) {
+            Ok(meta) if meta.is_file() => {
+                self.text = tree::read(&file)?;
+                true
+            }
             Ok(_) => {
                 return Err(bad_request!(
                     "a directory or a link stands at `{}`, where the slice's scaffold writes a file",
@@ -780,6 +986,56 @@ impl File {
 
     const fn standing(&self) -> &'static str {
         if self.held { "held" } else { "scaffolded" }
+    }
+}
+
+impl Handler {
+    // The `.route(..)` call that registers the handler: its route function
+    // where one was scaffolded, else the SDK's method fn over it.
+    fn registration(&self) -> String {
+        let service = self.route_fn.as_ref().map_or_else(
+            || format!("{}({})", route::function(&self.route.method), self.name),
+            |route_fn| format!("{route_fn}()"),
+        );
+        format!(".route({}, {service})", self.constant)
+    }
+
+    // How the handler's `Ok` reaches the wire, and where another status is
+    // set.
+    fn status_hint(&self) -> String {
+        self.route_fn.as_ref().map_or_else(
+            || {
+                format!(
+                    "Its `Ok` is answered `200` as JSON; for another status, declare a route \
+                     function over `handle_with(MethodFilter::{}, {}, decode, |output: {}| \
+                     (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers \
+                     reference shows and name it in `routes()` in place of `{}({})`.",
+                    self.route.method,
+                    self.name,
+                    self.output,
+                    route::function(&self.route.method),
+                    self.name
+                )
+            },
+            |route_fn| {
+                format!(
+                    "Its `Ok` is answered as JSON under the status `{route_fn}` names, \
+                     `StatusCode::OK`; for a `201`, change it there."
+                )
+            },
+        )
+    }
+}
+
+impl Budget {
+    // Whether `text` fits in what is left, taking it where it does.
+    const fn fits(&mut self, text: &str) -> bool {
+        let size = text.len() as u64;
+        if size > self.left {
+            return false;
+        }
+        self.left -= size;
+        true
     }
 }
 
@@ -871,6 +1127,43 @@ impl Line {
     fn key(&self) -> &str {
         self.text.lines().last().unwrap_or(&self.text).trim()
     }
+}
+
+// Whether a design signature declares an enumeration: a Rust or TypeScript
+// `enum`, a TypeScript union of string literals, or a Python class over an
+// `Enum` base.
+fn is_enum(signature: &str) -> bool {
+    let Some(head) = signature.lines().map(str::trim).find(|line| !line.is_empty()) else {
+        return false;
+    };
+    let mut head = head;
+    for prefix in ["export ", "declare ", "pub(crate) ", "pub ", "const "] {
+        head = head.strip_prefix(prefix).unwrap_or(head);
+    }
+    if head.starts_with("enum ") {
+        return true;
+    }
+    if let Some(rest) = head.strip_prefix("class ")
+        && let Some((_, bases)) = rest.split_once('(')
+        && let Some((bases, _)) = bases.split_once(')')
+    {
+        return bases.rsplit(',').next().is_some_and(|base| base.trim().ends_with("Enum"));
+    }
+    if let Some(rest) = head.strip_prefix("type ")
+        && let Some((_, union)) = rest.split_once('=')
+    {
+        let start = signature.find(union).unwrap_or(0);
+        let union = signature[start..].split(';').next().unwrap_or_default();
+        let literals: Vec<&str> =
+            union.split('|').map(str::trim).filter(|part| !part.is_empty()).collect();
+        return !literals.is_empty()
+            && literals.iter().all(|literal| {
+                literal.len() >= 2
+                    && ((literal.starts_with('"') && literal.ends_with('"'))
+                        || (literal.starts_with('\'') && literal.ends_with('\'')))
+            });
+    }
+    false
 }
 
 // The slice's name less the stem and the hyphen after it where it leads

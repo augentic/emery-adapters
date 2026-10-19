@@ -12,11 +12,14 @@
 //! function per requirement carrying neither, an ignored test per scenario,
 //! and the stem's lines in every list. A `start` requirement carrying a
 //! route is laid under the crate of the stem its route's resource names. The
-//! turn fills the markers it scaffolded through `edit_files`, since a
+//! brief carries the scaffolded text, each marker as the block an edit
+//! replaces, the one check command, and the reference passages the slice's
+//! shapes need. The turn fills the markers through `edit_files`, since a
 //! `write_files` entry naming a scaffolded file is refused, and a covered
 //! requirement whose marker or ignored test still stands is refused for
-//! correction, as is a module the tree holds that does not parse, named at
-//! the line the parser stopped at.
+//! correction, as is a file written beside the slice's crates and a module
+//! the tree holds that does not parse, named at the line the parser stopped
+//! at.
 
 mod scaffold;
 mod tree;
@@ -70,10 +73,10 @@ impl TargetAdapter for Adapter {
             }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let scaffold = Scaffold::plan(ctx.slice, root)?;
+                let mut scaffold = Scaffold::plan(ctx.slice, root)?;
                 let written = scaffold.write(root)?;
                 tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
-                let brief = scaffold.brief();
+                let brief = scaffold.brief(PROSE);
                 let paths = scaffold.paths();
                 let ctx = ctx.with_scaffold(target::Scaffold {
                     brief: &brief,
