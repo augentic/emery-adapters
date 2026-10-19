@@ -3541,9 +3541,10 @@ fn slice_of<'a>(slices: &'a [Integrated], module: &str) -> Option<&'a Integrated
 }
 
 // Whether any of the requirements `ids` name, among `requirements`, states
-// an HTTP surface: a method in capitals followed by a path, `GET
+// an HTTP surface: the typed `route` the engine lowers from the survey's
+// contract, else a method in capitals followed by a path, `GET
 // /orders/{id}`, in backticks or bare, in its body or in a scenario's
-// given, when, then, or and.
+// given, when, then, or and, which an older revision spells it by.
 fn states_route(ids: &[String], requirements: &[Value]) -> bool {
     const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
     let texts = |value: &Value| -> Vec<String> {
@@ -3555,11 +3556,17 @@ fn states_route(ids: &[String], requirements: &[Value]) -> bool {
             _ => Vec::new(),
         }
     };
-    requirements
+    let named: Vec<&Value> = requirements
         .iter()
         .filter(|requirement| {
             requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
         })
+        .collect();
+    if named.iter().any(|requirement| requirement["route"]["method"].is_string()) {
+        return true;
+    }
+    named
+        .into_iter()
         .flat_map(|requirement| {
             let mut lines = texts(&requirement["body"]);
             for scenario in requirement["scenarios"].as_array().into_iter().flatten() {
@@ -3808,14 +3815,16 @@ fn declared_tests(text: &str) -> Vec<String> {
 }
 
 // The test named by a scenario: one spelled exactly as it is, else one that
-// contains it or that it contains, both read without case; a short name is
-// never contained, since a word is not a scenario.
+// contains it or that it contains, both read as words — without case, every
+// run of non-alphanumeric characters one space, so `Per-probe budget` names
+// `per_probe_budget`; a short name is never contained, since a word is not a
+// scenario.
 fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
-    let scenario = scenario.trim().to_lowercase();
+    let scenario = words_of(scenario);
     if scenario.is_empty() {
         return None;
     }
-    let lowered: Vec<String> = tests.iter().map(|test| test.trim().to_lowercase()).collect();
+    let lowered: Vec<String> = tests.iter().map(|test| words_of(test)).collect();
     if lowered.contains(&scenario) {
         return Some(Named::Exact);
     }
@@ -3824,6 +3833,14 @@ fn named_by(scenario: &str, tests: &[String]) -> Option<Named> {
             || (scenario.len() >= 12 && test.contains(scenario.as_str()))
     });
     fuzzy.then_some(Named::Fuzzy)
+}
+
+fn words_of(text: &str) -> String {
+    text.to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|word| !word.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 // Every file beneath `dir` as a `/`-separated path relative to `root`, the
@@ -6192,8 +6209,9 @@ mod tests {
     // from the constant the module declares or a literal, a route fn of the
     // part's own spelling no method, a `.route(` over a topic none; a route is
     // a probe when the slice owning the module, found by the module's
-    // spelling of its name, has no requirement stating a method and path in
-    // its body or scenarios, and a module no merged slice owns is no probe.
+    // spelling of its name, has no requirement carrying a typed route or
+    // stating a method and path in its body or scenarios, and a module no
+    // merged slice owns is no probe.
     #[test]
     fn omnia_routes_per_module() {
         let root = scratch(
@@ -6262,9 +6280,9 @@ mod tests {
         ];
         let spec = serde_json::json!([
             {"id": "REQ-001", "body": ["`GET /orders/{id}` answers the order."]},
-            {"id": "REQ-002", "body": ["A client places an order."],
-             "scenarios": [{"when": "POST /orders with valid fields", "then": "201"}]},
-            {"id": "REQ-003", "body": ["Controllers never import repositories directly."]},
+            {"id": "REQ-002", "body": ["A client places an order."], "route": {"method": "POST", "path": "/orders"},
+             "scenarios": [{"when": "an order is placed with valid fields", "then": "201"}]},
+            {"id": "REQ-003", "body": ["Controllers never import repositories directly."], "route": null},
             {"id": "REQ-004", "body": ["Items are listed."], "scenarios": [{"given": ["GET /order-items is called"]}]},
             {"id": "REQ-005", "body": ["The application enables shutdown hooks."]},
         ]);
@@ -6490,6 +6508,14 @@ mod tests {
         assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
         assert_eq!(named_by("ships", &names), None);
         assert_eq!(named_by("an order is cancelled", &names), None);
+    }
+
+    #[test]
+    fn tests_named_across_separators() {
+        let names = vec!["per_probe_budget_is_enforced".to_owned(), "orders__are_paid".to_owned()];
+        assert_eq!(named_by("Per-probe budget is enforced", &names), Some(Named::Exact));
+        assert_eq!(named_by("Orders are paid, then shipped", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("Per-probe", &names), None);
     }
 
     #[test]

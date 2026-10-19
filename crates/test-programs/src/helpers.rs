@@ -1,6 +1,6 @@
 use emery_sdk::target::capability::Target;
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Source, SourceInput};
+use emery_sdk::{AdapterMetadata, Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput};
 use serde_json::json;
 
 /// The source name every probe input carries.
@@ -14,7 +14,8 @@ impl Source for Caller {}
 
 impl Target for Caller {}
 
-/// Returns the slice every target driver builds: one routed requirement under the `orders` stem.
+/// Returns the slice every target driver builds: one requirement under the
+/// `orders` stem, served at a typed route its statement does not spell.
 #[must_use]
 pub fn slice() -> Slice {
     Slice {
@@ -24,14 +25,19 @@ pub fn slice() -> Slice {
         requirements: vec![Requirement {
             id: "REQ-001".to_owned(),
             subject: "orders.create".to_owned(),
-            statement: vec!["POST /orders creates an order from at least one item.".to_owned()],
+            statement: vec!["Creates an order from at least one item.".to_owned()],
             scenarios: vec![Scenario {
                 name: "An order is created".to_owned(),
                 given: vec!["an item".to_owned()],
-                when: "POST /orders is called with it".to_owned(),
+                when: "an order is placed with it".to_owned(),
                 then: "the order is answered".to_owned(),
                 and: Vec::new(),
             }],
+            route: Some(Route {
+                method: "POST".to_owned(),
+                path: "/orders".to_owned(),
+            }),
+            topic: None,
         }],
         types: vec![DesignType {
             key: "orders.Order".to_owned(),

@@ -1098,7 +1098,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 
 [[package]]
 name = "emery-adapter"
-version = "0.38.0"
+version = "0.39.0"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1110,7 +1110,7 @@ dependencies = [
 
 [[package]]
 name = "emery-adapters"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-documentation",
  "emery-intent",
@@ -1134,28 +1134,28 @@ dependencies = [
 
 [[package]]
 name = "emery-documentation"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-intent"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-node"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-omnia"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "omnia-template",
@@ -1165,11 +1165,11 @@ dependencies = [
 
 [[package]]
 name = "emery-prose"
-version = "0.38.0"
+version = "0.39.0"
 
 [[package]]
 name = "emery-python"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "ruff_python_ast",
@@ -1179,7 +1179,7 @@ dependencies = [
 
 [[package]]
 name = "emery-sdk"
-version = "0.38.0"
+version = "0.39.0"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -1195,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "emery-typescript"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "oxc_allocator",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "evals"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "serde",
@@ -4633,7 +4633,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.13.0"
+version = "0.14.0"
 dependencies = [
  "emery-sdk",
  "futures",

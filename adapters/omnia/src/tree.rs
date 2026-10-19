@@ -148,11 +148,22 @@ impl<'a> Tree<'a> {
             });
             lines.push(split.map_or_else(
                 || {
-                    format!(
-                        "`crates/{dir}/` is written for `{dir}`, which is no stem of this slice \
-                         ({})",
-                        stems.iter().map(|stem| format!("`{stem}`")).collect::<Vec<_>>().join(", ")
-                    )
+                    if stems.is_empty() {
+                        format!(
+                            "`crates/{dir}/` is written for `{dir}`, and this slice has no stem \
+                             of its own: every requirement of it is `start`'s"
+                        )
+                    } else {
+                        format!(
+                            "`crates/{dir}/` is written for `{dir}`, which is no stem of this \
+                             slice ({})",
+                            stems
+                                .iter()
+                                .map(|stem| format!("`{stem}`"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        )
+                    }
                 },
                 |stem| {
                     format!(
@@ -166,14 +177,23 @@ impl<'a> Tree<'a> {
         if lines.is_empty() {
             return Ok(None);
         }
-        Ok(Some(format!(
+        let rule = if stems.is_empty() {
+            "the seed and the host are `start`, so a slice of `start` requirements alone \
+             scaffolds no crate and writes none: a stated route lands in the crate of the stem \
+             its resource names (`GET /health/live` in `crates/health/`), a cross-cutting rule is \
+             a `pub fn` of the stem it guards, a setting is a `pub(crate) const` of the part that \
+             reads it, and how the process readied itself is written nowhere and left out of \
+             `covered`, as the guardrails' table says; remove every file under each directory \
+             named through `delete` and drop its lines from the root `Cargo.toml` through \
+             `edit_files`"
+        } else {
             "a slice writes modules under the crates of its own stems alone, and a stem is one \
              word and is never split at its hyphen into a crate and a part: write each module \
              under `crates/<stem>/src/<part>.rs` for the stem its requirements lead with, remove \
              every file under the other directory through `delete`, and drop its lines from the \
-             root `Cargo.toml` through `edit_files`:\n{}",
-            lines.join("\n")
-        )))
+             root `Cargo.toml` through `edit_files`"
+        };
+        Ok(Some(format!("{rule}:\n{}", lines.join("\n"))))
     }
 
     // The rules after this one read the syntax tree, so a module `syn`

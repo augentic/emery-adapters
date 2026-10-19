@@ -11,16 +11,18 @@ use std::io::{ErrorKind, Write};
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{Error, bad_request, server_error};
+use emery_sdk::{Error, Route, bad_request, server_error};
 
 use self::names::{Names, escape, flat, number, pascal, screaming, snake};
 use self::render::Place;
-use self::route::Route;
 use crate::tree;
+
+const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
 
 pub struct Scaffold {
     stems: Vec<Stem>,
     start: Vec<String>,
+    relaid: Vec<Relaid>,
     existing: BTreeSet<String>,
     lines: Vec<Line>,
 }
@@ -44,6 +46,7 @@ struct Stem {
     tests: Option<File>,
     paths: Vec<(String, String)>,
     handlers: Vec<Handler>,
+    consumers: Vec<Consumer>,
     functions: Vec<Function>,
     types: Vec<Type>,
     scenarios: Vec<Test>,
@@ -69,6 +72,16 @@ struct Handler {
     constant: String,
     route: Route,
     params: Vec<Param>,
+    stated: Vec<Stated>,
+    marker: String,
+}
+
+struct Consumer {
+    name: String,
+    input: String,
+    constant: String,
+    topic: String,
+    declared: bool,
     stated: Vec<Stated>,
     marker: String,
 }
@@ -105,6 +118,13 @@ struct Test {
     marker: String,
 }
 
+// A `start` requirement laid under the crate of its route's resource.
+struct Relaid {
+    id: String,
+    route: String,
+    stem: String,
+}
+
 struct Line {
     path: String,
     text: String,
@@ -119,19 +139,77 @@ enum Standing {
     Unanchored,
 }
 
+// The topic table as the tree holds it: each constant's name and topic,
+// and the names claimed for the topics the slice declares.
+struct Table {
+    declared: Vec<(String, String)>,
+    names: Names,
+}
+
+// The names a part's items claim, each kind against its own namespace,
+// the module's imports and its functions reserved.
+struct Claims {
+    values: Names,
+    types: Names,
+    constants: Names,
+    tests: Names,
+}
+
+impl Default for Claims {
+    fn default() -> Self {
+        Self {
+            values: Names::reserving(&[
+                "routes", "topics", "get", "post", "put", "patch", "delete",
+            ]),
+            types: Names::reserving(&[
+                "Capabilities",
+                "Client",
+                "Context",
+                "Deserialize",
+                "Serialize",
+            ]),
+            constants: Names::default(),
+            tests: Names::default(),
+        }
+    }
+}
+
 impl Scaffold {
     pub fn plan(slice: &Slice, root: &Path) -> Result<Self, Error> {
         let existing: BTreeSet<String> = tree::crates(root)?.into_iter().collect();
+        let mut table = Table::read(root)?;
 
-        // the stems the slice builds, `start` set aside
+        // each requirement to its stem: `start` set aside, unless a typed
+        // route names the resource whose crate serves it
         let mut stems: Vec<Stem> = Vec::new();
+        let mut laid: Vec<Vec<&Requirement>> = Vec::new();
         let mut start = Vec::new();
+        let mut relaid = Vec::new();
         for requirement in &slice.requirements {
-            let name = requirement.stem();
-            if tree::is_start_stem(name) {
-                start.push(requirement.id.clone());
-            } else if !stems.iter().any(|stem| stem.name == name) {
-                stems.push(Stem::new(name, slice));
+            let own = requirement.stem();
+            let name = if tree::is_start_stem(own) {
+                let resource = route::of(requirement)
+                    .map(|route| (route, route::resource(route)))
+                    .and_then(|(route, stem)| Some((route, stem?)))
+                    .filter(|(_, stem)| !tree::is_start_stem(stem));
+                let Some((route, stem)) = resource else {
+                    start.push(requirement.id.clone());
+                    continue;
+                };
+                relaid.push(Relaid {
+                    id: requirement.id.clone(),
+                    route: route.to_string(),
+                    stem: stem.clone(),
+                });
+                stem
+            } else {
+                own.to_owned()
+            };
+            if let Some(at) = stems.iter().position(|stem| stem.name == name) {
+                laid[at].push(requirement);
+            } else {
+                stems.push(Stem::new(&name, slice));
+                laid.push(vec![requirement]);
             }
         }
 
@@ -148,17 +226,23 @@ impl Scaffold {
             }
         }
 
-        for (stem, types) in stems.iter_mut().zip(&owned) {
-            stem.plan(slice, types);
+        for ((stem, types), requirements) in stems.iter_mut().zip(&owned).zip(&laid) {
+            stem.plan(types, requirements, &mut table);
             stem.read(root)?;
         }
-        let mut lines: Vec<Line> = stems.iter().flat_map(Stem::lines).collect();
+        let mut lines: Vec<Line> = Vec::new();
+        for line in stems.iter().flat_map(Stem::lines) {
+            if !lines.iter().any(|held| held.path == line.path && held.text == line.text) {
+                lines.push(line);
+            }
+        }
         for line in &mut lines {
             line.read(root)?;
         }
         Ok(Self {
             stems,
             start,
+            relaid,
             existing,
             lines,
         })
@@ -199,6 +283,25 @@ impl Scaffold {
         Ok(written)
     }
 
+    // Every file the scaffold wrote or found, and every list it adds a
+    // line to, sorted: what the turn changes through `edit_files` alone.
+    pub fn paths(&self) -> Vec<String> {
+        let mut paths: Vec<String> = self
+            .stems
+            .iter()
+            .flat_map(|stem| {
+                [Kind::Manifest, Kind::Entry, Kind::Module, Kind::Tests]
+                    .into_iter()
+                    .filter_map(|kind| stem.file(kind))
+                    .map(|file| file.path.clone())
+            })
+            .chain(self.lines.iter().map(|line| line.path.clone()))
+            .collect();
+        paths.sort();
+        paths.dedup();
+        paths
+    }
+
     pub fn brief(&self) -> String {
         let mut text = String::new();
         for stem in &self.stems {
@@ -212,6 +315,14 @@ impl Scaffold {
                  scaffolded for it; cover what they satisfy and leave the rest out, as the \
                  guardrails' table says.\n",
                 self.start.join(", ")
+            );
+        }
+        for relaid in &self.relaid {
+            let _ = writeln!(
+                text,
+                "{} (`{}`), stated under `start`, is laid under `crates/{}/`, the stem its route's \
+                 resource names, since a stated route is its own stem's and never `start`'s.\n",
+                relaid.id, relaid.route, relaid.stem
             );
         }
         text.trim_end().to_owned()
@@ -260,6 +371,7 @@ impl Stem {
             doc,
             paths: Vec::new(),
             handlers: Vec::new(),
+            consumers: Vec::new(),
             functions: Vec::new(),
             types: Vec::new(),
             scenarios: Vec::new(),
@@ -268,38 +380,34 @@ impl Stem {
 
     // Names every item the part declares, the design types first so one
     // keeps its name over a handler's wrapper.
-    fn plan(&mut self, slice: &Slice, owned: &[&DesignType]) {
-        let mut values = Names::reserving(&["routes", "get", "post", "put", "patch", "delete"]);
-        let mut types =
-            Names::reserving(&["Capabilities", "Client", "Context", "Deserialize", "Serialize"]);
-        let mut constants = Names::default();
-        let mut tests = Names::default();
-
+    fn plan(&mut self, owned: &[&DesignType], requirements: &[&Requirement], table: &mut Table) {
+        let mut claims = Claims::default();
         for design_type in owned {
             let key = design_type.key.as_str();
             let last = key.rsplit('.').next().unwrap_or(key);
             let first = key.split('.').next().unwrap_or(key);
             self.types.push(Type {
-                name: types.claim(&pascal(last), &pascal(first)),
+                name: claims.types.claim(&pascal(last), &pascal(first)),
                 key: key.to_owned(),
                 signature: design_type.signature.clone(),
             });
         }
 
-        // the routed requirements grouped by route, the rest a function each
-        let mut routed: Vec<(Route, Vec<&Requirement>)> = Vec::new();
-        for requirement in slice.requirements.iter().filter(|r| r.stem() == self.name) {
+        // the routed requirements grouped by route, the consumers by topic,
+        // the rest a function each
+        let mut routed: Vec<(&Route, Vec<&Requirement>)> = Vec::new();
+        let mut consumed: Vec<(&str, Vec<&Requirement>)> = Vec::new();
+        for requirement in requirements {
             let suffix = format!("_{}", number(&requirement.id));
             if let Some(route) = route::of(requirement) {
-                match routed.iter_mut().find(|(known, _)| *known == route) {
-                    Some((_, group)) => group.push(requirement),
-                    None => routed.push((route, vec![requirement])),
-                }
+                group(&mut routed, route, requirement);
+            } else if let Some(topic) = requirement.topic.as_deref().filter(|t| !t.is_empty()) {
+                group(&mut consumed, topic, requirement);
             } else {
                 let tail = tail(&requirement.subject);
                 let base = if tail.is_empty() { snake(&self.name) } else { snake(tail) };
                 self.functions.push(Function {
-                    name: values.claim(&base, &suffix),
+                    name: claims.values.claim(&base, &suffix),
                     marker: format!("{} {}: the behaviour", requirement.id, requirement.subject),
                     stated: Stated::of(requirement),
                 });
@@ -307,7 +415,7 @@ impl Stem {
             for scenario in &requirement.scenarios {
                 let name = flat(&scenario.name);
                 self.scenarios.push(Test {
-                    name: tests.claim(&snake(&name), &suffix),
+                    name: claims.tests.claim(&snake(&name), &suffix),
                     id: requirement.id.clone(),
                     subject: requirement.subject.clone(),
                     scenario: scenario.clone(),
@@ -317,43 +425,71 @@ impl Stem {
             }
         }
         for (route, group) in routed {
-            let suffix = number(&group[0].id);
-            let name = values.claim(&handler_base(&group, &route), &format!("_{suffix}"));
-            let title = pascal(&name);
-            let constant = if let Some((constant, _)) =
-                self.paths.iter().find(|(_, path)| *path == route.path)
-            {
-                constant.clone()
-            } else {
-                let constant = constants.claim(&screaming(&route.path), &format!("_{suffix}"));
-                self.paths.push((constant.clone(), route.path.clone()));
-                constant
-            };
-            let stated: Vec<Stated> =
-                group.iter().map(|requirement| Stated::of(requirement)).collect();
-            let named: Vec<String> =
-                stated.iter().map(|stated| format!("{} {}", stated.id, stated.subject)).collect();
-            self.handlers.push(Handler {
-                input: types.claim(&format!("{title}Input"), &suffix),
-                output: types.claim(&format!("{title}Output"), &suffix),
-                name,
-                constant,
-                params: route::params(&route.path)
-                    .into_iter()
-                    .map(|wire| Param {
-                        field: snake(&wire),
-                        wire,
-                    })
-                    .collect(),
-                route,
-                stated,
-                marker: format!("{}: the handler", named.join(", ")),
-            });
+            self.handler(route, &group, &mut claims);
+        }
+        for (topic, group) in consumed {
+            self.consumer(topic, &group, &mut claims, table);
         }
 
         if !self.scenarios.is_empty() {
             self.tests = Some(File::at(format!("crates/{}/tests/{}.rs", self.name, self.part)));
         }
+    }
+
+    // One handler for the requirements served at `route`, over the path's
+    // one constant.
+    fn handler(&mut self, route: &Route, group: &[&Requirement], claims: &mut Claims) {
+        let suffix = number(&group[0].id);
+        let base = handler_base(group, &route.to_string());
+        let name = claims.values.claim(&base, &format!("_{suffix}"));
+        let title = pascal(&name);
+        let constant = if let Some((constant, _)) =
+            self.paths.iter().find(|(_, path)| *path == route.path)
+        {
+            constant.clone()
+        } else {
+            let constant = claims.constants.claim(&screaming(&route.path), &format!("_{suffix}"));
+            self.paths.push((constant.clone(), route.path.clone()));
+            constant
+        };
+        let stated = stated_of(group);
+        self.handlers.push(Handler {
+            input: claims.types.claim(&format!("{title}Input"), &suffix),
+            output: claims.types.claim(&format!("{title}Output"), &suffix),
+            name,
+            constant,
+            params: route
+                .params()
+                .map(|wire| Param {
+                    field: snake(wire),
+                    wire: wire.to_owned(),
+                })
+                .collect(),
+            route: route.clone(),
+            marker: format!("{}: the handler", named(&stated)),
+            stated,
+        });
+    }
+
+    // One consumer for the requirements that consume `topic`, under the
+    // table's constant for it.
+    fn consumer(
+        &mut self, topic: &str, group: &[&Requirement], claims: &mut Claims, table: &mut Table,
+    ) {
+        let suffix = number(&group[0].id);
+        let base = format!("on_{}", handler_base(group, topic));
+        let name = claims.values.claim(&base, &format!("_{suffix}"));
+        let (constant, declared) = table.constant(topic);
+        let stated = stated_of(group);
+        self.consumers.push(Consumer {
+            input: claims.types.claim(&format!("{}Input", pascal(&name)), &suffix),
+            name,
+            constant,
+            topic: topic.to_owned(),
+            declared,
+            marker: format!("{}: the consumer", named(&stated)),
+            stated,
+        });
     }
 
     fn read(&mut self, root: &Path) -> Result<(), Error> {
@@ -382,8 +518,9 @@ impl Stem {
         }
     }
 
-    // The stem's lines in the root lists and, where the tree holds its
-    // entry, the part's lines in the entry's.
+    // The stem's lines in the root lists, the constant of each topic the
+    // slice declares in the table, and, where the tree holds its entry, the
+    // part's lines in the entry's.
     fn lines(&self) -> Vec<Line> {
         let ident = self.package.replace('-', "_");
         let mut lines = vec![
@@ -404,6 +541,16 @@ impl Stem {
                 Place::Before("tracing::debug!("),
             ),
         ];
+        for consumer in self.consumers.iter().filter(|consumer| !consumer.declared) {
+            lines.push(Line::new(
+                TOPIC_TABLE,
+                format!(
+                    "\n/// The `{}` topic.\npub const {}: &str = \"{}\";",
+                    consumer.topic, consumer.constant, consumer.topic
+                ),
+                Place::FileEnd,
+            ));
+        }
         if self.entry.held {
             lines.push(Line::new(
                 &self.entry.path,
@@ -415,6 +562,13 @@ impl Stem {
                     &self.entry.path,
                     format!("        {}::routes(),", self.part),
                     Place::RoutesArray,
+                ));
+            }
+            if !self.consumers.is_empty() {
+                lines.push(Line::new(
+                    &self.entry.path,
+                    format!("        {}::topics,", self.part),
+                    Place::TopicsArray,
                 ));
             }
         }
@@ -441,12 +595,15 @@ impl Stem {
         if !self.handlers.is_empty() {
             entry_lines.push(format!("`{}::routes(),`", self.part));
         }
+        if !self.consumers.is_empty() {
+            entry_lines.push(format!("`{}::topics,`", self.part));
+        }
         let _ = writeln!(
             text,
             "- `{}`: {}, {} {} its lists.",
             self.entry.path,
             self.entry.standing(),
-            entry_lines.join(" and "),
+            listed(&entry_lines),
             if self.entry.held { "added to" } else { "in" }
         );
         let _ = writeln!(
@@ -454,7 +611,11 @@ impl Stem {
             "- `{}`: {}. {}",
             self.module.path,
             self.module.standing(),
-            if self.module.held { HELD } else { "Fill its markers, listed below." }
+            if self.module.held {
+                HELD
+            } else {
+                "Fill its markers, listed below, through `edit_files`."
+            }
         );
         match &self.tests {
             Some(tests) if tests.held => {
@@ -463,8 +624,8 @@ impl Stem {
             Some(tests) => {
                 let _ = writeln!(
                     text,
-                    "- `{}`: scaffolded, one ignored test per scenario. Fill each and remove its \
-                     `#[ignore = ..]` line.",
+                    "- `{}`: scaffolded, one ignored test per scenario. Fill each through \
+                     `edit_files` and remove its `#[ignore = ..]` line.",
                     tests.path
                 );
             }
@@ -482,6 +643,19 @@ impl Stem {
             "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines {}.",
             if added { "added" } else { "already held" }
         );
+        for consumer in &self.consumers {
+            let _ = writeln!(
+                text,
+                "- `{TOPIC_TABLE}`: the constant `{}` for the topic `{}` {}.",
+                consumer.constant,
+                consumer.topic,
+                if consumer.declared {
+                    "already declared"
+                } else {
+                    "added at the end of the table"
+                }
+            );
+        }
         for line in own.iter().filter(|line| standing(line) == Standing::Unanchored) {
             let _ = writeln!(
                 text,
@@ -516,16 +690,30 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `todo!(\"{}\")` in `{}`: the handler `{}` of `{} {}`. Fill `{}` and \
-                 `{}` with the wire's fields, write the body, and drop the `let _ = (input, \
+                "{count}. `todo!(\"{}\")` in `{}`: the handler `{}` of `{}`. Fill `{}` and `{}` \
+                 with the wire's fields, write the body, and drop the `let _ = (input, \
                  context);` line.",
                 escape(&handler.marker),
                 self.module.path,
                 handler.name,
-                handler.route.method,
-                handler.route.path,
+                handler.route,
                 handler.input,
                 handler.output
+            );
+        }
+        for consumer in &self.consumers {
+            count += 1;
+            let _ = writeln!(
+                text,
+                "{count}. `todo!(\"{}\")` in `{}`: the consumer `{}` of the topic `{}`, registered \
+                 in the part's `topics(..)` under `topic::{}`. Fill `{}` with the delivery's \
+                 fields, write the body, and drop the `let _ = (input, context);` line.",
+                escape(&consumer.marker),
+                self.module.path,
+                consumer.name,
+                consumer.topic,
+                consumer.constant,
+                consumer.input
             );
         }
         for function in &self.functions {
@@ -533,7 +721,8 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. `todo!(\"{}\")` in `{}`: the function `{}`, since the requirement \
-                 states no route. Give it the signature the behaviour needs and write the body.",
+                 states no route and no topic. Give it the signature the behaviour needs and \
+                 write the body.",
                 escape(&function.marker),
                 self.module.path,
                 function.name
@@ -598,6 +787,44 @@ impl Stated {
     }
 }
 
+impl Table {
+    fn read(root: &Path) -> Result<Self, Error> {
+        let file = root.join(TOPIC_TABLE);
+        let text = match fs::symlink_metadata(&file) {
+            Ok(meta) if meta.is_file() => tree::read(&file)?,
+            Ok(_) => return Err(bad_request!("`{TOPIC_TABLE}` is not a regular file")),
+            Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
+            Err(err) => return Err(server_error!("reading `{TOPIC_TABLE}`: {err}")),
+        };
+        let declared: Vec<(String, String)> = text.lines().filter_map(constant_of).collect();
+        let taken: Vec<&str> = declared.iter().map(|(name, _)| name.as_str()).collect();
+        Ok(Self {
+            names: Names::reserving(&taken),
+            declared,
+        })
+    }
+
+    // The table's constant for `topic`, and whether the table declares it
+    // already; a topic no constant spells is named for it, once.
+    fn constant(&mut self, topic: &str) -> (String, bool) {
+        if let Some((name, _)) = self.declared.iter().find(|(_, held)| held == topic) {
+            return (name.clone(), true);
+        }
+        let name = self.names.claim(&screaming(topic), "_TOPIC");
+        self.declared.push((name.clone(), topic.to_owned()));
+        (name, false)
+    }
+}
+
+// The name and the topic of a `pub const NAME: &str = "topic";` line.
+fn constant_of(line: &str) -> Option<(String, String)> {
+    let rest = line.trim().strip_prefix("pub const ")?;
+    let (name, rest) = rest.split_once(':')?;
+    let (_, value) = rest.split_once('=')?;
+    let topic = value.trim().strip_suffix(';')?.trim().strip_prefix('"')?.strip_suffix('"')?;
+    Some((name.trim().to_owned(), topic.to_owned()))
+}
+
 impl Line {
     fn new(path: &str, text: String, place: Place) -> Self {
         Self {
@@ -621,7 +848,7 @@ impl Line {
             }
             Ok(_) => {
                 let text = tree::read(&file)?;
-                if text.lines().any(|held| held.trim() == self.text.trim()) {
+                if text.lines().any(|held| held.trim() == self.key()) {
                     Standing::Held
                 } else if render::insert(&text, &self.text, &self.place).is_some() {
                     Standing::Add
@@ -631,6 +858,12 @@ impl Line {
             }
         };
         Ok(())
+    }
+
+    // The line that tells whether the file holds this one: the last of a
+    // text of several, since a constant's doc line tells nothing.
+    fn key(&self) -> &str {
+        self.text.lines().last().unwrap_or(&self.text).trim()
     }
 }
 
@@ -672,9 +905,44 @@ fn tail(subject: &str) -> &str {
     subject.split_once('.').map_or("", |(_, tail)| tail)
 }
 
-// The subject tail the route's requirements share, else the first's, else
-// the route itself, as a function name.
-fn handler_base(group: &[&Requirement], route: &Route) -> String {
+fn stated_of(group: &[&Requirement]) -> Vec<Stated> {
+    group.iter().map(|requirement| Stated::of(requirement)).collect()
+}
+
+// `requirement` under `key`'s group, in first-occurrence order.
+fn group<'r, K: PartialEq>(
+    groups: &mut Vec<(K, Vec<&'r Requirement>)>, key: K, requirement: &'r Requirement,
+) {
+    if let Some((_, group)) = groups.iter_mut().find(|(known, _)| *known == key) {
+        group.push(requirement);
+    } else {
+        groups.push((key, vec![requirement]));
+    }
+}
+
+// `REQ-001 orders.read, REQ-002 orders.refuse`, as a marker names the
+// requirements it stands for.
+fn named(stated: &[Stated]) -> String {
+    stated
+        .iter()
+        .map(|stated| format!("{} {}", stated.id, stated.subject))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+// `a`, `a and b`, or `a, b, and c`.
+fn listed(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [first, second] => format!("{first} and {second}"),
+        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
+    }
+}
+
+// The subject tail the group's requirements share, else the first's, else
+// `fallback` (the route or the topic), as a function name.
+fn handler_base(group: &[&Requirement], fallback: &str) -> String {
     let tails: Vec<Vec<&str>> = group
         .iter()
         .map(|requirement| {
@@ -685,7 +953,7 @@ fn handler_base(group: &[&Requirement], route: &Route) -> String {
     let segments =
         if shared.is_empty() { tails.first().cloned().unwrap_or_default() } else { shared };
     if segments.is_empty() {
-        return snake(&format!("{} {}", route.method, route.path));
+        return snake(fallback);
     }
     snake(&segments.join(" "))
 }

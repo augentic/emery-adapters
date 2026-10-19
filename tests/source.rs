@@ -140,6 +140,24 @@ impl<A: SourceAdapter> Shipped<A> {
         model
     }
 
+    // The `contract` claims the adapter joins by its own reading: over the
+    // workspace, one per surface serving a route — the surface's id, the
+    // route as the SDK spells it, the anchor of its registration — and no
+    // other; over `inline`, none, since a value is never surveyed.
+    async fn contracts(
+        &self, project: &Scratch, inline: &str, routed: &[(&str, &str, &str)], model: Scripted,
+    ) -> Scripted {
+        let evidence = self.accepted(&workspace(project), &model).await;
+        check_evidence(&evidence);
+        assert_eq!(routes(&evidence), routed, "the surfaces serving a route, and no other");
+
+        let evidence = self.accepted(&value(inline), &model).await;
+        check_evidence(&evidence);
+        assert!(routes(&evidence).is_empty(), "a value serves no route");
+        model.assert_exhausted();
+        model
+    }
+
     // Returns the workspace seams' turns of a run that surveys by code alone.
     fn prompted(&self, model: &Scripted, seams: usize) -> Vec<String> {
         let seen = model.seen();
@@ -218,6 +236,23 @@ fn declared(evidence: &Evidence) -> Vec<&str> {
         .collect();
     names.sort_unstable();
     names
+}
+
+// The `contract` claims' ids, routes, and anchors, sorted by id.
+fn routes(evidence: &Evidence) -> Vec<(&str, &str, &str)> {
+    let mut routes: Vec<(&str, &str, &str)> = evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Contract)
+        .map(|claim| {
+            let id = claim.id.as_deref().expect("a contract carries its surface's id");
+            let route = claim.extras.get("route").and_then(|r| r.as_str());
+            let path = claim.path.as_deref().expect("a contract is anchored at its surface");
+            (id, route.expect("a contract carries its route"), path)
+        })
+        .collect();
+    routes.sort_unstable();
+    routes
 }
 
 // The survey answer a surveying workspace's first turn is scripted with:
@@ -2307,6 +2342,64 @@ async fn typescript_types() {
             "Inline",
             &["Currency", "Rounding", "Money"],
             Scripted::answering([&survey, &answered, &answered]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A surface registered by a verb serves a typed route: the verb uppercase,
+// the path under its mount, each parameter `{name}` however the framework
+// spelled it, anchored at the registration under the surface's id; the
+// bootstrap serves none, and a value is never surveyed, so it carries none.
+#[tokio::test]
+async fn typescript_contracts() {
+    let project = scratch();
+    modules(&project, &APP);
+    let survey = app_inventory();
+    let answer = claim("orders.create");
+
+    let model = TYPESCRIPT
+        .contracts(
+            &project,
+            "export const pool = \"o-1\";\n",
+            &[
+                ("orders.find-order", "GET /api/orders/{id}", "src/routes.ts#L9"),
+                ("orders.post", "POST /api/orders", "src/routes.ts#L6-L8"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A method under a verb decorator serves its route under the class
+// decorator's prefix, anchored at the method; a decorator that is no verb
+// routes nothing, and a verb the grammar has no method for (`All`) is left
+// unrouted rather than guessed.
+#[tokio::test]
+async fn typescript_contracts_decorated() {
+    let project = scratch();
+    modules(&project, &NEST);
+    let survey = inventory(
+        &[
+            ("GET /orders/:id", "src/orders.controller.ts#L8-L12", "orders"),
+            ("POST /orders", "src/orders.controller.ts#L14-L17", "orders"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.create");
+
+    let model = TYPESCRIPT
+        .contracts(
+            &project,
+            "export const pool = \"o-1\";\n",
+            &[
+                ("orders.create", "POST /orders", "src/orders.controller.ts#L14-L17"),
+                ("orders.find", "GET /orders/{id}", "src/orders.controller.ts#L8-L12"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -4924,6 +5017,95 @@ async fn python_types() {
             "Inline",
             &["Currency", "Rounding", "Adjust", "Money", "Order"],
             Scripted::answering([&survey, &answered, &answered]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A decorated `def` serves a typed route under its blueprint's mount: a
+// verb decorator by its verb, a `route` by its `methods=`, a trailing `/`
+// dropped and a typed parameter spelled `{name}`; the bootstrap serves none,
+// and a value is never surveyed, so it carries none.
+#[tokio::test]
+async fn python_contracts() {
+    let project = scratch();
+    modules(&project, &FLASK);
+    let survey = inventory(
+        &[
+            ("POST /orders/", "app/orders/routes.py#L6-L8", "orders"),
+            ("GET /orders/<int:order_id>", "app/orders/routes.py#L11-L13", "orders"),
+            ("POST /auth/login", "app/auth/routes.py#L6-L8", "auth"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.create");
+
+    let model = PYTHON
+        .contracts(
+            &project,
+            "POOL = \"o-1\"\n",
+            &[
+                ("auth", "POST /auth/login", "app/auth/routes.py#L6-L8"),
+                ("orders.get-order-id", "GET /orders/{order_id}", "app/orders/routes.py#L11-L13"),
+                ("orders.post", "POST /orders", "app/orders/routes.py#L6-L8"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
+        )
+        .await;
+
+    assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
+}
+
+// A registration by a call named for its verb serves a typed route at the
+// call, a `{id}` parameter kept as spelled; a route a `path` or `url`
+// registers hands its method to the view, so it is left unrouted rather
+// than typed `GET`.
+#[tokio::test]
+async fn python_contracts_registered() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("app/__init__.py", ""),
+            (
+                "app/server.py",
+                "from aiohttp import web\n\nfrom .handlers import create, update\n\napp = \
+                 web.Application()\napp.add_routes([\n    web.post(\"/orders\", create),\n    \
+                 web.patch(\"/orders/{id}\", update),\n])\n",
+            ),
+            (
+                "app/handlers.py",
+                "async def create(request):\n    return {}\n\n\nasync def update(request):\n    \
+                 return {}\n",
+            ),
+            (
+                "app/urls.py",
+                "from django.urls import path\n\nfrom .views import index\n\nurlpatterns = \
+                 [\n    path(\"\", index, name=\"index\"),\n]\n",
+            ),
+            ("app/views.py", "def index(request):\n    return {}\n"),
+        ],
+    );
+    let survey = inventory(
+        &[
+            ("POST /orders", "app/server.py#L7", "orders"),
+            ("PATCH /orders/{id}", "app/server.py#L8", "orders"),
+            ("index", "app/urls.py#L6", "index"),
+        ],
+        &[],
+    );
+    let answer = claim("orders.create");
+
+    let model = PYTHON
+        .contracts(
+            &project,
+            "POOL = \"o-1\"\n",
+            &[
+                ("orders.create", "POST /orders", "app/server.py#L7"),
+                ("orders.update", "PATCH /orders/{id}", "app/server.py#L8"),
+            ],
+            Scripted::answering([&survey, &answer, &answer]),
         )
         .await;
 

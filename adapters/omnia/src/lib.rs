@@ -8,12 +8,15 @@
 //!
 //! Before a slice's turn, the adapter scaffolds the slice's skeleton from the
 //! typed slice: the stem's crate where the tree lacks it, the part with a
-//! handler per route the requirements state and a function per requirement
-//! stating none, an ignored test per scenario, and the stem's lines in every
-//! list. The turn fills the markers it scaffolded, and a covered requirement
-//! whose marker or ignored test still stands is refused for correction, as
-//! is a module the tree holds that does not parse, named at the line the
-//! parser stopped at.
+//! handler per route the requirements carry, a consumer per topic, and a
+//! function per requirement carrying neither, an ignored test per scenario,
+//! and the stem's lines in every list. A `start` requirement carrying a
+//! route is laid under the crate of the stem its route's resource names. The
+//! turn fills the markers it scaffolded through `edit_files`, since a
+//! `write_files` entry naming a scaffolded file is refused, and a covered
+//! requirement whose marker or ignored test still stands is refused for
+//! correction, as is a module the tree holds that does not parse, named at
+//! the line the parser stopped at.
 
 mod scaffold;
 mod tree;
@@ -71,7 +74,8 @@ impl TargetAdapter for Adapter {
                 let written = scaffold.write(root)?;
                 tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
                 let brief = scaffold.brief();
-                let ctx = ctx.with_scaffold(&brief);
+                let paths = scaffold.paths();
+                let ctx = ctx.with_scaffold(&brief).with_scaffolded(&paths);
                 emery_sdk::target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })

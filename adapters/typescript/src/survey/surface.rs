@@ -9,7 +9,7 @@ use emery_sdk::survey::code::{
 use emery_sdk::survey::resolve::{Target, normalize};
 use emery_sdk::survey::tests::Statement;
 use emery_sdk::survey::{Lines, route};
-use emery_sdk::{kebab, unique};
+use emery_sdk::{Route, kebab, unique};
 
 use super::DIALECT;
 use super::parse::Module;
@@ -80,8 +80,15 @@ impl TypeScript {
             lines: call.lines,
             detail,
             closure: tree.reaches(module, call.lines, &call.frames, call.class.as_deref()),
+            route: route.as_deref().and_then(|route| typed_route(method, route)),
         }
     }
+}
+
+// The route a registration serves, typed, where its verb is one HTTP
+// method: `all`, and a path the grammar refuses, leave the surface unrouted.
+fn typed_route(verb: &str, path: &str) -> Option<Route> {
+    Route::parse(&format!("{verb} {path}")).ok()
 }
 
 impl Recogniser for TypeScript {
@@ -263,6 +270,7 @@ fn at_decorated_class(tree: &Tree<TypeScript>, module: &Module, class: &Decorate
         lines: class.lines,
         detail,
         closure: tree.reaches(module, class.lines, &[], class.class.as_deref()),
+        route: None,
     }
 }
 
@@ -271,13 +279,18 @@ fn at_decorated_method(tree: &Tree<TypeScript>, module: &Module, decorated: &Dec
     let member = decorated.member.as_deref().unwrap_or_default();
     let mut detail = vec![format!("method `{class}.{member}` {}", decorated.lines)];
     detail.extend(through(module, decorated));
+    let routed = decorated_route(module, decorated);
     Derived {
-        stem: decorated_stem(module, decorated),
+        stem: routed.as_ref().map_or_else(
+            || decorated.literal.as_deref().and_then(route::literal_stem),
+            |(_, route)| DIALECT.route.stem(route),
+        ),
         discriminator: kebab(member),
         methods: Vec::new(),
         lines: decorated.lines,
         detail,
         closure: tree.reaches(module, decorated.lines, &[], decorated.class.as_deref()),
+        route: routed.as_ref().and_then(|(verb, route)| typed_route(verb, route)),
     }
 }
 
@@ -308,6 +321,7 @@ fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &s
         lines: declared,
         detail,
         closure: tree.reaches(module, declared, &[], class),
+        route: None,
     }
 }
 
@@ -338,16 +352,18 @@ fn class_prefix<'m>(module: &'m Module, class: Option<&str>) -> Option<&'m Decor
         .find(|d| d.registering(&DIALECT))
 }
 
-fn decorated_stem(module: &Module, decorated: &Decorated) -> Option<String> {
+// The verb and the path a method's decorator registers under its class's
+// prefix, `@Get(':id')` under `@Controller('orders')`; `None` for a
+// decorator that is no verb.
+fn decorated_route(module: &Module, decorated: &Decorated) -> Option<(String, String)> {
     let verb = decorated.name.last()?.to_ascii_lowercase();
-    if VERBS.contains(&verb.as_str()) {
-        let prefix =
-            class_prefix(module, decorated.class.as_deref()).and_then(|d| d.literal.as_deref());
-        let route = route::join(prefix.unwrap_or(""), decorated.literal.as_deref().unwrap_or(""));
-        DIALECT.route.stem(&route)
-    } else {
-        decorated.literal.as_deref().and_then(route::literal_stem)
+    if !VERBS.contains(&verb.as_str()) {
+        return None;
     }
+    let prefix =
+        class_prefix(module, decorated.class.as_deref()).and_then(|d| d.literal.as_deref());
+    let route = route::join(prefix.unwrap_or(""), decorated.literal.as_deref().unwrap_or(""));
+    Some((verb, route))
 }
 
 fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {

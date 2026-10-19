@@ -4,7 +4,7 @@ A requirement lands as a handler in the slice's module and the lines that wire i
 
 ## A route
 
-A requirement that states a method and a path is one route, in the slice's module and one entry of its stem's routes list:
+A requirement carrying a route, its `Route:` line, is one route, in the slice's module and one entry of its stem's routes list:
 
 ```rust
 // crates/orders/src/placing.rs

@@ -3,13 +3,14 @@
 use std::fmt::Write as _;
 
 use super::names::{escape, flat};
-use super::{Function, Handler, Stem, Type, route};
+use super::{Consumer, Function, Handler, Stem, Type, route};
 
 // The template's `rustfmt.toml` width, so a scaffolded line the formatter
 // would break is written broken.
 const MAX_WIDTH: usize = 100;
 const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
 const ROUTES_ANCHOR: &str = "// one entry per part with routes, each added at the end";
+const TOPICS_ANCHOR: &str = "// one entry per part with topics, each added at the end";
 
 // The stem's manifest, as the layout reference spells it.
 const MANIFEST: &str = r#"[package]
@@ -62,7 +63,7 @@ pub fn router<P: Capabilities>() -> axum::Router<Client<P>> {
 pub fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {
     common::topics(router, env).parts([
         // one entry per part with topics, each added at the end
-    ])
+<topics>    ])
 }
 ";
 
@@ -71,7 +72,8 @@ pub enum Place {
     // The root manifest's path list: after `common`'s line and the stems'
     // after it.
     PathList,
-    // The root manifest's crate list: the end of the file.
+    // The root manifest's crate list, and the topic table: the end of the
+    // file.
     FileEnd,
     // Before the line that starts with the anchor, as the root route and
     // topic lists take a statement.
@@ -80,6 +82,8 @@ pub enum Place {
     AfterLastPubMod,
     // At the end of the routes array of a stem's entry.
     RoutesArray,
+    // At the end of the topics array of a stem's entry.
+    TopicsArray,
 }
 
 // `text` with `line` where `place` says, or none where the text holds no
@@ -101,13 +105,17 @@ pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
         Place::AfterLastPubMod => {
             lines.iter().rposition(|held| held.trim_start().starts_with("pub mod "))? + 1
         }
-        Place::RoutesArray => {
-            let anchor = lines.iter().position(|held| held.trim() == ROUTES_ANCHOR)? + 1;
-            anchor + lines[anchor..].iter().position(|held| held.trim() == "])")?
-        }
+        Place::RoutesArray => array_end(&lines, ROUTES_ANCHOR)?,
+        Place::TopicsArray => array_end(&lines, TOPICS_ANCHOR)?,
     };
     lines.insert(at, line);
     Some(lines.join("\n") + "\n")
+}
+
+// The index of the `])` closing the array `anchor` opens.
+fn array_end(lines: &[&str], anchor: &str) -> Option<usize> {
+    let opened = lines.iter().position(|held| held.trim() == anchor)? + 1;
+    Some(opened + lines[opened..].iter().position(|held| held.trim() == "])")?)
 }
 
 pub fn manifest(stem: &Stem) -> String {
@@ -120,7 +128,16 @@ pub fn entry(stem: &Stem) -> String {
     } else {
         format!("        {}::routes(),\n", stem.part)
     };
-    ENTRY.replace("<stem>", &stem.name).replace("<part>", &stem.part).replace("<routes>", &routes)
+    let topics = if stem.consumers.is_empty() {
+        String::new()
+    } else {
+        format!("        {}::topics,\n", stem.part)
+    };
+    ENTRY
+        .replace("<stem>", &stem.name)
+        .replace("<part>", &stem.part)
+        .replace("<routes>", &routes)
+        .replace("<topics>", &topics)
 }
 
 pub fn module(stem: &Stem) -> String {
@@ -145,6 +162,10 @@ pub fn module(stem: &Stem) -> String {
         text.push('\n');
         text.push_str(&routes(stem));
     }
+    if !stem.consumers.is_empty() {
+        text.push('\n');
+        text.push_str(&topics(stem));
+    }
     for design_type in &stem.types {
         text.push('\n');
         text.push_str(&design(design_type));
@@ -152,6 +173,10 @@ pub fn module(stem: &Stem) -> String {
     for handler in &stem.handlers {
         text.push('\n');
         text.push_str(&self::handler(handler));
+    }
+    for consumer in &stem.consumers {
+        text.push('\n');
+        text.push_str(&self::consumer(consumer));
     }
     for function in &stem.functions {
         text.push('\n');
@@ -188,8 +213,14 @@ pub fn tests(stem: &Stem) -> String {
 }
 
 fn imports(stem: &Stem) -> String {
+    let routed = !stem.handlers.is_empty();
+    let consuming = !stem.consumers.is_empty();
     let mut text = String::new();
-    if !stem.handlers.is_empty() {
+    if routed || consuming {
+        let common = if consuming { "{Capabilities, config, topic}" } else { "Capabilities" };
+        let _ = writeln!(text, "use common::{common};");
+    }
+    if routed {
         let mut methods: Vec<&str> =
             stem.handlers.iter().map(|handler| route::function(&handler.route.method)).collect();
         methods.sort_unstable();
@@ -199,14 +230,67 @@ fn imports(stem: &Stem) -> String {
         } else {
             format!("{{{}}}", methods.join(", "))
         };
-        text.push_str("use common::Capabilities;\n");
         let _ = writeln!(text, "use omnia_sdk::api::http::{methods};");
-        text.push_str("use omnia_sdk::api::{Client, Context};\n");
     }
-    if !stem.handlers.is_empty() || !stem.types.is_empty() {
+    if routed || consuming {
+        let mut api = Vec::new();
+        if routed {
+            api.push("Client");
+        }
+        api.push("Context");
+        if consuming {
+            api.push("messaging");
+        }
+        let _ = writeln!(text, "use omnia_sdk::api::{{{}}};", api.join(", "));
+    }
+    let serializing = routed || !stem.types.is_empty();
+    if serializing {
         text.push_str("use serde::{Deserialize, Serialize};\n");
+    } else if consuming {
+        text.push_str("use serde::Deserialize;\n");
     }
     text
+}
+
+// The part's `topics(..)`: one `.route(..)` per consumer, chained over the
+// router, each broken as the formatter would.
+fn topics(stem: &Stem) -> String {
+    let head = "pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
+                &str,\n) -> messaging::Router<P> {\n";
+    let routes: Vec<(String, String)> = stem
+        .consumers
+        .iter()
+        .map(|consumer| {
+            (
+                format!("config::topic_for(env, topic::{})", consumer.constant),
+                format!("messaging::consume({})", consumer.name),
+            )
+        })
+        .collect();
+    let body = if let [(topic, consume)] = routes.as_slice() {
+        let joined = format!("    router.route({topic}, {consume})");
+        if joined.len() <= MAX_WIDTH {
+            joined
+        } else {
+            format!("    router.route(\n        {topic},\n        {consume},\n    )")
+        }
+    } else {
+        let chained: Vec<String> = routes
+            .iter()
+            .map(|(topic, consume)| {
+                let joined = format!("        .route({topic}, {consume})");
+                if joined.len() <= MAX_WIDTH {
+                    joined
+                } else {
+                    format!(
+                        "        .route(\n            {topic},\n            {consume},\n        )"
+                    )
+                }
+            })
+            .collect();
+        format!("    router\n{}", chained.join("\n"))
+    };
+    format!("{head}{body}\n}}\n")
 }
 
 fn routes(stem: &Stem) -> String {
@@ -290,9 +374,33 @@ fn handler(handler: &Handler) -> String {
 }
 
 fn signature(handler: &Handler) -> String {
-    let head = format!("pub(crate) async fn {}<P: Capabilities>(", handler.name);
-    let params = format!("input: {}, context: Context<P>", handler.input);
-    let tail = format!(") -> omnia_sdk::Result<{}> {{", handler.output);
+    head(&handler.name, &handler.input, &handler.output)
+}
+
+// A consumer: its input over the delivery, and the handler under its
+// requirements, its body the marker.
+fn consumer(consumer: &Consumer) -> String {
+    let mut text = format!(
+        "/// A delivery of `{}`.\n#[derive(Debug, Deserialize)]\npub struct {} {{}}\n\n",
+        consumer.topic, consumer.input
+    );
+    for stated in &consumer.stated {
+        let _ = writeln!(text, "// {} {}: {}", stated.id, stated.subject, stated.statement);
+    }
+    text.push_str(&head(&consumer.name, &consumer.input, "()"));
+    let _ = writeln!(
+        text,
+        "    let _ = (input, context);\n    todo!(\"{}\")\n}}",
+        escape(&consumer.marker)
+    );
+    text
+}
+
+// A handler's head, broken as the formatter would.
+fn head(name: &str, input: &str, output: &str) -> String {
+    let head = format!("pub(crate) async fn {name}<P: Capabilities>(");
+    let params = format!("input: {input}, context: Context<P>");
+    let tail = format!(") -> omnia_sdk::Result<{output}> {{");
     let joined = format!("{head}{params}{tail}");
     if joined.len() <= MAX_WIDTH {
         return joined + "\n";
@@ -301,7 +409,7 @@ fn signature(handler: &Handler) -> String {
     if packed.len() <= MAX_WIDTH {
         return format!("{head}\n{packed}\n{tail}\n");
     }
-    format!("{head}\n    input: {},\n    context: Context<P>,\n{tail}\n", handler.input)
+    format!("{head}\n    input: {input},\n    context: Context<P>,\n{tail}\n")
 }
 
 fn function(function: &Function) -> String {

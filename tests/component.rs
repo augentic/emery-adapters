@@ -247,8 +247,9 @@ async fn emery_node() {
 // The metadata lowers the seven rules in order; the init scaffolds the
 // template in the lent tree with no turn, the build scaffolds the slice's
 // skeleton from the typed slice the driver lowered — the stem's crate and
-// its lines in the seeded lists — before its turn, which fills the handler
-// and the test through `edit_files`, its turns carry the worker grant, and
+// its lines in the seeded lists — before its turn, the handler from the
+// typed route the driver lowered, which the turn fills with the test
+// through `edit_files`, its turns carry the worker grant, and
 // its report and the verdict lift back to the driver, the verify's check
 // finding the static files standing as the template spells them.
 #[tokio::test]
@@ -308,6 +309,12 @@ async fn emery_omnia() {
         module.contains(OMNIA_HANDLER_FILLED) && !module.contains(OMNIA_HANDLER_MARKER),
         "the handler the guest scaffolded holds the body the turn filled: {module}"
     );
+    for line in ["pub(crate) const ORDERS: &str = \"/orders\";\n", ".route(ORDERS, post(create))"] {
+        assert!(
+            module.contains(line),
+            "the typed route the driver lowered reached the skeleton as `{line}`: {module}"
+        );
+    }
     let tests = text("crates/orders/tests/orders.rs");
     assert!(
         tests.contains(OMNIA_TEST_FILLED) && !tests.contains("#[ignore"),
