@@ -16,13 +16,10 @@ use emery_sdk::{Doc, Error, INLINE_BYTES, Route, bad_request, server_error};
 
 use self::names::{Names, escape, flat, number, pascal, screaming, snake};
 use self::reference::{Needs, Role, Shape};
-use self::render::Place;
+use self::render::{Call, Expr, Place};
 use crate::tree;
 
 const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
-// The lists a slice of `start` requirements alone may touch, guarded so a
-// `write_files` over one is a correction rather than a landed overwrite.
-const ROOT_LISTS: [&str; 4] = ["Cargo.toml", "src/routes.rs", "src/messaging.rs", TOPIC_TABLE];
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
 
 pub struct Scaffold {
@@ -86,7 +83,8 @@ struct Handler {
     stated: Vec<Stated>,
     marker: String,
     // The route function over `handle_with` scaffolded beside a `POST`
-    // handler, so another status is one token's edit.
+    // handler, and beside one whose scenarios state a status other than
+    // `200`, so another status is one token's edit.
     route_fn: Option<String>,
 }
 
@@ -333,9 +331,14 @@ impl Scaffold {
         Ok(written)
     }
 
-    // Every file the scaffold wrote or found, every list it adds a line to,
-    // and, for a slice that laid no stem, the root lists, sorted: what the
-    // turn changes through `edit_files` alone.
+    // A slice of `start` requirements alone, none carrying a route, lays no
+    // stem: nothing is scaffolded and no turn is opened for it.
+    pub const fn is_empty(&self) -> bool {
+        self.stems.is_empty()
+    }
+
+    // Every file the scaffold wrote or found and every list it adds a line
+    // to, sorted: what the turn changes through `edit_files` alone.
     pub fn paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
             .stems
@@ -348,9 +351,6 @@ impl Scaffold {
             })
             .chain(self.lines.iter().map(|line| line.path.clone()))
             .collect();
-        if self.stems.is_empty() {
-            paths.extend(ROOT_LISTS.iter().map(|path| (*path).to_owned()));
-        }
         paths.sort();
         paths.dedup();
         paths
@@ -378,13 +378,6 @@ impl Scaffold {
                  guardrails' table says.",
                 self.start.join(", ")
             );
-            if self.stems.is_empty() {
-                text.push_str(
-                    " The root lists (`Cargo.toml`, `src/routes.rs`, `src/messaging.rs`, \
-                     `crates/common/src/topic.rs`) are edited through `edit_files` where a \
-                     line is yours to add, never written.",
-                );
-            }
             text.push_str("\n\n");
         }
         for relaid in &self.relaid {
@@ -413,9 +406,6 @@ impl Scaffold {
     // packages under clippy and their tests, then the guest check and the
     // formatter over the workspace.
     pub fn check(&self) -> String {
-        if self.stems.is_empty() {
-            return CHECK.to_owned();
-        }
         let packages: Vec<String> =
             self.stems.iter().map(|stem| format!("-p {}", stem.package)).collect();
         let packages = packages.join(" ");
@@ -426,9 +416,6 @@ impl Scaffold {
     }
 
     fn brief_references(&self, docs: &[Doc], budget: &mut Budget, text: &mut String) {
-        if self.stems.is_empty() {
-            return;
-        }
         let mut shapes = BTreeSet::new();
         for stem in &self.stems {
             if !stem.handlers.is_empty() {
@@ -606,7 +593,7 @@ impl Stem {
             self.paths.push((constant.clone(), route.path.clone()));
             constant
         };
-        let route_fn = (route.method == "POST")
+        let route_fn = (route.method == "POST" || states_status(group))
             .then(|| claims.values.claim(&format!("{name}_route"), &format!("_{suffix}")));
         let stated = stated_of(group);
         self.handlers.push(Handler {
@@ -706,13 +693,9 @@ impl Stem {
             ),
         ];
         for consumer in self.consumers.iter().filter(|consumer| !consumer.declared) {
-            let topic = escape(&consumer.topic);
             lines.push(Line::new(
                 TOPIC_TABLE,
-                format!(
-                    "\n/// The `{topic}` topic.\npub const {}: &str = \"{topic}\";",
-                    consumer.constant
-                ),
+                format!("\n{}", render::topic_constant(&consumer.constant, &consumer.topic)),
                 Place::FileEnd,
             ));
         }
@@ -992,12 +975,12 @@ impl File {
 impl Handler {
     // The `.route(..)` call that registers the handler: its route function
     // where one was scaffolded, else the SDK's method fn over it.
-    fn registration(&self) -> String {
+    fn registration(&self) -> Call {
         let service = self.route_fn.as_ref().map_or_else(
-            || format!("{}({})", route::function(&self.route.method), self.name),
-            |route_fn| format!("{route_fn}()"),
+            || Call::new(route::function(&self.route.method), [self.name.as_str()]),
+            |route_fn| Call::new(route_fn.as_str(), Vec::<Expr>::new()),
         );
-        format!(".route({}, {service})", self.constant)
+        Call::new(".route", [Expr::from(self.constant.as_str()), service.into()])
     }
 
     // How the handler's `Ok` reaches the wire, and where another status is
@@ -1020,7 +1003,9 @@ impl Handler {
             |route_fn| {
                 format!(
                     "Its `Ok` is answered as JSON under the status `{route_fn}` names, \
-                     `StatusCode::OK`; for a `201`, change it there."
+                     `StatusCode::OK`; for another status on an `Ok`, a `201` or a `503`, \
+                     change it there, and answer an error status, a `404`, as the error the \
+                     errors passage maps to it."
                 )
             },
         )
@@ -1040,11 +1025,22 @@ impl Budget {
 }
 
 impl Stated {
+    // A requirement the engine lowers with no statement is one its sources
+    // conflict over, so its line says so rather than ending at the colon.
+    const CONFLICT: &str = "[conflict] the sources disagree; the specification's notes under this id say what each \
+         states";
+
     fn of(requirement: &Requirement) -> Self {
+        let statement = requirement
+            .statement
+            .first()
+            .map(|line| flat(line))
+            .filter(|line| !line.is_empty())
+            .unwrap_or_else(|| Self::CONFLICT.to_owned());
         Self {
             id: requirement.id.clone(),
             subject: requirement.subject.clone(),
-            statement: requirement.statement.first().map(|line| flat(line)).unwrap_or_default(),
+            statement,
         }
     }
 }
@@ -1058,7 +1054,7 @@ impl Table {
             Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
             Err(err) => return Err(server_error!("reading `{TOPIC_TABLE}`: {err}")),
         };
-        let declared: Vec<(String, String)> = text.lines().filter_map(constant_of).collect();
+        let declared = constants_of(&text);
         let taken: Vec<&str> = declared.iter().map(|(name, _)| name.as_str()).collect();
         Ok(Self {
             names: Names::reserving(&taken),
@@ -1078,13 +1074,28 @@ impl Table {
     }
 }
 
-// The name and the topic of a `pub const NAME: &str = "topic";` line.
-fn constant_of(line: &str) -> Option<(String, String)> {
-    let rest = line.trim().strip_prefix("pub const ")?;
-    let (name, rest) = rest.split_once(':')?;
-    let (_, value) = rest.split_once('=')?;
-    let topic = value.trim().strip_suffix(';')?.trim().strip_prefix('"')?.strip_suffix('"')?;
-    Some((name.trim().to_owned(), topic.to_owned()))
+// The name and the topic of every `pub const NAME: &str = "topic";` in the
+// table, a value the formatter laid on the line beneath its `=` read with
+// the declaration.
+fn constants_of(text: &str) -> Vec<(String, String)> {
+    let mut declared = Vec::new();
+    let mut lines = text.lines().map(str::trim);
+    while let Some(line) = lines.next() {
+        let Some(rest) = line.strip_prefix("pub const ") else { continue };
+        let Some((name, rest)) = rest.split_once(':') else { continue };
+        let Some((_, value)) = rest.split_once('=') else { continue };
+        let value = if value.trim().is_empty() { lines.next().unwrap_or_default() } else { value };
+        let Some(topic) = value
+            .trim()
+            .strip_suffix(';')
+            .and_then(|value| value.trim().strip_prefix('"'))
+            .and_then(|value| value.strip_suffix('"'))
+        else {
+            continue;
+        };
+        declared.push((name.trim().to_owned(), topic.to_owned()));
+    }
+    declared
 }
 
 impl Line {
@@ -1262,6 +1273,23 @@ fn handler_base(group: &[&Requirement], fallback: &str) -> String {
         return snake(fallback);
     }
     snake(&segments.join(" "))
+}
+
+// Whether a scenario of the group's requirements states an HTTP status
+// other than `200`: a word of three digits in the status range in an
+// outcome line, `503` in `the status is 503 and the body says degraded`.
+fn states_status(group: &[&Requirement]) -> bool {
+    group
+        .iter()
+        .flat_map(|requirement| &requirement.scenarios)
+        .flat_map(|scenario| std::iter::once(&scenario.then).chain(&scenario.and))
+        .flat_map(|line| line.split(|ch: char| !ch.is_ascii_alphanumeric()))
+        .any(|word| {
+            word.len() == 3
+                && word != "200"
+                && word.starts_with(|ch| matches!(ch, '1'..='5'))
+                && word.bytes().all(|byte| byte.is_ascii_digit())
+        })
 }
 
 fn shared_lead<'a>(tails: &[Vec<&'a str>]) -> Vec<&'a str> {

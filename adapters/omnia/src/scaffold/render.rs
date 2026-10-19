@@ -1,17 +1,21 @@
 //! Renders the files a scaffold writes and places the lines it adds to the lists.
 
+mod item;
+
 use std::fmt::Write as _;
 
-use super::names::{escape, flat};
+pub use self::item::{Call, Expr};
+use self::item::{
+    Chain, Const, Consts, Doc, Enum, Fence, Field, File, Fn, Item, Struct, TAB, Uses, Vis, closure,
+};
+use super::names::{escape, flat, snake};
 use super::{Act, Consumer, Function, Handler, Stem, Test, Type, route};
 
-// The template's `rustfmt.toml` width, so a scaffolded line the formatter
-// would break is written broken.
-const MAX_WIDTH: usize = 100;
 const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
 const ROUTES_ANCHOR: &str = "// one entry per part with routes, each added at the end";
 const TOPICS_ANCHOR: &str = "// one entry per part with topics, each added at the end";
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
+const GENERICS: &str = "<P: Capabilities>";
 
 // The stem's manifest, as the layout reference spells it.
 const MANIFEST: &str = r#"[package]
@@ -41,42 +45,10 @@ serde_json.workspace = true
 tracing.workspace = true
 "#;
 
-// The stem's entry, as the layout reference spells it, with one part's
-// lines in its lists.
-const ENTRY: &str = r"//! # <stem>
-//!
-//! The `<stem>` stem.
-
-pub mod <part>;
-
-use common::Capabilities;
-use omnia_sdk::api::{Client, messaging};
-
-/// The stem's routes, merged onto the root router.
-pub fn router<P: Capabilities>() -> axum::Router<Client<P>> {
-    common::routers([
-        // one entry per part with routes, each added at the end
-<routes>    ])
-}
-
-/// The stem's topics, registered on the root messaging router under `env`.
-#[must_use]
-pub fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {
-    common::topics(router, env).parts([
-        // one entry per part with topics, each added at the end
-<topics>    ])
-}
-";
-
-// The decoder a pre-rendered route function reads the input with: what the
-// SDK's `post` does, spelled in the part so the encoder beside it is the one
-// place a status changes.
-const DECODE_JSON: &str = r#"// The JSON body with the path parameters inserted as string fields, as the
-// SDK's `post` decodes an input.
-fn decode_json<I: DeserializeOwned>(
-    params: &[(String, String)], body: &[u8],
-) -> Result<I, DecodeError> {
-    let mut value = if body.is_empty() {
+// The body of the decoder a pre-rendered route function reads the input
+// with: what the SDK's `post` does, spelled in the part so the encoder
+// beside it is the one place a status changes.
+const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
         serde_json::Value::Object(serde_json::Map::new())
     } else {
         serde_json::from_slice(body).map_err(|error| DecodeError::new(error.to_string()))?
@@ -87,9 +59,7 @@ fn decode_json<I: DeserializeOwned>(
     for (key, param) in params {
         object.insert(key.clone(), serde_json::Value::String(param.clone()));
     }
-    serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))
-}
-"#;
+    serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
 
 // Where a list takes a line.
 pub enum Place {
@@ -152,80 +122,121 @@ pub fn manifest(stem: &Stem) -> String {
     MANIFEST.replace("<package>", &stem.package).replace("<stem>", &stem.name)
 }
 
+// The topic table's constant for `topic`, under its doc line, as the lines
+// added at the end of the table.
+pub fn topic_constant(constant: &str, topic: &str) -> String {
+    let topic = escape(topic);
+    let mut file = File::default();
+    file.push(Consts {
+        comments: Vec::new(),
+        consts: vec![Const {
+            docs: Doc::new([format!("The `{topic}` topic.")]),
+            vis: Vis::Pub,
+            name: constant.to_owned(),
+            ty: "&str".to_owned(),
+            value: format!("\"{topic}\""),
+        }],
+    });
+    file.render().trim_end().to_owned()
+}
+
+// The stem's entry, as the layout reference spells it, with one part's
+// lines in its lists.
 pub fn entry(stem: &Stem) -> String {
-    let routes = if stem.handlers.is_empty() {
-        String::new()
-    } else {
-        format!("        {}::routes(),\n", stem.part)
-    };
-    let topics = if stem.consumers.is_empty() {
-        String::new()
-    } else {
-        format!("        {}::topics,\n", stem.part)
-    };
-    ENTRY
-        .replace("<stem>", &stem.name)
-        .replace("<part>", &stem.part)
-        .replace("<routes>", &routes)
-        .replace("<topics>", &topics)
+    let mut file = File::default();
+    file.push(Item::ModuleDoc(Doc::new([
+        format!("# {}", stem.name),
+        String::new(),
+        format!("The `{}` stem.", stem.name),
+    ])));
+    file.push(Item::Mods(vec![stem.part.clone()]));
+    let mut uses = Uses::default();
+    uses.add("common", &["Capabilities"]);
+    uses.add("omnia_sdk::api", &["Client", "messaging"]);
+    file.push(uses);
+    let routes = (!stem.handlers.is_empty()).then(|| format!("{}::routes(),", stem.part));
+    file.push(Fn {
+        docs: Doc::new(["The stem's routes, merged onto the root router."]),
+        vis: Vis::Pub,
+        name: "router".to_owned(),
+        generics: GENERICS.to_owned(),
+        ret: "axum::Router<Client<P>>".to_owned(),
+        body: fold("common::routers([", ROUTES_ANCHOR, routes),
+        ..Fn::default()
+    });
+    let topics = (!stem.consumers.is_empty()).then(|| format!("{}::topics,", stem.part));
+    file.push(Fn {
+        docs: Doc::new(["The stem's topics, registered on the root messaging router under `env`."]),
+        attrs: vec!["#[must_use]".to_owned()],
+        vis: Vis::Pub,
+        name: "topics".to_owned(),
+        generics: GENERICS.to_owned(),
+        params: vec!["router: messaging::Router<P>".to_owned(), "env: &str".to_owned()],
+        ret: "messaging::Router<P>".to_owned(),
+        body: fold("common::topics(router, env).parts([", TOPICS_ANCHOR, topics),
+        ..Fn::default()
+    });
+    file.render()
+}
+
+// The body of an entry's fold: its array opened under the anchor the
+// scaffold's lines and the engine's union merge read, the part's entry
+// beneath where the part has one.
+fn fold(opener: &str, anchor: &str, entry: Option<String>) -> Vec<String> {
+    let mut lines = vec![format!("    {opener}"), format!("        {anchor}")];
+    lines.extend(entry.map(|entry| format!("        {entry}")));
+    lines.push("    ])".to_owned());
+    lines
 }
 
 pub fn module(stem: &Stem) -> String {
-    let mut text = String::new();
-    for line in &stem.doc {
-        if line.is_empty() {
-            text.push_str("//!\n");
-        } else {
-            let _ = writeln!(text, "//! {line}");
-        }
-    }
-    let imports = imports(stem);
-    if !imports.is_empty() {
-        text.push('\n');
-        text.push_str(&imports);
+    let mut file = File::default();
+    file.push(Item::ModuleDoc(Doc::new(stem.doc.iter().cloned())));
+    let uses = imports(stem);
+    if !uses.is_empty() {
+        file.push(uses);
     }
     if !stem.handlers.is_empty() {
-        text.push_str("\n// The paths the part serves.\n");
-        for (constant, path) in &stem.paths {
-            let _ = writeln!(text, "pub(crate) const {constant}: &str = \"{}\";", escape(path));
-        }
-        text.push('\n');
-        text.push_str(&routes(stem));
+        file.push(Consts {
+            comments: vec!["The paths the part serves.".to_owned()],
+            consts: stem
+                .paths
+                .iter()
+                .map(|(constant, path)| Const {
+                    docs: Doc::default(),
+                    vis: Vis::Crate,
+                    name: constant.clone(),
+                    ty: "&str".to_owned(),
+                    value: format!("\"{}\"", escape(path)),
+                })
+                .collect(),
+        });
+        file.push(routes(stem));
     }
     if !stem.consumers.is_empty() {
-        text.push('\n');
-        text.push_str(&topics(stem));
+        file.push(topics(stem));
     }
     for design_type in &stem.types {
-        text.push('\n');
-        text.push_str(&design(design_type));
+        file.push(design(design_type));
     }
     for handler in &stem.handlers {
-        text.push('\n');
-        text.push_str(&self::handler(handler));
+        self::handler(handler, &mut file);
     }
     for consumer in &stem.consumers {
-        text.push('\n');
-        text.push_str(&self::consumer(consumer));
+        self::consumer(consumer, &mut file);
     }
     for function in &stem.functions {
-        text.push('\n');
-        text.push_str(&self::function(function));
+        file.push(self::function(function));
     }
     if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
-        text.push('\n');
-        text.push_str(DECODE_JSON);
+        file.push(decode_json());
     }
-    text
+    file.render()
 }
 
 // The test file: the prelude the scenarios act through, each helper only
 // where a test calls it, then one ignored test per scenario.
 pub fn tests(stem: &Stem) -> String {
-    let mut text = format!(
-        "//! The acceptance scenarios of the `{}` part of the `{}` stem, over the guest doubles.\n",
-        stem.part, stem.name
-    );
     let sending = stem.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)));
     let delivering = stem.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)));
     let with_body = stem
@@ -234,91 +245,157 @@ pub fn tests(stem: &Stem) -> String {
         .any(|test| matches!(&test.act, Act::Route(route) if carries_body(&route.method)));
     let ident = stem.package.replace('-', "_");
 
-    text.push('\n');
+    let mut file = File::default();
+    file.push(Item::ModuleDoc(Doc::new([format!(
+        "The acceptance scenarios of the `{}` part of the `{}` stem, over the guest doubles.",
+        stem.part, stem.name
+    )])));
+    let mut uses = Uses::default();
     if sending {
-        text.push_str("use axum::body::{Body, to_bytes};\n");
+        uses.add("axum::body", &["Body", "to_bytes"]);
         if with_body {
-            text.push_str("use axum::http::header::CONTENT_TYPE;\n");
+            uses.add("axum::http::header", &["CONTENT_TYPE"]);
         }
-        text.push_str("use axum::http::{Request, StatusCode};\n");
+        uses.add("axum::http", &["Request", "StatusCode"]);
     }
-    let common = if delivering { "{config, topic}" } else { "config" };
-    let _ = writeln!(text, "use common::{common};");
+    let common: &[&str] = if delivering { &["config", "topic"] } else { &["config"] };
+    uses.add("common", common);
     if sending || delivering {
-        text.push_str("use omnia_sdk::api::Client;\n");
+        uses.add("omnia_sdk::api", &["Client"]);
     }
     if delivering {
-        text.push_str("use omnia_sdk::api::messaging::{Delivery, DeliveryError, Router};\n");
+        uses.add("omnia_sdk::api::messaging", &["Delivery", "DeliveryError", "Router"]);
     }
-    text.push_str("use omnia_test::guest::{MapConfig, Provider};\n");
+    uses.add("omnia_test::guest", &["MapConfig", "Provider"]);
     if sending {
-        text.push_str("use tower::ServiceExt as _;\n");
+        uses.add("tower", &["ServiceExt as _"]);
     }
+    file.push(uses);
 
-    text.push_str(
-        "\n// The doubles every scenario starts from: set a setting or a response on them in the \
-         arrangement.\nfn provider() -> Provider {\n    \
-         Provider::default().config(MapConfig::default().with([(config::ENV, \"test\")]))\n}\n",
-    );
+    file.push(provider());
     if sending {
-        let _ = write!(
-            text,
-            "\n// One request through the stem's router, answered as its status and body.\n\
-             async fn send(provider: Provider, request: Request<Body>) -> (StatusCode, Vec<u8>) \
-             {{\n    let router = {ident}::router().with_state(Client::new(\"test\", provider));\n    \
-             let response = router.oneshot(request).await.expect(\"response\");\n    let status = \
-             response.status();\n    let body = to_bytes(response.into_body(), \
-             usize::MAX).await.expect(\"body\");\n    (status, body.to_vec())\n}}\n"
-        );
+        file.push(send(&ident));
     }
     if delivering {
-        let _ = write!(
-            text,
-            "\n// One delivery through the stem's topics, under the test environment.\n\
-             async fn deliver(provider: Provider, topic: &str, payload: &[u8]) -> Result<(), \
-             DeliveryError> {{\n    let router = {ident}::topics(Router::new(Client::new(\"test\", \
-             provider)), \"test\");\n    let delivery = Delivery {{\n        topic: \
-             Some(config::topic_for(\"test\", topic)),\n        payload: payload.to_vec(),\n        \
-             ..Delivery::default()\n    }};\n    router.handle(delivery).await\n}}\n"
-        );
+        file.push(deliver(&ident));
     }
-
     for test in &stem.scenarios {
-        text.push('\n');
-        let _ = writeln!(text, "// {} {}: {}", test.id, test.subject, flat(&test.scenario.name));
+        let mut item = test_fn(stem, test);
+        item.comments.push(format!("{} {}: {}", test.id, test.subject, flat(&test.scenario.name)));
         for given in &test.scenario.given {
-            let _ = writeln!(text, "//   Given {}", flat(given));
+            item.comments.push(format!("  Given {}", flat(given)));
         }
-        let _ = writeln!(text, "//   When {}", flat(&test.scenario.when));
-        let _ = writeln!(text, "//   Then {}", flat(&test.scenario.then));
+        item.comments.push(format!("  When {}", flat(&test.scenario.when)));
+        item.comments.push(format!("  Then {}", flat(&test.scenario.then)));
         for and in &test.scenario.and {
-            let _ = writeln!(text, "//   And {}", flat(and));
+            item.comments.push(format!("  And {}", flat(and)));
         }
-        text.push_str("#[tokio::test]\n");
-        text.push_str(&test_block(stem, test));
-        text.push('\n');
+        item.attrs.insert(0, "#[tokio::test]".to_owned());
+        file.push(item);
     }
-    text
+    file.render()
+}
+
+// The doubles every scenario starts from.
+fn provider() -> Fn {
+    Fn {
+        comments: vec![
+            "The doubles every scenario starts from: set a setting or a response on them in the \
+             arrangement."
+                .to_owned(),
+        ],
+        name: "provider".to_owned(),
+        ret: "Provider".to_owned(),
+        body: vec![
+            "    Provider::default().config(MapConfig::default().with([(config::ENV, \"test\")]))"
+                .to_owned(),
+        ],
+        ..Fn::default()
+    }
+}
+
+// One request through the router of the stem `ident` names.
+fn send(ident: &str) -> Fn {
+    Fn {
+        comments: vec![
+            "One request through the stem's router, answered as its status and body.".to_owned(),
+        ],
+        is_async: true,
+        name: "send".to_owned(),
+        params: vec!["provider: Provider".to_owned(), "request: Request<Body>".to_owned()],
+        ret: "(StatusCode, Vec<u8>)".to_owned(),
+        body: vec![
+            format!(
+                "    let router = {ident}::router().with_state(Client::new(\"test\", provider));"
+            ),
+            "    let response = router.oneshot(request).await.expect(\"response\");".to_owned(),
+            "    let status = response.status();".to_owned(),
+            "    let body = to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");"
+                .to_owned(),
+            "    (status, body.to_vec())".to_owned(),
+        ],
+        ..Fn::default()
+    }
+}
+
+// One delivery through the topics of the stem `ident` names.
+fn deliver(ident: &str) -> Fn {
+    Fn {
+        comments: vec![
+            "One delivery through the stem's topics, under the test environment.".to_owned(),
+        ],
+        is_async: true,
+        name: "deliver".to_owned(),
+        params: vec![
+            "provider: Provider".to_owned(),
+            "topic: &str".to_owned(),
+            "payload: &[u8]".to_owned(),
+        ],
+        ret: "Result<(), DeliveryError>".to_owned(),
+        body: vec![
+            format!(
+                "    let router = {ident}::topics(Router::new(Client::new(\"test\", provider)), \
+                 \"test\");"
+            ),
+            "    let delivery = Delivery {".to_owned(),
+            "        topic: Some(config::topic_for(\"test\", topic)),".to_owned(),
+            "        payload: payload.to_vec(),".to_owned(),
+            "        ..Delivery::default()".to_owned(),
+            "    };".to_owned(),
+            "    router.handle(delivery).await".to_owned(),
+        ],
+        ..Fn::default()
+    }
 }
 
 // A scaffolded test from its `#[ignore]` line to its closing brace: the one
 // block the turn replaces, so the brief quotes it as the `find`.
 pub fn test_block(stem: &Stem, test: &Test) -> String {
-    format!(
-        "#[ignore = \"{}\"]\nasync fn {}() {{\n{}    todo!(\"{}\")\n}}",
-        escape(&test.ignore),
-        test.name,
-        act(stem, test),
-        escape(&test.marker)
-    )
+    let mut file = File::default();
+    file.push(test_fn(stem, test));
+    file.render().trim_end().to_owned()
+}
+
+// A scenario's test as the turn finds it: ignored, its act laid from the
+// typed route or topic its requirement carries, its marker last.
+fn test_fn(stem: &Stem, test: &Test) -> Fn {
+    let mut body = act(stem, test);
+    body.push(marker_line(&test.marker));
+    Fn {
+        attrs: vec![format!("#[ignore = \"{}\"]", escape(&test.ignore))],
+        is_async: true,
+        name: test.name.clone(),
+        body,
+        ..Fn::default()
+    }
 }
 
 // The act of a scenario, laid from the typed route or topic its requirement
 // carries: the request sent, the delivery made, or the provider alone.
-fn act(stem: &Stem, test: &Test) -> String {
+fn act(stem: &Stem, test: &Test) -> Vec<String> {
     match &test.act {
         Act::Route(route) => {
-            let mut out = String::new();
+            let mut lines = Vec::new();
             let mut format = String::new();
             let mut params = Vec::new();
             for segment in route.path.split('/') {
@@ -326,7 +403,7 @@ fn act(stem: &Stem, test: &Test) -> String {
                     segment.strip_prefix('{').and_then(|rest| rest.strip_suffix('}'))
                 {
                     let wire = name.trim_start_matches('*');
-                    let field = super::names::snake(wire);
+                    let field = snake(wire);
                     let _ = write!(format, "{{{field}}}");
                     params.push((wire.to_owned(), field));
                 } else {
@@ -336,40 +413,30 @@ fn act(stem: &Stem, test: &Test) -> String {
             }
             format.pop();
             for (wire, field) in &params {
-                let _ = writeln!(out, "    let {field} = \"<{}>\";", escape(wire));
+                lines.push(format!("    let {field} = \"<{}>\";", escape(wire)));
             }
             let target = if params.is_empty() {
-                format!("\"{}\"", escape(&route.path))
+                Expr::from(format!("\"{}\"", escape(&route.path)))
             } else {
-                format!("format!(\"{}\")", escape(&format))
+                Expr::Macro(Call::new("format!", [format!("\"{}\"", escape(&format))]))
             };
-            let builder = format!("Request::{}({target})", route::function(&route.method));
-            let calls: Vec<String> = if carries_body(&route.method) {
-                vec![
-                    ".header(CONTENT_TYPE, \"application/json\")".to_owned(),
-                    ".body(Body::from(\"{}\"))".to_owned(),
-                    ".expect(\"request\")".to_owned(),
-                ]
+            let mut calls = Vec::new();
+            if carries_body(&route.method) {
+                calls.push(Call::new(
+                    ".header",
+                    vec!["CONTENT_TYPE".to_owned(), "\"application/json\"".to_owned()],
+                ));
+                calls.push(Call::new(".body", vec!["Body::from(\"{}\")".to_owned()]));
             } else {
-                vec![".body(Body::empty())".to_owned(), ".expect(\"request\")".to_owned()]
-            };
-            let joined = format!("    let request = {builder}{};", calls.concat());
-            if joined.len() <= MAX_WIDTH {
-                out.push_str(&joined);
-                out.push('\n');
-            } else {
-                let _ = writeln!(out, "    let request = {builder}");
-                for call in &calls {
-                    let _ = writeln!(out, "        {call}");
-                }
-                out.pop();
-                out.push_str(";\n");
+                calls.push(Call::new(".body", vec!["Body::empty()".to_owned()]));
             }
-            out.push_str(
-                "    let (status, body) = send(provider(), request).await;\n    let _ = (&status, \
-                 &body);\n",
-            );
-            out
+            calls.push(Call::new(".expect", vec!["\"request\"".to_owned()]));
+            let receiver =
+                Call::new(format!("Request::{}", route::function(&route.method)), [target]);
+            lines.extend(Chain::new(receiver, calls).bound(TAB, "request"));
+            lines.push("    let (status, body) = send(provider(), request).await;".to_owned());
+            lines.push("    let _ = (&status, &body);".to_owned());
+            lines
         }
         Act::Topic(topic) => {
             let constant = stem
@@ -377,30 +444,36 @@ fn act(stem: &Stem, test: &Test) -> String {
                 .iter()
                 .find(|consumer| consumer.topic == *topic)
                 .map_or("TOPIC", |consumer| consumer.constant.as_str());
-            format!(
-                "    let outcome = deliver(provider(), topic::{constant}, b\"{{}}\").await;\n    \
-                 let _ = &outcome;\n"
-            )
+            let provider = Call::new("provider", Vec::<Expr>::new());
+            let delivery = Call::new(
+                "deliver",
+                [provider.into(), Expr::from(format!("topic::{constant}")), "b\"{}\"".into()],
+            );
+            let mut lines = Chain::new(delivery, Vec::new()).awaited().bound(TAB, "outcome");
+            lines.push("    let _ = &outcome;".to_owned());
+            lines
         }
-        Act::Call => "    let provider = provider();\n    let _ = &provider;\n".to_owned(),
+        Act::Call => {
+            vec!["    let provider = provider();".to_owned(), "    let _ = &provider;".to_owned()]
+        }
     }
 }
 
 // The body of a handler or a consumer as scaffolded: the borrow that keeps
 // the lints quiet and the marker, the one block the turn replaces.
 pub fn stub(marker: &str) -> String {
-    format!("    let _ = (&input, &context);\n    todo!(\"{}\")", escape(marker))
+    format!("    let _ = (&input, &context);\n{}", marker_line(marker))
 }
 
 // The body of a function as scaffolded: its marker alone.
 pub fn marker_line(marker: &str) -> String {
-    format!("    todo!(\"{}\")", escape(marker))
+    let marker = Expr::Macro(Call::new("todo!", [format!("\"{}\"", escape(marker))]));
+    marker.tail(TAB).join("\n")
 }
 
 // `text` in a fence longer than any run of backticks it holds.
 pub fn fenced(lang: &str, text: &str) -> String {
-    let longest = text.lines().map(backticks).max().unwrap_or(0);
-    let fence = "`".repeat(longest.max(2) + 1);
+    let fence = Fence::around(text);
     format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
 }
 
@@ -410,20 +483,21 @@ pub fn carries_body(method: &str) -> bool {
     matches!(method, "POST" | "PUT" | "PATCH")
 }
 
-fn imports(stem: &Stem) -> String {
+fn imports(stem: &Stem) -> Uses {
     let routed = !stem.handlers.is_empty();
     let consuming = !stem.consumers.is_empty();
     let encoding = stem.handlers.iter().any(|handler| handler.route_fn.is_some());
-    let mut text = String::new();
+    let mut uses = Uses::default();
     if encoding {
-        text.push_str(
-            "use axum::Json;\nuse axum::http::StatusCode;\nuse axum::response::IntoResponse;\nuse \
-             axum::routing::MethodRouter;\n",
-        );
+        uses.add("axum", &["Json"]);
+        uses.add("axum::http", &["StatusCode"]);
+        uses.add("axum::response", &["IntoResponse"]);
+        uses.add("axum::routing", &["MethodRouter"]);
     }
     if routed || consuming {
-        let common = if consuming { "{Capabilities, config, topic}" } else { "Capabilities" };
-        let _ = writeln!(text, "use common::{common};");
+        let common: &[&str] =
+            if consuming { &["Capabilities", "config", "topic"] } else { &["Capabilities"] };
+        uses.add("common", common);
     }
     if routed {
         let mut names: Vec<&str> = stem
@@ -435,14 +509,7 @@ fn imports(stem: &Stem) -> String {
         if encoding {
             names.extend(["DecodeError", "MethodFilter", "RawRequest", "handle_with"]);
         }
-        names.sort_unstable();
-        names.dedup();
-        let names = if let [name] = names.as_slice() {
-            (*name).to_owned()
-        } else {
-            format!("{{{}}}", names.join(", "))
-        };
-        let _ = writeln!(text, "use omnia_sdk::api::http::{names};");
+        uses.add("omnia_sdk::api::http", &names);
     }
     if routed || consuming {
         let mut api = Vec::new();
@@ -453,88 +520,96 @@ fn imports(stem: &Stem) -> String {
         if consuming {
             api.push("messaging");
         }
-        let _ = writeln!(text, "use omnia_sdk::api::{{{}}};", api.join(", "));
+        uses.add("omnia_sdk::api", &api);
     }
     if encoding {
-        text.push_str("use serde::de::DeserializeOwned;\n");
+        uses.add("serde::de", &["DeserializeOwned"]);
     }
     let serializing = routed || !stem.types.is_empty();
     if serializing {
-        text.push_str("use serde::{Deserialize, Serialize};\n");
+        uses.add("serde", &["Deserialize", "Serialize"]);
     } else if consuming {
-        text.push_str("use serde::Deserialize;\n");
+        uses.add("serde", &["Deserialize"]);
     }
-    text
+    uses
 }
 
 // The part's `topics(..)`: one `.route(..)` per consumer, chained over the
-// router, each broken as the formatter would.
-fn topics(stem: &Stem) -> String {
-    let head = "pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
-                &str,\n) -> messaging::Router<P> {\n";
-    let routes: Vec<(String, String)> = stem
+// router.
+fn topics(stem: &Stem) -> Fn {
+    let calls = stem
         .consumers
         .iter()
         .map(|consumer| {
-            (
-                format!("config::topic_for(env, topic::{})", consumer.constant),
-                format!("messaging::consume({})", consumer.name),
-            )
+            let topic = Call::new(
+                "config::topic_for",
+                ["env".to_owned(), format!("topic::{}", consumer.constant)],
+            );
+            let consume = Call::new("messaging::consume", [consumer.name.as_str()]);
+            Call::new(".route", [topic, consume])
         })
         .collect();
-    let body = if let [(topic, consume)] = routes.as_slice() {
-        let joined = format!("    router.route({topic}, {consume})");
-        if joined.len() <= MAX_WIDTH {
-            joined
-        } else {
-            format!("    router.route(\n        {topic},\n        {consume},\n    )")
-        }
-    } else {
-        let chained: Vec<String> = routes
-            .iter()
-            .map(|(topic, consume)| {
-                let joined = format!("        .route({topic}, {consume})");
-                if joined.len() <= MAX_WIDTH {
-                    joined
-                } else {
-                    format!(
-                        "        .route(\n            {topic},\n            {consume},\n        )"
-                    )
-                }
-            })
-            .collect();
-        format!("    router\n{}", chained.join("\n"))
-    };
-    format!("{head}{body}\n}}\n")
-}
-
-fn routes(stem: &Stem) -> String {
-    let routes: Vec<String> = stem.handlers.iter().map(Handler::registration).collect();
-    let joined = format!("    axum::Router::new(){}", routes.concat());
-    let body = if joined.len() <= MAX_WIDTH {
-        joined
-    } else {
-        let chained: Vec<String> = routes.iter().map(|route| format!("        {route}")).collect();
-        format!("    axum::Router::new()\n{}", chained.join("\n"))
-    };
-    format!("pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {{\n{body}\n}}\n")
-}
-
-fn design(design_type: &Type) -> String {
-    let longest = design_type.signature.lines().map(backticks).max().unwrap_or(0);
-    let fence = "`".repeat(longest.max(2) + 1);
-    let mut text = format!("/// The design type `{}`.\n///\n/// {fence}text\n", design_type.key);
-    for line in design_type.signature.lines() {
-        let line = line.trim_end();
-        if line.is_empty() {
-            text.push_str("///\n");
-        } else {
-            let _ = writeln!(text, "/// {line}");
-        }
+    let chain = Chain::new("router", calls);
+    Fn {
+        vis: Vis::Crate,
+        name: "topics".to_owned(),
+        generics: GENERICS.to_owned(),
+        params: vec!["router: messaging::Router<P>".to_owned(), "env: &str".to_owned()],
+        ret: "messaging::Router<P>".to_owned(),
+        body: chain.tail(TAB),
+        ..Fn::default()
     }
-    let _ =
-        writeln!(text, "/// {fence}\n#[derive({DERIVES})]\npub {} {{}}", declaration(design_type));
-    text
+}
+
+// The part's `routes()`: one `.route(..)` per handler, chained over a new
+// router.
+fn routes(stem: &Stem) -> Fn {
+    let chain = Chain::new(
+        "axum::Router::new()",
+        stem.handlers.iter().map(Handler::registration).collect(),
+    );
+    Fn {
+        vis: Vis::Crate,
+        name: "routes".to_owned(),
+        generics: GENERICS.to_owned(),
+        ret: "axum::Router<Client<P>>".to_owned(),
+        body: chain.tail(TAB),
+        ..Fn::default()
+    }
+}
+
+// A design type's marker: the struct or enum under its signature, fenced in
+// its doc.
+fn design(design_type: &Type) -> Item {
+    let fence = Fence::around(&design_type.signature);
+    let mut docs = Doc::new([
+        format!("The design type `{}`.", design_type.key),
+        String::new(),
+        format!("{fence}text"),
+    ]);
+    for line in design_type.signature.lines() {
+        docs.push(line.trim_end());
+    }
+    docs.push(fence.to_string());
+    let attrs = vec![format!("#[derive({DERIVES})]")];
+    let name = design_type.name.clone();
+    if design_type.is_enum {
+        Item::Enum(Enum {
+            docs,
+            attrs,
+            vis: Vis::Pub,
+            name,
+            ..Enum::default()
+        })
+    } else {
+        Item::Struct(Struct {
+            docs,
+            attrs,
+            vis: Vis::Pub,
+            name,
+            ..Struct::default()
+        })
+    }
 }
 
 // `struct Order` or `enum Status`, as the type's marker spells it.
@@ -543,93 +618,148 @@ pub fn declaration(design_type: &Type) -> String {
     format!("{keyword} {}", design_type.name)
 }
 
-fn backticks(line: &str) -> usize {
-    line.split(|ch| ch != '`').map(str::len).max().unwrap_or(0)
-}
-
-fn handler(handler: &Handler) -> String {
+// A handler: its input over the route's parameters and its output, the
+// route function where one was scaffolded, and the handler under its
+// requirements, its body the marker.
+fn handler(handler: &Handler, file: &mut File) {
     let route = escape(&format!("{} {}", handler.route.method, handler.route.path));
-    let mut text = format!("/// The input of `{route}`.\n#[derive(Debug, Deserialize)]\n");
-    if handler.params.is_empty() {
-        let _ = writeln!(text, "pub struct {} {{}}\n", handler.input);
-    } else {
-        let _ = writeln!(text, "pub struct {} {{", handler.input);
-        for param in &handler.params {
-            let wire = escape(&param.wire);
-            let _ = writeln!(text, "    /// The `{wire}` path parameter.");
-            if param.field != param.wire {
-                let _ = writeln!(text, "    #[serde(rename = \"{wire}\")]");
-            }
-            let _ = writeln!(text, "    pub {}: String,", param.field);
-        }
-        text.push_str("}\n\n");
-    }
-    let _ = writeln!(
-        text,
-        "/// The output of `{route}`.\n#[derive(Debug, Serialize)]\npub struct {} {{}}\n",
-        handler.output
-    );
+    file.push(Struct {
+        docs: Doc::new([format!("The input of `{route}`.")]),
+        attrs: vec!["#[derive(Debug, Deserialize)]".to_owned()],
+        vis: Vis::Pub,
+        name: handler.input.clone(),
+        fields: handler
+            .params
+            .iter()
+            .map(|param| {
+                let wire = escape(&param.wire);
+                Field {
+                    docs: Doc::new([format!("The `{wire}` path parameter.")]),
+                    attrs: (param.field != param.wire)
+                        .then(|| format!("#[serde(rename = \"{wire}\")]"))
+                        .into_iter()
+                        .collect(),
+                    vis: Vis::Pub,
+                    name: param.field.clone(),
+                    ty: "String".to_owned(),
+                }
+            })
+            .collect(),
+    });
+    file.push(Struct {
+        docs: Doc::new([format!("The output of `{route}`.")]),
+        attrs: vec!["#[derive(Debug, Serialize)]".to_owned()],
+        vis: Vis::Pub,
+        name: handler.output.clone(),
+        ..Struct::default()
+    });
     if let Some(route_fn) = &handler.route_fn {
-        let _ = write!(
-            text,
-            "// The `{route}` route: the handler's `Ok` answered as JSON under the status named \
-             here.\npub(crate) fn {route_fn}<P: Capabilities>() -> MethodRouter<Client<P>> {{\n    \
-             handle_with(\n        MethodFilter::{},\n        {},\n        |raw: RawRequest<'_>| \
-             -> Result<{}, DecodeError> {{\n            decode_json(raw.path_params, \
-             raw.body)\n        }},\n        |output: {}| (StatusCode::OK, \
-             Json(output)).into_response(),\n    )\n}}\n\n",
-            handler.route.method, handler.name, handler.input, handler.output
-        );
+        let mut body = vec![
+            "    handle_with(".to_owned(),
+            format!("        MethodFilter::{},", handler.route.method),
+            format!("        {},", handler.name),
+            format!("        |raw: RawRequest<'_>| -> Result<{}, DecodeError> {{", handler.input),
+            "            decode_json(raw.path_params, raw.body)".to_owned(),
+            "        },".to_owned(),
+        ];
+        body.extend(closure(
+            2 * TAB,
+            &format!("|output: {}|", handler.output),
+            "(StatusCode::OK, Json(output)).into_response()",
+            ",",
+        ));
+        body.push("    )".to_owned());
+        file.push(Fn {
+            comments: vec![format!(
+                "The `{route}` route: the handler's `Ok` answered as JSON under the status named \
+                 here."
+            )],
+            vis: Vis::Crate,
+            name: route_fn.clone(),
+            generics: GENERICS.to_owned(),
+            ret: "MethodRouter<Client<P>>".to_owned(),
+            body,
+            ..Fn::default()
+        });
     }
-    for stated in &handler.stated {
-        let _ = writeln!(text, "// {} {}: {}", stated.id, stated.subject, stated.statement);
-    }
-    text.push_str(&head(&handler.name, &handler.input, &handler.output));
-    let _ = writeln!(text, "{}\n}}", stub(&handler.marker));
-    text
+    file.push(Fn {
+        comments: stated(&handler.stated),
+        vis: Vis::Crate,
+        is_async: true,
+        name: handler.name.clone(),
+        generics: GENERICS.to_owned(),
+        params: vec![format!("input: {}", handler.input), "context: Context<P>".to_owned()],
+        ret: format!("omnia_sdk::Result<{}>", handler.output),
+        body: lines(&stub(&handler.marker)),
+        ..Fn::default()
+    });
 }
 
 // A consumer: its input over the delivery, and the handler under its
 // requirements, its body the marker.
-fn consumer(consumer: &Consumer) -> String {
-    let mut text = format!(
-        "/// A delivery of `{}`.\n#[derive(Debug, Deserialize)]\npub struct {} {{}}\n\n",
-        escape(&consumer.topic),
-        consumer.input
-    );
-    for stated in &consumer.stated {
-        let _ = writeln!(text, "// {} {}: {}", stated.id, stated.subject, stated.statement);
-    }
-    text.push_str(&head(&consumer.name, &consumer.input, "()"));
-    let _ = writeln!(text, "{}\n}}", stub(&consumer.marker));
-    text
+fn consumer(consumer: &Consumer, file: &mut File) {
+    file.push(Struct {
+        docs: Doc::new([format!("A delivery of `{}`.", escape(&consumer.topic))]),
+        attrs: vec!["#[derive(Debug, Deserialize)]".to_owned()],
+        vis: Vis::Pub,
+        name: consumer.input.clone(),
+        ..Struct::default()
+    });
+    file.push(Fn {
+        comments: stated(&consumer.stated),
+        vis: Vis::Crate,
+        is_async: true,
+        name: consumer.name.clone(),
+        generics: GENERICS.to_owned(),
+        params: vec![format!("input: {}", consumer.input), "context: Context<P>".to_owned()],
+        ret: "omnia_sdk::Result<()>".to_owned(),
+        body: lines(&stub(&consumer.marker)),
+        ..Fn::default()
+    });
 }
 
-// A handler's head, broken as the formatter would.
-fn head(name: &str, input: &str, output: &str) -> String {
-    let head = format!("pub(crate) async fn {name}<P: Capabilities>(");
-    let params = format!("input: {input}, context: Context<P>");
-    let tail = format!(") -> omnia_sdk::Result<{output}> {{");
-    let joined = format!("{head}{params}{tail}");
-    if joined.len() <= MAX_WIDTH {
-        return joined + "\n";
+// A function under its requirement, its body the marker.
+fn function(function: &Function) -> Fn {
+    Fn {
+        comments: stated(std::slice::from_ref(&function.stated)),
+        docs: Doc::new([
+            format!("The behaviour `{}` states.", function.stated.subject),
+            String::new(),
+            "# Errors".to_owned(),
+            String::new(),
+            "As the requirement states.".to_owned(),
+        ]),
+        vis: Vis::Pub,
+        name: function.name.clone(),
+        ret: "omnia_sdk::Result<()>".to_owned(),
+        body: lines(&marker_line(&function.marker)),
+        ..Fn::default()
     }
-    let packed = format!("    {params},");
-    if packed.len() <= MAX_WIDTH {
-        return format!("{head}\n{packed}\n{tail}\n");
-    }
-    format!("{head}\n    input: {input},\n    context: Context<P>,\n{tail}\n")
 }
 
-fn function(function: &Function) -> String {
-    format!(
-        "// {} {}: {}\n/// The behaviour `{}` states.\n///\n/// # Errors\n///\n/// As the \
-         requirement states.\npub fn {}() -> omnia_sdk::Result<()> {{\n{}\n}}\n",
-        function.stated.id,
-        function.stated.subject,
-        function.stated.statement,
-        function.stated.subject,
-        function.name,
-        marker_line(&function.marker)
-    )
+fn decode_json() -> Fn {
+    Fn {
+        comments: vec![
+            "The JSON body with the path parameters inserted as string fields, as the".to_owned(),
+            "SDK's `post` decodes an input.".to_owned(),
+        ],
+        name: "decode_json".to_owned(),
+        generics: "<I: DeserializeOwned>".to_owned(),
+        params: vec!["params: &[(String, String)]".to_owned(), "body: &[u8]".to_owned()],
+        ret: "Result<I, DecodeError>".to_owned(),
+        body: lines(DECODE_BODY),
+        ..Fn::default()
+    }
+}
+
+// `// <id> <subject>: <statement>`, one per requirement an item stands for.
+fn stated(stated: &[super::Stated]) -> Vec<String> {
+    stated
+        .iter()
+        .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
+        .collect()
+}
+
+fn lines(text: &str) -> Vec<String> {
+    text.lines().map(str::to_owned).collect()
 }

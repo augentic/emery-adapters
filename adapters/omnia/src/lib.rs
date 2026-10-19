@@ -19,14 +19,16 @@
 //! requirement whose marker or ignored test still stands is refused for
 //! correction, as is a file written beside the slice's crates and a module
 //! the tree holds that does not parse, named at the line the parser stopped
-//! at.
+//! at. A slice of `start` requirements alone, none carrying a route, opens
+//! no turn: the seed and the host are the program's start, so it is built
+//! covering nothing and writing nothing.
 
 mod scaffold;
 mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
+use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
 use emery_sdk::{Error, Model, tracing};
 
 use self::scaffold::Scaffold;
@@ -74,6 +76,16 @@ impl TargetAdapter for Adapter {
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
                 let mut scaffold = Scaffold::plan(ctx.slice, root)?;
+                if scaffold.is_empty() {
+                    tracing::info!(
+                        slice = ctx.slice.id,
+                        "every requirement is `start`'s and none carries a route; no turn"
+                    );
+                    return Ok(Outcome::Built(Report {
+                        covered: Vec::new(),
+                        written: Vec::new(),
+                    }));
+                }
                 let written = scaffold.write(root)?;
                 tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
                 let brief = scaffold.brief(PROSE);

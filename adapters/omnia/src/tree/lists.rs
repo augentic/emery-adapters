@@ -1,7 +1,9 @@
 //! Checks that stem routers, topic constants, and stem dependencies are each
-//! used by the workspace, and that a stem which publishes is reached.
+//! used by the workspace, that a stem which publishes is reached, and that
+//! the root manifest names no crate the tree lacks.
 
 use emery_sdk::Error;
+use omnia_template::Manifest;
 
 use super::{
     Module, Tree, crates, is_ident, is_ident_char, is_start_stem, read, sources, spells,
@@ -17,6 +19,41 @@ const LAYOUT_DEPENDENCIES: [&str; 6] =
     ["axum", "common", "omnia-sdk", "serde", "serde_json", "tracing"];
 
 impl Tree<'_> {
+    // The template keeps a path entry by its shape alone, so one left behind
+    // after its crate went is no drift and compiles nothing.
+    pub(super) fn dangling_entries(&self) -> Result<Option<String>, Error> {
+        let file = self.root.join(Manifest::PATH);
+        if !file.is_file() {
+            return Ok(None);
+        }
+        let manifest = read(&file)?;
+        let lines: Vec<String> = manifest
+            .lines()
+            .enumerate()
+            .filter_map(|(index, line)| {
+                let (stem, dir) = path_entry(line)?;
+                let held = self.root.join("crates").join(dir).join("Cargo.toml").is_file();
+                (!held).then(|| {
+                    format!(
+                        "{}:{}: `{stem}` names `crates/{dir}`, which the tree lacks",
+                        Manifest::PATH,
+                        index + 1
+                    )
+                })
+            })
+            .collect();
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "the root manifest's path list names a crate the tree holds for each stem, and no \
+             other: an entry whose `crates/<dir>/Cargo.toml` is missing wires nothing and stands \
+             by its shape alone; remove it and the stem's `<stem>.workspace = true` line through \
+             `edit_files`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
     pub(super) fn unused_dependencies(&self) -> Result<Option<String>, Error> {
         let mut lines = Vec::new();
         for stem in crates(self.root)? {
@@ -271,4 +308,18 @@ fn dependencies(manifest: &str) -> Vec<(usize, String)> {
 
 fn unquoted(key: &str) -> &str {
     key.trim().trim_matches(|ch| ch == '"' || ch == '\'')
+}
+
+// The stem and the directory of a line shaped `<stem> = { path = "crates/<dir>" }`,
+// the shape the template keeps an entry by.
+fn path_entry(line: &str) -> Option<(&str, &str)> {
+    let (stem, rest) = line.trim().split_once(" = { path = \"crates/")?;
+    let dir = rest.strip_suffix("\" }")?;
+    (is_stem(stem) && is_stem(dir)).then_some((stem, dir))
+}
+
+fn is_stem(name: &str) -> bool {
+    let mut chars = name.chars();
+    chars.next().is_some_and(|first| first.is_ascii_lowercase())
+        && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
 }

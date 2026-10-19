@@ -1,67 +1,333 @@
 # target.build
 
-Build one slice of the plan into the lent project tree as an omnia guest in Rust, check it lints, its tests pass, and it compiles for `wasm32-wasip2`, and report what you covered and wrote.
+Build one slice of the plan into the lent project tree. The tree is an omnia guest in Rust.
+The adapter has already scaffolded your slice's files. Your work is to fill their markers.
+Then run the one check command, repair what it prints, and answer with one JSON object.
 
 ## Inputs
 
-- `$WORKSPACE` — the project tree, lent writable, sitting on the commit the brief names. Read it through the workspace tools; write it through this call's two tools alone: `edit_files` changes within a file the tree holds, each edit the one place its `find` matches and the text to put there; `write_files` writes a file whole, one or more per call, each created or replaced at a `/`-separated path relative to `$WORKSPACE`, and removes a file through the same call's `delete`. Your slice's files are in the tree before you start, so your work is `edit_files` over them; `write_files` is for a file of your own the brief does not name, and a `write_files` entry or `delete` naming a file the brief says was scaffolded is refused whole. The shell runs the checks below in `$WORKSPACE` and nothing else: a file the shell writes, through a redirect, a heredoc, `cp`, or a script, is outside the tools and is not yours. Nothing outside `$WORKSPACE` is reachable.
+- `$WORKSPACE` — the project tree, lent writable. It sits on the commit the brief names.
 - **The slice's plan entry** — its id, name, requirements, the design types it owns, and the slices it depends on.
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
 - **The design, whole** — the types and sections every slice shares.
-- **What the adapter scaffolded for this slice before this turn** — per stem of the slice: the files it scaffolded or found held, with the text of each file it wrote and of a held part of your stem where the brief has room for it; the lines it added to the lists; every marker to fill, in order, each quoted as the one block an `edit_files` edit replaces; the one check command to run, with your stem filled in; and the passages of the references the shapes it laid use, quoted. Read a file the brief names by its path alone before you edit it; the rest you have.
+- **What the adapter scaffolded for this slice before this turn** — per stem of the slice:
+  - the files it wrote or found held, with their text;
+  - the lines it added to the lists;
+  - every marker to fill, in order, each quoted as the block one `edit_files` edit replaces;
+  - the one check command, with your stem filled in;
+  - the passages of the references the shapes it laid use.
 
-Build this slice completely in one pass. Other slices of the wave are building beside you from the same commit; what you write merges with theirs under the rules the [layout](references/layout.md) states, so keep to its shape.
+Other slices of the wave build beside you from the same commit. Your files merge with theirs under the rules the [layout](references/layout.md) states. Keep to its shape.
 
-## What to write
+## How to work
 
-The [layout](references/layout.md) is the one shape every slice follows: the root package is the guest, `common` holds what every stem shares, and each stem is a crate under `crates/` whose entry composes its parts' routes and topics into one router of each kind, which the root lists merge. The adapter scaffolded your slice's place in it before this turn, from the requirements and types the slice carries: the stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them; your part, `crates/<stem>/src/<part>.rs`, with a path constant and a `.route(..)` per route your requirements carry, a handler per route over an empty input and output struct — a `POST` handler's route registered through a route function of the part, `<name>_route`, over `handle_with` with its status spelled out — a `topics(..)` and a consumer per topic they carry, its constant in the topic table, a `pub fn` per requirement carrying neither, and an empty `pub struct`, or `pub enum` where the signature is an enumeration, per design type you own; your tests, `crates/<stem>/tests/<part>.rs`, the prelude every test shares and one ignored test per acceptance scenario, each already sending the request or the delivery its requirement carries; and your lines in every list, the stem's four at the root and the part's in the entry. Each place your code goes is a marker, `todo!("REQ-.. <subject>: ..")` in a body or `{}` on a type, and the brief quotes every marker as the one block an `edit_files` edit replaces, with the file it stands in, so the `find` is the block as quoted and the `replace` is your code. Fill them, in the brief's order:
+Work in this order. Do not skip ahead.
 
-- **The design types you own**: `pub struct <Type> {}`, or `pub enum <Type> {}`, becomes the type the signature in its doc spells, as the [handlers](references/handlers.md) reference declares a design type — every field or variant documented, the wire's names kept through `#[serde(rename = "..")]`, the scaffolded derives kept less `Eq` where a field is a float — less a type that is a client, a connection, a settings struct, or a lifecycle, which the [translation](references/translation.md) writes nothing for: leave such a struct empty and say nothing more of it.
-- **The handlers**, as the [handlers](references/handlers.md) reference spells them: fill `<Name>Input` with one field per path parameter, which the adapter scaffolded, query parameter, or body field, and `<Name>Output` with the response's fields; then replace the block the brief quotes — the `let _ = (&input, &context);` line and the `todo!` — with the body. A handler's `Ok` is answered `200` as JSON; where a `POST` answers `201`, change the status its `<name>_route` spells, and where another handler answers another status, declare such a route function as the reference shows and name it in `routes()`. The host is reached through `context.provider()` alone, a setting under a `pub(crate) const` of your part whose value is its name — the identity `Identity::access_token` takes among them — a topic published under a constant of `common::topic` qualified through `config::topic`, and every failure — a fetch that errors, a status that is not success, a body that does not parse — a classified `omnia_sdk::Error` propagated with `?` rather than caught and answered as `Ok(())` or an empty collection, whatever the source's client wrapper answered its `.catch` with. One handler serves every requirement its marker names, since two requirements served at one method and path are one route. A requirement's route is its `Route:` line, which the extraction read from the source's own registration and the adapter scaffolded the constant, the `.route(..)`, and the handler from; a method and a path a statement or a scenario spells in prose, under no `Route:` line, is no route, so add none for it.
-- **A requirement carrying a message**, its `Message:` line — the name the extraction read from the source's own subscription, a topic the layout consumes — is a consumer the adapter scaffolded: `<Name>Input` over the delivery and a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>` with its marker, registered in your part's `topics(..)` under the table's constant for the topic, which the adapter declared at the end of `crates/common/src/topic.rs` where no slice had, with the `<part>::topics,` entry in the stem's entry. Fill the input with the delivery's fields and write the body as a handler's; the registration itself is never a requirement, since the host registers and acknowledges.
-- **A requirement carrying neither** is a `pub fn` with a marker: a stage of a pipeline, a rule every route obeys, a behaviour another part calls. Give it the signature the behaviour needs and write the body, returning `omnia_sdk::Result<T>` built with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!`, never a custom validation error enum or an `Option<T>` that swallows a rejection reason, and add no route to give it a surface. Where the requirement consumes a topic no `Message:` line carries — the design's `## APIs and integrations` lists an inbound stream whose bullet cites it or another requirement of your stem, or whose deliveries its scenario's `when` describes — the function is that stream's handler instead: a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>` registered through a `pub(crate) fn topics(router, env)` you add to your part, `router.route(config::topic_for(env, topic::<NAME>), messaging::consume(<handler>))`, its constant at the end of `crates/common/src/topic.rs` where no slice has declared it, and one `<part>::topics,` entry at the end of the array in the entry's `topics(..)`. A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `config::topic`. The slice that ends a pipeline — the one that publishes, or that `depends-on` the stem's other slices — registers the consumer where no part of the stem has, the handler calling the earlier parts' functions in the pipeline's order; a part that publishes in a stem no route or topic reaches, and no other stem calls, is a finding on your report, since nothing ever runs it.
-- **The tests**, `crates/<stem>/tests/<part>.rs`: each scenario is a `#[tokio::test]` named by it, under `#[ignore = "<id> <scenario>: unfilled"]` over the act the adapter laid from the requirement's route or message — a request through `send(provider(), request)`, a delivery through `deliver(provider(), topic::<NAME>, payload)`, the prelude's own functions over your stem's `router()` and `topics(..)` — and a `todo!`. Replace the block the brief quotes with the filled test as [testing](references/testing.md) spells it — the `#[ignore = ..]` line gone, the arrangement over the doubles of `omnia_test::guest`, the act as laid with the parameter, the body, or the payload the scenario states, the assertions it states over the status, the body, and what the doubles hold after. A scenario the specification gives you is a test; invent none, and delete none: a scenario you cannot yet satisfy keeps its ignored test as scaffolded, and its requirement stays out of `covered`. A service the tree does not run is a double handed to the provider, never a live connection.
-- **The lists** are filled: the stem's line in each root list, the part's `pub mod` line and its `routes()` and `topics,` entries in the entry, the constant of each topic your requirements carry in the topic table, all added by the adapter where the brief says `added`, held where an earlier slice added them. What the adapter does not derive is yours to add through `edit_files`, at the end of its list where the layout's table says: the constant of a topic you publish to, a `<part>::topics,` entry for a consumer no `Message:` line carried, and one `<crate>.workspace = true` line at the end of your stem's `[dependencies]` for each crate your code uses beyond the six the manifest holds, a crate the root manifest does not pin carrying its version instead. Where the brief says a line was not added — the file lacked its anchor — add that line yourself. Change no other line: a line you find in a list is not yours to rewrite, reorder, or fold your own into, since the merge keeps every form it is given and the verify then has two. Write no crate: your stem's is scaffolded, one word whatever its hyphens (`crates/order-items/` for `order-items`), and a crate the turn writes under any other name is a finding on your report. Your wiring is those lines and nothing else: no `mount`, no router of your own beyond your part's `routes()`, no change to `src/lib.rs`, and no edit to another stem's crate to be reached; the host runs a stem through its `routes()` and `topics(..)` alone.
-- **The seed**, every file outside `crates/<stem>/` beside `Cargo.lock`, is in the tree before you start: the adapter scaffolded the exemplar's guest template when the repository was initialised, byte for byte, so no slice writes or reports a seed file; read one in the tree where you need its text. The root `Cargo.toml` is held to the seed outside its two lists when you report: a pin, a lint, or a feature changed there is a finding with the lines named, and a check that passed through the change is no check at all.
-- **The `start` stem**, where your slice is under it — the slice `start` itself, or one the plan cut from it, `start-prefetch`, `start-credentials`, `start-bootstrap`: the seed and the host are the program's start, so the adapter scaffolded nothing for a `start` requirement carrying no route — one carrying a route is laid under the crate of the stem its route's resource names, `GET /health/live` in `crates/health/`, which the brief says — and **never write `crates/start/`** or add `start` to `Cargo.toml`; the adapter refuses a report over any file under `crates/start/`, and a crate written for a slice of `start` requirements alone under any other name. Everything the source did at start — read its settings, load or watch its credentials, build and hand on its clients, connect, listen, prefetch a table, watch itself, catch its signals, keep a lifecycle type — translates by the table in [what `start` becomes](references/guardrails.md): a deployment setting a handler reads is a constant of the part that reads it, written by that part's slice, a requirement the seed and the host satisfy — the component answers HTTP and deliveries, the routers reach every handler, the settings come from the host — is yours to cover, since the seed was scaffolded before any slice, and credential validation or rotation, client construction, table prefetch, a flag that decided whether the consumer or listener ran, signals, periodic jobs, and lifecycle types write nothing and are left out of `covered`.
-- **Reuse within your stem; do not write another stem.** Where your slice `depends-on` an earlier slice of **your own stem** (`crates/<stem>/src/<earlier_part>.rs`), import and call `crate::<earlier_part>::*` for the types, XML or JSON deserialization, validation, and conversion the earlier slice built — never duplicate its parser, types, or conversion in your own module. If integrating your slice exposes a defect in `crates/<stem>/src/<earlier_part>.rs` (such as an outer XML root wrapper struct, missing wire fields, or a filter mismatch), fix `crates/<stem>/src/<earlier_part>.rs` through `edit_files` while keeping every test in `crates/<stem>/tests/` passing. A test of yours that compensates for the earlier part — a `now` shifted by the event's own seconds so the delay comes out right, a field the wire never carries supplied so the parser accepts the message — has found that defect: repair the part, and let the test state the wire as the fixture spells it. Where your slice depends on **another stem**, depend on its crate as `<other>.workspace = true` if the tree holds it, or implement against the design's types in your own module if it is not in the tree yet; never write a crate or module for a stem your requirements do not lead with.
+1. Read the brief whole. It carries the text of every file the adapter wrote for you. Do not read those files again.
+2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it.
+3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit. Copy its `find` from the brief's block exactly.
+4. Add the list lines the brief says are yours to add, through `edit_files`.
+5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
+6. Answer with one JSON object: `covered` and `written`.
 
-A requirement, a scenario, or a design type that names the source's platform — a broker and its consumer, a vault, an agent, a timer, a server — is read for the behaviour behind it and lands as the [translation](references/translation.md) says: the capability that plays the role, the mechanism's own parts written nowhere, and a requirement whose whole statement is the mechanism left out of `covered` rather than stubbed, its marker left standing. The signatures of the route functions, the messaging router, the two folds of `common`, the capability traits, and the test doubles, as the pinned crates spell them, are in [the omnia API](references/omnia-api.md): the brief quotes the ones the shapes it laid use, and the rest are read there rather than by probing the crates through the shell. What a guest cannot do, what the host does for it and is never simulated, and the capability it reaches instead, is in the [guardrails](references/guardrails.md).
+Write through the two tools alone.
 
-The brief carries the text of every file the adapter wrote for you, so you edit text you have seen. A file it names as held was written by an earlier slice or run and holds whatever stands in it: read it in the tree before you edit it, as you read the topic table and your stem's other parts for a constant or a type a slice built before this one may already hold.
+- `edit_files` changes within a file. Each edit's `find` must match one place in the file. Several edits may go in one call.
+- `write_files` writes a file whole. Use it only for a file of your own that the brief does not name. Its `delete` removes a file.
+- A refused `find` names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more. Do not guess.
+- The shell runs the check command and nothing else. A file the shell writes, through a redirect, a heredoc, `cp`, or a script, is not yours and is a finding.
+- Nothing outside `$WORKSPACE` is reachable. Do not read the registry sources under `.cargo`. Do not run `rg`, `find`, or `ls` over them.
+- The signatures you need are in [the omnia API](references/omnia-api.md). The brief quotes the ones your shapes use.
+- Read a reference through `read_doc` only when the brief's passages do not answer your question.
+
+## What the adapter scaffolded
+
+The [layout](references/layout.md) is the one shape every slice follows.
+The root package is the guest. `common` holds what every stem shares.
+Each stem is a crate under `crates/` whose entry composes its parts' routes and topics. The root lists merge the stems.
+
+The adapter laid your slice's place in it before this turn, from the requirements and types the slice carries:
+
+- The stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them.
+- Your part, `crates/<stem>/src/<part>.rs`:
+  - a path constant and a `.route(..)` per route your requirements carry;
+  - a handler per route, over an input struct and an output struct;
+  - a `topics(..)` and a consumer per message they carry, with its constant in the topic table;
+  - a `pub fn` per requirement carrying neither;
+  - an empty `pub struct` or `pub enum` per design type you own.
+- A route function, `<name>_route`, over `handle_with`, for a `POST` handler and for a handler whose scenarios state a status other than `200`.
+  Its encoder spells `StatusCode::OK`. Change that token for a `201` or a `503` on an `Ok`. An error status, a `404`, is the error the handler returns.
+- Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
+  Each test already sends the request or the delivery its requirement carries.
+- Your lines in every list: the stem's four at the root and the part's in the entry.
+
+Each place your code goes is a marker: `todo!("REQ-.. <subject>: ..")` in a body, or `{}` on a type.
+The brief quotes every marker as the one block to replace, with the file it stands in.
+
+A marker line reading `[conflict]` names a requirement the sources disagree over.
+The specification's notes under its id say what each states. Fill it from the scenarios, as any other.
+
+## The markers
+
+Fill each kind as the shape below shows. Every `find` is the block the brief quotes, copied exactly.
+
+### A design type
+
+`pub struct <Type> {}`, or `pub enum <Type> {}`, becomes the type its doc's signature spells, as the [handlers](references/handlers.md) reference declares a design type.
+
+- Document every field or variant.
+- Keep the wire's names through `#[serde(rename = "..")]`.
+- Keep the scaffolded derives. Drop `Eq` where a field is a float.
+- A type that is a client, a connection, a settings struct, or a lifecycle is a mechanism. The [translation](references/translation.md) writes nothing for it.
+  Leave its struct empty and say nothing more of it.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/src/reading.rs",
+      "find": "pub struct Order {}",
+      "replace": "pub struct Order {\n    /// The order's id.\n    pub id: String,\n    /// The order's lines, as the wire spells them.\n    #[serde(rename = \"orderLines\")]\n    pub lines: Vec<Line>,\n}"
+    }
+  ]
+}
+```
+
+### A handler
+
+Fill the handler as the [handlers](references/handlers.md) reference spells it.
+
+- Fill `<Name>Input` with one field per path parameter, which the adapter scaffolded, query parameter, or body field.
+- Fill `<Name>Output` with the response's fields.
+- Replace the block the brief quotes, the `let _ = (&input, &context);` line and the `todo!`, with the body.
+- A handler's `Ok` is answered `200` as JSON. Another status is changed in the route function, as said above.
+- Reach the host through `context.provider()` alone.
+- A setting is a `pub(crate) const` of your part whose value is its name. Read it through `Config::get` at use.
+- A topic you publish is a constant of `common::topic`, qualified through `config::topic`.
+- Every failure is a classified `omnia_sdk::Error`, propagated with `?`: a fetch that errors, a status that is not success, a body that does not parse.
+  Never catch one and answer `Ok(())` or an empty collection.
+- One handler serves every requirement its marker names. Two requirements at one method and path are one route.
+- A requirement's route is its `Route:` line. The adapter scaffolded the constant, the `.route(..)`, and the handler from it.
+  A method and a path a statement or a scenario spells in prose is no route. Add none for it.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/src/reading.rs",
+      "find": "    let _ = (&input, &context);\n    todo!(\"REQ-030 orders.get-id.return-order: the handler\")",
+      "replace": "    let provider = context.provider();\n    let bytes = StateStore::get(provider, &key(&input.id))\n        .await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    let order: Order = serde_json::from_slice(&bytes)\n        .map_err(|error| server_error!(\"order `{}`: {error}\", input.id))?;\n    Ok(ReadOrderOutput { order })"
+    }
+  ]
+}
+```
+
+### A consumer
+
+A requirement carrying a message, its `Message:` line, is a consumer the adapter scaffolded.
+It is `<Name>Input` over the delivery and a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>`.
+It is registered in your part's `topics(..)` under the table's constant for the topic.
+The adapter declared the constant at the end of `crates/common/src/topic.rs` where no slice had, and added the `<part>::topics,` entry to the stem's entry.
+
+- Fill the input with the delivery's fields.
+- Write the body as a handler's. A rejected delivery is `Err(bad_request!(..))`, never `Ok(())`.
+- The registration itself is never a requirement. The host registers and acknowledges.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/src/fulfilment.rs",
+      "find": "    let _ = (&input, &context);\n    todo!(\"REQ-032 orders.on-placed.count-lines: the consumer\")",
+      "replace": "    let provider = context.provider();\n    let lines = i64::try_from(input.lines).map_err(|_| bad_request!(\"lines out of range\"))?;\n    StateStore::increment(provider, LINES_PLACED, lines).await?;\n    Ok(())"
+    }
+  ]
+}
+```
+
+### A function
+
+A requirement carrying neither a route nor a message is a `pub fn` with a marker: a stage of a pipeline, a rule every route obeys, a behaviour another part calls.
+
+- Give it the signature the behaviour needs. Change its parameters and its return type as the behaviour demands.
+- Return `omnia_sdk::Result<T>`. Build an error with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!`.
+- Never a custom error enum. Never an `Option<T>` that swallows the reason.
+- Add no route to give it a surface.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/src/reading.rs",
+      "find": "pub fn within_limit() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-033 orders.within-limit: the behaviour\")\n}",
+      "replace": "pub fn within_limit(order: &Order, limit: usize) -> omnia_sdk::Result<()> {\n    if order.lines.len() > limit {\n        return Err(bad_request!(\"order `{}`: {} lines, limit {limit}\", order.id, order.lines.len()));\n    }\n    Ok(())\n}"
+    }
+  ]
+}
+```
+
+Where such a requirement consumes a topic that no `Message:` line carries, the function is that stream's handler instead.
+The design's `## APIs and integrations` lists an inbound stream whose bullet cites it or another requirement of your stem.
+Or the stream's deliveries are what its scenario's `when` describes.
+
+- Make it a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>`.
+- Add a `pub(crate) fn topics(router, env)` to your part: `router.route(config::topic_for(env, topic::<NAME>), messaging::consume(<handler>))`.
+- Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it.
+- Add one `<part>::topics,` entry at the end of the array in the entry's `topics(..)`.
+
+A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `config::topic`.
+The slice that ends a pipeline registers the consumer where no part of the stem has. That is the slice that publishes, or that `depends-on` the stem's other slices.
+Its handler calls the earlier parts' functions in the pipeline's order.
+A part that publishes in a stem no route or topic reaches, and no other stem calls, is a finding on your report. Nothing ever runs it.
+
+### A test
+
+Each scenario is a `#[tokio::test]` named by it, under `#[ignore = "<id> <scenario>: unfilled"]`.
+The adapter laid its act from the requirement's route or message:
+a request through `send(provider(), request)`, a delivery through `deliver(provider(), topic::<NAME>, payload)`, or `provider()` alone.
+Replace the block the brief quotes with the filled test, as [testing](references/testing.md) spells it.
+
+- The `#[ignore = ..]` line goes.
+- The arrangement is over the doubles of `omnia_test::guest`. A service the tree does not run is a double handed to the provider, never a live connection.
+- The act stays as laid, with the parameter, the body, or the payload the scenario states in place of the placeholders.
+- The assertions are the scenario's: the status, the body, and what the doubles hold after.
+- A scenario the specification gives you is a test. Invent none. Delete none.
+- A scenario you cannot yet satisfy keeps its ignored test as scaffolded. Its requirement stays out of `covered`.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/tests/reading.rs",
+      "find": "#[ignore = \"REQ-030 an_order_is_read_by_its_id: unfilled\"]\n#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let id = \"<id>\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider(), request).await;\n    let _ = (&status, &body);\n    todo!(\"REQ-030 an_order_is_read_by_its_id: arrange, act, assert\")\n}",
+      "replace": "#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let provider = provider();\n    provider.storage.insert_state(\"orders/42\", br#\"{\"id\":\"42\",\"orderLines\":[]}\"#);\n    let id = \"42\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider.clone(), request).await;\n    assert_eq!(status, StatusCode::OK, \"{}\", String::from_utf8_lossy(&body));\n    let read: ReadOrderOutput = serde_json::from_slice(&body).expect(\"an order\");\n    assert_eq!(read.order.id, \"42\");\n}"
+    }
+  ]
+}
+```
+
+### A list line
+
+The adapter added the stem's line in each root list, the part's `pub mod` line and its `routes()` and `topics,` entries in the entry, and the constant of each topic your requirements carry.
+The brief says `added` or `already held` for each.
+What the adapter does not derive is yours to add, at the end of its list, where the layout's table says:
+
+- The constant of a topic you publish to.
+- A `<part>::topics,` entry for a consumer no `Message:` line carried.
+- One `<crate>.workspace = true` line at the end of your stem's `[dependencies]` for each crate your code uses beyond the six the manifest holds.
+  A crate the root manifest does not pin carries its version instead.
+- A line the brief says was not added, because the file lacked its anchor.
+
+Change no other line. A line you find in a list is not yours to rewrite, reorder, or fold your own into.
+The merge keeps every form it is given, and the verify then has two.
+
+```json
+{
+  "edits": [
+    {
+      "path": "crates/orders/Cargo.toml",
+      "find": "tracing.workspace = true\n",
+      "replace": "tracing.workspace = true\nchrono.workspace = true\n"
+    },
+    {
+      "path": "crates/common/src/topic.rs",
+      "find": "pub const ORDER_PLACED: &str = \"orders-placed.v1\";\n",
+      "replace": "pub const ORDER_PLACED: &str = \"orders-placed.v1\";\n/// An order was read.\npub const ORDER_READ: &str = \"orders-read.v1\";\n"
+    }
+  ]
+}
+```
+
+## What you never write
+
+- No crate. Your stem's is scaffolded, one word whatever its hyphens: `crates/order-items/` for `order-items`.
+  A crate written under any other name is a finding.
+- No `crates/start/`. Never add `start` to `Cargo.toml`. The seed and the host are the program's start.
+- No `mount`, no router of your own beyond your part's `routes()`, no change to `src/lib.rs`, and no edit to another stem's crate.
+  The host runs a stem through its `routes()` and `topics(..)` alone.
+- No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock` is the exemplar's guest template, scaffolded when the repository was initialised.
+  Read one where you need its text. Write or report none.
+- No change to the root `Cargo.toml` outside its two stem lists. A pin, a lint, or a feature changed there is a finding with the lines named.
+- No scaffolded file written whole. Edit it.
+- No file left behind by a check or a test, beside your files and `Cargo.lock`. Remove such a stray through `delete`.
+
+## The `start` stem
+
+Where your slice carries requirements under `start` beside its own stem's, read them by the table in [what `start` becomes](references/guardrails.md).
+
+- A `start` requirement carrying a route is laid under the crate of the stem its route's resource names: `GET /health/live` in `crates/health/`.
+  The brief says so. Fill it as any handler.
+- A `start` requirement carrying no route gets nothing scaffolded. The seed and the host satisfy what it states, or nothing does.
+- Cover one the seed and the host satisfy: the component answers HTTP and deliveries, the routers reach every handler, the settings come from the host.
+- A deployment setting a handler reads is a `pub(crate) const` of the part that reads it, written by that part's slice.
+- Credential validation or rotation, client construction, table prefetch, a flag that decided whether a consumer ran, signals, periodic jobs, and lifecycle types:
+  write nothing, and leave them out of `covered`.
+- A slice of `start` requirements alone, none carrying a route, is never put to you.
+
+## Reuse, and the platform's names
+
+- Where your slice `depends-on` an earlier slice of your own stem, `crates/<stem>/src/<earlier_part>.rs`, import and call `crate::<earlier_part>::*`.
+  Never duplicate its parser, types, or conversion.
+- Where integrating your slice exposes a defect in the earlier part, an outer XML root wrapper, a missing wire field, a filter mismatch, fix that part through `edit_files`.
+  Keep every test under `crates/<stem>/tests/` passing.
+- A test of yours that compensates for the earlier part has found that defect. Repair the part. Let the test state the wire as the fixture spells it.
+- Where your slice depends on another stem, depend on its crate as `<other>.workspace = true` if the tree holds it.
+  Else implement against the design's types in your own module.
+- A requirement, a scenario, or a design type that names the source's platform is read for the behaviour behind it: a broker and its consumer, a vault, an agent, a timer, a server.
+  It lands as the [translation](references/translation.md) says: the capability that plays the role, the mechanism's own parts written nowhere.
+- A requirement whose whole statement is the mechanism is left out of `covered`, its marker standing. Do not stub it.
+- What a guest cannot do, what the host does for it, and the capability it reaches instead are in the [guardrails](references/guardrails.md).
 
 ## The check
 
-The brief spells one command, with your stem filled in: `cargo clippy -p <stem> --all-targets -- -D warnings && cargo test -p <stem> && cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check`, or the last two steps alone where the adapter scaffolded no stem crate. Once your edits are in, run it in `$WORKSPACE` as the brief spells it and read what it prints; it stops at the first step that fails, so what it prints is the one thing to repair:
+The brief spells one command, with your stem filled in:
+`cargo clippy -p <stem> --all-targets -- -D warnings && cargo test -p <stem> && cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check`.
+Once your edits are in, run it in `$WORKSPACE` as the brief spells it. It stops at the first step that fails. What it prints is the one thing to repair.
 
-- `clippy` is your crate and its tests under the workspace's lints: `pedantic` and `nursery` among them, every `pub` item documented, no `unsafe`, and the host boundary, which the [guardrails](references/guardrails.md) spell: a `disallowed` method, type, or macro names the capability to reach instead, and the repair is that capability, since the lints are forbidden and no `allow` or `expect` lifts one. A handler `routes()` does not name, or a part the entry does not list, is dead code here. The first run resolves the workspace, which writes `Cargo.lock`, which stays, and `target/`, which `.gitignore` keeps out of the tree. A failure in a crate not yours is a type the design names and your module misuses, or a crate that is not there yet, which you work around in yours.
-- `test` is your crate's tests; they fail only for what your module does not yet do, and a test still ignored is one you have not filled.
-- `check` is every crate for the guest, so your lines resolve and your module compiles for the target; a crate that reaches past the component fails here, and the module that named it is the one to change.
-- `fmt` names a file to reformat through `edit_files`, as it reports, since a scaffolded file is never written whole; the formatter may wrap a list statement over several lines, which is still one entry. Where this step alone fails because no nightly toolchain is installed, the steps before it passed and the check is done.
+- `clippy` is your crate and its tests under the workspace's lints: `pedantic` and `nursery`, every `pub` item documented, no `unsafe`, and the host boundary.
+  The [guardrails](references/guardrails.md) spell the boundary. A `disallowed` method, type, or macro names the capability to reach instead. The repair is that capability.
+  No `allow` or `expect` lifts a lint. A handler `routes()` does not name, or a part the entry does not list, is dead code here.
+- The first run resolves the workspace and writes `Cargo.lock`, which stays, and `target/`, which `.gitignore` keeps out.
+- A failure in a crate not yours is a type the design names and your module misuses, or a crate that is not there yet. Work around it in yours.
+- `test` is your crate's tests. They fail only for what your module does not yet do. A test still ignored is one you have not filled.
+- `check` is every crate for the guest. A crate that reaches past the component fails here, and the module that named it is the one to change.
+- `fmt` names a file to reformat through `edit_files`, as it reports. The formatter may wrap a list statement over several lines, which is still one entry.
+- Where `fmt` alone fails because no nightly toolchain is installed, the steps before it passed and the check is done.
 
-Repair what it reports, through `edit_files` within a file, or `write_files` for a file of your own the brief does not name, and run it again until it passes. Report only once it passes, or once a step fails for a reason outside your slice, which the report then leaves uncovered. The whole change set of this copy is sealed as your slice's commit, so a file a check or a test left in the tree beside your files and `Cargo.lock` is a finding on your report, removed through `delete`.
+Repair what it reports, through `edit_files` within a file, or `write_files` for a file of your own. Run it again until it passes.
+Report once it passes, or once a step fails for a reason outside your slice, which the report then leaves uncovered.
 
 ## Report
 
-Answer with one JSON object:
+Answer with one JSON object and nothing else. No prose before it or after it.
 
-- `covered` — each requirement id the specification above holds that your module now implements and its test confirms, once each, including a requirement whose scenario `THEN` was rendered as `[unknown]` when your test asserts the outcome stated by the requirement's statement itself. Leave an id out rather than claim what the tree does not hold or a test does not pass.
-- `written` — the files the two tools wrote, once each, as a `/`-separated path relative to `$WORKSPACE`: the scaffolded files you edited, and the lists you added a line to. A file the adapter scaffolded and you did not touch, a seed file, and `Cargo.lock` are the tree's whether or not you list them.
+- `covered` — each requirement id of the specification above that your module now implements and its test confirms, once each.
+  Include a requirement whose scenario `THEN` was rendered as `[unknown]` when your test asserts the outcome its statement states.
+  Leave an id out rather than claim what the tree does not hold or a test does not pass.
+- `written` — the files the two tools wrote, once each, as a `/`-separated path relative to `$WORKSPACE`: the scaffolded files you edited, and the lists you added a line to.
 
-The report is held to the tree before it is accepted: each rule below the tree breaks comes back as a finding under `## Findings`, every line named with the repair to make, and a report that breaks none is accepted first time. The rules are the layout's, and the [handlers](references/handlers.md), [testing](references/testing.md), and [translation](references/translation.md) references spell the shapes that keep them:
+The report is held to the tree before it is accepted. Each rule the tree breaks comes back as a finding under `## Findings`, every line named with the repair to make.
+The rules are the layout's. The [handlers](references/handlers.md), [testing](references/testing.md), and [translation](references/translation.md) references spell the shapes that keep them.
 
-- A marker of a covered requirement stands, or a scenario of one is still ignored, still a `todo!`, or missing: fill it, or leave the id out of `covered`.
-- A file stands beside your stems' crates and `Cargo.lock` that the tree did not hold before your turn: a stray a check or a test left, removed through `delete`.
-- A crate is written for a stem your requirements do not lead with, or for a stem split at a hyphen; a module is the process, a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type; a file under `crates/start/`.
-- The root `Cargo.toml` differs from the seed outside its two stem lists.
-- A crate your stem's manifest names that no file of the stem spells; a constant of the topic table nothing names; a stem that publishes and nothing reaches.
-- A store read under a constant key that answers its miss as an empty collection or a default; a `Deserialize` struct wrapping a response in one `data` field; a refusal answered `Ok(())` from inside a catch; a setting whose name spells `FORMAT`.
+- A marker of a covered requirement stands, or a scenario of one is still ignored, still a `todo!`, or missing. Fill it, or leave the id out of `covered`.
+- A file stands beside your stems' crates and `Cargo.lock` that the tree did not hold before your turn. Remove it through `delete`.
+- A crate is written for a stem your requirements do not lead with, or for a stem split at a hyphen.
+- A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.
+- The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks.
+- A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
+- A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
+- A refusal answered `Ok(())` from inside a catch. A setting whose name spells `FORMAT`.
 
-Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes, then answer again; the report is yours once the tree stands.
+Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
 
 ## Worked example
 
-A slice `orders-reading` (`SLICE-006`) implementing `REQ-030` and `REQ-031`, the first part of the `orders` stem, which another slice also builds this wave. The adapter scaffolded the stem's manifest and entry, the part with a handler per route and an ignored test per scenario, and the stem's lines in the root lists; the turn filled the handlers and the tests, added a `chrono` line to the stem's manifest for the order's timestamp, and declared the constant of the topic it publishes to in the topic table. `REQ-031` depends on a `customers` module another slice is building this wave, so its test cannot pass yet: its marker and its ignored test stand as scaffolded, and it is left uncovered:
+A slice `orders-reading` (`SLICE-006`) implementing `REQ-030` and `REQ-031`, the first part of the `orders` stem, which another slice also builds this wave.
+The adapter scaffolded the stem's manifest and entry, the part with a handler per route and an ignored test per scenario, and the stem's lines in the root lists.
+The turn filled the handlers and the tests. It added a `chrono` line to the stem's manifest for the order's timestamp.
+It declared the constant of the topic it publishes to in the topic table.
+`REQ-031` depends on a `customers` module another slice is building this wave, so its test cannot pass yet.
+Its marker and its ignored test stand as scaffolded, and it is left uncovered:
 
 ```json
 {
@@ -75,13 +341,4 @@ A slice `orders-reading` (`SLICE-006`) implementing `REQ-030` and `REQ-031`, the
 }
 ```
 
-## Worked example: a `start` slice
-
-The slice `start` (`SLICE-001`) holds nine requirements read from the process the source was: `REQ-001` and `REQ-002` state the vault secret and rotation watcher it started with, `REQ-003` the token it exchanged at start and refreshed hourly, `REQ-004` the brokers it connected to, `REQ-005` the consumer group it joined, `REQ-006` the APM agent it initialised, `REQ-007` the signal handler that drained it, `REQ-008` the `Main` class that ran it all, and `REQ-009` the job it scheduled to reload a table every ten minutes. By the table in [what `start` becomes](references/guardrails.md) the seed and the host are `start`: the adapter scaffolded nothing for the slice, and it writes no module for the vault, the token, the brokers, the agent, the signals, the `Main`, or the job, and no key in the state store recording that any of them ran. Its report covers `REQ-004`, since the host and the seed's topic list answer deliveries as stated, writes nothing, since the seed was scaffolded when the repository was initialised, and leaves the other eight out:
-
-```json
-{
-  "covered": ["REQ-004"],
-  "written": []
-}
-```
+Answer with one JSON object.
