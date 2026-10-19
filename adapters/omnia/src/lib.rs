@@ -11,7 +11,9 @@
 //! handler per route the requirements state and a function per requirement
 //! stating none, an ignored test per scenario, and the stem's lines in every
 //! list. The turn fills the markers it scaffolded, and a covered requirement
-//! whose marker or ignored test still stands is refused for correction.
+//! whose marker or ignored test still stands is refused for correction, as
+//! is a module the tree holds that does not parse, named at the line the
+//! parser stopped at.
 
 mod scaffold;
 mod tree;

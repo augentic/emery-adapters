@@ -3,7 +3,9 @@
 mod lists;
 mod misses;
 mod process;
+mod syntax;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -11,28 +13,69 @@ use std::path::{Path, PathBuf};
 use emery_sdk::target::Report;
 use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
+use syn::visit::{self, Visit};
+use syn::{ItemFn, Macro};
 
+use self::syntax::Unparsed;
 use crate::scaffold::Scaffold;
 
 const MAX_DIFF_LINES: usize = 24;
-// The lead of a marker the scaffold writes, in a handler's or a function's
-// body as in a test's.
-const MARKER: &str = "todo!(\"REQ-";
 
 struct Module {
     path: String,
+    // The text with its comments blanked, for the rules that read a name
+    // off a line and for spelling a line into a finding.
     code: String,
+    parsed: Result<syn::File, Unparsed>,
 }
 
 impl Module {
     fn read(root: &Path, file: &Path) -> Result<Self, Error> {
         let path = relative(root, file);
-        let code = uncommented(&read(file)?);
-        Ok(Self { path, code })
+        let text = read(file)?;
+        Ok(Self {
+            path,
+            code: uncommented(&text),
+            parsed: syntax::parse(&text),
+        })
     }
 
     fn is_common(&self) -> bool {
         self.path.starts_with("crates/common/")
+    }
+
+    fn file(&self) -> Option<&syn::File> {
+        self.parsed.as_ref().ok()
+    }
+
+    fn spelled(&self, number: usize) -> String {
+        number
+            .checked_sub(1)
+            .and_then(|index| self.code.lines().nth(index))
+            .unwrap_or_default()
+            .trim()
+            .trim_end_matches(',')
+            .to_owned()
+    }
+
+    fn markers(&self) -> Vec<(usize, String)> {
+        let mut markers = Markers::default();
+        if let Some(file) = self.file() {
+            markers.visit_file(file);
+        }
+        markers.found
+    }
+}
+
+#[derive(Default)]
+struct Markers {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Markers {
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        self.found.extend(syntax::todo_marker(mac));
+        visit::visit_macro(self, mac);
     }
 }
 
@@ -72,6 +115,7 @@ impl<'a> Tree<'a> {
 
     fn check_common(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
+        findings.extend(self.unparsed());
         findings.extend(self.manifest_drift()?);
         findings.extend(self.process()?);
         findings.extend(self.stem_lints()?);
@@ -132,16 +176,29 @@ impl<'a> Tree<'a> {
         )))
     }
 
+    // The rules after this one read the syntax tree, so a module `syn`
+    // refuses is reported here and read by none of them.
+    fn unparsed(&self) -> Option<String> {
+        let lines: Vec<String> = self
+            .modules
+            .iter()
+            .filter_map(|module| {
+                let unparsed = module.parsed.as_ref().err()?;
+                Some(format!("{}:{}: {}", module.path, unparsed.line, unparsed.message))
+            })
+            .collect();
+        unparsed_finding(&lines)
+    }
+
     fn markers_left(&self, covered: &[String]) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
-            for (index, line) in module.code.lines().enumerate() {
-                for id in marker_ids(line) {
+            for (number, marker) in module.markers() {
+                for id in marker_ids(&marker) {
                     if covered.iter().any(|covered| covered == id) {
                         lines.push(format!(
-                            "{}:{}: {id} is covered and its marker stands",
-                            module.path,
-                            index + 1
+                            "{}:{number}: {id} is covered and its marker stands",
+                            module.path
                         ));
                     }
                 }
@@ -160,18 +217,28 @@ impl<'a> Tree<'a> {
     }
 
     // The test files are read here alone, since the tree's modules are a
-    // stem's sources.
+    // stem's sources; one `syn` refuses is reported as a module is, its
+    // scenarios unread.
     fn scenarios_tested(
         &self, scaffold: &Scaffold, covered: &[String],
-    ) -> Result<Option<String>, Error> {
-        let mut lines = Vec::new();
-        for expected in scaffold.expected() {
-            if !covered.iter().any(|covered| covered == expected.id) {
-                continue;
+    ) -> Result<Vec<String>, Error> {
+        let expected: Vec<_> = scaffold
+            .expected()
+            .filter(|expected| covered.iter().any(|covered| covered == expected.id))
+            .collect();
+        let mut files: BTreeMap<&str, Result<syn::File, Unparsed>> = BTreeMap::new();
+        for expected in &expected {
+            if !files.contains_key(expected.path) {
+                let file = self.root.join(expected.path);
+                let text = if file.is_file() { read(&file)? } else { String::new() };
+                files.insert(expected.path, syntax::parse(&text));
             }
-            let file = self.root.join(expected.path);
-            let text = if file.is_file() { read(&file)? } else { String::new() };
-            let Some(found) = test_of(&text, expected.test) else {
+        }
+
+        let mut lines = Vec::new();
+        for expected in &expected {
+            let Some(Ok(file)) = files.get(expected.path) else { continue };
+            let Some(found) = test_of(file, expected.test) else {
                 lines.push(format!(
                     "{}: {} is covered and its scenario `{}` has no test `{}`",
                     expected.path, expected.id, expected.scenario, expected.test
@@ -192,16 +259,26 @@ impl<'a> Tree<'a> {
                 ));
             }
         }
-        if lines.is_empty() {
-            return Ok(None);
+
+        let unparsed: Vec<String> = files
+            .iter()
+            .filter_map(|(path, parsed)| {
+                let unparsed = parsed.as_ref().err()?;
+                Some(format!("{path}:{}: {}", unparsed.line, unparsed.message))
+            })
+            .collect();
+        let mut findings = Vec::new();
+        findings.extend(unparsed_finding(&unparsed));
+        if !lines.is_empty() {
+            findings.push(format!(
+                "a covered requirement's scenarios are tests that run and pass: each scenario of \
+                 a covered requirement is the `#[tokio::test]` the adapter scaffolded for it in \
+                 the part's test file, filled, with its `#[ignore = ..]` line removed; fill each \
+                 through `edit_files`, or leave the requirement out of `covered`:\n{}",
+                lines.join("\n")
+            ));
         }
-        Ok(Some(format!(
-            "a covered requirement's scenarios are tests that run and pass: each scenario of a \
-             covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
-             part's test file, filled, with its `#[ignore = ..]` line removed; fill each \
-             through `edit_files`, or leave the requirement out of `covered`:\n{}",
-            lines.join("\n")
-        )))
+        Ok(findings)
     }
 
     // The workspace's lints are the host boundary, and they reach a crate
@@ -314,42 +391,42 @@ struct Found {
 }
 
 // The test `name` declares in a test file: its line, whether an `#[ignore]`
-// stands among the attributes above it, and the line of a marker left in
-// its body, read to the brace that closes it at the margin.
-fn test_of(text: &str, name: &str) -> Option<Found> {
-    let lines: Vec<&str> = text.lines().collect();
-    let at = lines.iter().position(|line| {
-        let rest = line.trim_start();
-        rest.strip_prefix("async fn ")
-            .or_else(|| rest.strip_prefix("fn "))
-            .and_then(|rest| rest.strip_prefix(name))
-            .is_some_and(|after| after.starts_with('(') || after.starts_with('<'))
-    })?;
-    let ignored = lines[..at]
-        .iter()
-        .rev()
-        .take_while(|line| {
-            let line = line.trim_start();
-            line.starts_with('#') || line.starts_with("//")
-        })
-        .any(|line| line.trim_start().starts_with("#[ignore"));
-    let end = lines[at..].iter().position(|line| *line == "}").map_or(lines.len(), |end| at + end);
-    let marker =
-        lines[at..end].iter().position(|line| line.contains(MARKER)).map(|index| at + index + 1);
+// stands among its attributes, and the line of a marker left in its body.
+fn test_of(file: &syn::File, name: &str) -> Option<Found> {
+    struct Test<'n, 'ast> {
+        name: &'n str,
+        found: Option<&'ast ItemFn>,
+    }
+
+    impl<'ast> Visit<'ast> for Test<'_, 'ast> {
+        fn visit_item_fn(&mut self, node: &'ast ItemFn) {
+            if self.found.is_some() {
+                return;
+            }
+            if node.sig.ident == self.name {
+                self.found = Some(node);
+            } else {
+                visit::visit_item_fn(self, node);
+            }
+        }
+    }
+
+    let mut test = Test { name, found: None };
+    test.visit_file(file);
+    let item = test.found?;
+    let mut markers = Markers::default();
+    markers.visit_block(&item.block);
     Some(Found {
-        line: at + 1,
-        ignored,
-        marker,
+        line: syntax::line(item.sig.fn_token.span),
+        ignored: item.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
+        marker: markers.found.first().map(|(line, _)| *line),
     })
 }
 
-// The requirement ids a marker on `line` names: the string of its `todo!`
-// up to the colon, one `REQ-<n> <subject>` per comma.
-fn marker_ids(line: &str) -> Vec<&str> {
-    let Some(at) = line.find(MARKER) else { return Vec::new() };
-    let rest = &line[at + MARKER.len() - "REQ-".len()..];
-    let body = rest.split('"').next().unwrap_or(rest);
-    let named = body.split(':').next().unwrap_or(body);
+// The requirement ids a marker names: its text up to the colon, one
+// `REQ-<n> <subject>` per comma.
+fn marker_ids(marker: &str) -> Vec<&str> {
+    let named = marker.split(':').next().unwrap_or(marker);
     named
         .split(',')
         .filter_map(|entry| entry.split_whitespace().next())
@@ -359,6 +436,18 @@ fn marker_ids(line: &str) -> Vec<&str> {
             })
         })
         .collect()
+}
+
+// The finding over the files `syn` refused, each `<path>:<line>: <message>`.
+fn unparsed_finding(lines: &[String]) -> Option<String> {
+    if lines.is_empty() {
+        return None;
+    }
+    Some(format!(
+        "a module that does not parse is read by no check and refused by the compiler; repair \
+         its syntax through `edit_files`:\n{}",
+        lines.join("\n")
+    ))
 }
 
 pub fn read(file: &Path) -> Result<String, Error> {
@@ -474,15 +563,6 @@ fn inherits_lints(manifest: &str) -> bool {
 
 fn is_ident(name: &str) -> bool {
     !name.is_empty() && name.chars().all(is_ident_char)
-}
-
-fn strip_vis(line: &str) -> &str {
-    let rest = line.trim_start();
-    let Some(after) = rest.strip_prefix("pub") else { return rest };
-    if let Some(scoped) = after.strip_prefix('(') {
-        return scoped.split_once(')').map_or(rest, |(_, tail)| tail.trim_start());
-    }
-    after.strip_prefix(char::is_whitespace).map_or(rest, str::trim_start)
 }
 
 fn pub_consts(text: &str) -> impl Iterator<Item = (usize, &str)> {

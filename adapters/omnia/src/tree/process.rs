@@ -1,38 +1,34 @@
 //! Rejects `crates/start/` files and process-lifecycle functions or types in stem crates.
 
 use emery_sdk::Error;
+use syn::visit::{self, Visit};
+use syn::{Ident, ImplItemFn, ItemFn, ItemStruct, TraitItemFn};
 
-use super::{Tree, spells, start_files};
+use super::{Tree, start_files, syntax};
 
-const LIFECYCLE: &[(&str, &str)] = &[
-    ("fn start", "a start of its own"),
-    ("fn stop", "a stop of its own"),
-    ("fn run", "a run of its own"),
-    ("fn listen", "a listener of its own"),
-    ("fn serve", "a server of its own"),
-    ("fn bootstrap", "a bootstrap of its own"),
-    ("fn shutdown", "a shutdown of its own"),
-    ("struct Main", "a lifecycle type of its own"),
-    ("struct App", "a lifecycle type of its own"),
-    ("struct Server", "a lifecycle type of its own"),
-    ("struct Application", "a lifecycle type of its own"),
+const LIFECYCLE_FNS: &[(&str, &str)] = &[
+    ("start", "a start of its own"),
+    ("stop", "a stop of its own"),
+    ("run", "a run of its own"),
+    ("listen", "a listener of its own"),
+    ("serve", "a server of its own"),
+    ("bootstrap", "a bootstrap of its own"),
+    ("shutdown", "a shutdown of its own"),
 ];
+
+const LIFECYCLE_TYPES: &[&str] = &["Main", "App", "Server", "Application"];
 
 impl Tree<'_> {
     pub(super) fn process(&self) -> Result<Vec<String>, Error> {
         let start = start_files(self.root)?;
         let mut lifecycle = Vec::new();
         for module in &self.modules {
-            for (number, line) in module.code.lines().enumerate() {
-                for (word, what) in LIFECYCLE {
-                    if spells(line, word) {
-                        lifecycle.push(format!(
-                            "{}:{}: {what} (`{word}`)",
-                            module.path,
-                            number + 1
-                        ));
-                    }
-                }
+            let mut found = Lifecycle::default();
+            if let Some(file) = module.file() {
+                found.visit_file(file);
+            }
+            for (number, what, spelled) in found.found {
+                lifecycle.push(format!("{}:{number}: {what} (`{spelled}`)", module.path));
             }
         }
         let mut findings = Vec::new();
@@ -60,5 +56,43 @@ impl Tree<'_> {
             ));
         }
         Ok(findings)
+    }
+}
+
+#[derive(Default)]
+struct Lifecycle {
+    found: Vec<(usize, &'static str, String)>,
+}
+
+impl Lifecycle {
+    fn function(&mut self, line: usize, ident: &Ident) {
+        if let Some((name, what)) = LIFECYCLE_FNS.iter().find(|(name, _)| ident == name) {
+            self.found.push((line, what, format!("fn {name}")));
+        }
+    }
+}
+
+impl<'ast> Visit<'ast> for Lifecycle {
+    fn visit_item_fn(&mut self, node: &'ast ItemFn) {
+        self.function(syntax::line(node.sig.fn_token.span), &node.sig.ident);
+        visit::visit_item_fn(self, node);
+    }
+
+    fn visit_impl_item_fn(&mut self, node: &'ast ImplItemFn) {
+        self.function(syntax::line(node.sig.fn_token.span), &node.sig.ident);
+        visit::visit_impl_item_fn(self, node);
+    }
+
+    fn visit_trait_item_fn(&mut self, node: &'ast TraitItemFn) {
+        self.function(syntax::line(node.sig.fn_token.span), &node.sig.ident);
+        visit::visit_trait_item_fn(self, node);
+    }
+
+    fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
+        if let Some(name) = LIFECYCLE_TYPES.iter().find(|name| node.ident == name) {
+            let line = syntax::line(node.struct_token.span);
+            self.found.push((line, "a lifecycle type of its own", format!("struct {name}")));
+        }
+        visit::visit_item_struct(self, node);
     }
 }

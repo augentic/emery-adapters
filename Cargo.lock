@@ -1159,6 +1159,8 @@ version = "0.13.0"
 dependencies = [
  "emery-sdk",
  "omnia-template",
+ "proc-macro2",
+ "syn 3.0.9",
 ]
 
 [[package]]
