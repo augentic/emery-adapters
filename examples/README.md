@@ -39,7 +39,7 @@ cargo run --manifest-path ../emery/Cargo.toml -- show design
 cargo run --manifest-path ../emery/Cargo.toml -- show plan
 ```
 
-Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.13.0.wasm`). Replacing the file is how a rebuild takes effect.
+Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.12.0.wasm`). Replacing the file is how a rebuild takes effect.
 
 ## Build
 
@@ -79,7 +79,7 @@ export CURSOR_SDK_BRIDGE_LOG=1
 
 An `adapter` is `emery:<name>@<version>`. `emery` reads `~/.emery/adapters/emery_<name>@<version>.wasm` before it fetches. The file there is that release on this machine.
 
-These examples name `0.13.0`, so the `cp` above stands in for the published release. Remove the file and the next run fetches it. A `-dev` version in both the config and the filename keeps a local build beside the release.
+These examples name `0.12.0`, so the `cp` above stands in for the published release. Remove the file and the next run fetches it. A `-dev` version in both the config and the filename keeps a local build beside the release.
 
 ## What a run looks like
 

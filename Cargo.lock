@@ -1111,7 +1111,7 @@ dependencies = [
 
 [[package]]
 name = "emery-adapters"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-documentation",
  "emery-intent",
@@ -1136,14 +1136,14 @@ dependencies = [
 
 [[package]]
 name = "emery-documentation"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-intent"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
 ]
@@ -1155,14 +1155,14 @@ source = "git+https://github.com/augentic/emery#e0428af7408b4ef539c07bda50e1ebe3
 
 [[package]]
 name = "emery-node"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
 ]
 
 [[package]]
 name = "emery-omnia"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "omnia-template",
@@ -1177,7 +1177,7 @@ source = "git+https://github.com/augentic/emery#e0428af7408b4ef539c07bda50e1ebe3
 
 [[package]]
 name = "emery-python"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "ruff_python_ast",
@@ -1205,7 +1205,7 @@ dependencies = [
 
 [[package]]
 name = "emery-typescript"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "oxc_allocator",
@@ -1257,7 +1257,7 @@ dependencies = [
 
 [[package]]
 name = "evals"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "serde",
@@ -4643,7 +4643,7 @@ dependencies = [
 
 [[package]]
 name = "test-programs"
-version = "0.14.0"
+version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "futures",

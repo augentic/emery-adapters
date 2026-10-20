@@ -362,7 +362,6 @@ fn parse(text: &str) -> Type {
         }
         _ if MAPS.contains(&name) => Type::Map(Box::new(Type::Any)),
         "Any" | "object" | "None" | "type" | "Type" => Type::Any,
-        _ if text.contains('.') => Type::Any,
         _ if is_ident(name) => Type::Named(name.to_owned(), Vec::new()),
         _ => Type::Any,
     }

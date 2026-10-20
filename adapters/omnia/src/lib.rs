@@ -1,27 +1,10 @@
 //! Builds each slice of a plan into an Omnia guest in Rust, and verifies the integrated tree.
 //!
 //! Initialises the repository with the guest template of [`omnia_template`],
-//! builds each stem as a member crate whose routers the root component
-//! merges, holds the tree to the layout's rules before accepting a report or
-//! verdict, and runs `cargo clippy`, `cargo test`, and the `wasm32-wasip2`
-//! check at each slice and wave.
-//!
-//! Before a slice's turn, the adapter scaffolds the slice's skeleton from the
-//! typed slice: the stem's crate where the tree lacks it, the part with a
-//! handler per route the requirements carry, a consumer per message, and a
-//! function per requirement carrying neither, an ignored test per scenario,
-//! and the stem's lines in every list. A `start` requirement carrying a
-//! route is laid under the crate of the stem its route's resource names. The
-//! brief carries the scaffolded text, each marker as the block an edit
-//! replaces, the one check command, and the reference passages the slice's
-//! shapes need. The turn fills the markers through `edit_files`, since a
-//! `write_files` entry naming a scaffolded file is refused, and a covered
-//! requirement whose marker or ignored test still stands is refused for
-//! correction, as is a file written beside the slice's crates and a module
-//! the tree holds that does not parse, named at the line the parser stopped
-//! at. A slice of `start` requirements alone, none carrying a route, opens
-//! no turn: the seed and the host are the program's start, so it is built
-//! covering nothing and writing nothing.
+//! scaffolds each slice into its stem's member crate whose routers the root
+//! component merges, holds the tree to the layout's rules before accepting a
+//! report or verdict, and runs `cargo clippy`, `cargo test`, and the
+//! `wasm32-wasip2` check at each slice and wave.
 
 mod layout;
 mod scaffold;

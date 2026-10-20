@@ -1,3 +1,3 @@
 [[source]]
-adapter = "emery:python@0.13.0"
+adapter = "emery:python@0.12.0"
 path = "../../evals/cases/fastapi-routers/fixture/"

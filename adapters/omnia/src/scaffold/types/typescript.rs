@@ -353,9 +353,12 @@ pub(super) fn parse(text: &str) -> Type {
     }
     if let Some((generic, after)) = between(text, '<', '>')
         && after.trim().is_empty()
-        && let Some(name) = text.split('<').next().map(str::trim)
-        && is_ident(name)
+        && let Some(head) = text.split('<').next().map(str::trim)
     {
+        let name = head.rsplit('.').next().unwrap_or(head);
+        if !is_ident(name) {
+            return Type::Any;
+        }
         let args: Vec<&str> = split_top(generic, ',').map(str::trim).collect();
         return match name {
             "Array" | "ReadonlyArray" | "Set" | "ReadonlySet" => {
@@ -369,20 +372,21 @@ pub(super) fn parse(text: &str) -> Type {
             _ => Type::Named(name.to_owned(), args.iter().map(|arg| parse(arg)).collect()),
         };
     }
-    match text {
+    let name = text.rsplit('.').next().unwrap_or(text);
+    match name {
         "string" => Type::Text,
         "number" => Type::Number,
         "boolean" | "true" | "false" => Type::Bool,
         "bigint" => Type::Int,
         "Date" => Type::Date,
         "Buffer" | "Uint8Array" => Type::Bytes,
-        _ if is_ident(text)
+        _ if is_ident(name)
             && !matches!(
-                text,
+                name,
                 "any" | "unknown" | "object" | "never" | "void" | "null" | "undefined" | "symbol"
             ) =>
         {
-            Type::Named(text.to_owned(), Vec::new())
+            Type::Named(name.to_owned(), Vec::new())
         }
         _ => Type::Any,
     }

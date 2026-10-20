@@ -84,7 +84,9 @@ fn parse(ty: &syn::Type) -> Type {
         syn::Type::Paren(paren) => parse(&paren.elem),
         syn::Type::Group(group) => parse(&group.elem),
         syn::Type::Reference(reference) => parse(&reference.elem),
+        syn::Type::Slice(slice) if is_u8(&slice.elem) => Type::Bytes,
         syn::Type::Slice(slice) => Type::Array(Box::new(parse(&slice.elem))),
+        syn::Type::Array(array) if is_u8(&array.elem) => Type::Bytes,
         syn::Type::Array(array) => Type::Array(Box::new(parse(&array.elem))),
         syn::Type::Path(path) => named(path),
         _ => Type::Any,
@@ -108,6 +110,7 @@ fn named(path: &TypePath) -> Type {
     let first = || args.first().map_or(Type::Any, |arg| parse(arg));
     let name = last.ident.to_string();
     match name.as_str() {
+        "Vec" if args.first().is_some_and(|arg| is_u8(arg)) => Type::Bytes,
         "Vec" | "VecDeque" | "BTreeSet" | "HashSet" => Type::Array(Box::new(first())),
         "Box" | "Arc" | "Rc" => first(),
         "Option" => Type::Nullable(Box::new(first())),
@@ -147,6 +150,10 @@ fn rename(attrs: &[Attribute]) -> Option<String> {
             pair.path.is_ident("rename").then(|| string(&pair.value)).flatten()
         })
     })
+}
+
+fn is_u8(ty: &syn::Type) -> bool {
+    matches!(ty, syn::Type::Path(path) if path.path.get_ident().is_some_and(|ident| ident == "u8"))
 }
 
 fn string(expr: &Expr) -> Option<String> {
