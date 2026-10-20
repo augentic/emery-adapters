@@ -1,8 +1,9 @@
-//! Selects, from the embedded references, the passages the slice's shapes compile and test against.
+//! Selects, from the embedded references, the passages the items the scaffold laid compile and test against.
 
 use std::collections::BTreeSet;
+use std::iter;
 
-use emery_sdk::{Doc, body};
+use emery_sdk::{Doc, body, push_unique};
 
 const API: &str = "references/omnia-api.md";
 const TESTING: &str = "references/testing.md";
@@ -200,9 +201,11 @@ const TRANSLATION_ROWS: &[(Role, &str)] = &[
     (Role::Broadcast, "a WebSocket push"),
 ];
 
-// The capability trait, the double, and the testing table's row each role
-// reaches, by the lead of each block.
-const CAPABILITIES: &[(Role, &str, &str, &str)] = &[
+// A role with the capability trait, the double, and the testing table's row
+// it reaches, by the lead of each block.
+type Capability = (Role, &'static str, &'static str, &'static str);
+
+const CAPABILITIES: &[Capability] = &[
     (Role::Publish, "pub trait Publish", "impl Sink", "`Publish`"),
     (Role::Upstream, "pub trait HttpRequest", "impl MatchedHttp", "`HttpRequest`"),
     (Role::Identity, "pub trait Identity", "impl FixedIdentity", "`Identity`"),
@@ -216,13 +219,13 @@ const CAPABILITIES: &[(Role, &str, &str, &str)] = &[
 
 // What the scaffold laid, which decides the passages.
 pub(super) struct Needs {
-    pub shapes: BTreeSet<Shape>,
+    pub laid: BTreeSet<Laid>,
     pub roles: BTreeSet<Role>,
 }
 
 // A kind of item the scaffold laid for the slice.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum Shape {
+pub(super) enum Laid {
     Routes,
     // A route function over `handle_with`, which spells the encoder.
     Encoded,
@@ -261,36 +264,33 @@ pub(super) fn roles(design: &str) -> BTreeSet<Role> {
 
 pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     let mut passages = Vec::new();
-    let has = |shape: Shape| needs.shapes.contains(&shape);
+    let has = |laid: Laid| needs.laid.contains(&laid);
     let mut roles = needs.roles.clone();
-    if has(Shape::Consumers) {
+    if has(Laid::Consumers) {
         roles.insert(Role::Consume);
     }
     let api = body(docs, API).unwrap_or_default();
-    let reached = |lead: fn(&(Role, &'static str, &'static str, &'static str)) -> &'static str| {
-        CAPABILITIES.iter().filter(|(role, ..)| roles.contains(role)).map(lead).collect::<Vec<_>>()
-    };
 
     // the routing and the handler's context
-    if has(Shape::Routes)
+    if has(Laid::Routes)
         && let Some((heading, routing)) = section(api, "Routing")
     {
         if let Some(plain) = before(routing, "The general constructor") {
             passages.push(markdown(API, &heading, plain));
         }
-        if has(Shape::Encoded)
+        if has(Laid::Encoded)
             && let Some(general) =
                 between(routing, "The general constructor", "The router is axum's")
         {
             passages.push(markdown(API, &heading, general));
         }
     }
-    if has(Shape::Consumers)
+    if has(Laid::Consumers)
         && let Some((heading, messaging)) = section(api, "Messaging")
     {
         passages.push(markdown(API, &heading, messaging));
     }
-    if (has(Shape::Routes) || has(Shape::Consumers))
+    if (has(Laid::Routes) || has(Laid::Consumers))
         && let Some((heading, handler)) = section(api, "The handler")
         && let Some(context) =
             fence(handler, 0).and_then(|fence| paragraph(fence, "pub struct Context<P>"))
@@ -305,23 +305,25 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     if let Some((heading, capabilities)) = section(api, "The capabilities")
         && let Some(fence) = fence(capabilities, 0)
     {
-        let leads = [vec!["pub trait Config"], reached(|(_, lead, ..)| lead)].concat();
-        passages.push(code(API, &heading, &paragraphs(fence, &leads)));
+        let leads = iter::once("pub trait Config").chain(reached(&roles, |(_, lead, ..)| lead));
+        passages.push(code(API, &heading, &paragraphs(fence, leads)));
     }
 
     // the doubles the tests arrange, `Provider` and `MapConfig` always
-    if has(Shape::Tests) {
+    if has(Laid::Tests) {
         if let Some((heading, doubles)) = section(api, "The doubles")
             && let Some(fence) = fence(doubles, 0)
         {
-            let seeding = reached(|(_, _, lead, _)| lead);
-            let leads = [vec!["pub struct Provider", "impl MapConfig"], seeding].concat();
-            passages.push(code(API, &heading, &paragraphs(fence, &leads)));
+            let leads = ["pub struct Provider", "impl MapConfig"]
+                .into_iter()
+                .chain(reached(&roles, |(_, _, lead, _)| lead));
+            passages.push(code(API, &heading, &paragraphs(fence, leads)));
         }
         if let Some(testing) = body(docs, TESTING)
             && let Some((heading, doubles)) = section(testing, "The doubles")
         {
-            let cells = [vec!["`Config`"], reached(|(.., cell)| cell)].concat();
+            let cells: Vec<&str> =
+                iter::once("`Config`").chain(reached(&roles, |(.., cell)| cell)).collect();
             let rows = table(doubles, |first| cells.iter().any(|cell| first.contains(cell)));
             if !rows.is_empty() {
                 passages.push(markdown(TESTING, &heading, &rows));
@@ -337,7 +339,7 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
                 .filter(|(role, _)| roles.contains(role))
                 .map(|(_, lead)| *lead)
                 .collect();
-            if has(Shape::Types) {
+            if has(Laid::Types) {
                 leads.push("a design type");
             }
             let rows =
@@ -355,14 +357,19 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     passages
 }
 
+// One lead of each capability block the roles reach, in the table's order.
+fn reached(
+    roles: &BTreeSet<Role>, lead: fn(&Capability) -> &'static str,
+) -> impl Iterator<Item = &'static str> {
+    CAPABILITIES.iter().filter(move |(role, ..)| roles.contains(role)).map(lead)
+}
+
 // The paragraphs of `text` each lead opens, once each, in the leads' order.
-fn paragraphs(text: &str, leads: &[&str]) -> String {
+fn paragraphs<'l>(text: &str, leads: impl IntoIterator<Item = &'l str>) -> String {
     let mut blocks: Vec<&str> = Vec::new();
     for lead in leads {
-        if let Some(block) = paragraph(text, lead)
-            && !blocks.contains(&block)
-        {
-            blocks.push(block);
+        if let Some(block) = paragraph(text, lead) {
+            push_unique(&mut blocks, block);
         }
     }
     blocks.join("\n\n")

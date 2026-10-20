@@ -1,4 +1,4 @@
-//! Renders the files a scaffold writes and places the lines it adds to the lists.
+//! Renders the files a scaffold writes: the stem's manifest and entry, the part, and its tests.
 
 mod item;
 
@@ -6,22 +6,23 @@ use std::fmt::Write as _;
 
 pub use self::item::{Call, Expr};
 use self::item::{
-    Chain, Const, Consts, Doc, Enum, Fence, Field, File, Fn, Item, Struct, TAB, Uses, Variant, Vis,
-    closure,
+    Chain, Const, Consts, Doc, Enum, Fence, Field, Fn, Item, Source, Struct, TAB, Uses, Variant,
+    Vis, closure,
 };
 use super::names::{escape, flat, snake};
 use super::types::{Body, DefaultFn, Member};
-use super::{Act, Consumer, Function, Handler, Stem, Test, Type, route};
+use super::{Act, Consumer, Function, Handler, Stated, Stem, Test, Type, trigger};
+use crate::layout::{
+    ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES, TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
+};
 
-const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
-const ROUTES_ANCHOR: &str = "// one entry per part with routes, each added at the end";
-const TOPICS_ANCHOR: &str = "// one entry per part with topics, each added at the end";
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
 // The derives of a type a float reaches, which `Eq` cannot hold.
 const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserialize";
 const GENERICS: &str = "<P: Capabilities>";
 
-// The stem's manifest, as the layout reference spells it.
+// The stem's manifest, as the layout reference spells it, its
+// `[dependencies]` the layout's fixed lines.
 const MANIFEST: &str = r#"[package]
 name = "<package>"
 description = "The `<stem>` stem"
@@ -41,12 +42,7 @@ tower.workspace = true
 
 # One line per crate the stem's files use, each added at the end.
 [dependencies]
-axum.workspace = true
-common.workspace = true
-omnia-sdk.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-tracing.workspace = true
+<dependencies>
 "#;
 
 // The body of the decoder a pre-rendered route function reads the input
@@ -65,122 +61,61 @@ const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
     }
     serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
 
-// Where a list takes a line.
-pub enum Place {
-    // The root manifest's path list: after `common`'s line and the stems'
-    // after it.
-    PathList,
-    // The root manifest's crate list, and the topic table: the end of the
-    // file.
-    FileEnd,
-    // Before the line that starts with the anchor, as the root route and
-    // topic lists take a statement.
-    Before(&'static str),
-    // Among the `pub mod` lines of a stem's entry, in the order the
-    // formatter keeps them.
-    PubModList,
-    // At the end of the routes array of a stem's entry.
-    RoutesArray,
-    // At the end of the topics array of a stem's entry.
-    TopicsArray,
-}
-
-// `text` with `line` where `place` says, or none where the text holds no
-// anchor for it.
-pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
-    let mut lines: Vec<&str> = text.lines().collect();
-    let at = match place {
-        Place::PathList => {
-            let mut at = lines.iter().position(|held| *held == PATH_LIST_ANCHOR)? + 1;
-            while lines.get(at).is_some_and(|held| held.contains(" = { path = \"crates/")) {
-                at += 1;
-            }
-            at
-        }
-        Place::FileEnd => lines.len(),
-        Place::Before(anchor) => {
-            lines.iter().position(|held| held.trim_start().starts_with(anchor))?
-        }
-        Place::PubModList => {
-            let first = lines.iter().position(|held| held.trim_start().starts_with("pub mod "))?;
-            let last = lines.iter().rposition(|held| held.trim_start().starts_with("pub mod "))?;
-            lines[first..=last]
-                .iter()
-                .position(|held| held.trim_start().starts_with("pub mod ") && *held > line)
-                .map_or(last + 1, |offset| first + offset)
-        }
-        Place::RoutesArray => array_end(&lines, ROUTES_ANCHOR)?,
-        Place::TopicsArray => array_end(&lines, TOPICS_ANCHOR)?,
-    };
-    lines.insert(at, line);
-    Some(lines.join("\n") + "\n")
-}
-
-// The index of the `])` closing the array `anchor` opens.
-fn array_end(lines: &[&str], anchor: &str) -> Option<usize> {
-    let opened = lines.iter().position(|held| held.trim() == anchor)? + 1;
-    Some(opened + lines[opened..].iter().position(|held| held.trim() == "])")?)
-}
-
 pub fn manifest(stem: &Stem) -> String {
-    MANIFEST.replace("<package>", &stem.package).replace("<stem>", &stem.name)
+    let dependencies: Vec<String> =
+        STEM_DEPENDENCIES.iter().map(|name| format!("{name}.workspace = true")).collect();
+    MANIFEST
+        .replace("<package>", &stem.package)
+        .replace("<stem>", &stem.name)
+        .replace("<dependencies>", &dependencies.join("\n"))
 }
 
 // The topic table's constant for `topic`, under its doc line, as the lines
 // added at the end of the table.
 pub fn topic_constant(constant: &str, topic: &str) -> String {
     let topic = escape(topic);
-    let mut file = File::default();
-    file.push(Consts {
-        comments: Vec::new(),
-        consts: vec![Const {
-            docs: Doc::new([format!("The `{topic}` topic.")]),
-            vis: Vis::Pub,
-            name: constant.to_owned(),
-            ty: "&str".to_owned(),
-            value: format!("\"{topic}\""),
-        }],
-    });
-    file.render().trim_end().to_owned()
+    let mut source = Source::default();
+    source.push(Consts::new([Const::new(constant, "&str", format!("\"{topic}\""))
+        .docs([format!("The `{topic}` topic.")])
+        .vis(Vis::Pub)]));
+    source.render().trim_end().to_owned()
 }
 
 // The stem's entry, as the layout reference spells it, with one part's
 // lines in its lists.
 pub fn entry(stem: &Stem) -> String {
-    let mut file = File::default();
-    file.push(Item::ModuleDoc(Doc::new([
+    let mut source = Source::default();
+    source.push(Item::ModuleDoc(Doc::new([
         format!("# {}", stem.name),
         String::new(),
         format!("The `{}` stem.", stem.name),
     ])));
-    file.push(Item::Mods(vec![stem.part.clone()]));
+    source.push(Item::Mods(vec![stem.part.clone()]));
     let mut uses = Uses::default();
     uses.add("common", &["Capabilities"]);
     uses.add("omnia_sdk::api", &["Client", "messaging"]);
-    file.push(uses);
+    source.push(uses);
     let routes = (!stem.handlers.is_empty()).then(|| format!("{}::routes(),", stem.part));
-    file.push(Fn {
-        docs: Doc::new(["The stem's routes, merged onto the root router."]),
-        vis: Vis::Pub,
-        name: "router".to_owned(),
-        generics: GENERICS.to_owned(),
-        ret: "axum::Router<Client<P>>".to_owned(),
-        body: fold("common::routers([", ROUTES_ANCHOR, routes),
-        ..Fn::default()
-    });
+    source.push(
+        Fn::new("router")
+            .docs(["The stem's routes, merged onto the root router."])
+            .vis(Vis::Pub)
+            .generics(GENERICS)
+            .returns("axum::Router<Client<P>>")
+            .body(fold("common::routers([", ROUTES_ANCHOR, routes)),
+    );
     let topics = (!stem.consumers.is_empty()).then(|| format!("{}::topics,", stem.part));
-    file.push(Fn {
-        docs: Doc::new(["The stem's topics, registered on the root messaging router under `env`."]),
-        attrs: vec!["#[must_use]".to_owned()],
-        vis: Vis::Pub,
-        name: "topics".to_owned(),
-        generics: GENERICS.to_owned(),
-        params: vec!["router: messaging::Router<P>".to_owned(), "env: &str".to_owned()],
-        ret: "messaging::Router<P>".to_owned(),
-        body: fold("common::topics(router, env).parts([", TOPICS_ANCHOR, topics),
-        ..Fn::default()
-    });
-    file.render()
+    source.push(
+        Fn::new("topics")
+            .docs(["The stem's topics, registered on the root messaging router under `env`."])
+            .attr("#[must_use]")
+            .vis(Vis::Pub)
+            .generics(GENERICS)
+            .params(["router: messaging::Router<P>", "env: &str"])
+            .returns("messaging::Router<P>")
+            .body(fold("common::topics(router, env).parts([", TOPICS_ANCHOR, topics)),
+    );
+    source.render()
 }
 
 // The body of an entry's fold: its array opened under the anchor the
@@ -194,48 +129,38 @@ fn fold(opener: &str, anchor: &str, entry: Option<String>) -> Vec<String> {
 }
 
 pub fn module(stem: &Stem) -> String {
-    let mut file = File::default();
-    file.push(Item::ModuleDoc(Doc::new(stem.doc.iter().cloned())));
+    let mut source = Source::default();
+    source.push(Item::ModuleDoc(Doc::new(stem.doc.iter().cloned())));
     let uses = imports(stem);
     if !uses.is_empty() {
-        file.push(uses);
+        source.push(uses);
     }
     if !stem.handlers.is_empty() {
-        file.push(Consts {
-            comments: vec!["The paths the part serves.".to_owned()],
-            consts: stem
-                .paths
-                .iter()
-                .map(|(constant, path)| Const {
-                    docs: Doc::default(),
-                    vis: Vis::Crate,
-                    name: constant.clone(),
-                    ty: "&str".to_owned(),
-                    value: format!("\"{}\"", escape(path)),
-                })
-                .collect(),
+        let paths = stem.paths.iter().map(|(constant, path)| {
+            Const::new(constant, "&str", format!("\"{}\"", escape(path))).vis(Vis::Crate)
         });
-        file.push(routes(stem));
+        source.push(Consts::new(paths).comment("The paths the part serves."));
+        source.push(routes(stem));
     }
     if !stem.consumers.is_empty() {
-        file.push(topics(stem));
+        source.push(topics(stem));
     }
     for design_type in &stem.types {
-        design(design_type, &mut file);
+        design(design_type, &mut source);
     }
     for handler in &stem.handlers {
-        self::handler(handler, &mut file);
+        self::handler(handler, &mut source);
     }
     for consumer in &stem.consumers {
-        self::consumer(consumer, &mut file);
+        self::consumer(consumer, &mut source);
     }
     for function in &stem.functions {
-        file.push(self::function(function));
+        source.push(self::function(function));
     }
     if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
-        file.push(decode_json());
+        source.push(decode_json());
     }
-    file.render()
+    source.render()
 }
 
 // The test file: the prelude the scenarios act through, each helper only
@@ -249,8 +174,8 @@ pub fn tests(stem: &Stem) -> String {
         .any(|test| matches!(&test.act, Act::Route(route) if carries_body(&route.method)));
     let ident = stem.package.replace('-', "_");
 
-    let mut file = File::default();
-    file.push(Item::ModuleDoc(Doc::new([format!(
+    let mut source = Source::default();
+    source.push(Item::ModuleDoc(Doc::new([format!(
         "The acceptance scenarios of the `{}` part of the `{}` stem, over the guest doubles.",
         stem.part, stem.name
     )])));
@@ -274,61 +199,44 @@ pub fn tests(stem: &Stem) -> String {
     if sending {
         uses.add("tower", &["ServiceExt as _"]);
     }
-    file.push(uses);
+    source.push(uses);
 
-    file.push(provider());
+    source.push(provider());
     if sending {
-        file.push(send(&ident));
+        source.push(send(&ident));
     }
     if delivering {
-        file.push(deliver(&ident));
+        source.push(deliver(&ident));
     }
     for test in &stem.scenarios {
-        let mut item = test_fn(stem, test);
-        item.comments.push(format!("{} {}: {}", test.id, test.subject, flat(&test.scenario.name)));
-        for given in &test.scenario.given {
-            item.comments.push(format!("  Given {}", flat(given)));
-        }
-        item.comments.push(format!("  When {}", flat(&test.scenario.when)));
-        item.comments.push(format!("  Then {}", flat(&test.scenario.then)));
-        for and in &test.scenario.and {
-            item.comments.push(format!("  And {}", flat(and)));
-        }
-        item.attrs.insert(0, "#[tokio::test]".to_owned());
-        file.push(item);
+        source.push(
+            scenario(stem, test).comments(steps(test)).attr("#[tokio::test]").attr(ignored(test)),
+        );
     }
-    file.render()
+    source.render()
 }
 
 // The doubles every scenario starts from.
 fn provider() -> Fn {
-    Fn {
-        comments: vec![
+    Fn::new("provider")
+        .comments([
             "The doubles every scenario starts from: set a setting or a response on them in the \
-             arrangement."
-                .to_owned(),
-        ],
-        name: "provider".to_owned(),
-        ret: "Provider".to_owned(),
-        body: vec![
-            "    Provider::default().config(MapConfig::default().with([(config::ENV, \"test\")]))"
-                .to_owned(),
-        ],
-        ..Fn::default()
-    }
+             arrangement.",
+        ])
+        .returns("Provider")
+        .body([
+            "    Provider::default().config(MapConfig::default().with([(config::ENV, \"test\")]))",
+        ])
 }
 
 // One request through the router of the stem `ident` names.
 fn send(ident: &str) -> Fn {
-    Fn {
-        comments: vec![
-            "One request through the stem's router, answered as its status and body.".to_owned(),
-        ],
-        is_async: true,
-        name: "send".to_owned(),
-        params: vec!["provider: Provider".to_owned(), "request: Request<Body>".to_owned()],
-        ret: "(StatusCode, Vec<u8>)".to_owned(),
-        body: vec![
+    Fn::new("send")
+        .comments(["One request through the stem's router, answered as its status and body."])
+        .asynchronous()
+        .params(["provider: Provider", "request: Request<Body>"])
+        .returns("(StatusCode, Vec<u8>)")
+        .body([
             format!(
                 "    let router = {ident}::router().with_state(Client::new(\"test\", provider));"
             ),
@@ -337,26 +245,17 @@ fn send(ident: &str) -> Fn {
             "    let body = to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");"
                 .to_owned(),
             "    (status, body.to_vec())".to_owned(),
-        ],
-        ..Fn::default()
-    }
+        ])
 }
 
 // One delivery through the topics of the stem `ident` names.
 fn deliver(ident: &str) -> Fn {
-    Fn {
-        comments: vec![
-            "One delivery through the stem's topics, under the test environment.".to_owned(),
-        ],
-        is_async: true,
-        name: "deliver".to_owned(),
-        params: vec![
-            "provider: Provider".to_owned(),
-            "topic: &str".to_owned(),
-            "payload: &[u8]".to_owned(),
-        ],
-        ret: "Result<(), DeliveryError>".to_owned(),
-        body: vec![
+    Fn::new("deliver")
+        .comments(["One delivery through the stem's topics, under the test environment."])
+        .asynchronous()
+        .params(["provider: Provider", "topic: &str", "payload: &[u8]"])
+        .returns("Result<(), DeliveryError>")
+        .body([
             format!(
                 "    let router = {ident}::topics(Router::new(Client::new(\"test\", provider)), \
                  \"test\");"
@@ -367,31 +266,37 @@ fn deliver(ident: &str) -> Fn {
             "        ..Delivery::default()".to_owned(),
             "    };".to_owned(),
             "    router.handle(delivery).await".to_owned(),
-        ],
-        ..Fn::default()
-    }
+        ])
 }
 
 // A scaffolded test from its `#[ignore]` line to its closing brace: the one
 // block the turn replaces, so the brief quotes it as the `find`.
 pub fn test_block(stem: &Stem, test: &Test) -> String {
-    let mut file = File::default();
-    file.push(test_fn(stem, test));
-    file.render().trim_end().to_owned()
+    let mut source = Source::default();
+    source.push(scenario(stem, test).attr(ignored(test)));
+    source.render().trim_end().to_owned()
 }
 
-// A scenario's test as the turn finds it: ignored, its act laid from the
-// typed route or topic its requirement carries, its marker last.
-fn test_fn(stem: &Stem, test: &Test) -> Fn {
+// A scenario's test as the turn finds it: its act laid from the typed route
+// or topic its requirement carries, its marker last.
+fn scenario(stem: &Stem, test: &Test) -> Fn {
     let mut body = act(stem, test);
     body.push(marker_line(&test.marker));
-    Fn {
-        attrs: vec![format!("#[ignore = \"{}\"]", escape(&test.ignore))],
-        is_async: true,
-        name: test.name.clone(),
-        body,
-        ..Fn::default()
-    }
+    Fn::new(&test.name).asynchronous().body(body)
+}
+
+fn ignored(test: &Test) -> String {
+    format!("#[ignore = \"{}\"]", escape(&test.ignore))
+}
+
+// The scenario's steps, quoted above its test.
+fn steps(test: &Test) -> Vec<String> {
+    let mut lines = vec![format!("{} {}: {}", test.id, test.subject, flat(&test.scenario.name))];
+    lines.extend(test.scenario.given.iter().map(|given| format!("  Given {}", flat(given))));
+    lines.push(format!("  When {}", flat(&test.scenario.when)));
+    lines.push(format!("  Then {}", flat(&test.scenario.then)));
+    lines.extend(test.scenario.and.iter().map(|and| format!("  And {}", flat(and))));
+    lines
 }
 
 // The act of a scenario, laid from the typed route or topic its requirement
@@ -426,17 +331,14 @@ fn act(stem: &Stem, test: &Test) -> Vec<String> {
             };
             let mut calls = Vec::new();
             if carries_body(&route.method) {
-                calls.push(Call::new(
-                    ".header",
-                    vec!["CONTENT_TYPE".to_owned(), "\"application/json\"".to_owned()],
-                ));
-                calls.push(Call::new(".body", vec!["Body::from(\"{}\")".to_owned()]));
+                calls.push(Call::new(".header", ["CONTENT_TYPE", "\"application/json\""]));
+                calls.push(Call::new(".body", ["Body::from(\"{}\")"]));
             } else {
-                calls.push(Call::new(".body", vec!["Body::empty()".to_owned()]));
+                calls.push(Call::new(".body", ["Body::empty()"]));
             }
-            calls.push(Call::new(".expect", vec!["\"request\"".to_owned()]));
+            calls.push(Call::new(".expect", ["\"request\""]));
             let receiver =
-                Call::new(format!("Request::{}", route::function(&route.method)), [target]);
+                Call::new(format!("Request::{}", trigger::method_fn(&route.method)), [target]);
             lines.extend(Chain::new(receiver, calls).bound(TAB, "request"));
             lines.push("    let (status, body) = send(provider(), request).await;".to_owned());
             lines.push("    let _ = (&status, &body);".to_owned());
@@ -511,7 +413,7 @@ fn imports(stem: &Stem) -> Uses {
             .handlers
             .iter()
             .filter(|handler| handler.route_fn.is_none())
-            .map(|handler| route::function(&handler.route.method))
+            .map(|handler| trigger::method_fn(&handler.route.method))
             .collect();
         if encoding {
             names.extend(["DecodeError", "MethodFilter", "RawRequest", "handle_with"]);
@@ -556,16 +458,12 @@ fn topics(stem: &Stem) -> Fn {
             Call::new(".route", [topic, consume])
         })
         .collect();
-    let chain = Chain::new("router", calls);
-    Fn {
-        vis: Vis::Crate,
-        name: "topics".to_owned(),
-        generics: GENERICS.to_owned(),
-        params: vec!["router: messaging::Router<P>".to_owned(), "env: &str".to_owned()],
-        ret: "messaging::Router<P>".to_owned(),
-        body: chain.tail(TAB),
-        ..Fn::default()
-    }
+    Fn::new("topics")
+        .vis(Vis::Crate)
+        .generics(GENERICS)
+        .params(["router: messaging::Router<P>", "env: &str"])
+        .returns("messaging::Router<P>")
+        .body(Chain::new("router", calls).tail(TAB))
 }
 
 // The part's `routes()`: one `.route(..)` per handler, chained over a new
@@ -575,21 +473,18 @@ fn routes(stem: &Stem) -> Fn {
         "axum::Router::new()",
         stem.handlers.iter().map(Handler::registration).collect(),
     );
-    Fn {
-        vis: Vis::Crate,
-        name: "routes".to_owned(),
-        generics: GENERICS.to_owned(),
-        ret: "axum::Router<Client<P>>".to_owned(),
-        body: chain.tail(TAB),
-        ..Fn::default()
-    }
+    Fn::new("routes")
+        .vis(Vis::Crate)
+        .generics(GENERICS)
+        .returns("axum::Router<Client<P>>")
+        .body(chain.tail(TAB))
 }
 
 // A design type as the scaffold lays it: the struct or enum under its
 // signature, fenced in its doc, with the fields or variants the signature
 // was read into and the fn each `serde(default)` names after it, or the
 // empty marker where the signature was not read.
-fn design(design_type: &Type, file: &mut File) {
+fn design(design_type: &Type, source: &mut Source) {
     let fence = Fence::around(&design_type.signature);
     let mut docs = Doc::new([
         format!("The design type `{}`.", design_type.key),
@@ -600,7 +495,7 @@ fn design(design_type: &Type, file: &mut File) {
         docs.push(line.trim_end());
     }
     docs.push(fence.to_string());
-    let name = design_type.name.clone();
+    let name = design_type.name.as_str();
     match &design_type.body {
         Body::Struct {
             generics,
@@ -608,20 +503,20 @@ fn design(design_type: &Type, file: &mut File) {
             fields,
             defaults,
             eq,
+            ..
         } => {
             let derives = if *eq { DERIVES } else { DERIVES_WITHOUT_EQ };
-            let mut attributes = vec![format!("#[derive({derives})]")];
-            attributes.extend(attrs.iter().cloned());
-            file.push(Struct {
-                docs,
-                attrs: attributes,
-                vis: Vis::Pub,
-                name,
-                generics: generics.clone(),
-                fields: fields.iter().map(laid_field).collect(),
-            });
+            source.push(
+                Struct::new(name)
+                    .docs(docs)
+                    .attr(format!("#[derive({derives})]"))
+                    .attrs(attrs.iter().cloned())
+                    .vis(Vis::Pub)
+                    .generics(generics)
+                    .fields(fields.iter().map(laid_field)),
+            );
             for default in defaults {
-                file.push(default_fn(default));
+                source.push(default_fn(default));
             }
         }
         Body::Enum { variants, numeric } => {
@@ -631,102 +526,73 @@ fn design(design_type: &Type, file: &mut File) {
                     "The source enumerates by number; the wire carries each variant's name here.",
                 );
             }
-            file.push(Enum {
-                docs,
-                attrs: vec![format!("#[derive({DERIVES})]")],
-                vis: Vis::Pub,
-                name,
-                variants: variants.iter().map(laid_variant).collect(),
-            });
+            source.push(
+                Enum::new(name)
+                    .docs(docs)
+                    .attr(format!("#[derive({DERIVES})]"))
+                    .vis(Vis::Pub)
+                    .variants(variants.iter().map(laid_variant)),
+            );
         }
-        Body::Marker { is_enum: true } => file.push(Enum {
-            docs,
-            attrs: vec![format!("#[derive({DERIVES})]")],
-            vis: Vis::Pub,
-            name,
-            ..Enum::default()
-        }),
-        Body::Marker { is_enum: false } => file.push(Struct {
-            docs,
-            attrs: vec![format!("#[derive({DERIVES})]")],
-            vis: Vis::Pub,
-            name,
-            ..Struct::default()
-        }),
+        Body::Marker { is_enum: true } => {
+            source.push(
+                Enum::new(name).docs(docs).attr(format!("#[derive({DERIVES})]")).vis(Vis::Pub),
+            );
+        }
+        Body::Marker { is_enum: false } => {
+            source.push(
+                Struct::new(name).docs(docs).attr(format!("#[derive({DERIVES})]")).vis(Vis::Pub),
+            );
+        }
     }
 }
 
 fn laid_field(member: &Member) -> Field {
-    Field {
-        docs: Doc::new(member.docs.iter().cloned()),
-        attrs: member.attrs.clone(),
-        vis: Vis::Pub,
-        name: member.name.clone(),
-        ty: member.ty.clone(),
-    }
+    Field::new(&member.name, &member.ty)
+        .docs(member.docs.clone())
+        .attrs(member.attrs.iter().cloned())
+        .vis(Vis::Pub)
 }
 
 fn laid_variant(member: &Member) -> Variant {
-    Variant {
-        docs: Doc::new(member.docs.iter().cloned()),
-        attrs: member.attrs.clone(),
-        name: member.name.clone(),
-    }
+    Variant::new(&member.name).docs(member.docs.clone()).attrs(member.attrs.iter().cloned())
 }
 
 // The fn a field's `serde(default)` names, `const` where its value allows.
 fn default_fn(default: &DefaultFn) -> Fn {
-    Fn {
-        is_const: default.constant,
-        name: default.name.clone(),
-        ret: default.ret.clone(),
-        body: vec![format!("{}{}", " ".repeat(TAB), default.value)],
-        ..Fn::default()
-    }
-}
-
-// `struct Order` or `enum Status`, as the type's marker spells it.
-pub fn declaration(design_type: &Type) -> String {
-    let keyword = if design_type.body.is_enum() { "enum" } else { "struct" };
-    format!("{keyword} {}", design_type.name)
+    let item = Fn::new(&default.name).returns(&default.ret).body([format!(
+        "{}{}",
+        " ".repeat(TAB),
+        default.value
+    )]);
+    if default.constant { item.constant() } else { item }
 }
 
 // A handler: its input over the route's parameters and its output, the
 // route function where one was scaffolded, and the handler under its
 // requirements, its body the marker.
-fn handler(handler: &Handler, file: &mut File) {
+fn handler(handler: &Handler, source: &mut Source) {
     let route = escape(&format!("{} {}", handler.route.method, handler.route.path));
-    file.push(Struct {
-        docs: Doc::new([format!("The input of `{route}`.")]),
-        attrs: vec!["#[derive(Debug, Deserialize)]".to_owned()],
-        vis: Vis::Pub,
-        name: handler.input.clone(),
-        generics: String::new(),
-        fields: handler
-            .params
-            .iter()
-            .map(|param| {
-                let wire = escape(&param.wire);
-                Field {
-                    docs: Doc::new([format!("The `{wire}` path parameter.")]),
-                    attrs: (param.field != param.wire)
-                        .then(|| format!("#[serde(rename = \"{wire}\")]"))
-                        .into_iter()
-                        .collect(),
-                    vis: Vis::Pub,
-                    name: param.field.clone(),
-                    ty: "String".to_owned(),
-                }
-            })
-            .collect(),
+    let params = handler.params.iter().map(|param| {
+        let wire = escape(&param.wire);
+        Field::new(&param.field, "String")
+            .docs([format!("The `{wire}` path parameter.")])
+            .attrs((param.field != param.wire).then(|| format!("#[serde(rename = \"{wire}\")]")))
+            .vis(Vis::Pub)
     });
-    file.push(Struct {
-        docs: Doc::new([format!("The output of `{route}`.")]),
-        attrs: vec!["#[derive(Debug, Serialize)]".to_owned()],
-        vis: Vis::Pub,
-        name: handler.output.clone(),
-        ..Struct::default()
-    });
+    source.push(
+        Struct::new(&handler.input)
+            .docs([format!("The input of `{route}`.")])
+            .attr("#[derive(Debug, Deserialize)]")
+            .vis(Vis::Pub)
+            .fields(params),
+    );
+    source.push(
+        Struct::new(&handler.output)
+            .docs([format!("The output of `{route}`.")])
+            .attr("#[derive(Debug, Serialize)]")
+            .vis(Vis::Pub),
+    );
     if let Some(route_fn) = &handler.route_fn {
         let mut body = vec![
             "    handle_with(".to_owned(),
@@ -743,97 +609,83 @@ fn handler(handler: &Handler, file: &mut File) {
             ",",
         ));
         body.push("    )".to_owned());
-        file.push(Fn {
-            comments: vec![format!(
-                "The `{route}` route: the handler's `Ok` answered as JSON under the status named \
-                 here."
-            )],
-            vis: Vis::Crate,
-            name: route_fn.clone(),
-            generics: GENERICS.to_owned(),
-            ret: "MethodRouter<Client<P>>".to_owned(),
-            body,
-            ..Fn::default()
-        });
+        source.push(
+            Fn::new(route_fn)
+                .comments([format!(
+                    "The `{route}` route: the handler's `Ok` answered as JSON under the status \
+                     named here."
+                )])
+                .vis(Vis::Crate)
+                .generics(GENERICS)
+                .returns("MethodRouter<Client<P>>")
+                .body(body),
+        );
     }
-    file.push(Fn {
-        comments: stated(&handler.stated),
-        vis: Vis::Crate,
-        is_async: true,
-        name: handler.name.clone(),
-        generics: GENERICS.to_owned(),
-        params: vec![format!("input: {}", handler.input), "context: Context<P>".to_owned()],
-        ret: format!("omnia_sdk::Result<{}>", handler.output),
-        body: lines(&stub(&handler.marker)),
-        ..Fn::default()
-    });
+    source.push(
+        Fn::new(&handler.name)
+            .comments(stated(&handler.stated))
+            .vis(Vis::Crate)
+            .asynchronous()
+            .generics(GENERICS)
+            .params([format!("input: {}", handler.input), "context: Context<P>".to_owned()])
+            .returns(format!("omnia_sdk::Result<{}>", handler.output))
+            .body(stub(&handler.marker).lines()),
+    );
 }
 
 // A consumer: its input over the delivery, and the handler under its
 // requirements, its body the marker.
-fn consumer(consumer: &Consumer, file: &mut File) {
-    file.push(Struct {
-        docs: Doc::new([format!("A delivery of `{}`.", escape(&consumer.topic))]),
-        attrs: vec!["#[derive(Debug, Deserialize)]".to_owned()],
-        vis: Vis::Pub,
-        name: consumer.input.clone(),
-        ..Struct::default()
-    });
-    file.push(Fn {
-        comments: stated(&consumer.stated),
-        vis: Vis::Crate,
-        is_async: true,
-        name: consumer.name.clone(),
-        generics: GENERICS.to_owned(),
-        params: vec![format!("input: {}", consumer.input), "context: Context<P>".to_owned()],
-        ret: "omnia_sdk::Result<()>".to_owned(),
-        body: lines(&stub(&consumer.marker)),
-        ..Fn::default()
-    });
+fn consumer(consumer: &Consumer, source: &mut Source) {
+    source.push(
+        Struct::new(&consumer.input)
+            .docs([format!("A delivery of `{}`.", escape(&consumer.topic))])
+            .attr("#[derive(Debug, Deserialize)]")
+            .vis(Vis::Pub),
+    );
+    source.push(
+        Fn::new(&consumer.name)
+            .comments(stated(&consumer.stated))
+            .vis(Vis::Crate)
+            .asynchronous()
+            .generics(GENERICS)
+            .params([format!("input: {}", consumer.input), "context: Context<P>".to_owned()])
+            .returns("omnia_sdk::Result<()>")
+            .body(stub(&consumer.marker).lines()),
+    );
 }
 
 // A function under its requirement, its body the marker.
 fn function(function: &Function) -> Fn {
-    Fn {
-        comments: stated(std::slice::from_ref(&function.stated)),
-        docs: Doc::new([
+    Fn::new(&function.name)
+        .comments(stated(std::slice::from_ref(&function.stated)))
+        .docs([
             format!("The behaviour `{}` states.", function.stated.subject),
             String::new(),
             "# Errors".to_owned(),
             String::new(),
             "As the requirement states.".to_owned(),
-        ]),
-        vis: Vis::Pub,
-        name: function.name.clone(),
-        ret: "omnia_sdk::Result<()>".to_owned(),
-        body: lines(&marker_line(&function.marker)),
-        ..Fn::default()
-    }
+        ])
+        .vis(Vis::Pub)
+        .returns("omnia_sdk::Result<()>")
+        .body(marker_line(&function.marker).lines())
 }
 
 fn decode_json() -> Fn {
-    Fn {
-        comments: vec![
-            "The JSON body with the path parameters inserted as string fields, as the".to_owned(),
-            "SDK's `post` decodes an input.".to_owned(),
-        ],
-        name: "decode_json".to_owned(),
-        generics: "<I: DeserializeOwned>".to_owned(),
-        params: vec!["params: &[(String, String)]".to_owned(), "body: &[u8]".to_owned()],
-        ret: "Result<I, DecodeError>".to_owned(),
-        body: lines(DECODE_BODY),
-        ..Fn::default()
-    }
+    Fn::new("decode_json")
+        .comments([
+            "The JSON body with the path parameters inserted as string fields, as the",
+            "SDK's `post` decodes an input.",
+        ])
+        .generics("<I: DeserializeOwned>")
+        .params(["params: &[(String, String)]", "body: &[u8]"])
+        .returns("Result<I, DecodeError>")
+        .body(DECODE_BODY.lines())
 }
 
 // `// <id> <subject>: <statement>`, one per requirement an item stands for.
-fn stated(stated: &[super::Stated]) -> Vec<String> {
+fn stated(stated: &[Stated]) -> Vec<String> {
     stated
         .iter()
         .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
         .collect()
-}
-
-fn lines(text: &str) -> Vec<String> {
-    text.lines().map(str::to_owned).collect()
 }

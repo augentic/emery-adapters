@@ -17,6 +17,16 @@ const COUNTED: &[&str] =
 // expectation the lint would otherwise raise.
 const MAX_BOOLS: usize = 3;
 
+// A design type's key as the design spells it: `Order`, `orders.Order`,
+// or `Order (src/orders.ts#L3)` where the design keyed two declarations of
+// one name by their anchors.
+pub(super) struct DesignKey<'a> {
+    // The stem the key leads with, where it is dotted.
+    pub stem: Option<&'a str>,
+    // The identifier the key declares.
+    pub name: &'a str,
+}
+
 // What a signature declares, as far as the reader can lay it.
 pub(super) struct Read {
     // The identifier the signature declares, where it spells one.
@@ -102,6 +112,8 @@ pub(super) enum Body {
         fields: Vec<Member>,
         defaults: Vec<DefaultFn>,
         eq: bool,
+        // Whether a field is laid over a map, so the module imports one.
+        map: bool,
     },
     Enum {
         variants: Vec<Member>,
@@ -137,6 +149,7 @@ pub(super) struct DefaultFn {
 #[derive(Default)]
 struct Laying {
     float: bool,
+    map: bool,
     owned: BTreeSet<usize>,
     carried: Vec<Carried>,
 }
@@ -161,6 +174,37 @@ struct Refs<'a> {
     owned: &'a [(String, String)],
     params: &'a [String],
     design: &'a [String],
+}
+
+// The scalar a field's laid type is, where it is one.
+enum Scalar {
+    Int,
+    Float,
+    Bool,
+    Text,
+}
+
+// A default spelled as the value its fn answers, or as serde's own where
+// the source's is an empty collection.
+enum Spelled {
+    Value { text: String, constant: bool },
+    Default,
+}
+
+impl<'a> DesignKey<'a> {
+    pub(super) fn parse(key: &'a str) -> Self {
+        let dotted = key.split(" (").next().unwrap_or(key).trim();
+        match dotted.rsplit_once('.') {
+            Some((head, name)) => Self {
+                stem: head.split('.').next(),
+                name,
+            },
+            None => Self {
+                stem: None,
+                name: dotted,
+            },
+        }
+    }
 }
 
 pub(super) fn read(signature: &str) -> Read {
@@ -199,14 +243,14 @@ pub(super) fn lay(
     for (read, name) in reads.iter().zip(names) {
         let (body, laying) = match &read.shape {
             Shape::Opaque { is_enum } => (Body::Marker { is_enum: *is_enum }, Laying::default()),
-            Shape::Enum(declared) => (enumeration(declared), Laying::default()),
+            Shape::Enum(declared) => (declared.lay(), Laying::default()),
             Shape::Struct(declared) => {
                 let refs = Refs {
                     owned: &owned,
                     params: &declared.generics,
                     design,
                 };
-                structure(declared, name, &refs, values)
+                declared.lay(name, &refs, values)
             }
         };
         bodies.push(body);
@@ -237,192 +281,179 @@ pub(super) fn lay(
     bodies
 }
 
-fn enumeration(declared: &Enum) -> Body {
-    let mut claims = Names::default();
-    let variants = declared
-        .variants
-        .iter()
-        .map(|variant| {
-            let name = claims.claim(&pascal(&variant.member), "2");
-            let doc = variant.doc.clone().unwrap_or_else(|| {
-                format!(
-                    "The `{}` variant.",
-                    escape(variant.wire.as_ref().unwrap_or(&variant.member))
-                )
+impl Enum {
+    fn lay(&self) -> Body {
+        let mut names = Names::default();
+        let variants = self
+            .variants
+            .iter()
+            .map(|variant| {
+                let name = names.reserve(&pascal(&variant.member), "2");
+                let doc = variant.doc.clone().unwrap_or_else(|| {
+                    format!(
+                        "The `{}` variant.",
+                        escape(variant.wire.as_ref().unwrap_or(&variant.member))
+                    )
+                });
+                let attrs = variant
+                    .wire
+                    .as_ref()
+                    .filter(|wire| **wire != name)
+                    .map(|wire| format!("#[serde(rename = \"{}\")]", escape(wire)))
+                    .into_iter()
+                    .collect();
+                Member {
+                    docs: vec![doc],
+                    attrs,
+                    name,
+                    ty: String::new(),
+                    carried: None,
+                }
+            })
+            .collect();
+        Body::Enum {
+            variants,
+            numeric: self.numeric,
+        }
+    }
+}
+
+impl Struct {
+    fn lay(&self, rust_name: &str, refs: &Refs<'_>, values: &mut Names) -> (Body, Laying) {
+        let mut laying = Laying::default();
+        let mut names = Names::default();
+        let mut fields = Vec::new();
+        let mut defaults = Vec::new();
+
+        // the bases first, each flattened into the struct
+        for base in &self.bases {
+            let name = names.reserve(&snake(base), "_2");
+            let mut field_laying = Laying::default();
+            let ty = Type::Named(base.clone(), Vec::new()).rust(&name, refs, &mut field_laying);
+            let mut docs = vec![format!("The fields of `{}`, flattened.", escape(base))];
+            let carried = field_laying.carried(&mut docs);
+            laying.take(field_laying);
+            fields.push(Member {
+                docs,
+                attrs: vec!["#[serde(flatten)]".to_owned()],
+                name,
+                ty,
+                carried,
             });
-            let attrs = variant
-                .wire
+        }
+
+        for field in &self.fields {
+            let name = names.reserve(&snake(&field.wire), "_2");
+            let mut field_laying = Laying::default();
+            let mut ty = field.ty.rust(&field.wire, refs, &mut field_laying);
+            let spelled = field
+                .default
                 .as_ref()
-                .filter(|wire| **wire != name)
-                .map(|wire| format!("#[serde(rename = \"{}\")]", escape(wire)))
-                .into_iter()
-                .collect();
-            Member {
-                docs: vec![doc],
+                .and_then(|literal| literal.spell(&field.ty, &field.wire, refs));
+
+            // a field the wire may omit with no default to stand in is an option
+            if field.optional && spelled.is_none() && !field.ty.is_nullable() {
+                ty = format!("Option<{ty}>");
+            }
+            let mut attrs = Vec::new();
+            if name != field.wire {
+                attrs.push(format!("#[serde(rename = \"{}\")]", escape(&field.wire)));
+            }
+            match spelled {
+                Some(Spelled::Value { text, constant }) => {
+                    let fn_name = values
+                        .reserve(&format!("default_{name}"), &format!("_{}", snake(rust_name)));
+                    attrs.push(format!("#[serde(default = \"{fn_name}\")]"));
+                    defaults.push(DefaultFn {
+                        name: fn_name,
+                        ret: ty.clone(),
+                        value: text,
+                        constant,
+                    });
+                }
+                Some(Spelled::Default) => attrs.push("#[serde(default)]".to_owned()),
+                None => {}
+            }
+            let mut docs = vec![
+                field
+                    .doc
+                    .clone()
+                    .unwrap_or_else(|| format!("The `{}` field.", escape(&field.wire))),
+            ];
+            let carried = field_laying.carried(&mut docs);
+            laying.take(field_laying);
+            fields.push(Member {
+                docs,
                 attrs,
                 name,
-                ty: String::new(),
-                carried: None,
-            }
-        })
-        .collect();
-    Body::Enum {
-        variants,
-        numeric: declared.numeric,
-    }
-}
-
-fn structure(
-    declared: &Struct, rust_name: &str, refs: &Refs<'_>, values: &mut Names,
-) -> (Body, Laying) {
-    let mut laying = Laying::default();
-    let mut claims = Names::default();
-    let mut fields = Vec::new();
-    let mut defaults = Vec::new();
-
-    // the bases first, each flattened into the struct
-    for base in &declared.bases {
-        let name = claims.claim(&snake(base), "_2");
-        let mut field_laying = Laying::default();
-        let ty = Type::Named(base.clone(), Vec::new()).rust(&name, refs, &mut field_laying);
-        let mut docs = vec![format!("The fields of `{}`, flattened.", escape(base))];
-        let carried = carried(&field_laying, &mut docs);
-        laying.take(field_laying);
-        fields.push(Member {
-            docs,
-            attrs: vec!["#[serde(flatten)]".to_owned()],
-            name,
-            ty,
-            carried,
-        });
-    }
-
-    for field in &declared.fields {
-        let name = claims.claim(&snake(&field.wire), "_2");
-        let mut field_laying = Laying::default();
-        let mut ty = field.ty.rust(&field.wire, refs, &mut field_laying);
-        let spelled = field.default.as_ref().and_then(|literal| spell(literal, &ty, refs));
-
-        // a field the wire may omit with no default to stand in is an option
-        if field.optional && spelled.is_none() && !ty.starts_with("Option<") {
-            ty = format!("Option<{ty}>");
+                ty,
+                carried,
+            });
         }
+
         let mut attrs = Vec::new();
-        if name != field.wire {
-            attrs.push(format!("#[serde(rename = \"{}\")]", escape(&field.wire)));
+        if fields.iter().filter(|field| field.ty == "bool").count() > MAX_BOOLS {
+            attrs.push(
+                "#[expect(clippy::struct_excessive_bools, reason = \"the wire carries each \
+                 flag\")]"
+                    .to_owned(),
+            );
         }
-        match spelled {
-            Some(Spelled::Value { text, constant }) => {
-                let fn_name =
-                    values.claim(&format!("default_{name}"), &format!("_{}", snake(rust_name)));
-                attrs.push(format!("#[serde(default = \"{fn_name}\")]"));
-                defaults.push(DefaultFn {
-                    name: fn_name,
-                    ret: ty.clone(),
-                    value: text,
-                    constant,
-                });
-            }
-            Some(Spelled::Default) => attrs.push("#[serde(default)]".to_owned()),
-            None => {}
-        }
-        let mut docs = vec![
-            field.doc.clone().unwrap_or_else(|| format!("The `{}` field.", escape(&field.wire))),
-        ];
-        let carried = carried(&field_laying, &mut docs);
-        laying.take(field_laying);
-        fields.push(Member {
-            docs,
+        let generics = if self.generics.is_empty() {
+            String::new()
+        } else {
+            format!("<{}>", self.generics.join(", "))
+        };
+        let body = Body::Struct {
+            generics,
             attrs,
-            name,
-            ty,
-            carried,
-        });
+            fields,
+            defaults,
+            eq: true,
+            map: laying.map,
+        };
+        (body, laying)
     }
-
-    let mut attrs = Vec::new();
-    if fields.iter().filter(|field| field.ty == "bool").count() > MAX_BOOLS {
-        attrs.push(
-            "#[expect(clippy::struct_excessive_bools, reason = \"the wire carries each flag\")]"
-                .to_owned(),
-        );
-    }
-    let generics = if declared.generics.is_empty() {
-        String::new()
-    } else {
-        format!("<{}>", declared.generics.join(", "))
-    };
-    let body = Body::Struct {
-        generics,
-        attrs,
-        fields,
-        defaults,
-        eq: true,
-    };
-    (body, laying)
 }
 
-// The doc line of each name a field carries as a value, and the first of
-// them for the brief.
-fn carried(laying: &Laying, docs: &mut Vec<String>) -> Option<String> {
-    for carried in &laying.carried {
-        docs.push(match carried {
-            Carried::Design(key) => format!(
-                "Carries the design's `{}`, declared by another slice, as a value.",
-                escape(key)
-            ),
-            Carried::Foreign(name) => format!(
-                "Carries the source's `{}`, which no design type declares, as a value.",
-                escape(name)
-            ),
-        });
-    }
-    laying.carried.first().map(|carried| match carried {
-        Carried::Design(key) | Carried::Foreign(key) => key.clone(),
-    })
-}
-
-// A default spelled as the value its fn answers, or as serde's own where
-// the source's is an empty collection.
-enum Spelled {
-    Value { text: String, constant: bool },
-    Default,
-}
-
-fn spell(literal: &Literal, ty: &str, refs: &Refs<'_>) -> Option<Spelled> {
-    let mut constant = true;
-    let text = match (literal, ty) {
-        (Literal::Int(digits), "i64") => grouped(digits),
-        (Literal::Int(digits), "f64") => format!("{}.0", grouped(digits)),
-        (Literal::Float(text), "f64") => {
-            if text.contains(['.', 'e', 'E']) {
-                text.clone()
-            } else {
-                format!("{text}.0")
+impl Literal {
+    // The default as the field's laid type takes it, or none where the
+    // source's literal does not fit the type.
+    fn spell(&self, ty: &Type, wire: &str, refs: &Refs<'_>) -> Option<Spelled> {
+        let mut constant = true;
+        let text = match (self, ty.scalar(wire)) {
+            (Self::Int(digits), Some(Scalar::Int)) => grouped(digits),
+            (Self::Int(digits), Some(Scalar::Float)) => format!("{}.0", grouped(digits)),
+            (Self::Float(text), Some(Scalar::Float)) => {
+                if text.contains(['.', 'e', 'E']) {
+                    text.clone()
+                } else {
+                    format!("{text}.0")
+                }
             }
-        }
-        (Literal::Bool(flag), "bool") => flag.to_string(),
-        (Literal::Str(text), "String") => {
-            constant = false;
-            format!("\"{}\".to_owned()", escape(text))
-        }
-        (Literal::Member(owner, member), _) => {
-            let Ref::Owned(rust, _) = refs.resolve(owner) else { return None };
-            if rust != ty {
-                return None;
+            (Self::Bool(flag), Some(Scalar::Bool)) => flag.to_string(),
+            (Self::Str(text), Some(Scalar::Text)) => {
+                constant = false;
+                format!("\"{}\".to_owned()", escape(text))
             }
-            format!("{rust}::{}", pascal(member))
-        }
-        (Literal::Empty, _) => {
-            let defaulted = ty.starts_with("Vec<")
-                || ty.starts_with("BTreeMap<")
-                || ty.starts_with("Option<")
-                || matches!(ty, "String" | "serde_json::Value");
-            return defaulted.then_some(Spelled::Default);
-        }
-        _ => return None,
-    };
-    Some(Spelled::Value { text, constant })
+            (Self::Member(owner, member), _) => {
+                // the field's type is the owned enumeration the member belongs to
+                let Type::Named(name, args) = ty else { return None };
+                let (Ref::Owned(rust, _), Ref::Owned(of, _)) =
+                    (refs.resolve(name), refs.resolve(owner))
+                else {
+                    return None;
+                };
+                if !args.is_empty() || rust != of {
+                    return None;
+                }
+                format!("{rust}::{}", pascal(member))
+            }
+            (Self::Empty, _) => return ty.defaults(refs).then_some(Spelled::Default),
+            _ => return None,
+        };
+        Some(Spelled::Value { text, constant })
+    }
 }
 
 // An integer literal with a separator every three digits past four, as
@@ -445,8 +476,29 @@ fn grouped(digits: &str) -> String {
 impl Laying {
     fn take(&mut self, other: Self) {
         self.float |= other.float;
+        self.map |= other.map;
         self.owned.extend(other.owned);
         self.carried.extend(other.carried);
+    }
+
+    // The doc line of each name a field carries as a value, and the first
+    // of them for the brief.
+    fn carried(&self, docs: &mut Vec<String>) -> Option<String> {
+        for carried in &self.carried {
+            docs.push(match carried {
+                Carried::Design(key) => format!(
+                    "Carries the design's `{}`, declared by another slice, as a value.",
+                    escape(key)
+                ),
+                Carried::Foreign(name) => format!(
+                    "Carries the source's `{}`, which no design type declares, as a value.",
+                    escape(name)
+                ),
+            });
+        }
+        self.carried.first().map(|carried| match carried {
+            Carried::Design(key) | Carried::Foreign(key) => key.clone(),
+        })
     }
 }
 
@@ -460,7 +512,7 @@ impl Refs<'_> {
         {
             return Ref::Owned(rust, at);
         }
-        if let Some(key) = self.design.iter().find(|key| declared_of(key) == name) {
+        if let Some(key) = self.design.iter().find(|key| DesignKey::parse(key).name == name) {
             return Ref::Design(key);
         }
         Ref::Foreign
@@ -468,6 +520,10 @@ impl Refs<'_> {
 }
 
 impl Type {
+    const fn is_nullable(&self) -> bool {
+        matches!(self, Self::Nullable(_))
+    }
+
     // The Rust type of the field `wire` names, noting what laying it needed.
     fn rust(&self, wire: &str, refs: &Refs<'_>, laying: &mut Laying) -> String {
         match self {
@@ -489,10 +545,13 @@ impl Type {
             Self::Bytes => "Vec<u8>".to_owned(),
             Self::Any => "serde_json::Value".to_owned(),
             Self::Array(inner) => format!("Vec<{}>", inner.rust(wire, refs, laying)),
-            Self::Map(inner) => format!("BTreeMap<String, {}>", inner.rust(wire, refs, laying)),
+            Self::Map(inner) => {
+                laying.map = true;
+                format!("BTreeMap<String, {}>", inner.rust(wire, refs, laying))
+            }
             Self::Nullable(inner) => {
-                let inner = inner.rust(wire, refs, laying);
-                if inner.starts_with("Option<") { inner } else { format!("Option<{inner}>") }
+                let laid = inner.rust(wire, refs, laying);
+                if inner.is_nullable() { laid } else { format!("Option<{laid}>") }
             }
             Self::Named(name, args) => match refs.resolve(name) {
                 Ref::Owned(rust, at) => {
@@ -517,6 +576,38 @@ impl Type {
             },
         }
     }
+
+    fn scalar(&self, wire: &str) -> Option<Scalar> {
+        match self {
+            Self::Int => Some(Scalar::Int),
+            Self::Float => Some(Scalar::Float),
+            Self::Number => Some(if counted(wire) { Scalar::Int } else { Scalar::Float }),
+            Self::Bool => Some(Scalar::Bool),
+            Self::Text | Self::Date => Some(Scalar::Text),
+            Self::Bytes
+            | Self::Any
+            | Self::Array(_)
+            | Self::Map(_)
+            | Self::Nullable(_)
+            | Self::Named(..) => None,
+        }
+    }
+
+    // Whether the laid type has the `Default` serde fills an omitted field
+    // with: a text, a collection, an option, or a value.
+    fn defaults(&self, refs: &Refs<'_>) -> bool {
+        match self {
+            Self::Text
+            | Self::Date
+            | Self::Any
+            | Self::Bytes
+            | Self::Array(_)
+            | Self::Map(_)
+            | Self::Nullable(_) => true,
+            Self::Named(name, _) => matches!(refs.resolve(name), Ref::Design(_) | Ref::Foreign),
+            Self::Bool | Self::Int | Self::Float | Self::Number => false,
+        }
+    }
 }
 
 impl Body {
@@ -532,13 +623,8 @@ impl Body {
         matches!(self, Self::Marker { .. })
     }
 
-    pub(super) fn uses_map(&self) -> bool {
-        match self {
-            Self::Struct { fields, .. } => {
-                fields.iter().any(|field| field.ty.contains("BTreeMap<"))
-            }
-            Self::Enum { .. } | Self::Marker { .. } => false,
-        }
+    pub(super) const fn uses_map(&self) -> bool {
+        matches!(self, Self::Struct { map: true, .. })
     }
 
     // The fields carried as values for a type the slice does not own, each
@@ -557,11 +643,47 @@ fn counted(wire: &str) -> bool {
     snake(wire).rsplit('_').next().is_some_and(|word| COUNTED.contains(&word))
 }
 
-// The identifier a design type's key declares: `Order` for `orders.Order`
-// and for `Order (src/orders.ts#L3)`.
-fn declared_of(key: &str) -> &str {
-    let key = key.split(" (").next().unwrap_or(key);
-    key.rsplit('.').next().unwrap_or(key)
+// A comment's lines as one doc line, ended with a full stop, each word
+// spelled as an identifier in backticks, as the doc-markdown lint asks.
+fn sentence(lines: &[String]) -> Option<String> {
+    let joined = lines
+        .iter()
+        .flat_map(|line| line.split_whitespace())
+        .map(backticked)
+        .collect::<Vec<_>>()
+        .join(" ");
+    if joined.is_empty() {
+        return None;
+    }
+    if joined.ends_with(['.', '!', '?']) { Some(joined) } else { Some(format!("{joined}.")) }
+}
+
+// A word in backticks where it spells an identifier: a path, a name with
+// an underscore, or a camel-case name past its first letter.
+fn backticked(word: &str) -> String {
+    if word.contains('`') {
+        return word.to_owned();
+    }
+    let core = word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_');
+    if core.is_empty() {
+        return word.to_owned();
+    }
+    let camel = core.starts_with(|ch: char| ch.is_ascii_uppercase())
+        && core.chars().filter(char::is_ascii_uppercase).count() > 1
+        && core.chars().filter(char::is_ascii_lowercase).count() > 1;
+    let identifier = (core.contains('_') && core != "_")
+        || core.contains("::")
+        || camel
+        || word.contains("::")
+        || word.ends_with("()");
+    if !identifier {
+        return word.to_owned();
+    }
+    let start = word.find(core).unwrap_or(0);
+    let end = start + core.len();
+    let (lead, tail) = (&word[..start], &word[end..]);
+    tail.strip_prefix("()")
+        .map_or_else(|| format!("{lead}`{core}`{tail}"), |after| format!("{lead}`{core}()`{after}"))
 }
 
 // `text` split at each `sep` outside brackets, parentheses, braces, angle
@@ -602,14 +724,20 @@ fn split_top(text: &str, sep: char) -> impl Iterator<Item = &str> {
 }
 
 // The text between the first `open` of `text` and its matching `close`,
-// with what follows the closer.
+// with what follows the closer; a string literal closes nothing, an
+// escaped quote ends none.
 fn between(text: &str, open: char, close: char) -> Option<(&str, &str)> {
     let start = text.find(open)?;
     let mut depth = 0usize;
     let mut quote: Option<char> = None;
+    let mut escaped = false;
     for (at, ch) in text[start..].char_indices() {
         if let Some(opened) = quote {
-            if ch == opened {
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == opened {
                 quote = None;
             }
             continue;

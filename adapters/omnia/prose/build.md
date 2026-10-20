@@ -55,8 +55,9 @@ The adapter laid your slice's place in it before this turn, from the requirement
   - a `topics(..)` and a consumer per message they carry, with its constant in the topic table;
   - a `pub fn` per requirement carrying neither;
   - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable.
-- A route function, `<name>_route`, over `handle_with`, for a `POST` handler and for a handler whose scenarios state a status other than `200`.
-  Its encoder spells `StatusCode::OK`. Change that token for a `201` or a `503` on an `Ok`. An error status, a `404`, is the error the handler returns.
+- A route function, `<name>_route`, over `handle_with`, for a `POST` handler and for a handler whose scenarios spell a status other than `200`.
+  Its encoder spells `StatusCode::OK`; change that token for a `201` or a `503` on an `Ok`, or declare `<name>_route` as the marker says where the scaffold laid a verb.
+  An error status, a `404`, is the error the handler returns.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
   Each test already sends the request or the delivery its requirement carries.
 - Your lines in every list: the stem's four at the root and the part's in the entry.
@@ -73,8 +74,9 @@ Fill each kind as the shape below shows. Every `find` is the block the brief quo
 
 ### A design type
 
-A design type the brief names as laid is finished: its fields and variants stand as the signature in its doc spells them, documented, the wire's names kept through `#[serde(rename = "..")]`, `Eq` already dropped where a float reaches it.
-Change a field only where the check refuses it.
+A design type the brief names as laid is finished: its fields and variants stand as the signature in its doc spells them.
+Each field is documented, the wire's names are kept through `#[serde(rename = "..")]`, and `Eq` is dropped where a float reaches it.
+Change a field only where a scenario's wire shape or the check requires it.
 A field the brief names as `serde_json::Value` stands for a type another slice declares; leave it, and read the value's fields where the behaviour needs them.
 
 A design type the brief lists among the markers, `pub struct <Type> {}` or `pub enum <Type> {}`, has a signature the scaffold could not lay.

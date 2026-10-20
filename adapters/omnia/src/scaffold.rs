@@ -1,36 +1,45 @@
 //! Scaffolds a slice's skeleton before its turn: the stem's crate, the part, its tests, and its lines in every list.
 
+mod brief;
+mod lists;
 mod names;
 mod reference;
 mod render;
-mod route;
+mod trigger;
 mod types;
 
 use std::collections::BTreeSet;
-use std::fmt::Write as _;
-use std::fs;
-use std::io::{ErrorKind, Write};
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{Doc, Error, INLINE_BYTES, Route, bad_request, server_error};
+use emery_sdk::{
+    Error, NoFollow, Route, Standing, bad_request, push_unique, server_error, standing, write_whole,
+};
 
-use self::names::{Names, escape, flat, number, pascal, screaming, snake};
-use self::reference::{Needs, Role, Shape};
-use self::render::{Call, Expr, Place};
-use crate::tree;
+use self::lists::{Line, Lists, Place, Placement, Topics};
+use self::names::{Names, flat, number, pascal, screaming, snake};
+use self::reference::Role;
+use self::render::{Call, Expr};
+use self::types::DesignKey;
+use crate::layout::{self, TOPICS, crate_dir, package};
 
-const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
-const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
-
-pub struct Scaffold {
+// A slice's skeleton as read against the tree and not yet written: each
+// stem's files, held or to scaffold, and each line placed in its list.
+pub struct Plan {
     stems: Vec<Stem>,
     start: Vec<String>,
     relaid: Vec<Relaid>,
     existing: BTreeSet<String>,
-    lines: Vec<Line>,
-    listing: BTreeSet<String>,
+    lists: Lists,
     roles: BTreeSet<Role>,
+}
+
+// A slice's skeleton as written, which the turn fills and the check holds
+// the tree to.
+pub struct Scaffold {
+    plan: Plan,
+    written: Vec<String>,
+    listing: BTreeSet<String>,
 }
 
 // What a check reads of one scenario the scaffold wrote a test for.
@@ -39,6 +48,13 @@ pub struct Expected<'a> {
     pub id: &'a str,
     pub scenario: &'a str,
     pub test: &'a str,
+}
+
+// One stem's share of the slice before its files are planned.
+struct StemPlan<'s> {
+    stem: Stem,
+    requirements: Vec<&'s Requirement>,
+    owned: Vec<&'s DesignType>,
 }
 
 struct Stem {
@@ -57,6 +73,7 @@ struct Stem {
     functions: Vec<Function>,
     types: Vec<Type>,
     scenarios: Vec<Test>,
+    lines: Vec<Line>,
 }
 
 #[derive(Clone, Copy)]
@@ -65,6 +82,10 @@ enum Kind {
     Entry,
     Module,
     Tests,
+}
+
+impl Kind {
+    const ALL: [Self; 4] = [Self::Manifest, Self::Entry, Self::Module, Self::Tests];
 }
 
 struct File {
@@ -149,46 +170,19 @@ struct Relaid {
     stem: String,
 }
 
-struct Line {
-    path: String,
-    text: String,
-    place: Place,
-    standing: Standing,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Standing {
-    Held,
-    Add,
-    Unanchored,
-}
-
-// The topic table as the tree holds it: each constant's name and topic,
-// and the names claimed for the topics the slice declares.
-struct Table {
-    declared: Vec<(String, String)>,
-    names: Names,
-}
-
-// The names a part's items claim, each kind against its own namespace,
-// the module's imports and its functions reserved.
-struct Claims {
+// The namespaces a part's items are named in, one per kind of item, the
+// module's imports and its functions reserved.
+struct Namespaces {
     values: Names,
     types: Names,
     constants: Names,
     tests: Names,
 }
 
-// How much of the brief the inlined texts may take: the files first, the
-// references after them, a text past the budget named by its path alone.
-struct Budget {
-    left: u64,
-}
-
-impl Default for Claims {
+impl Default for Namespaces {
     fn default() -> Self {
         Self {
-            values: Names::reserving(&[
+            values: Names::taken(&[
                 "routes",
                 "topics",
                 "get",
@@ -199,7 +193,7 @@ impl Default for Claims {
                 "handle_with",
                 "decode_json",
             ]),
-            types: Names::reserving(&[
+            types: Names::taken(&[
                 "Capabilities",
                 "Client",
                 "Context",
@@ -215,29 +209,28 @@ impl Default for Claims {
                 "StatusCode",
             ]),
             constants: Names::default(),
-            tests: Names::reserving(&["provider", "send", "deliver"]),
+            tests: Names::taken(&["provider", "send", "deliver"]),
         }
     }
 }
 
 impl Scaffold {
-    pub fn plan(slice: &Slice, root: &Path) -> Result<Self, Error> {
-        let existing: BTreeSet<String> = tree::crates(root)?.into_iter().collect();
-        let mut table = Table::read(root)?;
+    pub fn plan(slice: &Slice, root: &Path) -> Result<Plan, Error> {
+        let existing: BTreeSet<String> = layout::crates(root)?.into_iter().collect();
+        let mut topics = Topics::read(root)?;
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
-        let mut stems: Vec<Stem> = Vec::new();
-        let mut laid: Vec<Vec<&Requirement>> = Vec::new();
+        let mut plans: Vec<StemPlan> = Vec::new();
         let mut start = Vec::new();
         let mut relaid = Vec::new();
         for requirement in &slice.requirements {
             let own = requirement.stem();
-            let name = if tree::is_start_stem(own) {
-                let resource = route::of(requirement)
-                    .map(|route| (route, route::resource(route)))
+            let name = if layout::is_start_stem(own) {
+                let resource = trigger::route(requirement)
+                    .map(|route| (route, trigger::resource(route)))
                     .and_then(|(route, stem)| Some((route, stem?)))
-                    .filter(|(_, stem)| !tree::is_start_stem(stem));
+                    .filter(|(_, stem)| !layout::is_start_stem(stem));
                 let Some((route, stem)) = resource else {
                     start.push(requirement.id.clone());
                     continue;
@@ -251,107 +244,65 @@ impl Scaffold {
             } else {
                 own.to_owned()
             };
-            if let Some(at) = stems.iter().position(|stem| stem.name == name) {
-                laid[at].push(requirement);
-            } else {
-                stems.push(Stem::new(&name, slice));
-                laid.push(vec![requirement]);
+            match plans.iter_mut().find(|plan| plan.stem.name == name) {
+                Some(plan) => plan.requirements.push(requirement),
+                None => plans.push(StemPlan {
+                    stem: Stem::new(&name, slice),
+                    requirements: vec![requirement],
+                    owned: Vec::new(),
+                }),
             }
         }
 
         // each owned type to the stem its key leads with, else the first
-        let mut owned: Vec<Vec<&DesignType>> = vec![Vec::new(); stems.len()];
         for design_type in &slice.types {
-            let first = design_type.key.split('.').next().unwrap_or(&design_type.key);
-            let at = stems
+            let stem = DesignKey::parse(&design_type.key).stem;
+            let at = plans
                 .iter()
-                .position(|stem| stem.name == first)
-                .or_else(|| (!stems.is_empty()).then_some(0));
+                .position(|plan| Some(plan.stem.name.as_str()) == stem)
+                .or_else(|| (!plans.is_empty()).then_some(0));
             if let Some(at) = at {
-                owned[at].push(design_type);
+                plans[at].owned.push(design_type);
             }
         }
 
         let design_keys = types::design_keys(&slice.design);
-        for ((stem, types), requirements) in stems.iter_mut().zip(&owned).zip(&laid) {
-            stem.plan(types, requirements, &design_keys, &mut table);
+        let mut lists = Lists::default();
+        let mut stems = Vec::new();
+        for plan in plans {
+            let mut stem = plan.stem;
+            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
             stem.read(root)?;
+            stem.place_lines(root, &mut lists)?;
+            stems.push(stem);
         }
-        let mut lines: Vec<Line> = Vec::new();
-        for line in stems.iter().flat_map(Stem::lines) {
-            if !lines.iter().any(|held| held.path == line.path && held.text == line.text) {
-                lines.push(line);
-            }
-        }
-        for line in &mut lines {
-            line.read(root)?;
-        }
-        Ok(Self {
+        Ok(Plan {
             stems,
             start,
             relaid,
             existing,
-            lines,
-            listing: BTreeSet::new(),
+            lists,
             roles: reference::roles(&slice.design),
         })
     }
 
-    pub fn write(&mut self, root: &Path) -> Result<Vec<String>, Error> {
-        let mut written = Vec::new();
-        for stem in &self.stems {
-            for kind in [Kind::Manifest, Kind::Entry, Kind::Module, Kind::Tests] {
-                if let Some(file) = stem.file(kind).filter(|file| !file.held) {
-                    create(root, &file.path, &stem.render(kind))?;
-                    written.push(file.path.clone());
-                }
-            }
-        }
-
-        // every list file once, each of its lines in order
-        let mut paths: Vec<&str> = Vec::new();
-        for line in self.lines.iter().filter(|line| line.standing == Standing::Add) {
-            if !paths.contains(&line.path.as_str()) {
-                paths.push(&line.path);
-            }
-        }
-        for path in paths {
-            let file = root.join(path);
-            let mut text = tree::read(&file)?;
-            for line in &self.lines {
-                if line.path == path
-                    && line.standing == Standing::Add
-                    && let Some(next) = render::insert(&text, &line.text, &line.place)
-                {
-                    text = next;
-                }
-            }
-            fs::write(&file, text).map_err(|err| server_error!("writing `{path}`: {err}"))?;
-            written.push(path.to_owned());
-        }
-        self.listing = tree::listing(root)?;
-        Ok(written)
-    }
-
-    // A slice of `start` requirements alone, none carrying a route, lays no
-    // stem: nothing is scaffolded and no turn is opened for it.
-    pub const fn is_empty(&self) -> bool {
-        self.stems.is_empty()
+    // Every file the scaffold wrote and every list it added a line to.
+    pub fn written(&self) -> &[String] {
+        &self.written
     }
 
     // Every file the scaffold wrote or found and every list it adds a line
     // to, sorted: what the turn changes through `edit_files` alone.
     pub fn paths(&self) -> Vec<String> {
         let mut paths: Vec<String> = self
+            .plan
             .stems
             .iter()
             .flat_map(|stem| {
-                [Kind::Manifest, Kind::Entry, Kind::Module, Kind::Tests]
-                    .into_iter()
-                    .filter_map(|kind| stem.file(kind))
+                stem.files()
                     .map(|file| file.path.clone())
+                    .chain(stem.lines.iter().map(|line| line.path.clone()))
             })
-            .chain(self.lines.iter().map(|line| line.path.clone()))
             .collect();
         paths.sort();
         paths.dedup();
@@ -365,124 +316,68 @@ impl Scaffold {
         &self.listing
     }
 
-    pub fn brief(&self, docs: &[Doc]) -> String {
-        let mut budget = Budget { left: INLINE_BYTES };
-        let mut text = String::new();
-        for stem in &self.stems {
-            stem.brief_files(&self.lines, &mut budget, &mut text);
-            stem.brief_markers(&mut text);
-        }
-        if !self.start.is_empty() {
-            let _ = write!(
-                text,
-                "The `start` stem ({}): the seed and the host are `start`, so nothing was \
-                 scaffolded for it; cover what they satisfy and leave the rest out, as the \
-                 guardrails' table says.",
-                self.start.join(", ")
-            );
-            text.push_str("\n\n");
-        }
-        for relaid in &self.relaid {
-            let _ = writeln!(
-                text,
-                "{} (`{}`), stated under `start`, is laid under `crates/{}/`, the stem its route's \
-                 resource names, since a stated route is its own stem's and never `start`'s.\n",
-                relaid.id,
-                relaid.route,
-                crate_dir(&relaid.stem)
-            );
-        }
-        let _ = writeln!(
-            text,
-            "The check: once your edits are in, run `{}` in `$WORKSPACE` and read what it \
-             prints; repair what it reports through `edit_files` and run it again until it \
-             passes. Where its last step alone fails because no nightly toolchain is installed, \
-             the steps before it passed and the check is done.\n",
-            self.check()
-        );
-        self.brief_references(docs, &mut budget, &mut text);
-        text.trim_end().to_owned()
-    }
-
-    // The one shell command the turn checks the tree with: the slice's
-    // packages under clippy and their tests, then the guest check and the
-    // formatter over the workspace.
-    pub fn check(&self) -> String {
-        let packages: Vec<String> =
-            self.stems.iter().map(|stem| format!("-p {}", stem.package)).collect();
-        let packages = packages.join(" ");
-        format!(
-            "cargo clippy {packages} --all-targets -- -D warnings && cargo test {packages} && \
-             {CHECK}"
-        )
-    }
-
-    fn brief_references(&self, docs: &[Doc], budget: &mut Budget, text: &mut String) {
-        let mut shapes = BTreeSet::new();
-        for stem in &self.stems {
-            if !stem.handlers.is_empty() {
-                shapes.insert(Shape::Routes);
-            }
-            if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
-                shapes.insert(Shape::Encoded);
-            }
-            if !stem.consumers.is_empty() {
-                shapes.insert(Shape::Consumers);
-            }
-            if stem.tests.is_some() {
-                shapes.insert(Shape::Tests);
-            }
-            if !stem.types.is_empty() {
-                shapes.insert(Shape::Types);
-            }
-        }
-        let needs = Needs {
-            shapes,
-            roles: self.roles.clone(),
-        };
-        let mut quoted = String::new();
-        for passage in reference::passages(docs, &needs) {
-            let body = if passage.code {
-                render::fenced("rust", &passage.text)
-            } else {
-                format!("{}\n", passage.text)
-            };
-            let entry =
-                format!("From `{}`, under \"{}\":\n\n{body}\n", passage.source, passage.heading);
-            if !budget.fits(&entry) {
-                break;
-            }
-            quoted.push_str(&entry);
-        }
-        if quoted.is_empty() {
-            return;
-        }
-        text.push_str(
-            "What the references spell for these shapes, quoted; `read_doc` answers the rest of \
-             each document:\n\n",
-        );
-        text.push_str(&quoted);
-    }
-
     pub fn stems(&self) -> impl Iterator<Item = &str> {
-        self.stems.iter().map(|stem| stem.name.as_str())
+        self.plan.stems.iter().map(|stem| stem.name.as_str())
     }
 
     pub const fn existing(&self) -> &BTreeSet<String> {
-        &self.existing
+        &self.plan.existing
     }
 
     pub fn expected(&self) -> impl Iterator<Item = Expected<'_>> {
-        self.stems.iter().filter_map(|stem| stem.tests.as_ref().map(|file| (stem, file))).flat_map(
-            |(stem, file)| {
+        self.plan
+            .stems
+            .iter()
+            .filter_map(|stem| stem.tests.as_ref().map(|file| (stem, file)))
+            .flat_map(|(stem, file)| {
                 stem.scenarios.iter().map(move |test| Expected {
                     path: &file.path,
                     id: &test.id,
                     scenario: &test.scenario.name,
                     test: &test.name,
                 })
-            },
-        )
+            })
+    }
+}
+
+impl Plan {
+    // A slice of `start` requirements alone, none carrying a route, lays no
+    // stem: nothing is scaffolded and no turn is opened for it.
+    pub const fn is_empty(&self) -> bool {
+        self.stems.is_empty()
+    }
+
+    // Writes each stem's files the tree lacks and adds each placed line to
+    // its list, every list written once with its lines in order.
+    pub fn write(mut self, root: &Path) -> Result<Scaffold, Error> {
+        let mut written = Vec::new();
+        for stem in &self.stems {
+            for kind in Kind::ALL {
+                if let Some(file) = stem.file(kind).filter(|file| !file.held) {
+                    create(root, &file.path, &stem.render(kind))?;
+                    written.push(file.path.clone());
+                }
+            }
+        }
+
+        let mut touched: Vec<&str> = Vec::new();
+        for line in self.stems.iter().flat_map(|stem| &stem.lines) {
+            if line.placement == Placement::Add && self.lists.add(line) {
+                push_unique(&mut touched, &line.path);
+            }
+        }
+        for path in touched {
+            let Some(text) = self.lists.held(path) else { continue };
+            write_whole(root, path, Standing::File, text.as_bytes())
+                .map_err(|err| server_error!("writing `{path}`: {err}"))?;
+            written.push(path.to_owned());
+        }
+        let listing = layout::listing(root)?;
+        Ok(Scaffold {
+            plan: self,
+            written,
+            listing,
+        })
     }
 }
 
@@ -513,38 +408,32 @@ impl Stem {
             functions: Vec::new(),
             types: Vec::new(),
             scenarios: Vec::new(),
+            lines: Vec::new(),
         }
     }
 
     // Names every item the part declares, the design types first so one
     // keeps its name over a handler's wrapper, and lays each type once
     // every one is named, so a field naming another the slice owns reads
-    // its claimed name.
+    // its reserved name.
     fn plan(
         &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
-        table: &mut Table,
+        topics: &mut Topics,
     ) {
-        let mut claims = Claims::default();
+        let mut namespaces = Namespaces::default();
         let reads: Vec<types::Read> =
             owned.iter().map(|design_type| types::read(&design_type.signature)).collect();
         let names: Vec<String> = owned
             .iter()
             .zip(&reads)
             .map(|(design_type, read)| {
-                // `orders.Order`, or `Order (src/orders.ts#L3)` where the design
-                // keyed two declarations of one name by their anchors
-                let key = design_type.key.as_str();
-                let dotted = key.split(" (").next().unwrap_or(key);
-                let (stem, last) = match dotted.rsplit_once('.') {
-                    Some((head, last)) => (head.split('.').next(), last),
-                    None => (None, dotted),
-                };
-                let declared = read.name.as_deref().unwrap_or(last);
-                let suffix = stem.map_or_else(|| "2".to_owned(), pascal);
-                claims.types.claim(&pascal(declared), &suffix)
+                let key = DesignKey::parse(&design_type.key);
+                let declared = read.name.as_deref().unwrap_or(key.name);
+                let suffix = key.stem.map_or_else(|| "2".to_owned(), pascal);
+                namespaces.types.reserve(&pascal(declared), &suffix)
             })
             .collect();
-        let bodies = types::lay(&reads, &names, design_keys, &mut claims.values);
+        let bodies = types::lay(&reads, &names, design_keys, &mut namespaces.values);
         for ((design_type, name), body) in owned.iter().zip(names).zip(bodies) {
             self.types.push(Type {
                 name,
@@ -560,17 +449,17 @@ impl Stem {
         let mut consumed: Vec<(&str, Vec<&Requirement>)> = Vec::new();
         for requirement in requirements {
             let suffix = format!("_{}", number(&requirement.id));
-            let act = if let Some(route) = route::of(requirement) {
+            let act = if let Some(route) = trigger::route(requirement) {
                 group(&mut routed, route, requirement);
                 Act::Route(route.clone())
-            } else if let Some(topic) = route::message(requirement) {
+            } else if let Some(topic) = trigger::message(requirement) {
                 group(&mut consumed, topic, requirement);
                 Act::Topic(topic.to_owned())
             } else {
                 let tail = tail(&requirement.subject);
                 let base = if tail.is_empty() { snake(&self.name) } else { snake(tail) };
                 self.functions.push(Function {
-                    name: claims.values.claim(&base, &suffix),
+                    name: namespaces.values.reserve(&base, &suffix),
                     marker: format!("{} {}: the behaviour", requirement.id, requirement.subject),
                     stated: Stated::of(requirement),
                 });
@@ -579,7 +468,7 @@ impl Stem {
             for scenario in &requirement.scenarios {
                 let name = flat(&scenario.name);
                 self.scenarios.push(Test {
-                    name: claims.tests.claim(&snake(&name), &suffix),
+                    name: namespaces.tests.reserve(&snake(&name), &suffix),
                     id: requirement.id.clone(),
                     subject: requirement.subject.clone(),
                     scenario: scenario.clone(),
@@ -590,10 +479,10 @@ impl Stem {
             }
         }
         for (route, group) in routed {
-            self.handler(route, &group, &mut claims);
+            self.handler(route, &group, &mut namespaces);
         }
         for (topic, group) in consumed {
-            self.consumer(topic, &group, &mut claims, table);
+            self.consumer(topic, &group, &mut namespaces, topics);
         }
 
         if !self.scenarios.is_empty() {
@@ -603,26 +492,26 @@ impl Stem {
 
     // One handler for the requirements served at `route`, over the path's
     // one constant.
-    fn handler(&mut self, route: &Route, group: &[&Requirement], claims: &mut Claims) {
+    fn handler(&mut self, route: &Route, group: &[&Requirement], namespaces: &mut Namespaces) {
         let suffix = number(&group[0].id);
         let base = handler_base(group, &route.to_string());
-        let name = claims.values.claim(&base, &format!("_{suffix}"));
+        let name = namespaces.values.reserve(&base, &format!("_{suffix}"));
         let title = pascal(&name);
-        let constant = if let Some((constant, _)) =
-            self.paths.iter().find(|(_, path)| *path == route.path)
-        {
-            constant.clone()
-        } else {
-            let constant = claims.constants.claim(&screaming(&route.path), &format!("_{suffix}"));
-            self.paths.push((constant.clone(), route.path.clone()));
-            constant
-        };
+        let constant =
+            if let Some((constant, _)) = self.paths.iter().find(|(_, path)| *path == route.path) {
+                constant.clone()
+            } else {
+                let constant =
+                    namespaces.constants.reserve(&screaming(&route.path), &format!("_{suffix}"));
+                self.paths.push((constant.clone(), route.path.clone()));
+                constant
+            };
         let route_fn = (route.method == "POST" || states_status(group))
-            .then(|| claims.values.claim(&format!("{name}_route"), &format!("_{suffix}")));
+            .then(|| namespaces.values.reserve(&format!("{name}_route"), &format!("_{suffix}")));
         let stated = stated_of(group);
         self.handlers.push(Handler {
-            input: claims.types.claim(&format!("{title}Input"), &suffix),
-            output: claims.types.claim(&format!("{title}Output"), &suffix),
+            input: namespaces.types.reserve(&format!("{title}Input"), &suffix),
+            output: namespaces.types.reserve(&format!("{title}Output"), &suffix),
             name,
             constant,
             params: route
@@ -642,15 +531,16 @@ impl Stem {
     // One consumer for the requirements that consume `topic`, under the
     // table's constant for it.
     fn consumer(
-        &mut self, topic: &str, group: &[&Requirement], claims: &mut Claims, table: &mut Table,
+        &mut self, topic: &str, group: &[&Requirement], namespaces: &mut Namespaces,
+        topics: &mut Topics,
     ) {
         let suffix = number(&group[0].id);
         let base = format!("on_{}", handler_base(group, topic));
-        let name = claims.values.claim(&base, &format!("_{suffix}"));
-        let (constant, declared) = table.constant(topic);
+        let name = namespaces.values.reserve(&base, &format!("_{suffix}"));
+        let (constant, declared) = topics.constant(topic);
         let stated = stated_of(group);
         self.consumers.push(Consumer {
-            input: claims.types.claim(&format!("{}Input", pascal(&name)), &suffix),
+            input: namespaces.types.reserve(&format!("{}Input", pascal(&name)), &suffix),
             name,
             constant,
             topic: topic.to_owned(),
@@ -668,6 +558,20 @@ impl Stem {
         Ok(())
     }
 
+    // Decides each of the stem's lines against its list, the held entry
+    // read once with the stem's files.
+    fn place_lines(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
+        if self.entry.held {
+            lists.hold(&self.entry.path, &self.entry.text);
+        }
+        let mut lines = self.lines();
+        for line in &mut lines {
+            line.place(root, lists)?;
+        }
+        self.lines = lines;
+        Ok(())
+    }
+
     const fn file(&self, kind: Kind) -> Option<&File> {
         match kind {
             Kind::Manifest => Some(&self.manifest),
@@ -675,6 +579,10 @@ impl Stem {
             Kind::Module => Some(&self.module),
             Kind::Tests => self.tests.as_ref(),
         }
+    }
+
+    fn files(&self) -> impl Iterator<Item = &File> {
+        Kind::ALL.into_iter().filter_map(|kind| self.file(kind))
     }
 
     fn render(&self, kind: Kind) -> String {
@@ -706,19 +614,19 @@ impl Stem {
             ),
             Line::new("Cargo.toml", format!("{}.workspace = true", self.package), Place::FileEnd),
             Line::new(
-                "src/routes.rs",
+                layout::ROUTES,
                 format!("    let router = router.merge({ident}::router());"),
-                Place::Before("router.with_state("),
+                Place::Before(layout::ROUTE_LIST_ANCHOR),
             ),
             Line::new(
-                "src/messaging.rs",
+                layout::MESSAGING,
                 format!("    let router = {ident}::topics(router, &env);"),
-                Place::Before("tracing::debug!("),
+                Place::Before(layout::TOPIC_LIST_ANCHOR),
             ),
         ];
         for consumer in self.consumers.iter().filter(|consumer| !consumer.declared) {
             lines.push(Line::new(
-                TOPIC_TABLE,
+                TOPICS,
                 format!("\n{}", render::topic_constant(&consumer.constant, &consumer.topic)),
                 Place::FileEnd,
             ));
@@ -746,275 +654,7 @@ impl Stem {
         }
         lines
     }
-
-    fn brief_files(&self, lines: &[Line], budget: &mut Budget, text: &mut String) {
-        let _ = writeln!(text, "Stem `{}`, part `{}`:\n", self.name, self.part);
-        let _ = writeln!(
-            text,
-            "- `{}`: {}. One `<crate>.workspace = true` line at the end of `[dependencies]` for \
-             each crate your code uses beyond the six it holds; a crate the root manifest does \
-             not pin carries its version instead.",
-            self.manifest.path,
-            self.manifest.standing()
-        );
-        let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
-        if !self.handlers.is_empty() {
-            entry_lines.push(format!("`{}::routes(),`", self.part));
-        }
-        if !self.consumers.is_empty() {
-            entry_lines.push(format!("`{}::topics,`", self.part));
-        }
-        let _ = writeln!(
-            text,
-            "- `{}`: {}, {} {} its lists.",
-            self.entry.path,
-            self.entry.standing(),
-            listed(&entry_lines),
-            if self.entry.held { "added to" } else { "in" }
-        );
-        let _ = write!(
-            text,
-            "- `{}`: {}. {}",
-            self.module.path,
-            self.module.standing(),
-            if self.module.held {
-                HELD
-            } else {
-                "Fill its markers, listed below, through `edit_files`."
-            }
-        );
-        self.brief_text(Kind::Module, budget, text);
-        match &self.tests {
-            Some(tests) if tests.held => {
-                let _ = write!(text, "- `{}`: held. {HELD}", tests.path);
-                self.brief_text(Kind::Tests, budget, text);
-            }
-            Some(tests) => {
-                let _ = write!(
-                    text,
-                    "- `{}`: scaffolded, the prelude and one ignored test per scenario, each \
-                     sending the request or the delivery its requirement carries. Fill each \
-                     test through `edit_files`, replacing the block listed below.",
-                    tests.path
-                );
-                self.brief_text(Kind::Tests, budget, text);
-            }
-            None => {
-                text.push_str("- No scenario states a test, so no test file was scaffolded.\n");
-            }
-        }
-        self.brief_lines(lines, text);
-    }
-
-    // The stem's lines in the root lists and the topic table, each spelled,
-    // and the ones no anchor took.
-    fn brief_lines(&self, lines: &[Line], text: &mut String) {
-        let standing = |own: &Line| {
-            lines
-                .iter()
-                .find(|line| line.path == own.path && line.text == own.text)
-                .map_or(Standing::Unanchored, |line| line.standing)
-        };
-        let own = self.lines();
-        let root: Vec<&Line> =
-            own.iter().filter(|line| !line.path.starts_with("crates/")).collect();
-        let added = root.iter().any(|line| standing(line) == Standing::Add);
-        let spelled: Vec<String> = root
-            .iter()
-            .filter(|line| line.path != TOPIC_TABLE)
-            .map(|line| format!("`{}` in `{}`", line.text.trim(), line.path))
-            .collect();
-        let _ = writeln!(
-            text,
-            "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines {}: {}.",
-            if added { "added" } else { "already held" },
-            spelled.join(", ")
-        );
-        for consumer in &self.consumers {
-            let _ = writeln!(
-                text,
-                "- `{TOPIC_TABLE}`: the constant `{}` for the topic `{}` {}: `pub const {}: &str = \
-                 \"{}\";`.",
-                consumer.constant,
-                consumer.topic,
-                if consumer.declared {
-                    "already declared"
-                } else {
-                    "added at the end of the table"
-                },
-                consumer.constant,
-                escape(&consumer.topic)
-            );
-        }
-        for line in own.iter().filter(|line| standing(line) == Standing::Unanchored) {
-            let _ = writeln!(
-                text,
-                "- `{}` holds no anchor for `{}`, so the line was not added: add it through \
-                 `edit_files` where the layout's table says.",
-                line.path,
-                line.text.trim()
-            );
-        }
-        text.push('\n');
-    }
-
-    // The file's text under the budget, fenced after its line; its path
-    // alone past it.
-    fn brief_text(&self, kind: Kind, budget: &mut Budget, text: &mut String) {
-        let Some(held) = self.text(kind) else {
-            text.push('\n');
-            return;
-        };
-        let fenced = render::fenced("rust", &held);
-        if budget.fits(&fenced) {
-            let _ = write!(text, " Its text:\n\n{fenced}\n");
-        } else {
-            text.push_str(" Read it in the tree.\n");
-        }
-    }
-
-    // The design types laid from their signatures, finished as they stand,
-    // and the fields among them that carry another type as a value.
-    fn brief_types(&self, text: &mut String) {
-        let laid: Vec<String> = self
-            .types
-            .iter()
-            .filter(|design_type| !design_type.body.is_marker())
-            .map(|design_type| format!("`{}` (`{}`)", design_type.name, design_type.key))
-            .collect();
-        if laid.is_empty() {
-            return;
-        }
-        let _ = writeln!(
-            text,
-            "The design types {} in `{}` are scaffolded as their signatures spell, each field \
-             and variant documented and the wire's names kept through `serde(rename)`; they are \
-             finished, so change a field only where the check refuses it.",
-            listed(&laid),
-            self.module.path
-        );
-        let carried: Vec<String> = self
-            .types
-            .iter()
-            .flat_map(|design_type| {
-                design_type.body.carried().map(move |(field, stands_for)| {
-                    format!("`{}.{field}` (`{stands_for}`)", design_type.name)
-                })
-            })
-            .collect();
-        match carried.as_slice() {
-            [] => {}
-            [one] => {
-                let _ = writeln!(
-                    text,
-                    "The field {one} is `serde_json::Value` because the type it stands for is \
-                     declared by another slice or by no design type: leave it as laid, and read \
-                     the value's fields where the behaviour needs them."
-                );
-            }
-            several => {
-                let _ = writeln!(
-                    text,
-                    "The fields {} are `serde_json::Value` because the type each stands for is \
-                     declared by another slice or by no design type: leave them as laid, and read \
-                     the value's fields where the behaviour needs them.",
-                    listed(several)
-                );
-            }
-        }
-        text.push('\n');
-    }
-
-    fn brief_markers(&self, text: &mut String) {
-        self.brief_types(text);
-        if self.module.held || self.tests.as_ref().is_some_and(|tests| tests.held) {
-            text.push_str(
-                "The markers below are the ones a fresh scaffold writes; a held file holds \
-                 whatever stands in it.\n\n",
-            );
-        }
-        text.push_str(
-            "Markers, in fill order, each one `edit_files` edit whose `find` is the block quoted \
-             under it:\n\n",
-        );
-        let mut count = 0;
-        for design_type in self.types.iter().filter(|design_type| design_type.body.is_marker()) {
-            count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. `pub {} {{}}` in `{}`: the design type `{}`, whose signature the scaffold \
-                 could not lay. Replace it with the {} the signature in its doc spells, every \
-                 field documented; drop `Eq` from its derives where a field is a float.\n",
-                render::declaration(design_type),
-                self.module.path,
-                design_type.key,
-                if design_type.body.is_enum() { "enum" } else { "struct" }
-            );
-        }
-        for handler in &self.handlers {
-            count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. The handler `{}` of `{}` in `{}`: fill `{}` and `{}` with the wire's \
-                 fields, then replace this block with the body. {}\n\n{}",
-                handler.name,
-                handler.route,
-                self.module.path,
-                handler.input,
-                handler.output,
-                handler.status_hint(),
-                render::fenced("rust", &render::stub(&handler.marker))
-            );
-        }
-        for consumer in &self.consumers {
-            count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. The consumer `{}` of the topic `{}` in `{}`, registered in the part's \
-                 `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, then \
-                 replace this block with the body.\n\n{}",
-                consumer.name,
-                consumer.topic,
-                self.module.path,
-                consumer.constant,
-                consumer.input,
-                render::fenced("rust", &render::stub(&consumer.marker))
-            );
-        }
-        for function in &self.functions {
-            count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. The function `{}` in `{}`, since the requirement states no route and no \
-                 message: give it the signature the behaviour needs and replace this block with \
-                 the body.\n\n{}",
-                function.name,
-                self.module.path,
-                render::fenced("rust", &render::marker_line(&function.marker))
-            );
-        }
-        if let Some(tests) = &self.tests {
-            for test in &self.scenarios {
-                count += 1;
-                let _ = writeln!(
-                    text,
-                    "{count}. The test `{}` in `{}`: replace this block with the filled test, its \
-                     `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
-                     laid, and the assertions the scenario states.\n\n{}",
-                    test.name,
-                    tests.path,
-                    render::fenced("rust", &render::test_block(self, test))
-                );
-            }
-        }
-        if count == 0 {
-            text.push_str("None: the slice states no requirement under this stem.\n\n");
-        }
-    }
 }
-
-const HELD: &str =
-    "The tree already held it, so nothing was written over it; read it for what stands.";
 
 impl File {
     const fn at(path: String) -> Self {
@@ -1025,26 +665,30 @@ impl File {
         }
     }
 
+    // Reads what stands at the path, following no link on the way: a link
+    // or a directory there, or on the way, is refused before any write.
     fn read(&mut self, root: &Path) -> Result<(), Error> {
-        let file = root.join(&self.path);
-        self.held = match fs::symlink_metadata(&file) {
-            Ok(meta) if meta.is_file() => {
-                self.text = tree::read(&file)?;
+        self.held = match standing(root, &self.path) {
+            Ok(Standing::File) => {
+                self.text = layout::read(&root.join(&self.path))?;
                 true
             }
-            Ok(_) => {
+            Ok(Standing::Absent) => false,
+            Err(NoFollow::Io { path, source }) => {
+                return Err(server_error!("reading `{path}`: {source}"));
+            }
+            Err(err) => {
                 return Err(bad_request!(
-                    "a directory or a link stands at `{}`, where the slice's scaffold writes a file",
+                    "`{}` {err}, where the slice's scaffold writes a file",
                     self.path
                 ));
             }
-            Err(err) if err.kind() == ErrorKind::NotFound => false,
-            Err(err) => return Err(server_error!("reading `{}`: {err}", self.path)),
         };
         Ok(())
     }
 
-    const fn standing(&self) -> &'static str {
+    // Where the file came from, as the brief names it.
+    const fn origin(&self) -> &'static str {
         if self.held { "held" } else { "scaffolded" }
     }
 }
@@ -1054,50 +698,18 @@ impl Handler {
     // where one was scaffolded, else the SDK's method fn over it.
     fn registration(&self) -> Call {
         let service = self.route_fn.as_ref().map_or_else(
-            || Call::new(route::function(&self.route.method), [self.name.as_str()]),
+            || Call::new(trigger::method_fn(&self.route.method), [self.name.as_str()]),
             |route_fn| Call::new(route_fn.as_str(), Vec::<Expr>::new()),
         );
         Call::new(".route", [Expr::from(self.constant.as_str()), service.into()])
     }
-
-    // How the handler's `Ok` reaches the wire, and where another status is
-    // set.
-    fn status_hint(&self) -> String {
-        self.route_fn.as_ref().map_or_else(
-            || {
-                format!(
-                    "Its `Ok` is answered `200` as JSON; for another status, declare a route \
-                     function over `handle_with(MethodFilter::{}, {}, decode, |output: {}| \
-                     (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers \
-                     reference shows and name it in `routes()` in place of `{}({})`.",
-                    self.route.method,
-                    self.name,
-                    self.output,
-                    route::function(&self.route.method),
-                    self.name
-                )
-            },
-            |route_fn| {
-                format!(
-                    "Its `Ok` is answered as JSON under the status `{route_fn}` names, \
-                     `StatusCode::OK`; for another status on an `Ok`, a `201` or a `503`, \
-                     change it there, and answer an error status, a `404`, as the error the \
-                     errors passage maps to it."
-                )
-            },
-        )
-    }
 }
 
-impl Budget {
-    // Whether `text` fits in what is left, taking it where it does.
-    const fn fits(&mut self, text: &str) -> bool {
-        let size = text.len() as u64;
-        if size > self.left {
-            return false;
-        }
-        self.left -= size;
-        true
+impl Type {
+    // `struct Order` or `enum Status`, as the marker declares it.
+    fn declaration(&self) -> String {
+        let keyword = if self.body.is_enum() { "enum" } else { "struct" };
+        format!("{keyword} {}", self.name)
     }
 }
 
@@ -1122,101 +734,6 @@ impl Stated {
     }
 }
 
-impl Table {
-    fn read(root: &Path) -> Result<Self, Error> {
-        let file = root.join(TOPIC_TABLE);
-        let text = match fs::symlink_metadata(&file) {
-            Ok(meta) if meta.is_file() => tree::read(&file)?,
-            Ok(_) => return Err(bad_request!("`{TOPIC_TABLE}` is not a regular file")),
-            Err(err) if err.kind() == ErrorKind::NotFound => String::new(),
-            Err(err) => return Err(server_error!("reading `{TOPIC_TABLE}`: {err}")),
-        };
-        let declared = constants_of(&text);
-        let taken: Vec<&str> = declared.iter().map(|(name, _)| name.as_str()).collect();
-        Ok(Self {
-            names: Names::reserving(&taken),
-            declared,
-        })
-    }
-
-    // The table's constant for `topic`, and whether the table declares it
-    // already; a topic no constant spells is named for it, once.
-    fn constant(&mut self, topic: &str) -> (String, bool) {
-        if let Some((name, _)) = self.declared.iter().find(|(_, held)| held == topic) {
-            return (name.clone(), true);
-        }
-        let name = self.names.claim(&screaming(topic), "_TOPIC");
-        self.declared.push((name.clone(), topic.to_owned()));
-        (name, false)
-    }
-}
-
-// The name and the topic of every `pub const NAME: &str = "topic";` in the
-// table, a value the formatter laid on the line beneath its `=` read with
-// the declaration.
-fn constants_of(text: &str) -> Vec<(String, String)> {
-    let mut declared = Vec::new();
-    let mut lines = text.lines().map(str::trim);
-    while let Some(line) = lines.next() {
-        let Some(rest) = line.strip_prefix("pub const ") else { continue };
-        let Some((name, rest)) = rest.split_once(':') else { continue };
-        let Some((_, value)) = rest.split_once('=') else { continue };
-        let value = if value.trim().is_empty() { lines.next().unwrap_or_default() } else { value };
-        let Some(topic) = value
-            .trim()
-            .strip_suffix(';')
-            .and_then(|value| value.trim().strip_prefix('"'))
-            .and_then(|value| value.strip_suffix('"'))
-        else {
-            continue;
-        };
-        declared.push((name.trim().to_owned(), topic.to_owned()));
-    }
-    declared
-}
-
-impl Line {
-    fn new(path: &str, text: String, place: Place) -> Self {
-        Self {
-            path: path.to_owned(),
-            text,
-            place,
-            standing: Standing::Unanchored,
-        }
-    }
-
-    fn read(&mut self, root: &Path) -> Result<(), Error> {
-        let file = root.join(&self.path);
-        self.standing = match fs::symlink_metadata(&file) {
-            Err(err) if err.kind() == ErrorKind::NotFound => Standing::Unanchored,
-            Err(err) => return Err(server_error!("reading `{}`: {err}", self.path)),
-            Ok(meta) if !meta.is_file() => {
-                return Err(bad_request!(
-                    "`{}` is not a regular file, so the slice's line cannot be added to it",
-                    self.path
-                ));
-            }
-            Ok(_) => {
-                let text = tree::read(&file)?;
-                if text.lines().any(|held| held.trim() == self.key()) {
-                    Standing::Held
-                } else if render::insert(&text, &self.text, &self.place).is_some() {
-                    Standing::Add
-                } else {
-                    Standing::Unanchored
-                }
-            }
-        };
-        Ok(())
-    }
-
-    // The line that tells whether the file holds this one: the last of a
-    // text of several, since a constant's doc line tells nothing.
-    fn key(&self) -> &str {
-        self.text.lines().last().unwrap_or(&self.text).trim()
-    }
-}
-
 // The slice's name less the stem and the hyphen after it where it leads
 // with them, else the name whole, as a module name.
 fn part_of(slice: &str, stem: &str) -> String {
@@ -1226,36 +743,6 @@ fn part_of(slice: &str, stem: &str) -> String {
         .filter(|rest| !rest.is_empty())
         .unwrap_or(slice);
     snake(rest)
-}
-
-// The directory under `crates/` a stem's crate lives at: `common-stem` for
-// `common`, since `crates/common/` is the shared crate, and `<stem>`
-// otherwise.
-pub fn crate_dir(stem: &str) -> &str {
-    if stem == "common" { "common-stem" } else { stem }
-}
-
-// A stem named as a crate the root manifest pins, or as `common` or `guest`,
-// takes the package name `<stem>-stem`, so the names never collide.
-pub fn package(stem: &str) -> String {
-    if stem == "common" || stem == "guest" || pinned(stem) {
-        format!("{stem}-stem")
-    } else {
-        stem.to_owned()
-    }
-}
-
-fn pinned(name: &str) -> bool {
-    let Some(manifest) = omnia_template::entry("Cargo.toml") else { return false };
-    let mut in_pins = false;
-    for line in manifest.body.lines() {
-        if let Some(header) = line.strip_prefix('[') {
-            in_pins = header.starts_with("workspace.dependencies");
-        } else if in_pins && line.split_once(" = ").is_some_and(|(key, _)| key.trim() == name) {
-            return true;
-        }
-    }
-    false
 }
 
 fn tail(subject: &str) -> &str {
@@ -1285,16 +772,6 @@ fn named(stated: &[Stated]) -> String {
         .map(|stated| format!("{} {}", stated.id, stated.subject))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-// `a`, `a and b`, or `a, b, and c`.
-fn listed(items: &[String]) -> String {
-    match items {
-        [] => String::new(),
-        [one] => one.clone(),
-        [first, second] => format!("{first} and {second}"),
-        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
-    }
 }
 
 // The subject tail the group's requirements share, else the first's, else
@@ -1340,16 +817,9 @@ fn shared_lead<'a>(tails: &[Vec<&'a str>]) -> Vec<&'a str> {
     first[..shared].to_vec()
 }
 
+// Creates the file the plan found absent, its directories made one at a
+// time and no link followed.
 fn create(root: &Path, path: &str, text: &str) -> Result<(), Error> {
-    let file = root.join(path);
-    if let Some(dir) = file.parent() {
-        fs::create_dir_all(dir)
-            .map_err(|err| server_error!("creating `{}`: {err}", dir.display()))?;
-    }
-    let mut created = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&file)
-        .map_err(|err| server_error!("creating `{path}`: {err}"))?;
-    created.write_all(text.as_bytes()).map_err(|err| server_error!("writing `{path}`: {err}"))
+    write_whole(root, path, Standing::Absent, text.as_bytes())
+        .map_err(|err| server_error!("creating `{path}`: {err}"))
 }

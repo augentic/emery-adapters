@@ -8,9 +8,9 @@ pub const MAX_WIDTH: usize = 100;
 // The formatter's block indent.
 pub const TAB: usize = 4;
 
-// A file's items in order, printed one blank line apart.
+// A source file's items in order, printed one blank line apart.
 #[derive(Default)]
-pub struct File {
+pub struct Source {
     items: Vec<Item>,
 }
 
@@ -35,69 +35,70 @@ pub struct Doc(Vec<String>);
 pub struct Uses(Vec<(String, Vec<String>)>);
 
 // Constants under one `//` comment.
+#[derive(Default)]
 pub struct Consts {
-    pub comments: Vec<String>,
-    pub consts: Vec<Const>,
+    comments: Vec<String>,
+    consts: Vec<Const>,
 }
 
 pub struct Const {
-    pub docs: Doc,
-    pub vis: Vis,
-    pub name: String,
-    pub ty: String,
-    pub value: String,
+    docs: Doc,
+    vis: Vis,
+    name: String,
+    ty: String,
+    value: String,
 }
 
 // A function: the `//` lines above it, its docs and attributes, its
 // signature, and its body as lines already indented.
 #[derive(Default)]
 pub struct Fn {
-    pub comments: Vec<String>,
-    pub docs: Doc,
-    pub attrs: Vec<String>,
-    pub vis: Vis,
-    pub is_const: bool,
-    pub is_async: bool,
-    pub name: String,
-    pub generics: String,
-    pub params: Vec<String>,
-    pub ret: String,
-    pub body: Vec<String>,
+    comments: Vec<String>,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    is_const: bool,
+    is_async: bool,
+    name: String,
+    generics: String,
+    params: Vec<String>,
+    ret: String,
+    body: Vec<String>,
 }
 
 // A struct: its generics, `<T>`, printed after the name where it has any.
 #[derive(Default)]
 pub struct Struct {
-    pub docs: Doc,
-    pub attrs: Vec<String>,
-    pub vis: Vis,
-    pub name: String,
-    pub generics: String,
-    pub fields: Vec<Field>,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    generics: String,
+    fields: Vec<Field>,
 }
 
 pub struct Field {
-    pub docs: Doc,
-    pub attrs: Vec<String>,
-    pub vis: Vis,
-    pub name: String,
-    pub ty: String,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    ty: String,
 }
 
 #[derive(Default)]
 pub struct Enum {
-    pub docs: Doc,
-    pub attrs: Vec<String>,
-    pub vis: Vis,
-    pub name: String,
-    pub variants: Vec<Variant>,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    variants: Vec<Variant>,
 }
 
 // A unit variant under its docs and attributes.
 pub struct Variant {
-    pub docs: Doc,
-    pub attrs: Vec<String>,
-    pub name: String,
+    docs: Doc,
+    attrs: Vec<String>,
+    name: String,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -120,23 +121,23 @@ pub enum Expr {
 // A call: `callee(a, b)` where it fits, else one argument per line, or a
 // sole call argument broken in place behind the callee's parenthesis.
 pub struct Call {
-    pub callee: String,
-    pub args: Vec<Expr>,
+    callee: String,
+    args: Vec<Expr>,
 }
 
 // Method calls chained on a receiver, `.await` after the last where the
 // chain is awaited. A receiver shorter than the indent, which the formatter
 // extends the first call onto, is none the scaffold chains on.
 pub struct Chain {
-    pub receiver: Expr,
-    pub calls: Vec<Call>,
-    pub awaited: bool,
+    receiver: Expr,
+    calls: Vec<Call>,
+    awaited: bool,
 }
 
 // A Markdown fence longer than any run of backticks in the text it holds.
 pub struct Fence(String);
 
-impl File {
+impl Source {
     pub fn push(&mut self, item: impl Into<Item>) {
         self.items.push(item.into());
     }
@@ -215,6 +216,18 @@ impl Doc {
     }
 }
 
+impl<L: Into<String>, const N: usize> From<[L; N]> for Doc {
+    fn from(lines: [L; N]) -> Self {
+        Self::new(lines)
+    }
+}
+
+impl From<Vec<String>> for Doc {
+    fn from(lines: Vec<String>) -> Self {
+        Self(lines)
+    }
+}
+
 impl Uses {
     // The names taken from `path`, each once in sorted order.
     pub fn add(&mut self, path: &str, names: &[&str]) {
@@ -244,7 +257,7 @@ impl Uses {
                 continue;
             }
             let joined = format!("use {path}::{{{}}};", names.join(", "));
-            if joined.len() <= MAX_WIDTH {
+            if width(&joined) <= MAX_WIDTH {
                 let _ = writeln!(out, "{joined}");
             } else {
                 let _ = writeln!(out, "use {path}::{{");
@@ -262,6 +275,18 @@ fn is_std(path: &str) -> bool {
 }
 
 impl Consts {
+    pub fn new(consts: impl IntoIterator<Item = Const>) -> Self {
+        Self {
+            comments: Vec::new(),
+            consts: consts.into_iter().collect(),
+        }
+    }
+
+    pub fn comment(mut self, line: impl Into<String>) -> Self {
+        self.comments.push(line.into());
+        self
+    }
+
     fn render(&self, out: &mut String) {
         marked("//", &self.comments, out);
         for item in &self.consts {
@@ -271,6 +296,26 @@ impl Consts {
 }
 
 impl Const {
+    pub fn new(name: impl Into<String>, ty: impl Into<String>, value: impl Into<String>) -> Self {
+        Self {
+            docs: Doc::default(),
+            vis: Vis::Private,
+            name: name.into(),
+            ty: ty.into(),
+            value: value.into(),
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
     fn render(&self, out: &mut String) {
         self.docs.render("///", out);
         let decl = format!("{}const {}: {} =", self.vis.prefix(), self.name, self.ty);
@@ -281,6 +326,65 @@ impl Const {
 }
 
 impl Fn {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
+
+    // The `//` lines above the fn, after any it holds.
+    pub fn comments<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.comments.extend(lines.into_iter().map(Into::into));
+        self
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub fn attr(mut self, attr: impl Into<String>) -> Self {
+        self.attrs.push(attr.into());
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
+    pub const fn constant(mut self) -> Self {
+        self.is_const = true;
+        self
+    }
+
+    pub const fn asynchronous(mut self) -> Self {
+        self.is_async = true;
+        self
+    }
+
+    pub fn generics(mut self, generics: impl Into<String>) -> Self {
+        self.generics = generics.into();
+        self
+    }
+
+    pub fn params<P: Into<String>>(mut self, params: impl IntoIterator<Item = P>) -> Self {
+        self.params = params.into_iter().map(Into::into).collect();
+        self
+    }
+
+    pub fn returns(mut self, ret: impl Into<String>) -> Self {
+        self.ret = ret.into();
+        self
+    }
+
+    // The body as lines already indented.
+    pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.body = lines.into_iter().map(Into::into).collect();
+        self
+    }
+
     fn render(&self, out: &mut String) {
         marked("//", &self.comments, out);
         self.docs.render("///", out);
@@ -310,9 +414,9 @@ impl Fn {
         let arrow = if self.ret.is_empty() { String::new() } else { format!(" -> {}", self.ret) };
         let joined = format!("{opener}{}){arrow} {{", self.params.join(", "));
         let bounds = self.generics.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'));
-        if joined.len() <= MAX_WIDTH {
+        if width(&joined) <= MAX_WIDTH {
             let _ = writeln!(out, "{joined}");
-        } else if let Some(bounds) = bounds.filter(|_| opener.len() + 3 > MAX_WIDTH) {
+        } else if let Some(bounds) = bounds.filter(|_| width(&opener) + 3 > MAX_WIDTH) {
             let _ = writeln!(out, "{lead}<\n{}{bounds},", pad(TAB));
             if self.params.is_empty() {
                 let _ = writeln!(out, ">(){arrow} {{");
@@ -325,7 +429,7 @@ impl Fn {
             let _ = writeln!(out, "{opener}");
             compressed(&self.params, TAB, out);
             let _ = writeln!(out, "){arrow} {{");
-        } else if joined.len() <= MAX_WIDTH + 3 || arrow.is_empty() {
+        } else if width(&joined) <= MAX_WIDTH + 3 || arrow.is_empty() {
             let _ = writeln!(out, "{opener}){arrow}\n{{");
         } else {
             let _ = writeln!(out, "{opener})\n-> {} {{", self.ret);
@@ -334,6 +438,43 @@ impl Fn {
 }
 
 impl Struct {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub fn attr(mut self, attr: impl Into<String>) -> Self {
+        self.attrs.push(attr.into());
+        self
+    }
+
+    pub fn attrs<A: Into<String>>(mut self, attrs: impl IntoIterator<Item = A>) -> Self {
+        self.attrs.extend(attrs.into_iter().map(Into::into));
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
+    pub fn generics(mut self, generics: impl Into<String>) -> Self {
+        self.generics = generics.into();
+        self
+    }
+
+    pub fn fields(mut self, fields: impl IntoIterator<Item = Field>) -> Self {
+        self.fields = fields.into_iter().collect();
+        self
+    }
+
     fn render(&self, out: &mut String) {
         self.docs.render("///", out);
         attributes(&self.attrs, out);
@@ -351,6 +492,31 @@ impl Struct {
 }
 
 impl Field {
+    pub fn new(name: impl Into<String>, ty: impl Into<String>) -> Self {
+        Self {
+            docs: Doc::default(),
+            attrs: Vec::new(),
+            vis: Vis::Private,
+            name: name.into(),
+            ty: ty.into(),
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub fn attrs<A: Into<String>>(mut self, attrs: impl IntoIterator<Item = A>) -> Self {
+        self.attrs.extend(attrs.into_iter().map(Into::into));
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
     fn render(&self, out: &mut String) {
         let indent = pad(TAB);
         self.docs.render(&format!("{indent}///"), out);
@@ -362,6 +528,33 @@ impl Field {
 }
 
 impl Enum {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub fn attr(mut self, attr: impl Into<String>) -> Self {
+        self.attrs.push(attr.into());
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
+    pub fn variants(mut self, variants: impl IntoIterator<Item = Variant>) -> Self {
+        self.variants = variants.into_iter().collect();
+        self
+    }
+
     fn render(&self, out: &mut String) {
         self.docs.render("///", out);
         attributes(&self.attrs, out);
@@ -379,6 +572,24 @@ impl Enum {
 }
 
 impl Variant {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            docs: Doc::default(),
+            attrs: Vec::new(),
+            name: name.into(),
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub fn attrs<A: Into<String>>(mut self, attrs: impl IntoIterator<Item = A>) -> Self {
+        self.attrs.extend(attrs.into_iter().map(Into::into));
+        self
+    }
+
     fn render(&self, out: &mut String) {
         let indent = pad(TAB);
         self.docs.render(&format!("{indent}///"), out);
@@ -477,7 +688,7 @@ impl Call {
     // Inline where that fits within `width`, else broken beneath `at`.
     fn within(&self, width: usize, at: usize, trailing: bool) -> Vec<String> {
         let inline = self.inline();
-        if inline.len() <= width || self.args.is_empty() {
+        if self::width(&inline) <= width || self.args.is_empty() {
             vec![inline]
         } else {
             self.broken(at, trailing)
@@ -528,7 +739,7 @@ impl Chain {
     // binding does its first line open a call.
     pub fn bound(&self, indent: usize, pattern: &str) -> Vec<String> {
         let lead = format!("{}let {pattern} = ", pad(indent));
-        let after = self.lay(indent, lead.len() - indent, 1);
+        let after = self.lay(indent, width(&lead) - indent, 1);
         let beneath = self.lay(indent + TAB, 0, 1);
         let opens = |lines: &[String]| lines.first().is_some_and(|first| first.ends_with('('));
         if after.len() > 1
@@ -559,7 +770,7 @@ impl Chain {
         let suffix = if self.awaited { ".await" } else { "" };
         let inline: Vec<String> = self.calls.iter().map(Call::inline).collect();
         let joined = format!("{}{}{suffix}", self.receiver.inline(), inline.concat());
-        if joined.len() <= width {
+        if self::width(&joined) <= width {
             return vec![joined];
         }
 
@@ -585,7 +796,7 @@ impl Chain {
             && before.iter().all(|call| call.len() == 1)
         {
             let led = format!("{}{}", lines.concat(), inline[..before.len()].concat());
-            if led.len() + last.callee.len() < width {
+            if self::width(&led) + self::width(&last.callee) < width {
                 let mut lines = last.broken(indent, true);
                 if let Some(first) = lines.first_mut() {
                     first.insert_str(0, &led);
@@ -622,7 +833,7 @@ impl Display for Fence {
 // where it fits, else the body in a block.
 pub fn closure(indent: usize, head: &str, body: &str, close: &str) -> Vec<String> {
     let joined = format!("{}{head} {body}{close}", pad(indent));
-    if joined.len() <= MAX_WIDTH {
+    if width(&joined) <= MAX_WIDTH {
         return vec![joined];
     }
     vec![
@@ -636,7 +847,7 @@ pub fn closure(indent: usize, head: &str, body: &str, close: &str) -> Vec<String
 // line beneath at `indent` where it fits there, else the one line as it is.
 fn assigned(lead: &str, value: &str, indent: usize) -> Vec<String> {
     let joined = format!("{lead} {value};");
-    if joined.len() <= MAX_WIDTH || indent + value.len() + 1 > MAX_WIDTH {
+    if width(&joined) <= MAX_WIDTH || indent + width(value) + 1 > MAX_WIDTH {
         vec![joined]
     } else {
         vec![lead.to_owned(), format!("{}{value};", pad(indent))]
@@ -649,13 +860,13 @@ fn assigned(lead: &str, value: &str, indent: usize) -> Vec<String> {
 // wrapped, the last one's too, so a first line may end at the width and
 // every other one column short of it.
 fn compressed(items: &[String], indent: usize, out: &mut String) {
-    let width = MAX_WIDTH - indent - 1;
+    let room = MAX_WIDTH - indent - 1;
     let mut line = String::new();
     let mut wrapped = false;
     for (i, item) in items.iter().enumerate() {
         let last = i + 1 == items.len();
-        let counted = item.len() + usize::from(!last || wrapped);
-        if !line.is_empty() && line.len() + 1 + counted > width {
+        let counted = width(item) + usize::from(!last || wrapped);
+        if !line.is_empty() && width(&line) + 1 + counted > room {
             let _ = writeln!(out, "{}{line}", pad(indent));
             line.clear();
             wrapped = true;
@@ -700,6 +911,13 @@ fn attributes(attrs: &[String], out: &mut String) {
 
 fn pad(width: usize) -> String {
     " ".repeat(width)
+}
+
+// The columns a line takes, as the formatter counts them: one per
+// character, so a dash or an accented letter is no wider than its bytes
+// would make it.
+fn width(text: &str) -> usize {
+    text.chars().count()
 }
 
 fn backticks(line: &str) -> usize {

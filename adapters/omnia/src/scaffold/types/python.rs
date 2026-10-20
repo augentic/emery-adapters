@@ -1,9 +1,8 @@
 //! Reads a Python class: a model, a dataclass, a typed dict, or an enumeration.
 
-use super::typescript::sentence;
 use super::{
     Enum, Field, Literal, Read, Shape, Struct, Type, Variant, between, is_ident, literal, number,
-    split_top,
+    sentence, split_top,
 };
 
 // Bases that declare a class's kind rather than fields the wire carries.
@@ -381,11 +380,15 @@ fn union(arms: &[&str]) -> Type {
 
 // The lines of the class body at its own indent, a method's or a nested
 // class's body and a docstring set aside, each line joined with what its
-// open brackets run on to.
+// open brackets run on to. The indent is the fields', since a comment may
+// stand at any column.
 fn members<'a>(body: &'a [&'a str]) -> Vec<String> {
     let indent = body
         .iter()
-        .filter(|line| !line.trim().is_empty())
+        .filter(|line| {
+            let text = line.trim();
+            !text.is_empty() && !text.starts_with('#')
+        })
         .map(|line| line.len() - line.trim_start().len())
         .min()
         .unwrap_or_default();

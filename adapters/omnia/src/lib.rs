@@ -23,7 +23,9 @@
 //! no turn: the seed and the host are the program's start, so it is built
 //! covering nothing and writing nothing.
 
+mod layout;
 mod scaffold;
+mod syntax;
 mod tree;
 
 use std::path::Path;
@@ -69,14 +71,14 @@ impl TargetAdapter for Adapter {
         match task {
             Task::Init(ctx) => {
                 let scaffolded = omnia_template::scaffold(Path::new(ctx.workspace))
-                    .map_err(|err| tree::refusal(&err))?;
+                    .map_err(|err| layout::refusal(&err))?;
                 tracing::info!(scaffolded = scaffolded.len(), "scaffolded the guest template");
                 Ok(Outcome::Initialised)
             }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let mut scaffold = Scaffold::plan(ctx.slice, root)?;
-                if scaffold.is_empty() {
+                let plan = Scaffold::plan(ctx.slice, root)?;
+                if plan.is_empty() {
                     tracing::info!(
                         slice = ctx.slice.id,
                         "every requirement is `start`'s and none carries a route; no turn"
@@ -86,8 +88,11 @@ impl TargetAdapter for Adapter {
                         written: Vec::new(),
                     }));
                 }
-                let written = scaffold.write(root)?;
-                tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
+                let scaffold = plan.write(root)?;
+                tracing::info!(
+                    scaffolded = scaffold.written().len(),
+                    "scaffolded the slice's skeleton"
+                );
                 let brief = scaffold.brief(PROSE);
                 let paths = scaffold.paths();
                 let ctx = ctx.with_scaffold(target::Scaffold {

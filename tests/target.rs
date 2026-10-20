@@ -814,12 +814,14 @@ async fn omnia_init_held() {
     }
 
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/routes.rs", "src/messaging.rs"]}"#;
+    let routes = format!("// held\nfn router() {{\n{OMNIA_ROUTE_LINE}}}\n");
+    let messaging = format!("// held\nfn topics() {{\n{OMNIA_TOPICS_LINE}}}\n");
     let model = Scripted::answering([report]).calling(
         0,
         [edit_files(&[
             fill_function(),
-            ("src/routes.rs", "// held\n", &format!("// held\n{OMNIA_ROUTE_LINE}")),
-            ("src/messaging.rs", "// held\n", &format!("// held\n{OMNIA_TOPICS_LINE}")),
+            ("src/routes.rs", "// held\n", &routes),
+            ("src/messaging.rs", "// held\n", &messaging),
         ])],
     );
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
@@ -833,7 +835,7 @@ async fn omnia_init_held() {
     assert_eq!(text(&project, ".gitignore"), "# held\n", "the build writes no file of the seed");
     assert_eq!(
         text(&project, "src/routes.rs"),
-        format!("// held\n{OMNIA_ROUTE_LINE}"),
+        routes,
         "a held list without its anchor takes no line from the adapter, the turn's alone"
     );
     assert_eq!(
@@ -1657,6 +1659,201 @@ async fn omnia_scaffold_type_fallbacks() {
     ] {
         assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
     }
+}
+
+// A Rust declaration is laid as the TypeScript one is: a doc line kept, a
+// `serde(rename)` the wire's name, a type parameter carried, `Option`,
+// `Vec`, and a `BTreeMap` their own, an integer `i64`, a float dropping
+// `Eq`, a unit enum's variants renamed to their literals; an enum whose
+// variant carries a payload is the marker.
+#[tokio::test]
+async fn omnia_scaffold_rust_type() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = [
+        (
+            "orders.Order",
+            "/// An order.\n#[derive(Debug, Serialize, Deserialize)]\npub struct Order {\n    /// \
+             Who placed it.\n    #[serde(rename = \"customerId\")]\n    pub customer_id: String,\n    \
+             pub lines: Vec<OrderLine>,\n    pub note: Option<String>,\n    pub meta: \
+             BTreeMap<String, i64>,\n    pub weight_kg: f64,\n}",
+        ),
+        ("orders.OrderLine", "pub struct OrderLine {\n    pub sku: String,\n    pub quantity: u32,\n}"),
+        ("orders.Page", "pub struct Page<T> {\n    pub items: Vec<T>,\n    pub total: usize,\n}"),
+        (
+            "orders.Status",
+            "pub enum Status {\n    /// Awaiting payment.\n    #[serde(rename = \"pending\")]\n    \
+             Pending,\n    Paid,\n}",
+        ),
+        ("orders.Event", "pub enum Event {\n    Placed(Order),\n    Cancelled { reason: String },\n}"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    assert!(part.contains("\nuse std::collections::BTreeMap;\n"), "the map is imported: {part}");
+    for declared in [
+        "#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]\npub struct Order {\n    /// \
+         Who placed it.\n    #[serde(rename = \"customerId\")]\n    pub customer_id: String,\n    \
+         /// The `lines` field.\n    pub lines: Vec<OrderLine>,\n    /// The `note` field.\n    \
+         pub note: Option<String>,\n    /// The `meta` field.\n    pub meta: BTreeMap<String, \
+         i64>,\n    /// The `weight_kg` field.\n    pub weight_kg: f64,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct OrderLine {\n    \
+         /// The `sku` field.\n    pub sku: String,\n    /// The `quantity` field.\n    pub \
+         quantity: i64,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct Page<T> {\n    \
+         /// The `items` field.\n    pub items: Vec<T>,\n    /// The `total` field.\n    pub \
+         total: i64,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub enum Status {\n    \
+         /// Awaiting payment.\n    #[serde(rename = \"pending\")]\n    Pending,\n    /// The \
+         `Paid` variant.\n    Paid,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub enum Event {}\n",
+    ] {
+        assert!(part.contains(declared), "the part lays `{declared}`: {part}");
+    }
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let brief = &model.seen()[0].messages[0];
+    let cited = "`pub enum Event {}` in `crates/orders/src/reading.rs`: the design type `orders.Event`, \
+                 whose signature the scaffold could not lay.";
+    assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
+}
+
+// A signature with Windows line endings lays as one with Unix ones, in
+// either language the readers accept, its lines fenced in the doc without
+// the carriage returns.
+#[tokio::test]
+async fn omnia_scaffold_type_crlf() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = [
+        ("orders.Order", "export interface Order {\r\n  id: string;\r\n  note?: string;\r\n}"),
+        ("orders.Line", "/// A line.\r\npub struct Line {\r\n    pub sku: String,\r\n}"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    assert!(!part.contains('\r'), "no carriage return reaches the part: {part:?}");
+    let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
+    for declared in [
+        "/// ```text\n/// export interface Order {\n///   id: string;\n///   note?: string;\n/// \
+         }\n/// ```\n",
+        "pub struct Order {\n    /// The `id` field.\n    pub id: String,\n    /// The `note` \
+         field.\n    pub note: Option<String>,\n}\n",
+        "pub struct Line {\n    /// The `sku` field.\n    pub sku: String,\n}\n",
+    ] {
+        let declaration = if declared.starts_with("pub ") {
+            format!("{derives}{declared}")
+        } else {
+            declared.to_owned()
+        };
+        assert!(part.contains(&declaration), "the part lays `{declared}`: {part}");
+    }
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+}
+
+// A `#` comment at a column short of the fields' hides none of them: the
+// body's indent is the fields', and the comment reads as the doc of the
+// field beneath it.
+#[tokio::test]
+async fn omnia_scaffold_python_commented_body() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = vec![DesignType {
+        key: "orders.Order".to_owned(),
+        signature: "class Order(BaseModel):\n# what the wire carries\n    customer_id: str\n    \
+                    quantity: int = 1"
+            .to_owned(),
+    }];
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    let declared = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct Order \
+                    {\n    /// what the wire carries.\n    pub customer_id: String,\n    /// The \
+                    `quantity` field.\n    #[serde(default = \"default_quantity\")]\n    pub \
+                    quantity: i64,\n}\n\nconst fn default_quantity() -> i64 {\n    1\n}\n";
+    assert!(part.contains(declared), "the part lays every field: {part}");
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+}
+
+// A held entry with no `pub mod` line, as a repair that removed the last
+// part leaves one, takes the part's line before its first `use`, a blank
+// line between, and its routes entry at the end of the array.
+#[tokio::test]
+async fn omnia_scaffold_entry_without_mods() {
+    let project = omnia_tree().await;
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
+    let entry =
+        OMNIA_ENTRY.replace("pub mod reading;\n\n", "").replace("        reading::routes(),\n", "");
+    project.write("crates/orders/src/lib.rs", &entry);
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &omnia_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    assert_eq!(
+        text(&project, "crates/orders/src/lib.rs"),
+        OMNIA_ENTRY,
+        "the part's `pub mod` line is placed before the first `use` and its routes entry at the \
+         end of the array"
+    );
+    let brief = &model.seen()[0].messages[0];
+    let cited = "- `crates/orders/src/lib.rs`: held, `pub mod reading;` and `reading::routes(),` added to \
+                 its lists.";
+    assert!(brief.contains(cited), "the brief carries `{cited}`: {brief}");
+}
+
+// A symbolic link on the way to a file the slice's scaffold writes is
+// refused as a `bad_request` before any write, its path and what stands
+// there named, with no turn spent.
+#[tokio::test]
+async fn omnia_scaffold_link_on_the_way() {
+    let project = omnia_tree().await;
+    project.write("elsewhere/.keep", "");
+    std::fs::create_dir_all(project.path().join("crates/orders")).expect("the stem's directory");
+    symlink("../../elsewhere", project.path().join("crates/orders/src"))
+        .expect("planting the link");
+    let before = files_under(project.path());
+    let model = Scripted::default();
+
+    let refusal = OMNIA
+        .build_slice(&project, &model, &omnia_slice())
+        .await
+        .expect_err("a link on the way is refused");
+    model.assert_exhausted();
+
+    assert!(
+        matches!(refusal, Error::BadRequest { .. }),
+        "refused with the wrong class: {}",
+        refusal.description()
+    );
+    assert_eq!(
+        refusal.description(),
+        "`crates/orders/src/lib.rs` leads through the symlink `crates/orders/src`, where the \
+         slice's scaffold writes a file",
+        "the refusal names the path and the link"
+    );
+    assert_eq!(files_under(project.path()), before, "nothing is written before the refusal");
+    assert!(model.seen().is_empty(), "no turn is spent");
 }
 
 // The route is the typed one the requirement carries and nothing read from
@@ -3183,6 +3380,48 @@ async fn omnia_dependency_unused() {
     }
     let manifest = text(&project, "crates/orders/Cargo.toml");
     assert!(manifest.contains("chrono") && !manifest.contains("uuid"), "{manifest}");
+}
+
+// A crate spelled only inside a string literal is used by no file: the
+// name is read from the syntax tree, where a literal's text is no
+// identifier, so the dependency is a finding as one no file spells is,
+// while the crate a macro's arguments name as a path is used.
+#[tokio::test]
+async fn omnia_dependency_unused_in_string() {
+    let project = omnia_tree().await;
+    let unused = "uuid.workspace = true\n";
+    let manifest = format!(
+        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
+         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
+         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
+         chrono.workspace = true\n{unused}"
+    );
+    project.write("crates/orders/Cargo.toml", &manifest);
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Reads orders.\n\n/// The id's wire form.\n#[must_use]\npub fn id_format() -> &'static \
+         str {\n    \"uuid\"\n}\n\n/// Logs when an order was read.\npub fn read_at() {\n    \
+         tracing::info!(at = %chrono::Utc::now(), \"order read, its id a uuid::Uuid\");\n}\n",
+    );
+    let model = Scripted::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let unused_at = line_of(&manifest, "uuid.workspace");
+    assert!(
+        correction.contains(&format!(
+            "crates/orders/Cargo.toml:{unused_at}: dependency `uuid` is used by no file of \
+             `crates/orders/`"
+        )),
+        "a crate spelled only in a string literal is a finding: {correction}"
+    );
+    assert!(!correction.contains("chrono"), "a path in a macro's arguments is a use: {correction}");
+    assert!(!text(&project, "crates/orders/Cargo.toml").contains("uuid"));
 }
 
 // A part that publishes in a stem whose entry registers no part, and whose

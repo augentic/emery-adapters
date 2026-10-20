@@ -2,7 +2,7 @@
 
 use super::{
     Enum, Field, Literal, Read, Shape, Struct, Type, Variant, between, is_ident, literal, number,
-    param_name, split_top,
+    param_name, sentence, split_top,
 };
 
 // A declaration led by one of these is TypeScript's.
@@ -168,8 +168,8 @@ fn enumeration(rest: &str) -> Read {
     };
     let mut variants = Vec::new();
     let mut numeric = true;
-    for member in members(body) {
-        let text = member.text.trim();
+    for clause in clauses(body) {
+        let text = clause.text.trim();
         if text.is_empty() {
             continue;
         }
@@ -185,7 +185,7 @@ fn enumeration(rest: &str) -> Read {
         variants.push(Variant {
             member: member_name.to_owned(),
             wire,
-            doc: member.doc,
+            doc: clause.doc,
         });
     }
     Read {
@@ -199,8 +199,8 @@ fn enumeration(rest: &str) -> Read {
 fn object(body: &str, generics: Vec<String>, bases: Vec<String>) -> Shape {
     let mut fields = Vec::new();
     let mut indexed = false;
-    for member in members(body) {
-        let mut text = member.text.trim();
+    for clause in clauses(body) {
+        let mut text = clause.text.trim();
         while let Some(modifier) = MODIFIERS.iter().find(|modifier| text.starts_with(*modifier)) {
             text = text[modifier.len()..].trim_start();
         }
@@ -211,7 +211,7 @@ fn object(body: &str, generics: Vec<String>, bases: Vec<String>) -> Shape {
             indexed = true;
             continue;
         }
-        let Some(field) = field(text, member.doc) else { continue };
+        let Some(field) = field(text, clause.doc) else { continue };
         fields.push(field);
     }
     if fields.is_empty() && bases.is_empty() && indexed {
@@ -408,24 +408,24 @@ fn ident_head(text: &str) -> Option<String> {
     is_ident(head).then(|| head.to_owned())
 }
 
-// One member of a body with the comment written above it.
-struct Member {
+// One clause of a body, raw, with the comment written above it.
+struct Clause {
     text: String,
     doc: Option<String>,
 }
 
-// The members of a braced body, each ended by a top-level `;`, `,`, or a
-// line break where the member is whole, its comments read as its doc.
-fn members(body: &str) -> Vec<Member> {
-    let mut members: Vec<Member> = Vec::new();
+// The clauses of a braced body, each ended by a top-level `;`, `,`, or a
+// line break where the clause is whole, its comments read as its doc.
+fn clauses(body: &str) -> Vec<Clause> {
+    let mut clauses: Vec<Clause> = Vec::new();
     let mut doc: Vec<String> = Vec::new();
     let mut text = String::new();
     let mut depth = 0i32;
     let mut quote: Option<char> = None;
     let mut chars = body.chars().peekable();
     let mut previous = ' ';
-    // whether the line still holds the member just ended, so a comment
-    // after it on the line is that member's
+    // whether the line still holds the clause just ended, so a comment
+    // after it on the line is that clause's
     let mut trailing = false;
     while let Some(ch) = chars.next() {
         if let Some(open) = quote {
@@ -440,7 +440,7 @@ fn members(body: &str) -> Vec<Member> {
             '/' if depth == 0 && text.trim().is_empty() && chars.peek() == Some(&'/') => {
                 let line: String = chars.by_ref().take_while(|ch| *ch != '\n').collect();
                 let line = line.trim_start_matches('/').trim().to_owned();
-                match members.last_mut() {
+                match clauses.last_mut() {
                     Some(last) if trailing && last.doc.is_none() => {
                         last.doc = sentence(&[line]);
                     }
@@ -485,7 +485,7 @@ fn members(body: &str) -> Vec<Member> {
                 text.push(ch);
             }
             ';' | ',' if depth <= 0 => {
-                trailing = flush(&mut text, &mut doc, &mut members);
+                trailing = flush(&mut text, &mut doc, &mut clauses);
             }
             '\n' if depth <= 0 => {
                 trailing = false;
@@ -493,7 +493,7 @@ fn members(body: &str) -> Vec<Member> {
                     && !text.trim_end().ends_with([':', '|', '&', '=', '<', '(', '?'])
                     && !continues(chars.clone());
                 if whole {
-                    flush(&mut text, &mut doc, &mut members);
+                    flush(&mut text, &mut doc, &mut clauses);
                 } else {
                     text.push(' ');
                 }
@@ -507,70 +507,27 @@ fn members(body: &str) -> Vec<Member> {
         }
         previous = ch;
     }
-    flush(&mut text, &mut doc, &mut members);
-    members
+    flush(&mut text, &mut doc, &mut clauses);
+    clauses
 }
 
-// Whether the next line continues a member: a union or intersection arm.
+// Whether the next line continues a clause: a union or intersection arm.
 fn continues(rest: std::iter::Peekable<std::str::Chars<'_>>) -> bool {
     let next: String = rest.skip_while(|ch| ch.is_whitespace()).take(1).collect();
     matches!(next.as_str(), "|" | "&")
 }
 
-// Ends the member `text` holds, answering whether it held one.
-fn flush(text: &mut String, doc: &mut Vec<String>, members: &mut Vec<Member>) -> bool {
-    let member = text.trim();
-    let held = !member.is_empty();
+// Ends the clause `text` holds, answering whether it held one.
+fn flush(text: &mut String, doc: &mut Vec<String>, clauses: &mut Vec<Clause>) -> bool {
+    let clause = text.trim();
+    let held = !clause.is_empty();
     if held {
-        members.push(Member {
-            text: member.to_owned(),
+        clauses.push(Clause {
+            text: clause.to_owned(),
             doc: sentence(doc),
         });
     }
     doc.clear();
     text.clear();
     held
-}
-
-// A comment's lines as one doc line, ended with a full stop, each word
-// spelled as an identifier in backticks, as the doc-markdown lint asks.
-pub(super) fn sentence(lines: &[String]) -> Option<String> {
-    let joined = lines
-        .iter()
-        .flat_map(|line| line.split_whitespace())
-        .map(backticked)
-        .collect::<Vec<_>>()
-        .join(" ");
-    if joined.is_empty() {
-        return None;
-    }
-    if joined.ends_with(['.', '!', '?']) { Some(joined) } else { Some(format!("{joined}.")) }
-}
-
-// A word in backticks where it spells an identifier: a path, a name with
-// an underscore, or a camel-case name past its first letter.
-fn backticked(word: &str) -> String {
-    if word.contains('`') {
-        return word.to_owned();
-    }
-    let core = word.trim_matches(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_');
-    if core.is_empty() {
-        return word.to_owned();
-    }
-    let camel = core.starts_with(|ch: char| ch.is_ascii_uppercase())
-        && core.chars().filter(char::is_ascii_uppercase).count() > 1
-        && core.chars().filter(char::is_ascii_lowercase).count() > 1;
-    let identifier = (core.contains('_') && core != "_")
-        || core.contains("::")
-        || camel
-        || word.contains("::")
-        || word.ends_with("()");
-    if !identifier {
-        return word.to_owned();
-    }
-    let start = word.find(core).unwrap_or(0);
-    let end = start + core.len();
-    let (lead, tail) = (&word[..start], &word[end..]);
-    tail.strip_prefix("()")
-        .map_or_else(|| format!("{lead}`{core}`{tail}"), |after| format!("{lead}`{core}()`{after}"))
 }

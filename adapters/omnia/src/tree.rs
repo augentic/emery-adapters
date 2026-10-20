@@ -3,40 +3,43 @@
 mod lists;
 mod misses;
 mod process;
-mod syntax;
 
-use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use emery_sdk::Error;
 use emery_sdk::target::Report;
-use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
 use syn::visit::{self, Visit};
 use syn::{ItemFn, Macro};
 
-use self::syntax::Unparsed;
+use crate::layout::{self, Toml, TopicTable};
 use crate::scaffold::Scaffold;
+use crate::syntax::{self, Mentions, Unparsed};
 
 const MAX_DIFF_LINES: usize = 24;
 
+// One Rust file of the tree: its text, what `syn` made of it, and the names
+// it mentions, none where `syn` refused it.
 struct Module {
     path: String,
-    // The text with its comments blanked, for the rules that read a name
-    // off a line and for spelling a line into a finding.
-    code: String,
+    text: String,
     parsed: Result<syn::File, Unparsed>,
+    mentions: Mentions,
 }
 
 impl Module {
     fn read(root: &Path, file: &Path) -> Result<Self, Error> {
-        let path = relative(root, file);
-        let text = read(file)?;
+        let path = layout::relative(root, file);
+        let text = layout::read(file)?;
+        let parsed = syntax::parse(&text);
+        let mentions = parsed.as_ref().ok().map(Mentions::of).unwrap_or_default();
         Ok(Self {
             path,
-            code: uncommented(&text),
-            parsed: syntax::parse(&text),
+            text,
+            parsed,
+            mentions,
         })
     }
 
@@ -48,10 +51,11 @@ impl Module {
         self.parsed.as_ref().ok()
     }
 
-    fn spelled(&self, number: usize) -> String {
+    // The line `number` stands on, trimmed and without its trailing comma.
+    fn line(&self, number: usize) -> String {
         number
             .checked_sub(1)
-            .and_then(|index| self.code.lines().nth(index))
+            .and_then(|index| self.text.lines().nth(index))
             .unwrap_or_default()
             .trim()
             .trim_end_matches(',')
@@ -79,23 +83,40 @@ impl<'ast> Visit<'ast> for Markers {
     }
 }
 
+// The Rust files of a tree, read once: the stems' sources, the stems' tests,
+// and the root lists the tree holds.
 pub struct Tree<'a> {
     root: &'a Path,
     modules: Vec<Module>,
+    tests: Vec<Module>,
+    lists: Vec<Module>,
 }
 
 impl<'a> Tree<'a> {
     pub fn read(root: &'a Path) -> Result<Self, Error> {
         let mut modules = Vec::new();
-        for stem in entries(&root.join("crates"))? {
-            if is_start_crate(&stem) {
-                continue;
-            }
-            for file in sources(&stem.join("src"))? {
+        let mut tests = Vec::new();
+        for stem in layout::stem_dirs(root)? {
+            for file in layout::sources(&stem.join("src"))? {
                 modules.push(Module::read(root, &file)?);
             }
+            for file in layout::sources(&stem.join("tests"))? {
+                tests.push(Module::read(root, &file)?);
+            }
         }
-        Ok(Self { root, modules })
+        let mut lists = Vec::new();
+        for path in [layout::ROUTES, layout::MESSAGING] {
+            let file = root.join(path);
+            if file.is_file() {
+                lists.push(Module::read(root, &file)?);
+            }
+        }
+        Ok(Self {
+            root,
+            modules,
+            tests,
+            lists,
+        })
     }
 
     pub fn check_build(&self, scaffold: &Scaffold, report: &Report) -> Result<Vec<String>, Error> {
@@ -103,7 +124,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.split_stems(scaffold)?);
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
-        findings.extend(self.scenarios_tested(scaffold, &report.covered)?);
+        findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -119,11 +140,11 @@ impl<'a> Tree<'a> {
         findings.extend(self.unparsed());
         findings.extend(self.manifest_drift()?);
         findings.extend(self.dangling_entries()?);
-        findings.extend(self.process()?);
-        findings.extend(self.stem_lints()?);
+        findings.extend(self.simulated_process()?);
+        findings.extend(self.unlinted_stems()?);
         findings.extend(self.unused_dependencies()?);
-        findings.extend(self.stems_merged()?);
-        findings.extend(self.unnamed_topics()?);
+        findings.extend(self.unmerged_stems());
+        findings.extend(self.unnamed_topics());
         findings.extend(self.unreached_publishers()?);
         findings.extend(self.empty_misses());
         findings.extend(self.response_wrappers());
@@ -136,13 +157,13 @@ impl<'a> Tree<'a> {
     // tree held; `crates/start/` is the process rule's.
     fn foreign_crates(&self, scaffold: &Scaffold) -> Result<Vec<String>, Error> {
         let stems: Vec<&str> = scaffold.stems().collect();
-        Ok(crates(self.root)?
+        Ok(layout::crates(self.root)?
             .into_iter()
             .filter(|dir| {
                 !(dir == "common"
-                    || is_start_stem(dir)
+                    || layout::is_start_stem(dir)
                     || scaffold.existing().contains(dir)
-                    || stems.iter().any(|stem| crate::scaffold::crate_dir(stem) == dir))
+                    || stems.iter().any(|stem| layout::crate_dir(stem) == dir))
             })
             .collect())
     }
@@ -165,8 +186,8 @@ impl<'a> Tree<'a> {
                     )
                 },
                 |stem| {
-                    let stem_dir = crate::scaffold::crate_dir(stem);
-                    let pkg = crate::scaffold::package(stem);
+                    let stem_dir = layout::crate_dir(stem);
+                    let pkg = layout::package(stem);
                     format!(
                         "`crates/{dir}/` is written for `{dir}`, the head of the stem `{stem}`, \
                          whose crate is `crates/{stem_dir}/` (package `{pkg}`, path `{}`)",
@@ -192,18 +213,16 @@ impl<'a> Tree<'a> {
     // tree held once the skeleton was written: a crate `split_stems` or the
     // process rule names is that finding's, so one problem is one finding.
     fn strays(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
-        let mut own: Vec<String> = scaffold
-            .stems()
-            .map(|stem| format!("crates/{}/", crate::scaffold::crate_dir(stem)))
-            .collect();
+        let mut own: Vec<String> =
+            scaffold.stems().map(|stem| format!("crates/{}/", layout::crate_dir(stem))).collect();
         own.extend(self.foreign_crates(scaffold)?.into_iter().map(|dir| format!("crates/{dir}/")));
         own.extend(
-            crates(self.root)?
+            layout::crates(self.root)?
                 .into_iter()
-                .filter(|dir| is_start_stem(dir))
+                .filter(|dir| layout::is_start_stem(dir))
                 .map(|dir| format!("crates/{dir}/")),
         );
-        let lines: Vec<String> = listing(self.root)?
+        let lines: Vec<String> = layout::listing(self.root)?
             .difference(scaffold.listing())
             .filter(|path| path.as_str() != "Cargo.lock")
             .filter(|path| !own.iter().any(|dir| path.starts_with(dir.as_str())))
@@ -220,18 +239,24 @@ impl<'a> Tree<'a> {
         )))
     }
 
-    // The rules after this one read the syntax tree, so a module `syn`
+    // The rules after this one read the syntax tree, so a file `syn`
     // refuses is reported here and read by none of them.
     fn unparsed(&self) -> Option<String> {
         let lines: Vec<String> = self
-            .modules
-            .iter()
+            .files()
             .filter_map(|module| {
                 let unparsed = module.parsed.as_ref().err()?;
                 Some(format!("{}:{}: {}", module.path, unparsed.line, unparsed.message))
             })
             .collect();
-        unparsed_finding(&lines)
+        if lines.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "a module that does not parse is read by no check and refused by the compiler; repair \
+             its syntax through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
     }
 
     fn markers_left(&self, covered: &[String]) -> Option<String> {
@@ -260,29 +285,22 @@ impl<'a> Tree<'a> {
         ))
     }
 
-    // The test files are read here alone, since the tree's modules are a
-    // stem's sources; one `syn` refuses is reported as a module is, its
-    // scenarios unread.
-    fn scenarios_tested(
-        &self, scaffold: &Scaffold, covered: &[String],
-    ) -> Result<Vec<String>, Error> {
-        let expected: Vec<_> = scaffold
+    // A test file `syn` refuses is `unparsed`'s finding, its scenarios
+    // unread here.
+    fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
+        let mut lines = Vec::new();
+        for expected in scaffold
             .expected()
             .filter(|expected| covered.iter().any(|covered| covered == expected.id))
-            .collect();
-        let mut files: BTreeMap<&str, Result<syn::File, Unparsed>> = BTreeMap::new();
-        for expected in &expected {
-            if !files.contains_key(expected.path) {
-                let file = self.root.join(expected.path);
-                let text = if file.is_file() { read(&file)? } else { String::new() };
-                files.insert(expected.path, syntax::parse(&text));
-            }
-        }
-
-        let mut lines = Vec::new();
-        for expected in &expected {
-            let Some(Ok(file)) = files.get(expected.path) else { continue };
-            let Some(found) = test_of(file, expected.test) else {
+        {
+            let test = match self.module(expected.path) {
+                Some(module) => match module.file() {
+                    Some(file) => test_of(file, expected.test),
+                    None => continue,
+                },
+                None => None,
+            };
+            let Some(found) = test else {
                 lines.push(format!(
                     "{}: {} is covered and its scenario `{}` has no test `{}`",
                     expected.path, expected.id, expected.scenario, expected.test
@@ -303,39 +321,29 @@ impl<'a> Tree<'a> {
                 ));
             }
         }
-
-        let unparsed: Vec<String> = files
-            .iter()
-            .filter_map(|(path, parsed)| {
-                let unparsed = parsed.as_ref().err()?;
-                Some(format!("{path}:{}: {}", unparsed.line, unparsed.message))
-            })
-            .collect();
-        let mut findings = Vec::new();
-        findings.extend(unparsed_finding(&unparsed));
-        if !lines.is_empty() {
-            findings.push(format!(
-                "a covered requirement's scenarios are tests that run and pass: each scenario of \
-                 a covered requirement is the `#[tokio::test]` the adapter scaffolded for it in \
-                 the part's test file, filled, with its `#[ignore = ..]` line removed; fill each \
-                 through `edit_files`, or leave the requirement out of `covered`:\n{}",
-                lines.join("\n")
-            ));
+        if lines.is_empty() {
+            return None;
         }
-        Ok(findings)
+        Some(format!(
+            "a covered requirement's scenarios are tests that run and pass: each scenario of a \
+             covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
+             part's test file, filled, with its `#[ignore = ..]` line removed; fill each through \
+             `edit_files`, or leave the requirement out of `covered`:\n{}",
+            lines.join("\n")
+        ))
     }
 
     // The workspace's lints are the host boundary, and they reach a crate
     // through its `[lints]` table alone.
-    fn stem_lints(&self) -> Result<Option<String>, Error> {
+    fn unlinted_stems(&self) -> Result<Option<String>, Error> {
         let mut lines = Vec::new();
-        for dir in crates(self.root)? {
-            if dir == "common" || is_start_stem(&dir) {
+        for dir in layout::crates(self.root)? {
+            if dir == "common" || layout::is_start_stem(&dir) {
                 continue;
             }
             let path = format!("crates/{dir}/Cargo.toml");
             let file = self.root.join(&path);
-            if file.is_file() && !inherits_lints(&read(&file)?) {
+            if file.is_file() && !Toml::read(&layout::read(&file)?).inherits_workspace_lints() {
                 lines.push(path);
             }
         }
@@ -351,7 +359,7 @@ impl<'a> Tree<'a> {
     }
 
     fn static_drift(&self) -> Result<Vec<String>, Error> {
-        let drift = omnia_template::drift(self.root).map_err(|err| refusal(&err))?;
+        let drift = omnia_template::drift(self.root).map_err(|err| layout::refusal(&err))?;
         let mut findings = Vec::new();
         for file in drift.files() {
             let finding = if self.lacks(file.path) {
@@ -359,7 +367,7 @@ impl<'a> Tree<'a> {
                     "`{}` is a static file of the template the tree lacks; write it whole through \
                      `write_files`, as the template spells it:\n{}",
                     file.path,
-                    template(file.path)?
+                    layout::template(file.path)?
                 )
             } else if file.lines.len() > MAX_DIFF_LINES {
                 format!(
@@ -367,7 +375,7 @@ impl<'a> Tree<'a> {
                      it whole through `write_files`, as the template spells it:\n{}",
                     file.path,
                     file.lines.len(),
-                    template(file.path)?
+                    layout::template(file.path)?
                 )
             } else {
                 format!(
@@ -384,7 +392,7 @@ impl<'a> Tree<'a> {
     }
 
     fn manifest_drift(&self) -> Result<Option<String>, Error> {
-        let drift = Manifest::new(self.root).drift().map_err(|err| refusal(&err))?;
+        let drift = Manifest::new(self.root).drift().map_err(|err| layout::refusal(&err))?;
         if drift.is_empty() {
             return Ok(None);
         }
@@ -393,7 +401,7 @@ impl<'a> Tree<'a> {
                 "the tree lacks the root `{}`; write it whole through `write_files` as the \
                  template spells it, then add each stem's line to its two lists:\n{}",
                 Manifest::PATH,
-                template(Manifest::PATH)?
+                layout::template(Manifest::PATH)?
             )
         } else {
             format!(
@@ -413,18 +421,18 @@ impl<'a> Tree<'a> {
         )
     }
 
-    fn code(&self, path: &str) -> Result<String, Error> {
-        let file = self.root.join(path);
-        if file.is_file() { Ok(uncommented(&read(&file)?)) } else { Ok(String::new()) }
+    fn files(&self) -> impl Iterator<Item = &Module> {
+        self.modules.iter().chain(&self.tests).chain(&self.lists)
     }
 
-    fn constants(&self, path: &str) -> Result<Vec<(usize, String)>, Error> {
-        let file = self.root.join(path);
-        if !file.is_file() {
-            return Ok(Vec::new());
-        }
-        let text = read(&file)?;
-        Ok(pub_consts(&text).map(|(line, name)| (line, name.to_owned())).collect())
+    fn module(&self, path: &str) -> Option<&Module> {
+        self.files().find(|module| module.path == path)
+    }
+
+    // The topic table as the tree holds it; empty where the tree lacks it
+    // or `syn` refused it, which `unparsed` reports.
+    fn topics(&self) -> TopicTable {
+        self.module(layout::TOPICS).and_then(Module::file).map(TopicTable::of).unwrap_or_default()
     }
 }
 
@@ -480,265 +488,4 @@ fn marker_ids(marker: &str) -> Vec<&str> {
             })
         })
         .collect()
-}
-
-// The finding over the files `syn` refused, each `<path>:<line>: <message>`.
-fn unparsed_finding(lines: &[String]) -> Option<String> {
-    if lines.is_empty() {
-        return None;
-    }
-    Some(format!(
-        "a module that does not parse is read by no check and refused by the compiler; repair \
-         its syntax through `edit_files`:\n{}",
-        lines.join("\n")
-    ))
-}
-
-pub fn read(file: &Path) -> Result<String, Error> {
-    fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
-}
-
-fn template(path: &str) -> Result<&'static str, Error> {
-    omnia_template::entry(path)
-        .map(|entry| entry.body)
-        .ok_or_else(|| server_error!("the template holds no `{path}`"))
-}
-
-pub fn refusal(err: &omnia_template::Error) -> Error {
-    match err {
-        omnia_template::Error::Occupied { .. } => bad_request!("{err}"),
-        _ => server_error!("{err}"),
-    }
-}
-
-fn relative(root: &Path, file: &Path) -> String {
-    file.strip_prefix(root).unwrap_or(file).display().to_string()
-}
-
-fn uncommented(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for line in text.split_inclusive('\n') {
-        let newline = line.ends_with('\n');
-        let content = line.strip_suffix('\n').unwrap_or(line);
-        let code = match comment_start(content) {
-            Some(0) => "",
-            Some(at) => content[..at].trim_end(),
-            None => content,
-        };
-        out.push_str(code);
-        if newline {
-            out.push('\n');
-        }
-    }
-    out
-}
-
-fn comment_start(line: &str) -> Option<usize> {
-    if line.trim_start().starts_with("//") {
-        return Some(0);
-    }
-    if !line.contains("//") {
-        return None;
-    }
-    let mut in_string = false;
-    let mut escaped = false;
-    for (at, ch) in line.char_indices() {
-        if in_string {
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                in_string = false;
-            }
-        } else if ch == '"' {
-            in_string = true;
-        } else if line[at..].starts_with("//") {
-            return Some(at);
-        }
-    }
-    None
-}
-
-fn spells(text: &str, word: &str) -> bool {
-    if word.is_empty() {
-        return false;
-    }
-    let mut from = 0;
-    while let Some(at) = text[from..].find(word) {
-        let start = from + at;
-        let end = start + word.len();
-        let before = text[..start].chars().next_back().is_none_or(|ch| !is_ident_char(ch));
-        let after = text[end..].chars().next().is_none_or(|ch| !is_ident_char(ch));
-        if before && after {
-            return true;
-        }
-        from = end;
-    }
-    false
-}
-
-fn is_ident_char(ch: char) -> bool {
-    ch.is_alphanumeric() || ch == '_'
-}
-
-// Whether a manifest inherits the workspace's lints, as `[lints]` holding
-// `workspace = true` or a top-level `lints.workspace = true`.
-fn inherits_lints(manifest: &str) -> bool {
-    let mut table: Option<&str> = None;
-    for line in manifest.lines() {
-        let line = line.split('#').next().unwrap_or_default().trim();
-        if let Some(header) = line.strip_prefix('[') {
-            table = Some(header.strip_suffix(']').map_or("", str::trim));
-            continue;
-        }
-        let Some((key, value)) = line.split_once('=') else { continue };
-        let key = key.trim();
-        let value = value.trim();
-        if value == "true"
-            && (table == Some("lints") && key == "workspace"
-                || table.is_none() && key == "lints.workspace")
-        {
-            return true;
-        }
-    }
-    false
-}
-
-fn is_ident(name: &str) -> bool {
-    !name.is_empty() && name.chars().all(is_ident_char)
-}
-
-fn pub_consts(text: &str) -> impl Iterator<Item = (usize, &str)> {
-    text.lines().enumerate().filter_map(|(index, line)| {
-        let rest = line.trim_start().strip_prefix("pub const ")?;
-        let name = rest.split(|ch: char| !is_ident_char(ch)).next()?;
-        (!name.is_empty()).then_some((index + 1, name))
-    })
-}
-
-fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let listing = match fs::read_dir(dir) {
-        Ok(listing) => listing,
-        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(server_error!("listing `{}`: {err}", dir.display())),
-    };
-    let mut paths = listing
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
-    paths.sort();
-    Ok(paths)
-}
-
-fn is_start_crate(dir: &Path) -> bool {
-    dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
-}
-
-pub fn is_start_stem(name: &str) -> bool {
-    name == "start"
-        || name
-            .strip_prefix("start")
-            .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
-}
-
-fn start_files(root: &Path) -> Result<Vec<String>, Error> {
-    let mut found = Vec::new();
-    for dir in entries(&root.join("crates"))? {
-        if !is_start_crate(&dir) {
-            continue;
-        }
-        for file in files(&dir)? {
-            found.push(relative(root, &file));
-        }
-    }
-    found.sort();
-    Ok(found)
-}
-
-// Every file of the tree, root-relative with `/` between segments, as a
-// commit would carry it: nothing under `.git` or `.emery`, and nothing
-// under the root's `target/`, which the checks fill.
-pub fn listing(root: &Path) -> Result<BTreeSet<String>, Error> {
-    let mut found = BTreeSet::new();
-    let mut pending = vec![root.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
-            if name == ".git" || name == ".emery" || (dir == root && name == "target") {
-                continue;
-            }
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_dir() {
-                pending.push(path);
-            } else {
-                let relative: Vec<String> = path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .components()
-                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
-                    .collect();
-                found.insert(relative.join("/"));
-            }
-        }
-    }
-    Ok(found)
-}
-
-// Ignores empty directories left behind by `delete`.
-pub fn crates(root: &Path) -> Result<Vec<String>, Error> {
-    let mut names = Vec::new();
-    for path in entries(&root.join("crates"))? {
-        let meta = fs::symlink_metadata(&path)
-            .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-        if !meta.is_dir() || !has_files(&path)? {
-            continue;
-        }
-        if let Some(name) = path.file_name().and_then(|name| name.to_str()) {
-            names.push(name.to_owned());
-        }
-    }
-    Ok(names)
-}
-
-fn has_files(dir: &Path) -> Result<bool, Error> {
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_file() {
-                return Ok(true);
-            } else if meta.is_dir() {
-                pending.push(path);
-            }
-        }
-    }
-    Ok(false)
-}
-
-fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let mut found = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_dir() {
-                pending.push(path);
-            } else if meta.is_file() {
-                found.push(path);
-            }
-        }
-    }
-    found.sort();
-    Ok(found)
-}
-
-fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    Ok(files(dir)?
-        .into_iter()
-        .filter(|path| path.extension().is_some_and(|ext| ext == "rs"))
-        .collect())
 }
