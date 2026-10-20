@@ -49,6 +49,9 @@ pub(super) struct Struct {
 }
 
 pub(super) struct Field {
+    // The declared field name, or the wire name where the source names one
+    // alone.
+    pub name: String,
     // The name the wire carries.
     pub wire: String,
     pub ty: Type,
@@ -72,6 +75,9 @@ pub(super) struct Variant {
     pub member: String,
     // The literal the wire carries.
     pub wire: Option<String>,
+    // Whether the wire literal is a number, so the variant's name is also
+    // accepted as an alias.
+    pub alias: bool,
     pub doc: Option<String>,
 }
 
@@ -83,6 +89,8 @@ pub(super) enum Literal {
     Str(String),
     // An empty collection, or a factory for one.
     Empty,
+    // Omitted on the wire when decorated, filled with serde's `Default`.
+    Default,
     // A member of an enumeration, `Status.PENDING`.
     Member(String, String),
 }
@@ -305,7 +313,17 @@ impl Enum {
                     .wire
                     .as_ref()
                     .filter(|wire| **wire != name)
-                    .map(|wire| format!("#[serde(rename = \"{}\")]", escape(wire)))
+                    .map(|wire| {
+                        if variant.alias {
+                            format!(
+                                "#[serde(rename = \"{}\", alias = \"{}\")]",
+                                escape(wire),
+                                escape(&name)
+                            )
+                        } else {
+                            format!("#[serde(rename = \"{}\")]", escape(wire))
+                        }
+                    })
                     .into_iter()
                     .collect();
                 Member {
@@ -360,13 +378,13 @@ impl Struct {
         }
 
         for field in &self.fields {
-            let name = names.reserve(&snake(&field.wire), "_2");
+            let name = names.reserve(&snake(&field.name), "_2");
             let mut field_laying = Laying::default();
-            let mut ty = field.ty.rust(&field.wire, refs, &mut field_laying);
+            let mut ty = field.ty.rust(&field.name, refs, &mut field_laying);
             let spelled = field
                 .default
                 .as_ref()
-                .and_then(|literal| literal.spell(&field.ty, &field.wire, refs));
+                .and_then(|literal| literal.spell(&field.ty, &field.name, refs));
 
             // a field the wire may omit with no default to stand in is an option
             if field.optional && spelled.is_none() && !field.ty.is_nullable() {
@@ -467,6 +485,7 @@ impl Literal {
                 format!("{rust}::{}", refs.variant(at, member)?)
             }
             (Self::Empty, _) => return ty.defaults(refs).then_some(Spelled::Default),
+            (Self::Default, _) => return ty.has_default(refs).then_some(Spelled::Default),
             _ => return None,
         };
         Some(Spelled::Value { text, constant })
@@ -634,6 +653,11 @@ impl Type {
             Self::Named(name, _) => matches!(refs.resolve(name), Ref::Design(_) | Ref::Foreign),
             Self::Bool | Self::Int | Self::Float | Self::Number => false,
         }
+    }
+
+    // Whether the laid type implements `Default`, scalars included.
+    fn has_default(&self, refs: &Refs<'_>) -> bool {
+        matches!(self, Self::Bool | Self::Int | Self::Float | Self::Number) || self.defaults(refs)
     }
 }
 

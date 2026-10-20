@@ -151,6 +151,7 @@ fn enumeration(body: &[&str], numeric: bool) -> Shape {
         variants.push(Variant {
             member: member.to_owned(),
             wire,
+            alias: false,
             doc: sentence(&doc),
         });
         doc.clear();
@@ -225,6 +226,7 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
         }
     }
     Some(Field {
+        name: wire.clone(),
         wire,
         ty: parse(annotation),
         optional,

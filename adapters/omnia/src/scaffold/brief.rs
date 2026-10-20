@@ -263,7 +263,8 @@ impl Stem {
             text,
             "The design types {} in `{}` are scaffolded as their signatures spell, each field \
              and variant documented and the wire's names kept through `serde(rename)`; they are \
-             finished, so change a field only where the check refuses it.",
+             finished, so change a field only where a scenario's wire shape or the check \
+             requires it.",
             listed(&laid),
             self.module.path
         );

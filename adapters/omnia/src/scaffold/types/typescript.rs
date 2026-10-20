@@ -118,6 +118,7 @@ fn alias(rest: &str) -> Read {
             .map(|text| Variant {
                 member: text.to_owned(),
                 wire: Some(text.to_owned()),
+                alias: false,
                 doc: None,
             })
             .collect();
@@ -178,13 +179,19 @@ fn enumeration(rest: &str) -> Read {
             None => (text, None),
         };
         let member_name = literal(member_name).unwrap_or(member_name);
-        let wire = value.and_then(literal).map(str::to_owned);
+        let wire = value.and_then(|val| literal(val).map(str::to_owned));
+        let alias = wire.is_none() && matches!(value.and_then(number), Some(Literal::Int(_)));
+        let wire = wire.or_else(|| match value.and_then(number) {
+            Some(Literal::Int(digits)) => Some(digits),
+            _ => None,
+        });
         if wire.is_some() {
             numeric = false;
         }
         variants.push(Variant {
             member: member_name.to_owned(),
             wire,
+            alias,
             doc: clause.doc,
         });
     }
@@ -200,7 +207,7 @@ fn object(body: &str, generics: Vec<String>, bases: Vec<String>) -> Shape {
     let mut fields = Vec::new();
     let mut indexed = false;
     for clause in clauses(body) {
-        let mut text = clause.text.trim();
+        let (wire, json_property, mut text) = decorators(clause.text.trim());
         while let Some(modifier) = MODIFIERS.iter().find(|modifier| text.starts_with(*modifier)) {
             text = text[modifier.len()..].trim_start();
         }
@@ -211,7 +218,7 @@ fn object(body: &str, generics: Vec<String>, bases: Vec<String>) -> Shape {
             indexed = true;
             continue;
         }
-        let Some(field) = field(text, clause.doc) else { continue };
+        let Some(field) = field(text, wire, json_property, clause.doc) else { continue };
         fields.push(field);
     }
     if fields.is_empty() && bases.is_empty() && indexed {
@@ -226,8 +233,10 @@ fn object(body: &str, generics: Vec<String>, bases: Vec<String>) -> Shape {
 
 // `name?: Type = default` read as a field; a method, a computed name, or a
 // function-typed field is none.
-fn field(text: &str, doc: Option<String>) -> Option<Field> {
-    let (wire, rest) =
+fn field(
+    text: &str, wire: Option<String>, json_property: bool, doc: Option<String>,
+) -> Option<Field> {
+    let (name, rest) =
         if let Some(quote) = text.chars().next().filter(|ch| matches!(ch, '"' | '\'')) {
             let end = text[1..].find(quote)? + 1;
             (text[1..end].to_owned(), text[end + 1..].trim_start())
@@ -237,9 +246,10 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
                 .unwrap_or(text.len());
             (text[..end].to_owned(), text[end..].trim_start())
         };
-    if wire.is_empty() {
+    if name.is_empty() {
         return None;
     }
+    let wire = wire.unwrap_or_else(|| name.clone());
     let optional = rest.starts_with('?');
     let rest = rest.strip_prefix(['?', '!']).unwrap_or(rest).trim_start();
     if rest.starts_with(['(', '<']) {
@@ -259,12 +269,64 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
         return None;
     }
     let optional = optional || default.is_some();
+    let default =
+        default.and_then(default_of).or_else(|| json_property.then_some(Literal::Default));
     Some(Field {
+        name,
         wire,
         ty: parse(&ty),
         optional,
-        default: default.and_then(default_of),
+        default,
         doc,
+    })
+}
+
+// Strips leading `@..` decorators from `text`, answering the wire name a
+// `@JsonProperty` or `@Expose` spells, whether `@JsonProperty` was among
+// them, and what follows the decorators.
+fn decorators(mut text: &str) -> (Option<String>, bool, &str) {
+    let mut wire = None;
+    let mut json_property = false;
+    text = text.trim_start();
+    while let Some(after_at) = text.strip_prefix('@') {
+        let end = after_at
+            .find(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$' | '.')))
+            .unwrap_or(after_at.len());
+        let name = after_at[..end].rsplit('.').next().unwrap_or("");
+        if !is_ident(name) {
+            break;
+        }
+        if name == "JsonProperty" {
+            json_property = true;
+        }
+        let rest = after_at[end..].trim_start();
+        if rest.starts_with('(') {
+            let Some((args, after_parens)) = between(rest, '(', ')') else {
+                break;
+            };
+            if let Some(found) = decorator_wire(name, args) {
+                wire = Some(found);
+            }
+            text = after_parens.trim_start();
+        } else {
+            text = rest;
+        }
+    }
+    (wire, json_property, text)
+}
+
+fn decorator_wire(name: &str, args: &str) -> Option<String> {
+    if !matches!(name, "JsonProperty" | "Expose") {
+        return None;
+    }
+    let first = split_top(args, ',').next()?.trim();
+    if let Some(quoted) = literal(first) {
+        return (!quoted.is_empty()).then(|| quoted.to_owned());
+    }
+    let (body, _) = between(first, '{', '}')?;
+    split_top(body, ',').find_map(|entry| {
+        let (key, value) = entry.split_once(':')?;
+        (key.trim() == "name").then(|| literal(value)).flatten().map(str::to_owned)
     })
 }
 
@@ -494,6 +556,7 @@ fn clauses(body: &str) -> Vec<Clause> {
             '\n' if depth <= 0 => {
                 trailing = false;
                 let whole = !text.trim().is_empty()
+                    && !decorators(&text).2.is_empty()
                     && !text.trim_end().ends_with([':', '|', '&', '=', '<', '(', '?'])
                     && !continues(chars.clone());
                 if whole {
