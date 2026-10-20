@@ -6,7 +6,7 @@ Operator-invoked, never CI. The component suites in [tests/source.rs](../tests/s
 
 ## Running
 
-The prerequisites are the live examples' ([examples/README.md](../examples/README.md)): a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY`. Build both binaries, then run from the repository root; every path the runner resolves is relative to it.
+The prerequisites are the live examples' ([examples/README.md](../examples/README.md)): a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; an `omnia` build card's second arm needs `emery-dev` and a local Ollama server besides ([The small-model arm](#the-small-model-arm)). Build both binaries, then run from the repository root; every path the runner resolves is relative to it.
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release
@@ -79,6 +79,8 @@ cargo build -p emery-omnia --target wasm32-wasip2 --release
 EVAL_RUNS=1 cargo run -p evals -- --build --target omnia express-orders
 ```
 
+An `omnia` build card is run twice, the same command under `emery-dev` and `qwen3-coder:30b` after it ([The small-model arm](#the-small-model-arm)), so every change the small model reads is measured under it.
+
 Both targets scaffold a whole tree at the init, so the repository the engine creates is the base the eval builds over, with nothing of a project beside it. A build turn runs the toolchain as well as composing, and repairs the findings the adapter's gates answer its report with, so every build runs at `EVAL_BUILD_RUNG` rather than the specify's rung: `CURSOR_TIMEOUT_SECS` is process-wide and caps every turn alike, and the engine resumes a failed build from its label but climbs no ladder. A slice that outlasts the build rung is sized wrongly before it is budgeted wrongly — the engine floors a stem past twelve requirements at its sub-stems, and a plan whose slices still run long is the slicing prompt's to cut finer.
 
 The runner reads the build three ways: the envelope on success (each slice's wave, merge commit, covered and uncovered ids, the paths its commit changed, and the paths its merge conflicted at and the model resolved; the verified heads and the waves the verify repaired; the label and where it stands) or the failure envelope the binary prints among its log lines (`slice-conflict`, `verify-failed`, the wave named in the message); the backend's `completion` lines, labelled `build-<slice>` and `verify`, for the turns' durations and tokens; and the host's `git log --first-parent` over the chain the build left — the label in `.emery/vcs/repos/target` when the run landed, the integration copy `.emery/vcs/integration` a failed run leaves for inspection — each merge commit read for its `Slice:`, `Wave:`, `Requirements:`, and `Covered:` trailers and the files it brought in. Where the envelope and the chain disagree, the chain is what the repository holds.
@@ -99,6 +101,29 @@ The build findings carry one line, `reference oracle 18/22; crates 3 vs 2, Rust 
 ### Building a plan again
 
 `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan `run-1` of each named case committed under an earlier card again, under this invocation's `EMERY_BIN`, target, `CURSOR_MODEL`, and `EVAL_JOBS`, so one revision is built under several arms — a plan is target-neutral, so the arms may build it through different targets — and the plan's own variance is out of the comparison. The staged project is copied whole under the new card, less the engine's repositories and working copies and the earlier build's files; the `[target]` table of `emery.toml` is rewritten for this invocation's target, so the engine creates a repository holding no label afresh and builds every slice over its root; and the run's specify is read back from the files the earlier run kept, so the card's specify columns and completions repeat the source card's, which its header says. The card the rebuild stands on must still be under `target/eval/`.
+
+### The small-model arm
+
+Every `omnia` build card is one command run twice over one component: under the release `emery` and `composer-2.5`, then under `emery-dev` and `qwen3-coder:30b` over a local Ollama server ([the protocol](cards/README.md#protocol), "An omnia card is a pair"). Whoever runs the round runs both, an agent asked to run the eval included: it starts the server where none answers, runs the small-model arm after the large-model one, and stops the server before it reads the card. The arm needs three things beyond the release build's:
+
+- `emery-dev`, the same runtime over [omnia-genai](https://github.com/augentic/omnia-backends/tree/main/crates/genai), built in the engine checkout under the `genai` feature; the runner reads the backend from the binary's name.
+- Ollama with the model pulled: `qwen3-coder:30b`, 19 GB on disk and 25 GB resident with every layer on the GPU of a 36 GB Mac, so nothing else heavy runs beside the arm.
+- The server running with its context length set, since Ollama's default silently truncates a brief that inlines a slice's files and the design, in a shell of its own kept running for the arm.
+
+```bash
+cargo build --manifest-path ../emery/Cargo.toml --release --features genai --bin emery-dev
+ollama pull qwen3-coder:30b
+OLLAMA_CONTEXT_LENGTH=131072 OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
+  OLLAMA_KEEP_ALIVE=-1 OLLAMA_NUM_PARALLEL=1 ollama serve
+curl -s http://127.0.0.1:11434/api/tags    # the server answers with the models it serves
+
+EMERY_BIN=../emery/target/release/emery-dev GENAI_MODEL=qwen3-coder:30b GENAI_ENDPOINT=http://127.0.0.1:11434/ \
+  EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 \
+  cargo run -p evals -- --rebuild 2026-10-19T04-08-24Z --target omnia express-orders
+pkill -f 'ollama serve'                    # the model stays resident until the server stops
+```
+
+The knobs are the small-model band's, and move only where a round names the move and its header records it: `EVAL_JOBS=1`, since the server answers one completion at a time; `EVAL_BUILD_RUNG=7200/600`, the cap on one build turn, since a small model's turn runs toward its tool-call cap rather than converging early, over the cap on one shell command, the longest `cargo` step a turn may run, raised (`7200/1200`) where a card's turns die in the shell at it; `GENAI_MAX_TOOL_CALLS` and `GENAI_MAX_ROUNDS` (128 each) and `GENAI_MAX_CANDIDATES` (2) at the backend's defaults; at the server, `OLLAMA_KEEP_ALIVE=-1` keeps the model resident between turns and `OLLAMA_NUM_PARALLEL=1` gives the one completion the whole context. A bare `GENAI_MODEL` names an Ollama model at `GENAI_ENDPOINT`; `openai::<name>` with `OPENAI_API_KEY` names a vLLM or any OpenAI-compatible server. The card's header records the backend, the model, and every knob set, and `--facts` under `emery-dev` needs no server at all. The arm takes hours where the large-model arm takes under one; its card is read against the small-model band, C1 (`2026-10-19T22-47-32Z`) until a card passes it, and a difference between the two arms of one round is the model's alone, since the plan, the component, and the knobs are one.
 
 ### Experiment arms
 
