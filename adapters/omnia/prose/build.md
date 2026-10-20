@@ -54,7 +54,7 @@ The adapter laid your slice's place in it before this turn, from the requirement
   - a handler per route, over an input struct and an output struct;
   - a `topics(..)` and a consumer per message they carry, with its constant in the topic table;
   - a `pub fn` per requirement carrying neither;
-  - an empty `pub struct` or `pub enum` per design type you own.
+  - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable.
 - A route function, `<name>_route`, over `handle_with`, for a `POST` handler and for a handler whose scenarios state a status other than `200`.
   Its encoder spells `StatusCode::OK`. Change that token for a `201` or a `503` on an `Ok`. An error status, a `404`, is the error the handler returns.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
@@ -73,7 +73,12 @@ Fill each kind as the shape below shows. Every `find` is the block the brief quo
 
 ### A design type
 
-`pub struct <Type> {}`, or `pub enum <Type> {}`, becomes the type its doc's signature spells, as the [handlers](references/handlers.md) reference declares a design type.
+A design type the brief names as laid is finished: its fields and variants stand as the signature in its doc spells them, documented, the wire's names kept through `#[serde(rename = "..")]`, `Eq` already dropped where a float reaches it.
+Change a field only where the check refuses it.
+A field the brief names as `serde_json::Value` stands for a type another slice declares; leave it, and read the value's fields where the behaviour needs them.
+
+A design type the brief lists among the markers, `pub struct <Type> {}` or `pub enum <Type> {}`, has a signature the scaffold could not lay.
+It becomes the type its doc's signature spells, as the [handlers](references/handlers.md) reference declares a design type.
 
 - Document every field or variant.
 - Keep the wire's names through `#[serde(rename = "..")]`.
@@ -86,8 +91,8 @@ Fill each kind as the shape below shows. Every `find` is the block the brief quo
   "edits": [
     {
       "path": "crates/orders/src/reading.rs",
-      "find": "pub struct Order {}",
-      "replace": "pub struct Order {\n    /// The order's id.\n    pub id: String,\n    /// The order's lines, as the wire spells them.\n    #[serde(rename = \"orderLines\")]\n    pub lines: Vec<Line>,\n}"
+      "find": "pub struct OrderRef {}",
+      "replace": "pub struct OrderRef {\n    /// The order's id, where the reference carries one.\n    pub id: Option<String>,\n    /// The order's code, where the reference carries one.\n    pub code: Option<String>,\n}"
     }
   ]
 }

@@ -6,15 +6,19 @@ use std::fmt::Write as _;
 
 pub use self::item::{Call, Expr};
 use self::item::{
-    Chain, Const, Consts, Doc, Enum, Fence, Field, File, Fn, Item, Struct, TAB, Uses, Vis, closure,
+    Chain, Const, Consts, Doc, Enum, Fence, Field, File, Fn, Item, Struct, TAB, Uses, Variant, Vis,
+    closure,
 };
 use super::names::{escape, flat, snake};
+use super::types::{Body, DefaultFn, Member};
 use super::{Act, Consumer, Function, Handler, Stem, Test, Type, route};
 
 const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
 const ROUTES_ANCHOR: &str = "// one entry per part with routes, each added at the end";
 const TOPICS_ANCHOR: &str = "// one entry per part with topics, each added at the end";
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
+// The derives of a type a float reaches, which `Eq` cannot hold.
+const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserialize";
 const GENERICS: &str = "<P: Capabilities>";
 
 // The stem's manifest, as the layout reference spells it.
@@ -217,7 +221,7 @@ pub fn module(stem: &Stem) -> String {
         file.push(topics(stem));
     }
     for design_type in &stem.types {
-        file.push(design(design_type));
+        design(design_type, &mut file);
     }
     for handler in &stem.handlers {
         self::handler(handler, &mut file);
@@ -488,6 +492,9 @@ fn imports(stem: &Stem) -> Uses {
     let consuming = !stem.consumers.is_empty();
     let encoding = stem.handlers.iter().any(|handler| handler.route_fn.is_some());
     let mut uses = Uses::default();
+    if stem.types.iter().any(|design_type| design_type.body.uses_map()) {
+        uses.add("std::collections", &["BTreeMap"]);
+    }
     if encoding {
         uses.add("axum", &["Json"]);
         uses.add("axum::http", &["StatusCode"]);
@@ -578,9 +585,11 @@ fn routes(stem: &Stem) -> Fn {
     }
 }
 
-// A design type's marker: the struct or enum under its signature, fenced in
-// its doc.
-fn design(design_type: &Type) -> Item {
+// A design type as the scaffold lays it: the struct or enum under its
+// signature, fenced in its doc, with the fields or variants the signature
+// was read into and the fn each `serde(default)` names after it, or the
+// empty marker where the signature was not read.
+fn design(design_type: &Type, file: &mut File) {
     let fence = Fence::around(&design_type.signature);
     let mut docs = Doc::new([
         format!("The design type `{}`.", design_type.key),
@@ -591,30 +600,94 @@ fn design(design_type: &Type) -> Item {
         docs.push(line.trim_end());
     }
     docs.push(fence.to_string());
-    let attrs = vec![format!("#[derive({DERIVES})]")];
     let name = design_type.name.clone();
-    if design_type.is_enum {
-        Item::Enum(Enum {
-            docs,
+    match &design_type.body {
+        Body::Struct {
+            generics,
             attrs,
+            fields,
+            defaults,
+            eq,
+        } => {
+            let derives = if *eq { DERIVES } else { DERIVES_WITHOUT_EQ };
+            let mut attributes = vec![format!("#[derive({derives})]")];
+            attributes.extend(attrs.iter().cloned());
+            file.push(Struct {
+                docs,
+                attrs: attributes,
+                vis: Vis::Pub,
+                name,
+                generics: generics.clone(),
+                fields: fields.iter().map(laid_field).collect(),
+            });
+            for default in defaults {
+                file.push(default_fn(default));
+            }
+        }
+        Body::Enum { variants, numeric } => {
+            if *numeric {
+                docs.push("");
+                docs.push(
+                    "The source enumerates by number; the wire carries each variant's name here.",
+                );
+            }
+            file.push(Enum {
+                docs,
+                attrs: vec![format!("#[derive({DERIVES})]")],
+                vis: Vis::Pub,
+                name,
+                variants: variants.iter().map(laid_variant).collect(),
+            });
+        }
+        Body::Marker { is_enum: true } => file.push(Enum {
+            docs,
+            attrs: vec![format!("#[derive({DERIVES})]")],
             vis: Vis::Pub,
             name,
             ..Enum::default()
-        })
-    } else {
-        Item::Struct(Struct {
+        }),
+        Body::Marker { is_enum: false } => file.push(Struct {
             docs,
-            attrs,
+            attrs: vec![format!("#[derive({DERIVES})]")],
             vis: Vis::Pub,
             name,
             ..Struct::default()
-        })
+        }),
+    }
+}
+
+fn laid_field(member: &Member) -> Field {
+    Field {
+        docs: Doc::new(member.docs.iter().cloned()),
+        attrs: member.attrs.clone(),
+        vis: Vis::Pub,
+        name: member.name.clone(),
+        ty: member.ty.clone(),
+    }
+}
+
+fn laid_variant(member: &Member) -> Variant {
+    Variant {
+        docs: Doc::new(member.docs.iter().cloned()),
+        attrs: member.attrs.clone(),
+        name: member.name.clone(),
+    }
+}
+
+// The fn a field's `serde(default)` names, `const` where its value allows.
+fn default_fn(default: &DefaultFn) -> Fn {
+    Fn {
+        is_const: default.constant,
+        name: default.name.clone(),
+        ret: default.ret.clone(),
+        body: vec![format!("{}{}", " ".repeat(TAB), default.value)],
+        ..Fn::default()
     }
 }
 
 // `struct Order` or `enum Status`, as the type's marker spells it.
 pub fn declaration(design_type: &Type) -> String {
-    let keyword = if design_type.is_enum { "enum" } else { "struct" };
+    let keyword = if design_type.body.is_enum() { "enum" } else { "struct" };
     format!("{keyword} {}", design_type.name)
 }
 
@@ -628,6 +701,7 @@ fn handler(handler: &Handler, file: &mut File) {
         attrs: vec!["#[derive(Debug, Deserialize)]".to_owned()],
         vis: Vis::Pub,
         name: handler.input.clone(),
+        generics: String::new(),
         fields: handler
             .params
             .iter()

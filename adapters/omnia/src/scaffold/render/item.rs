@@ -56,6 +56,7 @@ pub struct Fn {
     pub docs: Doc,
     pub attrs: Vec<String>,
     pub vis: Vis,
+    pub is_const: bool,
     pub is_async: bool,
     pub name: String,
     pub generics: String,
@@ -64,12 +65,14 @@ pub struct Fn {
     pub body: Vec<String>,
 }
 
+// A struct: its generics, `<T>`, printed after the name where it has any.
 #[derive(Default)]
 pub struct Struct {
     pub docs: Doc,
     pub attrs: Vec<String>,
     pub vis: Vis,
     pub name: String,
+    pub generics: String,
     pub fields: Vec<Field>,
 }
 
@@ -87,7 +90,14 @@ pub struct Enum {
     pub attrs: Vec<String>,
     pub vis: Vis,
     pub name: String,
-    pub variants: Vec<String>,
+    pub variants: Vec<Variant>,
+}
+
+// A unit variant under its docs and attributes.
+pub struct Variant {
+    pub docs: Doc,
+    pub attrs: Vec<String>,
+    pub name: String,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -222,9 +232,13 @@ impl Uses {
 
     // `use <path>::<name>;` for one name, `use <path>::{<names>};` for
     // several, the names compressed beneath the brace where the line is
-    // too long.
+    // too long, and the standard library's group a blank line apart from
+    // the crates', as the template's `group_imports` lays them.
     fn render(&self, out: &mut String) {
-        for (path, names) in &self.0 {
+        for (at, (path, names)) in self.0.iter().enumerate() {
+            if at > 0 && is_std(&self.0[at - 1].0) && !is_std(path) {
+                out.push('\n');
+            }
             if let [name] = names.as_slice() {
                 let _ = writeln!(out, "use {path}::{name};");
                 continue;
@@ -239,6 +253,12 @@ impl Uses {
             }
         }
     }
+}
+
+fn is_std(path: &str) -> bool {
+    ["std", "core", "alloc"]
+        .iter()
+        .any(|root| path == *root || path.starts_with(&format!("{root}::")))
 }
 
 impl Consts {
@@ -280,8 +300,9 @@ impl Fn {
     // at most, and the return on the next line past that.
     fn head(&self, out: &mut String) {
         let lead = format!(
-            "{}{}fn {}",
+            "{}{}{}fn {}",
             self.vis.prefix(),
+            if self.is_const { "const " } else { "" },
             if self.is_async { "async " } else { "" },
             self.name
         );
@@ -316,7 +337,7 @@ impl Struct {
     fn render(&self, out: &mut String) {
         self.docs.render("///", out);
         attributes(&self.attrs, out);
-        let decl = format!("{}struct {}", self.vis.prefix(), self.name);
+        let decl = format!("{}struct {}{}", self.vis.prefix(), self.name, self.generics);
         if self.fields.is_empty() {
             let _ = writeln!(out, "{decl} {{}}");
             return;
@@ -351,9 +372,20 @@ impl Enum {
         }
         let _ = writeln!(out, "{decl} {{");
         for variant in &self.variants {
-            let _ = writeln!(out, "{}{variant},", pad(TAB));
+            variant.render(out);
         }
         out.push_str("}\n");
+    }
+}
+
+impl Variant {
+    fn render(&self, out: &mut String) {
+        let indent = pad(TAB);
+        self.docs.render(&format!("{indent}///"), out);
+        for attr in &self.attrs {
+            let _ = writeln!(out, "{indent}{attr}");
+        }
+        let _ = writeln!(out, "{indent}{},", self.name);
     }
 }
 

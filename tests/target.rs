@@ -119,9 +119,9 @@ const OMNIA_ENTRY: &str = "//! # orders\n//!\n//! The `orders` stem.\n\npub mod 
                            // one entry per part with topics, each added at the end\n    ])\n}\n";
 // The routed slice's part as the adapter scaffolds it: the module doc from the
 // plan's brief, the imports its handler needs, the path constant and the
-// `routes()` over it, the owned design type with its signature fenced in
-// its doc, the handler's input and output over the route, and the handler
-// under its requirement, its body the marker.
+// `routes()` over it, the owned design type laid from its signature with the
+// signature fenced in its doc, the handler's input and output over the
+// route, and the handler under its requirement, its body the marker.
 const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse common::Capabilities;\nuse \
                             omnia_sdk::api::http::get;\nuse omnia_sdk::api::{Client, \
                             Context};\nuse serde::{Deserialize, Serialize};\n\n// The paths the \
@@ -131,7 +131,8 @@ const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse common::Capabil
                             get(read))\n}\n\n/// The design type `orders.Order`.\n///\n/// \
                             ```text\n/// interface Order {\n///   id: string;\n/// }\n/// \
                             ```\n#[derive(Debug, Clone, PartialEq, Eq, Serialize, \
-                            Deserialize)]\npub struct Order {}\n\n/// The input of `GET \
+                            Deserialize)]\npub struct Order {\n    /// The `id` field.\n    pub \
+                            id: String,\n}\n\n/// The input of `GET \
                             /orders/{id}`.\n#[derive(Debug, Deserialize)]\npub struct ReadInput \
                             {\n    /// The `id` path parameter.\n    pub id: String,\n}\n\n/// \
                             The output of `GET /orders/{id}`.\n#[derive(Debug, \
@@ -934,19 +935,20 @@ fn assert_omnia_scaffold_brief(brief: &str) {
     let module_text = format!("Its text:\n\n````rust\n{OMNIA_MODULE}````\n");
     let tests_text = format!("Its text:\n\n```rust\n{OMNIA_TESTS}```\n");
     let markers = format!(
-        "Markers, in fill order, each one `edit_files` edit whose `find` is the block quoted \
-         under it:\n\n1. `pub struct Order {{}}` in `crates/orders/src/reading.rs`: the design \
-         type `orders.Order`. Replace it with the struct the signature in its doc spells, every \
-         field documented; drop `Eq` from its derives where a field is a float.\n\n2. The handler \
-         `read` of `GET /orders/{{id}}` in `crates/orders/src/reading.rs`: fill `ReadInput` and \
-         `ReadOutput` with the wire's fields, then replace this block with the body. Its `Ok` is \
-         answered `200` as JSON; for another status, declare a route function over \
-         `handle_with(MethodFilter::GET, read, decode, |output: ReadOutput| \
-         (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers reference shows \
-         and name it in `routes()` in place of `get(read)`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n\
-         3. The test `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`: \
-         replace this block with the filled test, its `#[ignore = ..]` line gone: the \
-         arrangement over `provider()`, the act as laid, and the assertions the scenario \
+        "The design types `Order` (`orders.Order`) in `crates/orders/src/reading.rs` are \
+         scaffolded as their signatures spell, each field and variant documented and the wire's \
+         names kept through `serde(rename)`; they are finished, so change a field only where the \
+         check refuses it.\n\nMarkers, in fill order, each one `edit_files` edit whose `find` is \
+         the block quoted under it:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
+         `crates/orders/src/reading.rs`: fill `ReadInput` and `ReadOutput` with the wire's \
+         fields, then replace this block with the body. Its `Ok` is answered `200` as JSON; for \
+         another status, declare a route function over `handle_with(MethodFilter::GET, read, \
+         decode, |output: ReadOutput| (StatusCode::NO_CONTENT, Json(output)).into_response())` \
+         as the handlers reference shows and name it in `routes()` in place of \
+         `get(read)`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
+         `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`: replace this \
+         block with the filled test, its `#[ignore = ..]` line gone: the arrangement over \
+         `provider()`, the act as laid, and the assertions the scenario \
          states.\n\n```rust\n{OMNIA_TEST_MARKER}```\n"
     );
     for carried in [
@@ -1387,8 +1389,12 @@ async fn omnia_scaffold_conflict() {
 }
 
 // A design type whose signature declares an enumeration in any of the
-// source languages is scaffolded as a `pub enum`, so a turn never writes a
-// struct standing for one; every other signature is a `pub struct`.
+// source languages is scaffolded as a `pub enum` over its variants, each
+// renamed to the literal the wire carries where the signature spells one
+// and a numeric enumeration's doc saying what the wire carries, so a turn
+// never writes a struct standing for one; a union of object types, which no
+// enum lays, is the empty marker the brief cites, and every laid type is
+// named finished.
 #[tokio::test]
 async fn omnia_scaffold_enum() {
     let project = omnia_tree().await;
@@ -1415,24 +1421,239 @@ async fn omnia_scaffold_enum() {
     let part = text(&project, "crates/orders/src/reading.rs");
     let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
     for declared in [
-        "pub enum OrderStatus {}",
-        "pub enum CustomerTier {}",
-        "pub enum Channel {}",
-        "pub enum Priority {}",
+        "pub enum OrderStatus {\n    /// The `Placed` variant.\n    Placed,\n    /// The `Paid` \
+         variant.\n    Paid,\n}",
+        "pub enum CustomerTier {\n    /// The `standard` variant.\n    #[serde(rename = \
+         \"standard\")]\n    Standard,\n    /// The `gold` variant.\n    #[serde(rename = \
+         \"gold\")]\n    Gold,\n}",
+        "pub enum Channel {\n    /// The `web` variant.\n    #[serde(rename = \"web\")]\n    \
+         Web,\n    /// The `shop` variant.\n    #[serde(rename = \"shop\")]\n    Shop,\n}",
+        "pub enum Priority {\n    /// The `Low` variant.\n    Low,\n    /// The `High` \
+         variant.\n    High,\n}",
         "pub struct OrderRef {}",
-        "pub struct Order {}",
+        "pub struct Order {\n    /// The `id` field.\n    pub id: String,\n}",
     ] {
         let declaration = format!("{derives}{declared}\n");
         assert!(part.contains(&declaration), "the part declares `{declared}`: {part}");
     }
+    assert!(
+        part.contains(
+            "///   High,\n/// }\n/// ```\n///\n/// The source enumerates by number; the wire \
+             carries each variant's name here.\n#[derive("
+        ),
+        "the numeric enumeration's doc says what the wire carries: {part}"
+    );
     assert_eq!(part.matches(&format!("{derives}pub enum ")).count(), 4, "{part}");
     assert_eq!(part.matches(&format!("{derives}pub struct ")).count(), 2, "{part}");
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
     let brief = &model.seen()[0].messages[0];
     for cited in [
-        "`pub enum OrderStatus {}` in `crates/orders/src/reading.rs`: the design type \
-         `orders.OrderStatus`. Replace it with the enum the signature in its doc spells",
-        "`pub struct Order {}` in `crates/orders/src/reading.rs`: the design type `orders.Order`. \
-         Replace it with the struct the signature in its doc spells",
+        "The design types `OrderStatus` (`orders.OrderStatus`), `CustomerTier` \
+         (`orders.CustomerTier`), `Channel` (`orders.Channel`), `Priority` (`orders.Priority`), \
+         and `Order` (`orders.Order`) in `crates/orders/src/reading.rs` are scaffolded as their \
+         signatures spell, each field and variant documented and the wire's names kept through \
+         `serde(rename)`; they are finished, so change a field only where the check refuses it.",
+        "1. `pub struct OrderRef {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.OrderRef`, whose signature the scaffold could not lay. Replace it with the \
+         struct the signature in its doc spells",
+    ] {
+        assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
+    }
+    assert!(!brief.contains("`pub enum OrderStatus {}`"), "a laid type is no marker: {brief}");
+}
+
+// A TypeScript interface is laid field by field: the wire's name kept
+// through `serde(rename)` over its snake-case spelling, an optional field
+// an `Option`, a `number` an integer where its name counts and a float
+// otherwise, which drops `Eq` from the derives, an array of an owned type a
+// `Vec` of its claimed name, a `Record` a `BTreeMap` with the import it
+// needs, a field typed by a design type another slice declares a
+// `serde_json::Value` under a doc naming it, and a generic interface a
+// generic struct; the brief names the laid types finished and the carried
+// field as one to leave.
+#[tokio::test]
+async fn omnia_scaffold_types() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.design = "# Design\n\nType: orders.Order\n```\n```\n\nType: orders.Address\n```\n```\n\n\
+                    Type: orders.OrderLine\n```\n```\n\nType: orders.Page\n```\n```\n"
+        .to_owned();
+    slice.types = [
+        (
+            "orders.Order",
+            "export interface Order {\n  customerId: string;\n  lines: OrderLine[];\n  shipTo: \
+             Address;\n  courierNote?: string;\n  subtotalCents: number;\n  weightKg: number;\n  \
+             meta: Record<string, unknown>;\n}",
+        ),
+        (
+            "orders.OrderLine",
+            "export interface OrderLine {\n  sku: string;\n  quantity: number;\n}",
+        ),
+        ("orders.Page", "export interface Page<T> {\n  items: T[];\n  total: number;\n}"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        part.contains(
+            "\n\nuse std::collections::BTreeMap;\n\nuse serde::{Deserialize, Serialize};\n\n"
+        ),
+        "the map's import leads the file in the standard library's group: {part}"
+    );
+    for declared in [
+        "#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]\npub struct Order {\n    /// \
+         The `customerId` field.\n    #[serde(rename = \"customerId\")]\n    pub customer_id: \
+         String,\n    /// The `lines` field.\n    pub lines: Vec<OrderLine>,\n    /// The `shipTo` \
+         field.\n    /// Carries the design's `orders.Address`, declared by another slice, as a \
+         value.\n    #[serde(rename = \"shipTo\")]\n    pub ship_to: serde_json::Value,\n    /// \
+         The `courierNote` field.\n    #[serde(rename = \"courierNote\")]\n    pub courier_note: \
+         Option<String>,\n    /// The `subtotalCents` field.\n    #[serde(rename = \
+         \"subtotalCents\")]\n    pub subtotal_cents: i64,\n    /// The `weightKg` field.\n    \
+         #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `meta` field.\n    \
+         pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct OrderLine {\n    \
+         /// The `sku` field.\n    pub sku: String,\n    /// The `quantity` field.\n    pub \
+         quantity: i64,\n}\n",
+        "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct Page<T> {\n    \
+         /// The `items` field.\n    pub items: Vec<T>,\n    /// The `total` field.\n    pub \
+         total: i64,\n}\n",
+    ] {
+        assert!(part.contains(declared), "the part lays `{declared}`: {part}");
+    }
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let brief = &model.seen()[0].messages[0];
+    let cited = "The design types `Order` (`orders.Order`), `OrderLine` (`orders.OrderLine`), and `Page` \
+         (`orders.Page`) in `crates/orders/src/reading.rs` are scaffolded as their signatures \
+         spell, each field and variant documented and the wire's names kept through \
+         `serde(rename)`; they are finished, so change a field only where the check refuses it.\n\
+         The field `Order.ship_to` (`orders.Address`) is `serde_json::Value` because the type it \
+         stands for is declared by another slice or by no design type: leave it as laid, and \
+         read the value's fields where the behaviour needs them.\n\nMarkers, in fill order";
+    assert!(brief.contains(cited), "the brief carries `{cited}`: {brief}");
+    assert!(!brief.contains("whose signature the scaffold could not lay"), "{brief}");
+}
+
+// A Python model is laid the same way: an annotation its Rust type, a
+// `None` default an `Option`, a literal default a `serde(default)` over a
+// `const fn` answering it beside the struct, a pydantic alias the wire's
+// name, and an enumeration's members renamed to their literals.
+#[tokio::test]
+async fn omnia_scaffold_python_types() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = [
+        (
+            "orders.Order",
+            "class Order(BaseModel):\n    customer_id: str\n    lines: list[Line]\n    note: str | \
+             None = None\n    quantity: int = 1\n    def total(self) -> int: ...",
+        ),
+        (
+            "orders.Line",
+            "class Line(BaseModel):\n    sku: str\n    quantity: int = Field(default=1, \
+             alias=\"qty\")",
+        ),
+        (
+            "orders.Status",
+            "class Status(str, Enum):\n    PENDING = \"pending\"\n    PAID = \"paid\"",
+        ),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
+    for declared in [
+        "pub struct Order {\n    /// The `customer_id` field.\n    pub customer_id: String,\n    \
+         /// The `lines` field.\n    pub lines: Vec<Line>,\n    /// The `note` field.\n    pub \
+         note: Option<String>,\n    /// The `quantity` field.\n    #[serde(default = \
+         \"default_quantity\")]\n    pub quantity: i64,\n}\n\nconst fn default_quantity() -> i64 \
+         {\n    1\n}\n",
+        "pub struct Line {\n    /// The `sku` field.\n    pub sku: String,\n    /// The `qty` \
+         field.\n    #[serde(default = \"default_qty\")]\n    pub qty: i64,\n}\n\nconst fn \
+         default_qty() -> i64 {\n    1\n}\n",
+        "pub enum Status {\n    /// The `pending` variant.\n    #[serde(rename = \"pending\")]\n    \
+         Pending,\n    /// The `paid` variant.\n    #[serde(rename = \"paid\")]\n    Paid,\n}\n",
+    ] {
+        let declaration = format!("{derives}{declared}");
+        assert!(part.contains(&declaration), "the part lays `{declared}`: {part}");
+    }
+    assert!(!part.contains("pub total"), "a method is no field: {part}");
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+}
+
+// What the reader cannot lay whole stays the empty marker with the brief's
+// entry: an alias inferred from a schema, a union of object types, and a
+// table; a design type keyed by its anchor, where two declarations share a
+// name, is named from the identifier its signature declares and claimed
+// apart from the first.
+#[tokio::test]
+async fn omnia_scaffold_type_fallbacks() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = [
+        ("orders.ListQuery", "export type ListQuery = z.infer<typeof listQuerySchema>;"),
+        ("orders.OrderRef", "export type OrderRef = { id: string } | { code: string };"),
+        (
+            "orders.TRANSITIONS",
+            "export const TRANSITIONS: Record<OrderState, OrderState[]> = {\n  placed: \
+             ['paid'],\n  paid: [],\n};",
+        ),
+        ("orders.Order", "interface Order {\n  id: string;\n}"),
+        ("Order (src/orders.ts#L3)", "export interface Order {\n  code: string;\n}"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
+    for declared in [
+        "pub struct ListQuery {}\n",
+        "pub struct OrderRef {}\n",
+        "pub struct Transitions {}\n",
+        "pub struct Order {\n    /// The `id` field.\n    pub id: String,\n}\n",
+        "pub struct Order2 {\n    /// The `code` field.\n    pub code: String,\n}\n",
+    ] {
+        let declaration = format!("{derives}{declared}");
+        assert!(part.contains(&declaration), "the part declares `{declared}`: {part}");
+    }
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let brief = &model.seen()[0].messages[0];
+    for cited in [
+        "The design types `Order` (`orders.Order`) and `Order2` (`Order (src/orders.ts#L3)`) in \
+         `crates/orders/src/reading.rs` are scaffolded as their signatures spell",
+        "1. `pub struct ListQuery {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.ListQuery`, whose signature the scaffold could not lay. Replace it with the \
+         struct the signature in its doc spells, every field documented; drop `Eq` from its \
+         derives where a field is a float.",
+        "2. `pub struct OrderRef {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.OrderRef`, whose signature the scaffold could not lay.",
+        "3. `pub struct Transitions {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.TRANSITIONS`, whose signature the scaffold could not lay.",
     ] {
         assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
     }

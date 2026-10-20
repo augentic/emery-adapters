@@ -4,6 +4,7 @@ mod names;
 mod reference;
 mod render;
 mod route;
+mod types;
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -119,7 +120,7 @@ struct Type {
     name: String,
     key: String,
     signature: String,
-    is_enum: bool,
+    body: types::Body,
 }
 
 struct Test {
@@ -271,8 +272,9 @@ impl Scaffold {
             }
         }
 
+        let design_keys = types::design_keys(&slice.design);
         for ((stem, types), requirements) in stems.iter_mut().zip(&owned).zip(&laid) {
-            stem.plan(types, requirements, &mut table);
+            stem.plan(types, requirements, &design_keys, &mut table);
             stem.read(root)?;
         }
         let mut lines: Vec<Line> = Vec::new();
@@ -515,18 +517,40 @@ impl Stem {
     }
 
     // Names every item the part declares, the design types first so one
-    // keeps its name over a handler's wrapper.
-    fn plan(&mut self, owned: &[&DesignType], requirements: &[&Requirement], table: &mut Table) {
+    // keeps its name over a handler's wrapper, and lays each type once
+    // every one is named, so a field naming another the slice owns reads
+    // its claimed name.
+    fn plan(
+        &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
+        table: &mut Table,
+    ) {
         let mut claims = Claims::default();
-        for design_type in owned {
-            let key = design_type.key.as_str();
-            let last = key.rsplit('.').next().unwrap_or(key);
-            let first = key.split('.').next().unwrap_or(key);
+        let reads: Vec<types::Read> =
+            owned.iter().map(|design_type| types::read(&design_type.signature)).collect();
+        let names: Vec<String> = owned
+            .iter()
+            .zip(&reads)
+            .map(|(design_type, read)| {
+                // `orders.Order`, or `Order (src/orders.ts#L3)` where the design
+                // keyed two declarations of one name by their anchors
+                let key = design_type.key.as_str();
+                let dotted = key.split(" (").next().unwrap_or(key);
+                let (stem, last) = match dotted.rsplit_once('.') {
+                    Some((head, last)) => (head.split('.').next(), last),
+                    None => (None, dotted),
+                };
+                let declared = read.name.as_deref().unwrap_or(last);
+                let suffix = stem.map_or_else(|| "2".to_owned(), pascal);
+                claims.types.claim(&pascal(declared), &suffix)
+            })
+            .collect();
+        let bodies = types::lay(&reads, &names, design_keys, &mut claims.values);
+        for ((design_type, name), body) in owned.iter().zip(names).zip(bodies) {
             self.types.push(Type {
-                name: claims.types.claim(&pascal(last), &pascal(first)),
-                key: key.to_owned(),
-                is_enum: is_enum(&design_type.signature),
+                name,
+                key: design_type.key.clone(),
                 signature: design_type.signature.clone(),
+                body,
             });
         }
 
@@ -849,7 +873,60 @@ impl Stem {
         }
     }
 
+    // The design types laid from their signatures, finished as they stand,
+    // and the fields among them that carry another type as a value.
+    fn brief_types(&self, text: &mut String) {
+        let laid: Vec<String> = self
+            .types
+            .iter()
+            .filter(|design_type| !design_type.body.is_marker())
+            .map(|design_type| format!("`{}` (`{}`)", design_type.name, design_type.key))
+            .collect();
+        if laid.is_empty() {
+            return;
+        }
+        let _ = writeln!(
+            text,
+            "The design types {} in `{}` are scaffolded as their signatures spell, each field \
+             and variant documented and the wire's names kept through `serde(rename)`; they are \
+             finished, so change a field only where the check refuses it.",
+            listed(&laid),
+            self.module.path
+        );
+        let carried: Vec<String> = self
+            .types
+            .iter()
+            .flat_map(|design_type| {
+                design_type.body.carried().map(move |(field, stands_for)| {
+                    format!("`{}.{field}` (`{stands_for}`)", design_type.name)
+                })
+            })
+            .collect();
+        match carried.as_slice() {
+            [] => {}
+            [one] => {
+                let _ = writeln!(
+                    text,
+                    "The field {one} is `serde_json::Value` because the type it stands for is \
+                     declared by another slice or by no design type: leave it as laid, and read \
+                     the value's fields where the behaviour needs them."
+                );
+            }
+            several => {
+                let _ = writeln!(
+                    text,
+                    "The fields {} are `serde_json::Value` because the type each stands for is \
+                     declared by another slice or by no design type: leave them as laid, and read \
+                     the value's fields where the behaviour needs them.",
+                    listed(several)
+                );
+            }
+        }
+        text.push('\n');
+    }
+
     fn brief_markers(&self, text: &mut String) {
+        self.brief_types(text);
         if self.module.held || self.tests.as_ref().is_some_and(|tests| tests.held) {
             text.push_str(
                 "The markers below are the ones a fresh scaffold writes; a held file holds \
@@ -861,17 +938,17 @@ impl Stem {
              under it:\n\n",
         );
         let mut count = 0;
-        for design_type in &self.types {
+        for design_type in self.types.iter().filter(|design_type| design_type.body.is_marker()) {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. `pub {} {{}}` in `{}`: the design type `{}`. Replace it with the {} the \
-                 signature in its doc spells, every field documented; drop `Eq` from its derives \
-                 where a field is a float.\n",
+                "{count}. `pub {} {{}}` in `{}`: the design type `{}`, whose signature the scaffold \
+                 could not lay. Replace it with the {} the signature in its doc spells, every \
+                 field documented; drop `Eq` from its derives where a field is a float.\n",
                 render::declaration(design_type),
                 self.module.path,
                 design_type.key,
-                if design_type.is_enum { "enum" } else { "struct" }
+                if design_type.body.is_enum() { "enum" } else { "struct" }
             );
         }
         for handler in &self.handlers {
@@ -1138,43 +1215,6 @@ impl Line {
     fn key(&self) -> &str {
         self.text.lines().last().unwrap_or(&self.text).trim()
     }
-}
-
-// Whether a design signature declares an enumeration: a Rust or TypeScript
-// `enum`, a TypeScript union of string literals, or a Python class over an
-// `Enum` base.
-fn is_enum(signature: &str) -> bool {
-    let Some(head) = signature.lines().map(str::trim).find(|line| !line.is_empty()) else {
-        return false;
-    };
-    let mut head = head;
-    for prefix in ["export ", "declare ", "pub(crate) ", "pub ", "const "] {
-        head = head.strip_prefix(prefix).unwrap_or(head);
-    }
-    if head.starts_with("enum ") {
-        return true;
-    }
-    if let Some(rest) = head.strip_prefix("class ")
-        && let Some((_, bases)) = rest.split_once('(')
-        && let Some((bases, _)) = bases.split_once(')')
-    {
-        return bases.rsplit(',').next().is_some_and(|base| base.trim().ends_with("Enum"));
-    }
-    if let Some(rest) = head.strip_prefix("type ")
-        && let Some((_, union)) = rest.split_once('=')
-    {
-        let start = signature.find(union).unwrap_or(0);
-        let union = signature[start..].split(';').next().unwrap_or_default();
-        let literals: Vec<&str> =
-            union.split('|').map(str::trim).filter(|part| !part.is_empty()).collect();
-        return !literals.is_empty()
-            && literals.iter().all(|literal| {
-                literal.len() >= 2
-                    && ((literal.starts_with('"') && literal.ends_with('"'))
-                        || (literal.starts_with('\'') && literal.ends_with('\'')))
-            });
-    }
-    false
 }
 
 // The slice's name less the stem and the hyphen after it where it leads
