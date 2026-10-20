@@ -24,6 +24,7 @@ emery-typescript = { path = "adapters/typescript" }
 emery-node = { path = "adapters/node" }
 emery-omnia = { path = "adapters/omnia" }
 omnia-template.workspace = true
+syn.workspace = true
 test-programs.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -42,7 +43,7 @@ homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
 rust-version = "1.99"
-version = "0.14.0"
+version = "0.12.0"
 publish = false
 
 [workspace.lints.rust]
@@ -74,9 +75,11 @@ unused_result_ok = "warn"
 [workspace.dependencies]
 futures = "0.3.34"
 opentelemetry-proto = "0.33.1"
+proc-macro2 = { version = "1.0.107", default-features = false, features = ["span-locations"] }
 semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+syn = { version = "3.0.9", default-features = false, features = ["full", "parsing", "visit"] }
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "sync", "time"] }
 toml = "1.1.8"
 tracing = "0.1.44"

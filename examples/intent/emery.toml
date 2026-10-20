@@ -1,4 +1,4 @@
 [[source]]
 name = "intent"
-adapter = "emery:intent@0.13.0"
+adapter = "emery:intent@0.12.0"
 description = "Ship the orders service: place, read, and cancel orders over HTTP. Every order carries at least one line item; a shipped order can no longer be cancelled. Keep the API platform-neutral."

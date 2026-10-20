@@ -2,6 +2,8 @@
 
 use std::collections::BTreeSet;
 
+use emery_sdk::words;
+
 // Every strict and reserved keyword, so a part or a function named as one
 // takes a trailing underscore rather than a raw identifier.
 const KEYWORDS: &[&str] = &[
@@ -11,39 +13,6 @@ const KEYWORDS: &[&str] = &[
     "return", "self", "static", "struct", "super", "trait", "true", "try", "type", "typeof",
     "union", "unsafe", "unsized", "use", "virtual", "where", "while", "yield",
 ];
-
-// The words of `text`, split at its separators and its camel-case
-// boundaries, so `orderId` and `HTTPServer` spell `order_id` and
-// `http_server`.
-fn words(text: &str) -> Vec<String> {
-    let chars: Vec<char> = text.chars().collect();
-    let mut words = Vec::new();
-    let mut word = String::new();
-    for (at, &ch) in chars.iter().enumerate() {
-        if !ch.is_ascii_alphanumeric() {
-            if !word.is_empty() {
-                words.push(std::mem::take(&mut word));
-            }
-            continue;
-        }
-        let after = at.checked_sub(1).map(|before| chars[before]);
-        let boundary = ch.is_ascii_uppercase()
-            && after.is_some_and(|before| {
-                before.is_ascii_lowercase()
-                    || before.is_ascii_digit()
-                    || (before.is_ascii_uppercase()
-                        && chars.get(at + 1).is_some_and(char::is_ascii_lowercase))
-            });
-        if boundary && !word.is_empty() {
-            words.push(std::mem::take(&mut word));
-        }
-        word.push(ch.to_ascii_lowercase());
-    }
-    if !word.is_empty() {
-        words.push(word);
-    }
-    words
-}
 
 pub(super) fn snake(text: &str) -> String {
     let words = words(text);
@@ -114,19 +83,21 @@ pub(super) fn escape(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+// One namespace of a part's identifiers: every name reserved so far, so no
+// two items of the kind share one.
 #[derive(Default)]
 pub(super) struct Names(BTreeSet<String>);
 
 impl Names {
-    // The names the module's own imports and functions take, so a claim
-    // never shadows one.
-    pub(super) fn reserving(taken: &[&str]) -> Self {
+    // A namespace with `taken` reserved already: the module's own imports
+    // and functions, so a later reservation never shadows one.
+    pub(super) fn taken(taken: &[&str]) -> Self {
         Self(taken.iter().map(|name| (*name).to_owned()).collect())
     }
 
-    // `name` where no earlier claim took it, else `name` with `suffix` after
-    // it, then with a counter after both.
-    pub(super) fn claim(&mut self, name: &str, suffix: &str) -> String {
+    // Reserves `name` where nothing took it, else `name` with `suffix` after
+    // it, then with a counter after both, answering the name reserved.
+    pub(super) fn reserve(&mut self, name: &str, suffix: &str) -> String {
         let mut candidate = name.to_owned();
         let mut count = 1;
         while !self.0.insert(candidate.clone()) {

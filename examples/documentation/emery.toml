@@ -1,4 +1,4 @@
 [[source]]
 name = "docs"
-adapter = "emery:documentation@0.13.0"
+adapter = "emery:documentation@0.12.0"
 path = "docs/"

@@ -7,8 +7,8 @@ use syn::{
     Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, Stmt, TraitItemFn,
 };
 
-use super::syntax::{self, calls, derives, is_unit_ok, pat_leads, pat_names, path_ends};
 use super::{Module, Tree};
+use crate::syntax::{self, calls, derives, is_unit_ok, pat_leads, pat_names, path_ends};
 
 // The calls that answer an empty collection, each with its spelling.
 const NOTHING: &[(&[&str], &str)] = &[
@@ -434,7 +434,7 @@ impl<'ast> Visit<'ast> for Misses<'_> {
         {
             let arrow = syntax::line(node.fat_arrow_token.spans[0]);
             let line = syntax::head_line(&node.body).unwrap_or(arrow);
-            let spelled = if line == arrow { self.module.spelled(line) } else { spelling };
+            let spelled = if line == arrow { self.module.line(line) } else { spelling };
             self.answered(line, &spelled);
             return;
         }

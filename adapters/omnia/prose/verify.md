@@ -1,60 +1,188 @@
 # target.verify
 
-Verify the integrated project tree after a wave of slices has merged into it, repair what the checks find, and answer a verdict.
+Verify the integrated project tree after a wave of slices has merged into it.
+Run the checks. Repair what they find. Run them again. Answer with one JSON object, the verdict.
 
 ## Inputs
 
-- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools, run the checks below in it, and repair what they find through this call's two tools: `edit_files` for a change within a file, each edit the one place its `find` matches and the text to put there, which is what a repair almost always is — a line added to a list, a type's shape put back to the design's; `write_files` for a file written whole and a file removed through its `delete`. Then run the checks again. The shell runs the checks and nothing else: a file it writes is not a repair. What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
+- `$WORKSPACE` — the integrated tree, lent writable with the shell. Read it through the workspace tools. Run the checks in it.
+- The two tools. `edit_files` changes within a file: each edit's `find` must match one place, and `replace` is the text to put there.
+  A repair is almost always an `edit_files` edit: a line added to a list, a type's shape put back to the design's.
+  `write_files` writes a file whole, and removes a file through its `delete`.
+- A refused `find` names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more.
 
+The shell runs the checks and nothing else. A file it writes is not a repair.
+What you write, and what a check leaves behind, is sealed as the wave's own commit by the engine, never by you.
 Nothing outside `$WORKSPACE` is reachable.
+
+## The tree
+
+The tree is an omnia guest in the [layout](references/layout.md):
+
+- the root package `guest`: the entry in `src/lib.rs`, the route list in `src/routes.rs`, the topic list in `src/messaging.rs`, and the two rungs under `tests/`;
+- `crates/common`: the capability bound, the two folds a stem's entry composes its parts with, the topic table, and the environment helpers;
+- one crate per stem beside it, its entry composing its parts' routes and topics, each with its own manifest and tests;
+- the root `Cargo.toml`, pinning every shared crate.
+
+Five checks are yours to run. The layout's own rules the adapter holds for you when you answer, as [the rules held](#the-rules-held) says.
+Do not read the tree for those rules.
 
 ## Checks
 
-The tree is an omnia guest in the [layout](references/layout.md): the root package `guest` holding the entry in `src/lib.rs`, the route list in `src/routes.rs`, the topic list in `src/messaging.rs`, and the two rungs under `tests/`; `crates/common` holding the capability bound, the two folds a stem's entry composes its parts with, the topic table, and the environment helpers; one crate per stem beside it, its entry composing its parts' routes and topics, each with its own manifest and tests; and the root `Cargo.toml` pinning every shared crate. Five checks are yours to run; the layout's own rules the adapter holds for you when you answer, as [the rules held](#the-rules-held) says, so do not read the tree for them. Mark the time (`touch "$TMPDIR/before"`), then run each check in `$WORKSPACE`, in this order, and read what it prints:
+Mark the time first: `touch "$TMPDIR/before"`. Then run each check in `$WORKSPACE`, in this order, and read what it prints.
 
-1. **It lints.** `cargo clippy --workspace --all-targets -- -D warnings` exits 0 over every crate and its tests, under the workspace's lints, the host boundary among them: a `disallowed` method, type, or macro names the capability to reach instead, and the repair is that capability, never an `allow` or an `expect`, which the forbidden lints refuse. The merge may have kept one slice's `Cargo.lock` over another's; the first cargo run resolves the workspace again and rewrites it. A statement naming a stem the root `Cargo.toml`'s `[dependencies]` lacks, a `pub mod` line naming no file, an entry of a stem's routes or topics array naming a part with no such function, or a module using a crate its stem's manifest does not name fails here, and the repair is the missing line, at the end of its list, or the entry removed. A part no entry lists, or a handler no `routes()` names, is dead code here, and the repair is the missing entry or `.route(..)`, never an `allow`.
-2. **The tests pass.** `cargo test --workspace` exits 0, every test of every crate passing, and the two rungs with them: a panic in `tests/routes.rs` naming an overlapping route is two slices routing one path with one method, in `tests/messaging.rs` naming a duplicate topic two slices consuming one, and the owner is whichever slice's requirement states it.
-3. **The guest builds.** `cargo build --target wasm32-wasip2` exits 0 and `target/wasm32-wasip2/debug/guest.wasm` exists: the whole program compiles for the component, every crate a statement named included.
-4. **It is formatted.** `cargo +nightly fmt --all -- --check` exits 0, where `rustup run nightly rustfmt --version` succeeds; where it does not, skip this check and say so in no failure. A file it names is reformatted as it reports, through `edit_files`, or `write_files` whole, a list file included: the formatter may wrap a list statement over lines and never changes what the list holds.
-5. **The checks wrote nothing else.** `find . -type f -not -path './target/*' -newer "$TMPDIR/before"` names `Cargo.lock` and what you repaired at most. Any other path is something a check or a test wrote into the tree. No repository is reachable from `$WORKSPACE`, so `git` cannot answer this.
+1. **It lints.** `cargo clippy --workspace --all-targets -- -D warnings` exits 0.
+   Every crate and its tests, under the workspace's lints, the host boundary among them.
+   A `disallowed` method, type, or macro names the capability to reach instead. The repair is that capability, never an `allow` or an `expect`.
+   The merge may have kept one slice's `Cargo.lock` over another's. The first cargo run resolves the workspace again and rewrites it.
+   What fails here, and its repair:
+   - a statement naming a stem the root `Cargo.toml`'s `[dependencies]` lacks: add the stem's line at the end of the list;
+   - a `pub mod` line naming no file: remove the line;
+   - an entry of a stem's routes or topics array naming a part with no such function: remove the entry;
+   - a module using a crate its stem's manifest does not name: add the line at the end of the stem's `[dependencies]`;
+   - a part no entry lists, or a handler no `routes()` names, is dead code: add the missing entry or `.route(..)`.
+2. **The tests pass.** `cargo test --workspace` exits 0, every test of every crate, and the two rungs with them.
+   A panic in `tests/routes.rs` naming an overlapping route is two slices routing one path with one method.
+   A panic in `tests/messaging.rs` naming a duplicate topic is two slices consuming one topic.
+   The owner is whichever slice's requirement states it.
+3. **The guest builds.** `cargo build --target wasm32-wasip2` exits 0 and `target/wasm32-wasip2/debug/guest.wasm` exists.
+   The whole program compiles for the component, every crate a statement named included.
+4. **It is formatted.** `cargo +nightly fmt --all -- --check` exits 0, where `rustup run nightly rustfmt --version` succeeds.
+   Where it does not succeed, skip this check and name no failure for it.
+   A file it names is reformatted as it reports, through `edit_files`, or `write_files` whole, a list file included.
+   The formatter may wrap a list statement over lines. It never changes what the list holds.
+5. **The checks wrote nothing else.** `find . -type f -not -path './target/*' -newer "$TMPDIR/before"` names `Cargo.lock` and what you repaired, at most.
+   Any other path is something a check or a test wrote into the tree. Remove it through `delete`.
+   No repository is reachable from `$WORKSPACE`, so `git` cannot answer this.
 
-A check that fails ends the sequence where it is useful: a tree that does not compile cannot run its tests or build the guest, a lint failure alone leaves the tests, the guest build, and the formatter worth running, and the fifth runs whatever came before. A check that passed is run again only where a repair touched what it reads: the checks are slow over a whole tree, and the turn has one budget, so run them as few times as the repairs demand and answer once the last run is clean or its failure is yours to report.
+A check that fails ends the sequence where it is useful.
+A tree that does not compile cannot run its tests or build the guest.
+A lint failure alone leaves the tests, the guest build, and the formatter worth running. The fifth runs whatever came before.
+A check that passed is run again only where a repair touched what it reads. The checks are slow, and the turn has one budget.
+Run them as few times as the repairs demand. Answer once the last run is clean or its failure is yours to report.
 
 ## The rules held
 
-When you answer, the adapter reads the tree against the layout's rules and refuses the verdict with every rule it breaks as a finding under `## Findings`, whatever the checks printed. Each finding names the file, the line, and the repair; make it through the two tools, run the checks the repair touches again, and answer again. The rules are:
+When you answer, the adapter reads the tree against the layout's rules.
+It refuses the verdict with every rule the tree breaks as a finding under `## Findings`, whatever the checks printed.
+Each finding names the file, the line, and the repair. Make the repair through the two tools. Run the checks the repair touches again. Answer again.
+The rules are:
 
-- **The static files stand.** Every file of the seed outside the four root lists the layout names — `src/lib.rs`, `tests/routes.rs`, `tests/messaging.rs`, `examples/runtime.rs`, `crates/common/Cargo.toml`, `crates/common/src/lib.rs`, `crates/common/src/config.rs`, `clippy.toml`, the toolchain and tooling files, `supply-chain/`, and `.github/` whole — and the root `Cargo.toml` outside its two lists are held to the exemplar's guest template: the finding is the `-` lines of the template to put back and the `+` lines of the tree to drop, or the template's body whole for a file the tree lacks. Nothing is put back before this turn, so a drift a slice merged is yours to repair as the finding spells it, through `edit_files`, or `write_files` for a file written whole, and so is one your own repair made. Every pin, the lints, and the component's entry are the template's, so a check that fails for a crate the pins lack is repaired in the stem's manifest, where the crate carries its version, never in the root's.
-- **Every stem is merged.** Every stem's `router()` is merged by a `router.merge(<stem>::router())` statement of `src/routes.rs` and its `topics(..)` registered by a `<stem>::topics(router, &env)` statement of `src/messaging.rs`: a stem the lists do not name compiles clean and serves nothing, which no check sees. The repair adds the stem's line at the end of its list through `edit_files` and rewrites no other: the static text around a list stands as the seed spells it, and every line of a list is one entry, once.
-- **Every topic is named.** Every constant of `crates/common/src/topic.rs` is named by a module, as `topic::<NAME>` through `config::topic` or `config::topic_for`; one nothing names is a topic nothing publishes or consumes. The repair names it from the part whose requirement publishes or consumes the topic, or removes the constant with its doc comment through `edit_files`.
-- **No `crates/start/` crate is written.** The seed and the host are `start`, and no crate of the tree is ever `crates/start/`, as the [guardrails](references/guardrails.md) spell out under what `start` becomes. The repair removes every file under `crates/start/` through `delete` and drops any `start` line from the root `Cargo.toml` through `edit_files`.
-- **No module is the process.** Under `crates/*/src`, a function that starts, stops, runs, listens, serves, bootstraps, or shuts down, or a `Main`, `App`, `Server`, or `Application` type is the process the source was, which the host is and the tree never simulates. The repair is not a rename: the module is removed through `delete`, with its `pub mod` line and its test, and the requirements it stood for are left to the report, since what it did the host does or nothing does. Where a removal leaves a crate with no module, the crate stays with its empty list.
-- **No miss is answered as nothing.** A read of the store under a constant key — `StateStore::get(provider, KEY)` — whose function returns an empty collection, by a `return` or as its tail expression, defaults the miss, or answers its `None` arm as nothing has filled the cache and lost the table; a default on the hit's own arm decodes what the store held and is none, and a read under a key built from the input is a lookup and passes. The repair writes the fetch into the reading function through `edit_files`: on `Ok(None)` it fetches the table from its upstream as the design spells the call, stores it under the same key with a TTL, and answers what it fetched.
-- **No struct wraps an HTTP response in a single `data` field.** Under `crates/*/src`, a `Deserialize` struct whose body holds a single `data` field wraps the response in the source's HTTP client property (`response.data`), which the wire never carries. The repair removes the wrapper struct through `edit_files` and deserializes `response.body()` directly into `Vec<T>` for a JSON array or a struct with the body's fields at its root.
-- **Every stem inherits the lints.** Every `crates/*/Cargo.toml` carries `[lints]` with `workspace = true`, since the workspace's lints are the host boundary and reach a crate through that table alone. The repair adds the table through `edit_files` and runs the first check again, which then holds the crate to the boundary.
-- **Every dependency is used.** Every crate a stem's `[dependencies]` names beyond the layout's six fixed lines is spelled by a module or a test of the stem; one no file spells is compiled for nothing, and a slice that named it meant to use it. The repair removes the line through `edit_files`, or writes the use the slice's requirement states, and runs the first two checks again.
-- **Every stem that publishes is reached.** A part spelling `Publish` in a stem whose entry registers no part's `routes()` or `topics`, and whose crate no other stem's module names, is never run, since the host runs a stem through its two folds alone. The repair is the trigger the design's `## APIs and integrations` spells for the stem's inbound stream — the constant at the end of the topic table, its value the topic less the environment prefix, the `.route(config::topic_for(env, topic::<NAME>), messaging::consume_with(<handler>, <decode>))` in the part's `topics(..)` with the handler calling the stem's earlier parts, and the part's entry at the end of the stem's array — through `edit_files`, then the first two checks again.
-- **No refusal is answered `Ok(())`.** Under `crates/*/src`, a `return Ok(())` or a tail `Ok(())` inside a `let Ok(..) = .. else` block, an `Err(..) =>` arm, an `if ..is_err()` branch, or a `let Some(..) = ...ok() else` block answers a delivery or a call the code refused as processed, so the refusal is lost. The repair returns the error with `?` — `bad_request!` for a validation or timeliness rejection, `bad_gateway!` for an upstream that refused — through `edit_files`, and `Ok(())` stays only where a valid message is filtered out by a rule; a test that expected the swallow is repaired to expect the error.
-- **No setting names a format.** A `const NAME: &str = "NAME"` whose name spells `FORMAT` reads a parser's syntax from the deployment. The repair holds the syntax in the constant itself (`"%d/%m/%Y"` for a criterion's `DD/MM/YYYY`) through `edit_files`, and the module parses with it.
+- **The static files stand.** Every file of the seed outside the four root lists is held to the exemplar's guest template.
+  Those are `src/lib.rs`, `tests/routes.rs`, `tests/messaging.rs`, `examples/runtime.rs`, `crates/common/Cargo.toml`, `crates/common/src/lib.rs`, `crates/common/src/config.rs`, `clippy.toml`,
+  the toolchain and tooling files, `supply-chain/`, and `.github/` whole. The root `Cargo.toml` outside its two lists is held the same way.
+  The finding is the `-` lines of the template to put back and the `+` lines of the tree to drop, or the template's body whole for a file the tree lacks.
+  Nothing is put back before this turn. A drift a slice merged is yours to repair as the finding spells it, through `edit_files`, or `write_files` for a file written whole.
+  So is a drift your own repair made.
+  Every pin, the lints, and the component's entry are the template's.
+  A check that fails for a crate the pins lack is repaired in the stem's manifest, where the crate carries its version, never in the root's.
+  An entry of the root manifest's path list naming a crate the tree lacks, `start = { path = "crates/start" }` with no `crates/start/Cargo.toml`, is a finding at its line.
+  The repair drops it and the stem's `<stem>.workspace = true` line through `edit_files`.
+- **Every stem is merged.** Every stem's `router()` is merged by a `router.merge(<stem>::router())` statement of `src/routes.rs`.
+  Every stem's `topics(..)` is registered by a `<stem>::topics(router, &env)` statement of `src/messaging.rs`.
+  A stem the lists do not name compiles clean and serves nothing, which no check sees.
+  The repair adds the stem's line at the end of its list through `edit_files` and rewrites no other.
+  The static text around a list stands as the seed spells it, and every line of a list is one entry, once.
+- **Every topic is named.** Every constant of `crates/common/src/topic.rs` is named by a module, as `topic::<NAME>` through `config::topic` or `config::topic_for`.
+  One nothing names is a topic nothing publishes or consumes.
+  The repair names it from the part whose requirement publishes or consumes the topic, or removes the constant with its doc comment through `edit_files`.
+- **No `crates/start/` crate is written.** The seed and the host are `start`, as the [guardrails](references/guardrails.md) spell out under what `start` becomes.
+  The repair removes every file under `crates/start/` through `delete` and drops any `start` line from the root `Cargo.toml` through `edit_files`.
+- **No module is the process.** Under `crates/*/src`, a function that starts, stops, runs, listens, serves, bootstraps, or shuts down is the process the source was.
+  So is a `Main`, `App`, `Server`, or `Application` type. The host is the process, and the tree never simulates it.
+  The repair is not a rename. The module is removed through `delete`, with its `pub mod` line and its test.
+  The requirements it stood for are left to the report. What it did, the host does or nothing does.
+  Where a removal leaves a crate with no module, the crate stays with its empty list.
+- **No miss is answered as nothing.** A read of the store under a constant key, `StateStore::get(provider, KEY)`, must not answer its miss as an empty collection or a default.
+  A function that returns an empty collection on `Ok(None)`, by a `return` or as its tail, or defaults the miss, has lost the table.
+  A default on the hit's own arm decodes what the store held and is none. A read under a key built from the input is a lookup and passes.
+  The repair writes the fetch into the reading function through `edit_files`.
+  On `Ok(None)` it fetches the table from its upstream as the design spells the call, stores it under the same key with a TTL, and answers what it fetched.
+- **No struct wraps an HTTP response in a single `data` field.** Under `crates/*/src`, a `Deserialize` struct whose body holds a single `data` field wraps the response in the source's client property.
+  The wire never carries that. The repair removes the wrapper struct through `edit_files`.
+  Deserialize `response.body()` directly into `Vec<T>` for a JSON array, or into a struct with the body's fields at its root.
+- **Every stem inherits the lints.** Every `crates/*/Cargo.toml` carries `[lints]` with `workspace = true`.
+  The workspace's lints are the host boundary and reach a crate through that table alone.
+  The repair adds the table through `edit_files` and runs the first check again.
+- **Every dependency is used.** Every crate a stem's `[dependencies]` names beyond the layout's six fixed lines is spelled by a module or a test of the stem.
+  One no file spells is compiled for nothing, and a slice that named it meant to use it.
+  The repair removes the line through `edit_files`, or writes the use the slice's requirement states, and runs the first two checks again.
+- **Every stem that publishes is reached.** A part spelling `Publish` in a stem whose entry registers no part's `routes()` or `topics`, and whose crate no other stem's module names, is never run.
+  The host runs a stem through its two folds alone.
+  The repair is the trigger the design's `## APIs and integrations` spells for the stem's inbound stream, through `edit_files`, then the first two checks again:
+  - the constant at the end of the topic table, its value the topic less the environment prefix;
+  - the `.route(config::topic_for(env, topic::<NAME>), messaging::consume_with(<handler>, <decode>))` in the part's `topics(..)`, the handler calling the stem's earlier parts;
+  - the part's entry at the end of the stem's array.
+- **No refusal is answered `Ok(())`.** Under `crates/*/src`, a `return Ok(())` or a tail `Ok(())` inside a catch answers a delivery or a call the code refused as processed.
+  A catch is a `let Ok(..) = .. else` block, an `Err(..) =>` arm, an `if ..is_err()` branch, or a `let Some(..) = ...ok() else` block.
+  The repair returns the error with `?`, through `edit_files`: `bad_request!` for a validation or timeliness rejection, `bad_gateway!` for an upstream that refused.
+  `Ok(())` stays only where a valid message is filtered out by a rule. A test that expected the swallow is repaired to expect the error.
+- **No setting names a format.** A `const NAME: &str = "NAME"` whose name spells `FORMAT` reads a parser's syntax from the deployment.
+  The repair holds the syntax in the constant itself, `"%d/%m/%Y"` for a criterion's `DD/MM/YYYY`, through `edit_files`, and the module parses with it.
 
 ## Repairs
 
-A failure in the merged tree is the seam between two slices, and the repair is the smallest change that closes it: two slices typing one design type differently, or each declaring a struct or an XML/JSON parser of its own for it — the repair keeps the struct, parser, and validation of the module whose slice owns the type key and has the later module of the stem `use` and call `crate::<earlier_part>::*`, so every module of the stem reads one shape and runs one pipeline — one depending on a crate the other did not write, a list missing a line, an entry's array missing a part's entry or holding one for a part with no such function, a manifest missing a crate a file uses, two slices routing one path with one method or consuming one topic, a topic constant declared twice under two names, a test asserting what another slice's module no longer does, a cache-aside function answering an empty table where `StateStore::get` answered `None` rather than fetching and storing it. Repair it where the layout puts it — in the slice's own module, its lines, its stem's manifest, its test — and change nothing a passing check covers. A static file is never a repair's to change: one that differs from the template is a finding on your verdict, put back as the finding spells it; a manifest naming a source is put back to the pin; a list is repaired by adding the line it lacks, never by rewriting one it holds. Then run the checks again from the one that failed.
+A failure in the merged tree is the seam between two slices. The repair is the smallest change that closes it.
 
-Leave what a repair would have to invent: a requirement no module implements, a test for a scenario the tree does not hold, a module the plan has a later wave land. A failure that remains after the repairs you can justify is reported, not patched over.
+- Two slices typing one design type differently, or each declaring a struct or a parser of its own for it:
+  keep the struct, parser, and validation of the module whose slice owns the type key, and have the later module of the stem `use` and call `crate::<earlier_part>::*`.
+  Every module of the stem then reads one shape and runs one pipeline.
+- One slice depending on a crate the other did not write: the line in the stem's manifest.
+- A list missing a line: add it at the end.
+- An entry's array missing a part's entry, or holding one for a part with no such function: add or remove the entry.
+- A manifest missing a crate a file uses: add the line.
+- Two slices routing one path with one method, or consuming one topic: the owner is whichever slice's requirement states it.
+- A topic constant declared twice under two names: keep one, name it from both sides.
+- A test asserting what another slice's module no longer does: repair the test to the module.
+- A cache-aside function answering an empty table where `StateStore::get` answered `None`: write the fetch and the store into it.
+
+Repair it where the layout puts it: in the slice's own module, its lines, its stem's manifest, its test. Change nothing a passing check covers.
+A static file is never a repair's to change. One that differs from the template is a finding on your verdict, put back as the finding spells it.
+A manifest naming a source is put back to the pin. A list is repaired by adding the line it lacks, never by rewriting one it holds.
+Then run the checks again from the one that failed.
+
+Leave what a repair would have to invent: a requirement no module implements, a test for a scenario the tree does not hold, a module the plan has a later wave land.
+A failure that remains after the repairs you can justify is reported, not patched over.
+
+A repair is one `edit_files` call. Its `find` is the text as the file holds it. Its `replace` is the text to stand there:
+
+```json
+{
+  "edits": [
+    {
+      "path": "src/routes.rs",
+      "find": "    let router = router.merge(health::router());\n",
+      "replace": "    let router = router.merge(health::router());\n    let router = router.merge(orders::router());\n"
+    }
+  ]
+}
+```
 
 ## Verdict
 
-Answer with one JSON object:
+Answer with one JSON object and nothing else. No prose before it or after it.
 
-- `passed` — true when every check passed on its last run, false otherwise.
-- `failures` — one entry per check that still failed, naming the check and quoting the tail of what it printed, the first error lines of `cargo` or the failing test names; empty when `passed` is true.
+- `passed` — `true` when every check passed on its last run, `false` otherwise.
+- `failures` — one entry per check that still failed, naming the check and quoting the tail of what it printed: the first error lines of `cargo`, or the failing test names.
+  Empty when `passed` is `true`.
 
-The verdict is held to the tree before it is accepted, as [the rules held](#the-rules-held) says: a finding under `## Findings` names a rule the tree breaks with what to put back or remove. Repair it through the two tools, run the checks the repair touches again, and answer again; the verdict is yours once the tree stands, passing or failing.
+The verdict is held to the tree before it is accepted, as [the rules held](#the-rules-held) says.
+A finding under `## Findings` names a rule the tree breaks with what to put back or remove.
+Repair it through the two tools. Run the checks the repair touches again. Answer again. The verdict is yours once the tree stands, passing or failing.
+
+A passing verdict is this, exactly:
+
+```json
+{
+  "passed": true,
+  "failures": []
+}
+```
 
 ## Worked example
 
-A wave whose `payments` slice built against the design's `Money` type while the `orders` slice, merged beside it, declared the type with another shape; `orders`' declaration was repaired to the design's and clippy run again clean, and the tests then found a transition `payments` does not implement, left for the report:
+A wave whose `payments` slice built against the design's `Money` type while the `orders` slice, merged beside it, declared the type with another shape.
+`orders`' declaration was repaired to the design's and clippy run again clean. The tests then found a transition `payments` does not implement, left for the report:
 
 ```json
 {
@@ -66,3 +194,5 @@ A wave whose `payments` slice built against the design's `Money` type while the 
 ```
 
 Report what the checks found on their last run, never what the tree should hold.
+
+Answer with one JSON object.

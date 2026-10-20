@@ -9,7 +9,7 @@ First-party Wasm components for [Emery](https://github.com/augentic/emery): the 
 
 **Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and component tests, then walk the adapter live with its example or the eval's build arm.
 
-The version operators pin (`emery:documentation@0.13.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR as `ghcr.io/augentic/emery/<name>:<version>`.
+The version operators pin (`emery:documentation@0.12.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR as `ghcr.io/augentic/emery/<name>:<version>`.
 
 ## What an adapter is
 
@@ -46,7 +46,7 @@ cargo nextest run -p emery-adapters --test component  # the shipped components a
 ```bash
 cargo build --workspace --target wasm32-wasip2 --release   # every component
 mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.13.0.wasm   # one per adapter the example names
+cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.12.0.wasm   # one per adapter the example names
 emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
 emery show spec
 ```

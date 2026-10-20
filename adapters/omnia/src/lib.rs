@@ -1,29 +1,19 @@
 //! Builds each slice of a plan into an Omnia guest in Rust, and verifies the integrated tree.
 //!
 //! Initialises the repository with the guest template of [`omnia_template`],
-//! builds each stem as a member crate whose routers the root component
-//! merges, holds the tree to the layout's rules before accepting a report or
-//! verdict, and runs `cargo clippy`, `cargo test`, and the `wasm32-wasip2`
-//! check at each slice and wave.
-//!
-//! Before a slice's turn, the adapter scaffolds the slice's skeleton from the
-//! typed slice: the stem's crate where the tree lacks it, the part with a
-//! handler per route the requirements carry, a consumer per message, and a
-//! function per requirement carrying neither, an ignored test per scenario,
-//! and the stem's lines in every list. A `start` requirement carrying a
-//! route is laid under the crate of the stem its route's resource names. The
-//! turn fills the markers it scaffolded through `edit_files`, since a
-//! `write_files` entry naming a scaffolded file is refused, and a covered
-//! requirement whose marker or ignored test still stands is refused for
-//! correction, as is a module the tree holds that does not parse, named at
-//! the line the parser stopped at.
+//! scaffolds each slice into its stem's member crate whose routers the root
+//! component merges, holds the tree to the layout's rules before accepting a
+//! report or verdict, and runs `cargo clippy`, `cargo test`, and the
+//! `wasm32-wasip2` check at each slice and wave.
 
+mod layout;
 mod scaffold;
+mod syntax;
 mod tree;
 
 use std::path::Path;
 
-use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
+use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
 use emery_sdk::{Error, Model, tracing};
 
 use self::scaffold::Scaffold;
@@ -64,16 +54,29 @@ impl TargetAdapter for Adapter {
         match task {
             Task::Init(ctx) => {
                 let scaffolded = omnia_template::scaffold(Path::new(ctx.workspace))
-                    .map_err(|err| tree::refusal(&err))?;
+                    .map_err(|err| layout::refusal(&err))?;
                 tracing::info!(scaffolded = scaffolded.len(), "scaffolded the guest template");
                 Ok(Outcome::Initialised)
             }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let scaffold = Scaffold::plan(ctx.slice, root)?;
-                let written = scaffold.write(root)?;
-                tracing::info!(scaffolded = written.len(), "scaffolded the slice's skeleton");
-                let brief = scaffold.brief();
+                let plan = Scaffold::plan(ctx.slice, root)?;
+                if plan.is_empty() {
+                    tracing::info!(
+                        slice = ctx.slice.id,
+                        "every requirement is `start`'s and none carries a route; no turn"
+                    );
+                    return Ok(Outcome::Built(Report {
+                        covered: Vec::new(),
+                        written: Vec::new(),
+                    }));
+                }
+                let scaffold = plan.write(root)?;
+                tracing::info!(
+                    scaffolded = scaffold.written().len(),
+                    "scaffolded the slice's skeleton"
+                );
+                let brief = scaffold.brief(PROSE);
                 let paths = scaffold.paths();
                 let ctx = ctx.with_scaffold(target::Scaffold {
                     brief: &brief,

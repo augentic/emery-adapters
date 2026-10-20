@@ -27,12 +27,16 @@ const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/order
 // The handler and test markers the omnia adapter scaffolds for the slice the
 // driver hands it, and the bodies the scripted turn puts in their place.
 const OMNIA_HANDLER_MARKER: &str =
-    "    let _ = (input, context);\n    todo!(\"REQ-001 orders.create: the handler\")\n";
+    "    let _ = (&input, &context);\n    todo!(\"REQ-001 orders.create: the handler\")\n";
 const OMNIA_HANDLER_FILLED: &str =
     "    let CreateInput {} = input;\n    let _ = context;\n    Ok(CreateOutput {})\n";
 const OMNIA_TEST_MARKER: &str = "#[ignore = \"REQ-001 An order is created: unfilled\"]\nasync fn \
-                                 an_order_is_created() {\n    todo!(\"REQ-001 An order is \
-                                 created: arrange, act, assert\")\n}\n";
+                                 an_order_is_created() {\n    let request = \
+                                 Request::post(\"/orders\")\n        .header(CONTENT_TYPE, \
+                                 \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
+                                 .expect(\"request\");\n    let (status, body) = send(provider(), \
+                                 request).await;\n    let _ = (&status, &body);\n    \
+                                 todo!(\"REQ-001 An order is created: arrange, act, assert\")\n}\n";
 const OMNIA_TEST_FILLED: &str = "async fn an_order_is_created() {\n    assert_eq!(1 + 1, 2);\n}\n";
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
 
@@ -309,7 +313,12 @@ async fn emery_omnia() {
         module.contains(OMNIA_HANDLER_FILLED) && !module.contains(OMNIA_HANDLER_MARKER),
         "the handler the guest scaffolded holds the body the turn filled: {module}"
     );
-    for line in ["pub(crate) const ORDERS: &str = \"/orders\";\n", ".route(ORDERS, post(create))"] {
+    for line in [
+        "pub(crate) const ORDERS: &str = \"/orders\";\n",
+        ".route(ORDERS, create_route())",
+        "pub(crate) fn create_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
+         handle_with(\n        MethodFilter::POST,\n        create,\n",
+    ] {
         assert!(
             module.contains(line),
             "the typed route the driver lowered reached the skeleton as `{line}`: {module}"

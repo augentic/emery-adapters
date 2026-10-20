@@ -20,7 +20,7 @@ const TYPED: Spelling = Spelling {
 // The route the requirement carries, where the SDK has a route function
 // for its method; a `HEAD` or `OPTIONS` route is none, so the requirement
 // scaffolds a function.
-pub(super) fn of(requirement: &Requirement) -> Option<&Route> {
+pub(super) fn route(requirement: &Requirement) -> Option<&Route> {
     match &requirement.trigger {
         Some(Trigger::Http(route))
             if METHODS.iter().any(|(name, _)| *name == route.method)
@@ -48,7 +48,8 @@ fn is_topic(name: &str) -> bool {
         })
 }
 
-pub(super) fn function(method: &str) -> &'static str {
+// The SDK's route function for `method`, `get` for one it has none for.
+pub(super) fn method_fn(method: &str) -> &'static str {
     METHODS.iter().find(|(name, _)| *name == method).map_or("get", |(_, function)| function)
 }
 

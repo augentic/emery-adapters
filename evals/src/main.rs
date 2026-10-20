@@ -36,15 +36,76 @@ const BUILD_RUNG: &str = "1200/240";
 const BOOTSTRAP: &str = "start";
 
 // The run's log filter unless the caller sets one: every adapter the case
-// runs under at trace beside the SDK's, and the backend's tool-call
-// arguments whole, which it logs under a target of their own. The crate is
-// `emery-<kind>`, so the tracing target is `emery_<kind>`.
+// runs under at trace beside the SDK's, and, for either backend, its
+// completion and tool-call lines and the tool-call arguments whole, which
+// it logs under a target of their own. The crate is `emery-<kind>`, so the
+// tracing target is `emery_<kind>`.
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_sdk=trace".to_owned();
     for adapter in adapters {
         let _ = write!(filter, ",emery_{adapter}=trace");
     }
-    filter + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_core=off"
+    filter
+        + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_genai=debug,omnia_genai::tools=trace,\
+           omnia_core=off"
+}
+
+// The backend the binary answers the model through, read from its file
+// name: `emery-dev` is the genai runtime, anything else the shipped Cursor
+// one. Each names its own model and budget variables, which the runner
+// sets from the rung and the card records.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Backend {
+    Cursor,
+    GenAi,
+}
+
+impl Backend {
+    fn of(emery: &Path) -> Self {
+        if emery.file_stem().is_some_and(|stem| stem == "emery-dev") {
+            Self::GenAi
+        } else {
+            Self::Cursor
+        }
+    }
+
+    const fn name(self) -> &'static str {
+        match self {
+            Self::Cursor => "cursor",
+            Self::GenAi => "genai",
+        }
+    }
+
+    // The variable naming the model, and the model the backend runs when
+    // it is unset.
+    const fn model(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Cursor => ("CURSOR_MODEL", "auto"),
+            Self::GenAi => ("GENAI_MODEL", "gpt-5.5"),
+        }
+    }
+
+    // The pair a rung sets: the cap on one completion, then the cut-off on
+    // its silence — Cursor's inactivity, which exempts a running shell;
+    // genai's cap on one shell command, since it has no other reading of
+    // silence — so a build rung's second figure is the longest `cargo`
+    // step under genai, and the card's figure to raise where a cold compile
+    // outruns it.
+    const fn rung(self) -> (&'static str, &'static str) {
+        match self {
+            Self::Cursor => ("CURSOR_TIMEOUT_SECS", "CURSOR_INACTIVITY_SECS"),
+            Self::GenAi => ("GENAI_TIMEOUT_SECS", "GENAI_SHELL_TIMEOUT_SECS"),
+        }
+    }
+
+    // The budget variables the runner inherits and the card names where
+    // the caller set them.
+    const fn knobs(self) -> &'static [&'static str] {
+        match self {
+            Self::Cursor => &["CURSOR_MAX_TOOL_CALLS"],
+            Self::GenAi => &["GENAI_MAX_TOOL_CALLS", "GENAI_MAX_ROUNDS", "GENAI_MAX_CANDIDATES"],
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -302,12 +363,13 @@ struct Settings {
     // the one rung every `emery build` runs at, since a slice's turn writes
     // a tree and repairs its findings where a specify turn answers claims
     build_rung: Rung,
+    backend: Backend,
     model: String,
     // the caller's `RUST_LOG`, when set, over the per-case default
     rust_log: Option<String>,
-    // the caller's `CURSOR_MAX_TOOL_CALLS`, when set; the runner inherits it,
-    // the card names it
-    max_tool_calls: Option<String>,
+    // the backend's budget variables the caller set; the runner inherits
+    // them, the card names them
+    knobs: Vec<(String, String)>,
     // the card whose committed plans this invocation builds again
     rebuild: Option<String>,
 }
@@ -359,6 +421,13 @@ impl Settings {
             &env::var("EVAL_BUILD_RUNG").unwrap_or_else(|_| BUILD_RUNG.to_owned()),
             "EVAL_BUILD_RUNG",
         )?;
+        let backend = Backend::of(&emery);
+        let (model, default) = backend.model();
+        let knobs = backend
+            .knobs()
+            .iter()
+            .filter_map(|knob| Some(((*knob).to_owned(), env::var(knob).ok()?)))
+            .collect();
 
         Ok(Self {
             root: root.to_path_buf(),
@@ -370,9 +439,10 @@ impl Settings {
             runs,
             ladder,
             build_rung,
-            model: env::var("CURSOR_MODEL").unwrap_or_else(|_| "auto".to_owned()),
+            backend,
+            model: env::var(model).unwrap_or_else(|_| default.to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
-            max_tool_calls: env::var("CURSOR_MAX_TOOL_CALLS").ok(),
+            knobs,
             rebuild: None,
         })
     }
@@ -3095,7 +3165,9 @@ fn spells_word(text: &str, word: &str) -> bool {
 // `topic`; the path, a literal or the table's constant the first argument
 // names by its last segment, `?` where it is neither; and the methods the
 // second argument spells, one per route fn (`get(..)`) or
-// `MethodFilter::<M>`, `?` where it spells none.
+// `MethodFilter::<M>`, those of the `handle_with(..)` a route function of
+// the list's own text names where the argument calls one (`create_route()`),
+// `?` where it spells none.
 struct Registered {
     topic: bool,
     path: String,
@@ -3128,6 +3200,9 @@ fn registered(list: &str, table: &str) -> Vec<Registered> {
             .to_owned();
         let topic = first.contains("topic_for(") || first.contains("topic(");
         let mut methods = methods_in(second);
+        if methods.is_empty() {
+            methods = declared_methods(list, second);
+        }
         if methods.is_empty() {
             methods.push("?".to_owned());
         }
@@ -3207,6 +3282,38 @@ fn methods_in(expression: &str) -> Vec<String> {
         at = end;
     }
     methods
+}
+
+// The methods a route expression spells through a route function of the
+// module, `<name>()` or `<name>::<P>()`: those the `handle_with(..)` in the
+// body of `fn <name>` names; none where the expression calls no function,
+// the module declares none of that name, or its body names no filter.
+fn declared_methods(module: &str, expression: &str) -> Vec<String> {
+    let expression = expression.trim();
+    let end = expression
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+        .unwrap_or(expression.len());
+    let name = &expression[..end];
+    if name.is_empty() || !expression[end..].contains('(') {
+        return Vec::new();
+    }
+    let declaration = format!("fn {name}");
+    let mut from = 0;
+    while let Some(at) = module[from..].find(&declaration) {
+        let start = from + at;
+        let after = module[start + declaration.len()..].chars().next();
+        if matches!(after, Some('(' | '<')) {
+            let body = &module[start..];
+            let Some(call) = body.find("handle_with(") else {
+                return Vec::new();
+            };
+            let open = call + "handle_with(".len();
+            let close = closing(&body[open..]).map_or(body.len(), |at| open + at);
+            return methods_in(&body[open..close]);
+        }
+        from = start + declaration.len();
+    }
+    Vec::new()
 }
 
 // The names of the directories under `dir`; none where `dir` is no directory.
@@ -3316,12 +3423,43 @@ impl HostCheck {
     }
 }
 
-// One acceptance scenario of a merged slice's requirement, and the test
-// named by it, if any.
+// One acceptance scenario of a requirement a merged slice covered, and the
+// test named by it, if any.
 struct Scenario {
     stem: String,
     unknown: bool,
     named: Option<Named>,
+}
+
+// The scenarios of the requirements the merged slices covered, each with
+// the test among `names` it is named by: an uncovered requirement has no
+// test to name, by the adapter's own rule, so its scenarios are not counted
+// against the ratio; where nothing merged, every requirement's are, so a
+// build that landed no slice still shows what its tests would be named by.
+fn scenarios_of(
+    requirements: &[Value], integrated: &[Integrated], names: &[String],
+) -> Vec<Scenario> {
+    let covered: BTreeSet<&str> =
+        integrated.iter().flat_map(|slice| slice.covered.iter().map(String::as_str)).collect();
+    let mut scenarios = Vec::new();
+    for requirement in requirements {
+        let Some(id) = requirement["id"].as_str() else {
+            continue;
+        };
+        if !integrated.is_empty() && !covered.contains(id) {
+            continue;
+        }
+        let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
+        let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
+        for scenario in listed {
+            scenarios.push(Scenario {
+                stem: stem.clone(),
+                unknown: scenario["then"].as_str() == Some("[unknown]"),
+                named: named_by(scenario["name"].as_str().unwrap_or(""), names),
+            });
+        }
+    }
+    scenarios
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -3353,37 +3491,19 @@ impl Fidelity {
             .find(|check| check.name == target.runner())
             .map_or((0, 0), |runner| target.test_counts(runner));
 
-        // the tests the tree declares, against the merged slices' scenarios
+        // the tests the tree declares, against the covered scenarios
         let names = target.test_names(&export)?;
-        let merged: BTreeSet<String> =
-            build.integrated().into_iter().flat_map(|slice| slice.requirements).collect();
+        let integrated = build.integrated();
         let requirements = spec
             .and_then(|spec| spec["requirements"].as_array())
             .map(Vec::as_slice)
             .unwrap_or_default();
-        let mut scenarios = Vec::new();
-        for requirement in requirements {
-            let Some(id) = requirement["id"].as_str() else {
-                continue;
-            };
-            if !merged.is_empty() && !merged.contains(id) {
-                continue;
-            }
-            let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
-            let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
-            for scenario in listed {
-                scenarios.push(Scenario {
-                    stem: stem.clone(),
-                    unknown: scenario["then"].as_str() == Some("[unknown]"),
-                    named: named_by(scenario["name"].as_str().unwrap_or(""), &names),
-                });
-            }
-        }
+        let scenarios = scenarios_of(requirements, &integrated, &names);
 
         // the modules the lists do not reach, the routes they mount, the
         // files outside the layout, and what the checks wrote
         let unreached = target.unreached(&export)?;
-        let routes = routes(target.routes(&export), &build.integrated(), requirements);
+        let routes = routes(target.routes(&export), &integrated, requirements);
         let stems: BTreeSet<&str> =
             requirements.iter().filter_map(|r| r["subject"].as_str().and_then(stem)).collect();
         let outside =
@@ -3608,9 +3728,11 @@ impl Display for Fidelity {
         let unknown = self.scenarios.iter().filter(|s| s.unknown).count();
         writeln!(
             f,
-            "\n## Scenarios named by a test\n\n- {}/{total} scenarios of the merged slices have a \
-             test named by them: {exact} by the scenario's name exactly, {} by a test name \
-             containing it or contained in it.\n- {unknown} scenarios have `then [unknown]`.\n",
+            "\n## Scenarios named by a test\n\n- {}/{total} scenarios of the requirements the \
+             merged slices covered have a test named by them: {exact} by the scenario's name \
+             exactly, {} by a test name containing it or contained in it; an uncovered \
+             requirement's scenarios are not counted.\n- {unknown} scenarios have `then \
+             [unknown]`.\n",
             self.named(),
             self.named() - exact,
         )?;
@@ -3867,19 +3989,26 @@ fn files_under(root: &Path, dir: &Path, scratch: &str, found: &mut Vec<String>) 
 }
 
 // Whether a run may put a turn to the model: `None` strips `CURSOR_API_KEY`
-// from the binary's environment, so the backend refuses the first turn
-// after the adapters have read their trees and logged their facts.
+// from the binary's environment, or points genai's `GENAI_ENDPOINT` at a
+// port nothing answers on, so the backend refuses the first turn after the
+// adapters have read their trees and logged their facts.
 #[derive(Clone, Copy)]
 enum Turns {
     Live,
     None,
 }
 
+// Where a `Turns::None` run under genai sends its first request: the
+// discard port of the loopback, so the connection is refused whichever
+// provider the model id routes to, a local server that needs no key included.
+const NOWHERE: &str = "http://127.0.0.1:9";
+
 #[expect(clippy::disallowed_types, reason = "the eval runs the shipped `emery` binary natively")]
 fn emery(
     project: &Path, settings: &Settings, rust_log: &str, rung: Rung, args: &[&str], turns: Turns,
 ) -> io::Result<std::process::Output> {
     let mut command = std::process::Command::new(&settings.emery);
+    let (timeout, inactivity) = settings.backend.rung();
     command
         .arg("--format")
         .arg("json")
@@ -3887,10 +4016,13 @@ fn emery(
         .current_dir(project)
         .env("NO_COLOR", "1")
         .env("RUST_LOG", rust_log)
-        .env("CURSOR_TIMEOUT_SECS", rung.timeout.to_string())
-        .env("CURSOR_INACTIVITY_SECS", rung.inactivity.to_string());
+        .env(timeout, rung.timeout.to_string())
+        .env(inactivity, rung.inactivity.to_string());
     if matches!(turns, Turns::None) {
-        command.env_remove("CURSOR_API_KEY");
+        match settings.backend {
+            Backend::Cursor => command.env_remove("CURSOR_API_KEY"),
+            Backend::GenAi => command.env("GENAI_ENDPOINT", NOWHERE),
+        };
     }
     command.output()
 }
@@ -4716,22 +4848,25 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             settings.build_rung
         )
     });
-    let budget = settings
-        .max_tool_calls
-        .as_deref()
-        .map_or_else(String::new, |calls| format!(" · `CURSOR_MAX_TOOL_CALLS={calls}`"));
+    let mut budget = String::new();
+    for (knob, value) in &settings.knobs {
+        let _ = write!(budget, " · `{knob}={value}`");
+    }
     let rebuilt = settings.rebuild.as_deref().map_or_else(String::new, |card| {
         format!(
             " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
              specify columns and completions repeat that card's"
         )
     });
+    let (timeout, inactivity) = settings.backend.rung();
     let mut card = format!(
-        "# Eval {started}\n\nmodel `{}` · emery `{}` · {} · {} runs per case · ladder {} \
-         (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`, climbed on a `timeout` or `inactive` \
+        "# Eval {started}\n\nmodel `{}` (`{}`) · backend {} · emery `{}` · {} · {} runs per case \
+         · ladder {} (`{timeout}`/`{inactivity}`, climbed on a `timeout` or `inactive` \
          completion; the columns are the first rung's){budget}{built}{rebuilt} · runs \
          under `target/eval/{name}/`\n",
         settings.model,
+        settings.backend.model().0,
+        settings.backend.name(),
         settings.emery.display(),
         adapters.join(" · "),
         settings.runs,
@@ -4744,6 +4879,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             Card {
                 report,
                 ladder: &settings.ladder,
+                backend: settings.backend,
                 built: settings.target.is_some(),
             }
         );
@@ -4755,6 +4891,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
 struct Card<'a> {
     report: &'a Report<'a>,
     ladder: &'a [Rung],
+    backend: Backend,
     // whether the run built each plan, so the rows carry the build columns
     built: bool,
 }
@@ -4809,7 +4946,7 @@ impl Display for Card<'_> {
 
         // where each run landed on the ladder
         if self.ladder.len() > 1 {
-            ladder(f, runs, self.ladder)?;
+            ladder(f, runs, self.ladder, self.backend)?;
         }
 
         // stability across runs: at the first rung when two landed there,
@@ -5352,11 +5489,14 @@ fn behaviour_notes(f: &mut Formatter<'_>, behaviours: &Behaviours) -> fmt::Resul
 
 // One row per run: pass or fail at each rung attempted, `—` past the rung
 // it landed on.
-fn ladder(f: &mut Formatter<'_>, runs: &[Vec<Attempt>], ladder: &[Rung]) -> fmt::Result {
+fn ladder(
+    f: &mut Formatter<'_>, runs: &[Vec<Attempt>], ladder: &[Rung], backend: Backend,
+) -> fmt::Result {
+    let (timeout, inactivity) = backend.rung();
     writeln!(
         f,
-        "\nBudget ladder (`CURSOR_TIMEOUT_SECS`/`CURSOR_INACTIVITY_SECS`), climbed on a `timeout` \
-         or `inactive` completion:\n"
+        "\nBudget ladder (`{timeout}`/`{inactivity}`), climbed on a `timeout` or `inactive` \
+         completion:\n"
     )?;
     let heads: Vec<String> = ladder.iter().map(Rung::to_string).collect();
     writeln!(f, "| run | {} |", heads.join(" | "))?;
@@ -5847,6 +5987,30 @@ mod tests {
         assert!(!targets.contains(&"documentation"));
     }
 
+    // Both backends' completion and tool-call lines are in the default
+    // filter, so one runner reads a run under `emery` or `emery-dev`.
+    #[test]
+    fn rust_log_reads_both_backends() {
+        let filter = rust_log(["typescript"]);
+        let directives: Vec<&str> = filter.split(',').collect();
+        assert!(directives.contains(&"omnia_cursor=info"));
+        assert!(directives.contains(&"omnia_cursor::tools=trace"));
+        assert!(directives.contains(&"omnia_genai=debug"));
+        assert!(directives.contains(&"omnia_genai::tools=trace"));
+        assert!(directives.contains(&"omnia_core=off"));
+    }
+
+    #[test]
+    fn backend_of_binary() {
+        assert_eq!(Backend::of(Path::new("../emery/target/release/emery")), Backend::Cursor);
+        assert_eq!(Backend::of(Path::new("../emery/target/release/emery-dev")), Backend::GenAi);
+        assert_eq!(Backend::of(Path::new("/opt/bin/emery-dev.exe")), Backend::GenAi);
+        assert_eq!(Backend::Cursor.rung(), ("CURSOR_TIMEOUT_SECS", "CURSOR_INACTIVITY_SECS"));
+        assert_eq!(Backend::GenAi.rung(), ("GENAI_TIMEOUT_SECS", "GENAI_SHELL_TIMEOUT_SECS"));
+        assert_eq!(Backend::Cursor.model(), ("CURSOR_MODEL", "auto"));
+        assert_eq!(Backend::GenAi.model(), ("GENAI_MODEL", "gpt-5.5"));
+    }
+
     #[test]
     fn starved_run() {
         let starved = run_from(
@@ -6094,6 +6258,53 @@ mod tests {
         assert_eq!(named_by("an order is cancelled", &names), None);
     }
 
+    // The scenarios of a requirement a merged slice left uncovered are not
+    // counted, since the adapter has it keep its ignored test; those of a
+    // requirement no merged slice holds are not either; and with nothing
+    // merged every requirement's are.
+    #[test]
+    fn scenarios_counted_over_covered_requirements() {
+        let slice = |name: &str, requirements: &[&str], covered: &[&str]| Integrated {
+            id: format!("SLICE-{name}"),
+            name: name.to_owned(),
+            wave: 1,
+            requirements: requirements.iter().map(|id| (*id).to_owned()).collect(),
+            covered: covered.iter().map(|id| (*id).to_owned()).collect(),
+            files: Vec::new(),
+            commit: None,
+            resolved: Vec::new(),
+        };
+        let integrated = [
+            slice("start", &["REQ-001", "REQ-002"], &["REQ-002"]),
+            slice("orders", &["REQ-003"], &["REQ-003"]),
+        ];
+        let spec = serde_json::json!([
+            {"id": "REQ-001", "subject": "start.connect-brokers",
+             "scenarios": [{"name": "The brokers are connected", "then": "[unknown]"}]},
+            {"id": "REQ-002", "subject": "start.read-settings",
+             "scenarios": [{"name": "The settings are read", "then": "they are held"}]},
+            {"id": "REQ-003", "subject": "orders.read",
+             "scenarios": [
+                 {"name": "An order is answered", "then": "200"},
+                 {"name": "A missing order is refused", "then": "404"},
+             ]},
+            {"id": "REQ-004", "subject": "payments.charge",
+             "scenarios": [{"name": "A card is charged", "then": "200"}]},
+        ]);
+        let names = vec!["the settings are read".to_owned(), "an order is answered".to_owned()];
+
+        let counted = scenarios_of(spec.as_array().unwrap(), &integrated, &names);
+        let stems: Vec<&str> = counted.iter().map(|scenario| scenario.stem.as_str()).collect();
+        assert_eq!(stems, ["start", "orders", "orders"]);
+        let found: Vec<Option<Named>> = counted.iter().map(|scenario| scenario.named).collect();
+        assert_eq!(found, [Some(Named::Exact), Some(Named::Exact), None]);
+        assert!(counted.iter().all(|scenario| !scenario.unknown));
+
+        let every = scenarios_of(spec.as_array().unwrap(), &[], &names);
+        assert_eq!(every.len(), 5, "nothing merged counts every requirement's scenarios");
+        assert_eq!(every.iter().filter(|scenario| scenario.unknown).count(), 1);
+    }
+
     // A scratch tree of the test's own under the host's temp dir, written from
     // `(path, text)` pairs and removed first where an earlier run left it.
     #[expect(
@@ -6228,11 +6439,17 @@ mod tests {
                 ),
                 (
                     "crates/orders/src/placing.rs",
-                    "pub(crate) const ORDERS: &str = \"/orders\";\n\n\
+                    "pub(crate) const ORDERS: &str = \"/orders\";\n\
+                     pub(crate) const ORDER_NOTES: &str = \"/orders/{id}/notes\";\n\n\
                      pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(ORDERS, place_order_route())\n}\n\n\
+                     axum::Router::new().route(ORDERS, place_order_route()).route(ORDER_NOTES, notes_route())\n}\n\n\
                      pub(crate) fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
-                     router.route(config::topic_for(env, topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n",
+                     router.route(config::topic_for(env, topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n\n\
+                     pub(crate) fn place_order_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
+                     handle_with(\n        MethodFilter::POST,\n        place_order,\n        \
+                     |raw: RawRequest<'_>| -> Result<PlaceOrderInput, DecodeError> {\n            \
+                     decode_json(raw.path_params, raw.body)\n        },\n        \
+                     |output: PlaceOrderOutput| (StatusCode::CREATED, Json(output)).into_response(),\n    )\n}\n",
                 ),
                 (
                     "crates/architecture/src/architecture.rs",
@@ -6296,7 +6513,8 @@ mod tests {
             ("crates/architecture/src/architecture.rs", "GET", "/architecture/layering", true),
             ("crates/health/src/health.rs", "GET", "/health/ready", false),
             ("crates/order-items/src/order_items.rs", "GET", "/order-items", false),
-            ("crates/orders/src/placing.rs", "?", "/orders", false),
+            ("crates/orders/src/placing.rs", "POST", "/orders", false),
+            ("crates/orders/src/placing.rs", "?", "/orders/{id}/notes", false),
             ("crates/orders/src/reading.rs", "GET", "/orders/{id}", false),
             ("crates/orders/src/reading.rs", "DELETE", "/orders/{id}", false),
             ("crates/orders/src/reading.rs", "GET", "/orders", false),
@@ -6475,6 +6693,44 @@ mod tests {
                 bytes: 10
             }
         );
+    }
+
+    // The genai backend's lines carry the same messages under its own
+    // targets, `omnia_genai::tools` for a call and `omnia_genai::observe`
+    // for the completion, with `exit=` and `duration_ms=` after the result's
+    // size and the phase split after the duration; the reader keys on the
+    // message, so it reads them as it reads Cursor's.
+    #[test]
+    fn genai_completions_read_by_message() {
+        let log = "\
+2026-10-19T10:00:00.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion started prompt_bytes=81234 tools=5
+2026-10-19T10:00:01.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\"
+2026-10-19T10:00:02.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"crates/orders/src/reading.rs\"]) error=None
+2026-10-19T10:01:31.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\" result_bytes=4096 exit=\"0\" duration_ms=90000
+2026-10-19T10:01:32.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=read_doc subject=\"references/testing.md\"
+2026-10-19T10:01:33.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=read_doc subject=\"references/testing.md\" result_bytes=9000 duration_ms=3
+2026-10-19T10:02:00.000000Z  INFO complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion outcome=\"corrected\" attempts=2 duration_ms=120000 model_ms=25000 tool_ms=90003 check_ms=4997 input_tokens=90000 cache_read_tokens=0 cache_write_tokens=0 output_tokens=7000 reasoning_tokens=0 total_tokens=97000
+2026-10-19T10:03:00.000000Z  WARN complete{n=2 model=\"openai::qwen3-coder\" format=schema label=\"verify\"}: omnia_genai::observe: completion outcome=\"timeout\" attempts=0 duration_ms=600000 model_ms=600000 tool_ms=0 check_ms=0 input_tokens=0 cache_read_tokens=0 cache_write_tokens=0 output_tokens=0 reasoning_tokens=0
+";
+        let completions = completions(log);
+        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        assert_eq!(labels, ["build-SLICE-001", "verify"]);
+        assert_eq!(completions[0].outcome, "corrected");
+        assert_eq!(completions[0].duration, Duration::from_secs(120));
+        assert_eq!(completions[0].tokens.input, 90000);
+        assert_eq!(completions[0].tokens.output, 7000);
+        assert_eq!(
+            completions[0].shell,
+            ShellUse {
+                calls: 1,
+                time: Duration::from_secs(90),
+                bytes: 4096
+            },
+            "the shell alone is counted, never a guest tool"
+        );
+        assert_eq!(completions[0].writes.edits, 1);
+        assert_eq!(completions[1].outcome, "timeout");
+        assert_eq!(completions[1].shell, ShellUse::default());
     }
 
     // An envelope carrying `sealed` is read before the chain: each seal's

@@ -4,7 +4,9 @@ use emery_sdk::Error;
 use syn::visit::{self, Visit};
 use syn::{Ident, ImplItemFn, ItemFn, ItemStruct, TraitItemFn};
 
-use super::{Tree, start_files, syntax};
+use super::Tree;
+use crate::layout::start_files;
+use crate::syntax;
 
 const LIFECYCLE_FNS: &[(&str, &str)] = &[
     ("start", "a start of its own"),
@@ -19,7 +21,7 @@ const LIFECYCLE_FNS: &[(&str, &str)] = &[
 const LIFECYCLE_TYPES: &[&str] = &["Main", "App", "Server", "Application"];
 
 impl Tree<'_> {
-    pub(super) fn process(&self) -> Result<Vec<String>, Error> {
+    pub(super) fn simulated_process(&self) -> Result<Vec<String>, Error> {
         let start = start_files(self.root)?;
         let mut lifecycle = Vec::new();
         for module in &self.modules {

@@ -26,16 +26,16 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test |
+| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai --bin emery-dev` in the engine checkout), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, and `GENAI_MAX_CANDIDATES` as the knobs the card names; the backend is named in the card's header |
 | `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | The target `--build` builds through, the one `--target` names alone |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default, which the backend's agent pool (`CURSOR_MAX_AGENTS`, 8) bounds in practice |
-| `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`, which a specify climbs |
-| `EVAL_BUILD_RUNG` | `1200/240` | The one rung every `emery build` runs at, in the same shape; a slice's turn writes a tree and repairs its findings, and the engine resumes a build but climbs nothing, so it starts a rung up |
-| `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run |
-| `CURSOR_MAX_TOOL_CALLS` | unset | The backend's tool calls a turn may make (128 unless set), the budget a build turn's `write_files` calls spend; the runner inherits it. Named in the card's header when set |
-| `RUST_LOG` | set by the runner | The SDK and every adapter the case runs at `trace`, the backend's tool-call arguments beside them (`omnia_cursor::tools=trace`); the card reads the trace lines. A caller's value is kept |
+| `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`, which a specify climbs; under `emery-dev` the pair is `GENAI_TIMEOUT_SECS/GENAI_SHELL_TIMEOUT_SECS`, the second figure the cap on one shell command, since genai reads silence no other way |
+| `EVAL_BUILD_RUNG` | `1200/240` | The one rung every `emery build` runs at, in the same shape; a slice's turn writes a tree and repairs its findings, and the engine resumes a build but climbs nothing, so it starts a rung up. Under `emery-dev` its second figure bounds the longest `cargo` step of a build turn, so a cold compile that outruns it is raised here, `1200/1200`, and recorded by the header |
+| `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run. Under `emery-dev` the model is `GENAI_MODEL` (`gpt-5.5` unless set), recorded the same way |
+| `CURSOR_MAX_TOOL_CALLS` | unset | The backend's tool calls a turn may make (128 unless set), the budget a build turn's `write_files` calls spend; the runner inherits it. Named in the card's header when set, as `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, and `GENAI_MAX_CANDIDATES` are under `emery-dev` |
+| `RUST_LOG` | set by the runner | The SDK and every adapter the case runs at `trace`, either backend's completion and tool-call lines and the tool-call arguments beside them (`omnia_cursor::tools=trace`, `omnia_genai=debug,omnia_genai::tools=trace`); the card reads the trace lines. A caller's value is kept |
 
 The defaults suit a sibling release build. Set the paths when `CARGO_TARGET_DIR` puts the artifacts elsewhere, or to point at an experiment's build.
 
@@ -55,7 +55,7 @@ The smallest useful pass is one small case per stem shape: `orders`, `cli-jobs`,
 
 ### Survey facts without a model turn
 
-`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped. The adapter logs the facts it would put before the model (bootstrap, registrations, decorated definitions, exports, packages; for `documentation`, each document's outline) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
+`--facts [case|adapter..]` stages the named cases and runs each once with `CURSOR_API_KEY` stripped, or, under `emery-dev`, with `GENAI_ENDPOINT` pointed at a loopback port nothing answers on, since a local server needs no key. The adapter logs the facts it would put before the model (bootstrap, registrations, decorated definitions, exports, packages; for `documentation`, each document's outline) and the first turn fails before any is spent, in seconds. The text is printed and written to `target/eval/facts/<case>/facts.md`; a graded run writes the same beside its log as `run-N.facts.md`.
 
 This is how an expectation is written, since the facts say which modules locate a surface and how each export is read, and how a change to the facts or the keep policy is checked before a live run. A line the model should not see (a hook's decorator, a data-only class) is the adapter's defect, visible here.
 
