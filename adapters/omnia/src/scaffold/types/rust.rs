@@ -47,6 +47,7 @@ fn field(field: &syn::Field) -> Option<Field> {
     let ident = field.ident.as_ref()?.to_string();
     let name = ident.strip_prefix("r#").unwrap_or(&ident);
     Some(Field {
+        name: name.to_owned(),
         wire: rename(&field.attrs).unwrap_or_else(|| name.to_owned()),
         ty: parse(&field.ty),
         optional: false,
@@ -60,6 +61,7 @@ fn variant(variant: &syn::Variant) -> Option<Variant> {
     matches!(variant.fields, Fields::Unit).then(|| Variant {
         member: variant.ident.to_string(),
         wire: rename(&variant.attrs),
+        alias: false,
         doc: docs(&variant.attrs),
     })
 }

@@ -939,8 +939,9 @@ fn assert_omnia_scaffold_brief(brief: &str) {
     let markers = format!(
         "The design types `Order` (`orders.Order`) in `crates/orders/src/reading.rs` are \
          scaffolded as their signatures spell, each field and variant documented and the wire's \
-         names kept through `serde(rename)`; they are finished, so change a field only where the \
-         check refuses it.\n\nMarkers, in fill order, each one `edit_files` edit whose `find` is \
+         names kept through `serde(rename)`; they are finished, so change a field only where a \
+         scenario's wire shape or the check requires it.\n\nMarkers, in fill order, each one \
+         `edit_files` edit whose `find` is \
          the block quoted under it:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
          `crates/orders/src/reading.rs`: fill `ReadInput` and `ReadOutput` with the wire's \
          fields, then replace this block with the body. Its `Ok` is answered `200` as JSON; for \
@@ -1407,6 +1408,10 @@ async fn omnia_scaffold_enum() {
         ("orders.CustomerTier", "export type CustomerTier = 'standard' | 'gold';"),
         ("orders.Channel", "class Channel(str, Enum):\n    WEB = \"web\"\n    SHOP = \"shop\""),
         ("orders.Priority", "export enum Priority {\n  Low,\n  High,\n}"),
+        (
+            "orders.ChangeType",
+            "export enum ChangeType {\n  ExitedFirstStation = 1,\n  NormalStep = 2,\n}",
+        ),
         ("orders.OrderRef", "export type OrderRef = { id: string } | { code: string };"),
         ("orders.Order", "interface Order {\n  id: string;\n}"),
     ]
@@ -1432,6 +1437,9 @@ async fn omnia_scaffold_enum() {
          Web,\n    /// The `shop` variant.\n    #[serde(rename = \"shop\")]\n    Shop,\n}",
         "pub enum Priority {\n    /// The `Low` variant.\n    Low,\n    /// The `High` \
          variant.\n    High,\n}",
+        "pub enum ChangeType {\n    /// The `1` variant.\n    #[serde(rename = \"1\", alias = \
+         \"ExitedFirstStation\")]\n    ExitedFirstStation,\n    /// The `2` variant.\n    \
+         #[serde(rename = \"2\", alias = \"NormalStep\")]\n    NormalStep,\n}",
         "pub struct OrderRef {}",
         "pub struct Order {\n    /// The `id` field.\n    pub id: String,\n}",
     ] {
@@ -1445,16 +1453,17 @@ async fn omnia_scaffold_enum() {
         ),
         "the numeric enumeration's doc says what the wire carries: {part}"
     );
-    assert_eq!(part.matches(&format!("{derives}pub enum ")).count(), 4, "{part}");
+    assert_eq!(part.matches(&format!("{derives}pub enum ")).count(), 5, "{part}");
     assert_eq!(part.matches(&format!("{derives}pub struct ")).count(), 2, "{part}");
     assert_parses(&project, &["crates/orders/src/reading.rs"]);
     let brief = &model.seen()[0].messages[0];
     for cited in [
         "The design types `OrderStatus` (`orders.OrderStatus`), `CustomerTier` \
          (`orders.CustomerTier`), `Channel` (`orders.Channel`), `Priority` (`orders.Priority`), \
-         and `Order` (`orders.Order`) in `crates/orders/src/reading.rs` are scaffolded as their \
-         signatures spell, each field and variant documented and the wire's names kept through \
-         `serde(rename)`; they are finished, so change a field only where the check refuses it.",
+         `ChangeType` (`orders.ChangeType`), and `Order` (`orders.Order`) in \
+         `crates/orders/src/reading.rs` are scaffolded as their signatures spell, each field and \
+         variant documented and the wire's names kept through `serde(rename)`; they are \
+         finished, so change a field only where a scenario's wire shape or the check requires it.",
         "1. `pub struct OrderRef {}` in `crates/orders/src/reading.rs`: the design type \
          `orders.OrderRef`, whose signature the scaffold could not lay. Replace it with the \
          struct the signature in its doc spells",
@@ -1490,7 +1499,8 @@ async fn omnia_scaffold_types() {
         ),
         (
             "orders.OrderLine",
-            "export interface OrderLine {\n  sku: string;\n  quantity: number;\n}",
+            "export class OrderLine {\n  @JsonProperty(\"codigoSku\")\n  @JsonType(String)\n  \
+             public sku: string;\n  quantity: number;\n}",
         ),
         ("orders.Page", "export interface Page<T> {\n  items: T[];\n  total: number;\n}"),
     ]
@@ -1523,7 +1533,8 @@ async fn omnia_scaffold_types() {
          #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `meta` field.\n    \
          pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
         "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct OrderLine {\n    \
-         /// The `sku` field.\n    pub sku: String,\n    /// The `quantity` field.\n    pub \
+         /// The `codigoSku` field.\n    #[serde(rename = \"codigoSku\")]\n    #[serde(default)]\n    \
+         pub sku: String,\n    /// The `quantity` field.\n    pub \
          quantity: i64,\n}\n",
         "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct Page<T> {\n    \
          /// The `items` field.\n    pub items: Vec<T>,\n    /// The `total` field.\n    pub \
@@ -1536,7 +1547,8 @@ async fn omnia_scaffold_types() {
     let cited = "The design types `Order` (`orders.Order`), `OrderLine` (`orders.OrderLine`), and `Page` \
          (`orders.Page`) in `crates/orders/src/reading.rs` are scaffolded as their signatures \
          spell, each field and variant documented and the wire's names kept through \
-         `serde(rename)`; they are finished, so change a field only where the check refuses it.\n\
+         `serde(rename)`; they are finished, so change a field only where a scenario's wire shape \
+         or the check requires it.\n\
          The field `Order.ship_to` (`orders.Address`) is `serde_json::Value` because the type it \
          stands for is declared by another slice or by no design type: leave it as laid, and \
          read the value's fields where the behaviour needs them.\n\nMarkers, in fill order";
