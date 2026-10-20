@@ -1557,16 +1557,19 @@ async fn omnia_scaffold_python_types() {
         (
             "orders.Order",
             "class Order(BaseModel):\n    customer_id: str\n    lines: list[Line]\n    note: str | \
-             None = None\n    quantity: int = 1\n    def total(self) -> int: ...",
+             None = None\n    quantity: int = 1\n    status: Status = Status.Paid\n    def \
+             total(self) -> int: ...",
         ),
         (
             "orders.Line",
             "class Line(BaseModel):\n    sku: str\n    quantity: int = Field(default=1, \
              alias=\"qty\")",
         ),
+        ("orders.Page", "class Page(BaseModel, Generic[T, 'U> {}']):\n    items: list[T]"),
         (
             "orders.Status",
-            "class Status(str, Enum):\n    PENDING = \"pending\"\n    PAID = \"paid\"",
+            "class Status(str, Enum):\n    PENDING = \"pending\"\n    PAID = \"paid\"\n    Paid = \
+             \"settled\"",
         ),
     ]
     .into_iter()
@@ -1585,13 +1588,17 @@ async fn omnia_scaffold_python_types() {
         "pub struct Order {\n    /// The `customer_id` field.\n    pub customer_id: String,\n    \
          /// The `lines` field.\n    pub lines: Vec<Line>,\n    /// The `note` field.\n    pub \
          note: Option<String>,\n    /// The `quantity` field.\n    #[serde(default = \
-         \"default_quantity\")]\n    pub quantity: i64,\n}\n\nconst fn default_quantity() -> i64 \
-         {\n    1\n}\n",
+         \"default_quantity\")]\n    pub quantity: i64,\n    /// The `status` field.\n    \
+         #[serde(default = \"default_status\")]\n    pub status: Status,\n}\n\nconst fn \
+         default_quantity() -> i64 {\n    1\n}\n\nconst fn default_status() -> Status {\n    \
+         Status::Paid2\n}\n",
         "pub struct Line {\n    /// The `sku` field.\n    pub sku: String,\n    /// The `qty` \
          field.\n    #[serde(default = \"default_qty\")]\n    pub qty: i64,\n}\n\nconst fn \
          default_qty() -> i64 {\n    1\n}\n",
+        "pub struct Page<T> {\n    /// The `items` field.\n    pub items: Vec<T>,\n}\n",
         "pub enum Status {\n    /// The `pending` variant.\n    #[serde(rename = \"pending\")]\n    \
-         Pending,\n    /// The `paid` variant.\n    #[serde(rename = \"paid\")]\n    Paid,\n}\n",
+         Pending,\n    /// The `paid` variant.\n    #[serde(rename = \"paid\")]\n    Paid,\n    \
+         /// The `settled` variant.\n    #[serde(rename = \"settled\")]\n    Paid2,\n}\n",
     ] {
         let declaration = format!("{derives}{declared}");
         assert!(part.contains(&declaration), "the part lays `{declared}`: {part}");

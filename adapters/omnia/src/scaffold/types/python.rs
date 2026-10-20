@@ -100,7 +100,12 @@ pub(super) fn read(signature: &str) -> Option<Read> {
         let base_name = base_name.rsplit('.').next().unwrap_or(base_name);
         if base_name == "Generic" || base_name == "Protocol" {
             if let Some((params, _)) = between(base, '[', ']') {
-                generics.extend(split_top(params, ',').map(str::trim).map(str::to_owned));
+                generics.extend(
+                    split_top(params, ',')
+                        .map(str::trim)
+                        .filter(|param| is_ident(param))
+                        .map(str::to_owned),
+                );
             }
             continue;
         }

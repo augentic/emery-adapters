@@ -172,6 +172,7 @@ enum Ref<'a> {
 struct Refs<'a> {
     // Each owned type's declared name and its Rust name.
     owned: &'a [(String, String)],
+    reads: &'a [Read],
     params: &'a [String],
     design: &'a [String],
     // The type whose fields are being laid, so a shared declared name resolves
@@ -250,6 +251,7 @@ pub(super) fn lay(
             Shape::Struct(declared) => {
                 let refs = Refs {
                     owned: &owned,
+                    reads,
                     params: &declared.generics,
                     design,
                     at,
@@ -319,6 +321,17 @@ impl Enum {
             variants,
             numeric: self.numeric,
         }
+    }
+
+    // The variant identifier `lay` claims for `member`, where the enumeration
+    // declares it.
+    fn variant(&self, member: &str) -> Option<String> {
+        let mut names = Names::default();
+        self.variants
+            .iter()
+            .map(|variant| (&variant.member, names.reserve(&pascal(&variant.member), "2")))
+            .find(|(declared, _)| *declared == member)
+            .map(|(_, name)| name)
     }
 }
 
@@ -443,7 +456,7 @@ impl Literal {
             (Self::Member(owner, member), _) => {
                 // the field's type is the owned enumeration the member belongs to
                 let Type::Named(name, args) = ty else { return None };
-                let (Ref::Owned(rust, _), Ref::Owned(of, _)) =
+                let (Ref::Owned(rust, at), Ref::Owned(of, _)) =
                     (refs.resolve(name), refs.resolve(owner))
                 else {
                     return None;
@@ -451,7 +464,7 @@ impl Literal {
                 if !args.is_empty() || rust != of {
                     return None;
                 }
-                format!("{rust}::{}", pascal(member))
+                format!("{rust}::{}", refs.variant(at, member)?)
             }
             (Self::Empty, _) => return ty.defaults(refs).then_some(Spelled::Default),
             _ => return None,
@@ -525,6 +538,11 @@ impl Refs<'_> {
             return Ref::Design(key);
         }
         Ref::Foreign
+    }
+
+    fn variant(&self, at: usize, member: &str) -> Option<String> {
+        let Shape::Enum(declared) = &self.reads.get(at)?.shape else { return None };
+        declared.variant(member)
     }
 }
 
@@ -804,7 +822,7 @@ fn number(text: &str) -> Option<Literal> {
 fn param_name(text: &str) -> String {
     text.trim()
         .split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
-        .find(|word| !word.is_empty())
+        .find(|word| is_ident(word))
         .unwrap_or_default()
         .to_owned()
 }

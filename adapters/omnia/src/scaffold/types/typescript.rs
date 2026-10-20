@@ -61,7 +61,7 @@ pub(super) fn read(signature: &str) -> Option<Read> {
 // Python does not.
 fn braced(rest: &str) -> bool {
     let head = rest.lines().next().unwrap_or(rest);
-    let head = head.split('{').next().unwrap_or(head);
+    let head = split_top(head, '{').next().unwrap_or(head);
     !head.trim_end().ends_with(':')
 }
 
