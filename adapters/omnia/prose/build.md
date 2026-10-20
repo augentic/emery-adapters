@@ -94,7 +94,7 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
     {
       "path": "crates/orders/src/reading.rs",
       "find": "pub struct OrderRef {}",
-      "replace": "pub struct OrderRef {\n    /// The order's id, where the reference carries one.\n    pub id: Option<String>,\n    /// The order's code, where the reference carries one.\n    pub code: Option<String>,\n}"
+      "replace": "pub struct OrderRef {\n    /// The order id.\n    pub id: Option<String>,\n    /// The order code.\n    pub code: Option<String>,\n}"
     }
   ]
 }
@@ -123,7 +123,7 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
     {
       "path": "crates/orders/src/reading.rs",
       "find": "    let _ = (&input, &context);\n    todo!(\"REQ-030 orders.get-id.return-order: the handler\")",
-      "replace": "    let provider = context.provider();\n    let bytes = StateStore::get(provider, &key(&input.id))\n        .await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    let order: Order = serde_json::from_slice(&bytes)\n        .map_err(|error| server_error!(\"order `{}`: {error}\", input.id))?;\n    Ok(ReadOrderOutput { order })"
+      "replace": "    let raw = StateStore::get(context.provider(), &input.id).await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    Ok(serde_json::from_slice(&raw)?)"
     }
   ]
 }
@@ -146,7 +146,7 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
     {
       "path": "crates/orders/src/fulfilment.rs",
       "find": "    let _ = (&input, &context);\n    todo!(\"REQ-032 orders.on-placed.count-lines: the consumer\")",
-      "replace": "    let provider = context.provider();\n    let lines = i64::try_from(input.lines).map_err(|_| bad_request!(\"lines out of range\"))?;\n    StateStore::increment(provider, LINES_PLACED, lines).await?;\n    Ok(())"
+      "replace": "    let delta = i64::from(input.lines);\n    StateStore::increment(context.provider(), LINES_PLACED, delta).await?;\n    Ok(())"
     }
   ]
 }
@@ -167,7 +167,7 @@ A requirement carrying neither a route nor a message is a `pub fn` with a marker
     {
       "path": "crates/orders/src/reading.rs",
       "find": "pub fn within_limit() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-033 orders.within-limit: the behaviour\")\n}",
-      "replace": "pub fn within_limit(order: &Order, limit: usize) -> omnia_sdk::Result<()> {\n    if order.lines.len() > limit {\n        return Err(bad_request!(\"order `{}`: {} lines, limit {limit}\", order.id, order.lines.len()));\n    }\n    Ok(())\n}"
+      "replace": "pub fn within_limit(n: usize, max: usize) -> omnia_sdk::Result<()> {\n    if n > max {\n        return Err(bad_request!(\"{n} > {max}\"));\n    }\n    Ok(())\n}"
     }
   ]
 }
@@ -206,8 +206,8 @@ Replace the block the brief quotes with the filled test, as [testing](references
   "edits": [
     {
       "path": "crates/orders/tests/reading.rs",
-      "find": "#[ignore = \"REQ-030 an_order_is_read_by_its_id: unfilled\"]\n#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let id = \"<id>\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider(), request).await;\n    let _ = (&status, &body);\n    todo!(\"REQ-030 an_order_is_read_by_its_id: arrange, act, assert\")\n}",
-      "replace": "#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let provider = provider();\n    provider.storage.insert_state(\"orders/42\", br#\"{\"id\":\"42\",\"orderLines\":[]}\"#);\n    let id = \"42\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider.clone(), request).await;\n    assert_eq!(status, StatusCode::OK, \"{}\", String::from_utf8_lossy(&body));\n    let read: ReadOrderOutput = serde_json::from_slice(&body).expect(\"an order\");\n    assert_eq!(read.order.id, \"42\");\n}"
+      "find": "#[ignore = \"REQ-033 over_limit: unfilled\"]\nasync fn over_limit() {\n    let _ = provider();\n    todo!(\"REQ-033 over_limit: arrange, act, assert\")\n}",
+      "replace": "async fn over_limit() {\n    let err = within_limit(11, 10).expect_err(\"over limit\");\n    assert_eq!(err.code(), \"bad_request\");\n}"
     }
   ]
 }
