@@ -99,6 +99,7 @@ impl Scaffold {
         let needs = Needs {
             laid,
             roles: self.plan.roles.clone(),
+            idioms: self.plan.idioms.clone(),
         };
         let mut quoted = String::new();
         for passage in reference::passages(docs, &needs) {

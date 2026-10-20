@@ -241,6 +241,80 @@ where
 
 The capability is the one way to each of these; what a guest reaches no other way is in the [guardrails](guardrails.md).
 
+## A probe
+
+A readiness or health requirement probes a store with one call through the capability that reaches it, awaited: the probe passed when the call answered what a live store answers, and failed when it answered `Err`. The host bounds every call, so the probe sets no deadline of its own: no timer, no race, no `within` helper, no `PROBE_TIMEOUT_MS` setting, and the source's parallel probes run one after the other. A SQL store is probed by `SELECT 1` over `TableStore::query` under the connection's constant, one row the pass and `Err` or no row the failure; a key-value store by `StateStore::get` of a probe key, a miss as much a pass as a hit, since the store answered. Never an `HttpRequest` to a store's address: the connection is the host's, named by a constant of the part whose value is the name the deployment binds, never a URL.
+
+```rust
+use omnia_sdk::api::Context;
+use omnia_sdk::{StateStore, TableStore};
+use serde::{Deserialize, Serialize};
+
+// The SQL connection the deployment binds for the orders tables.
+pub(crate) const ORDERS_DB: &str = "orders";
+
+// The key the cache probe reads; what it holds, if anything, is not read.
+const PROBE: &str = "health/probe";
+
+/// The input of `GET /health/ready`: nothing.
+#[derive(Debug, Deserialize)]
+pub struct ReadyInput {}
+
+/// Whether each store answered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Readiness {
+    /// The SQL store answered `SELECT 1` with a row.
+    pub store: bool,
+    /// The cache answered the probe read.
+    pub cache: bool,
+}
+
+pub(crate) async fn ready<P>(input: ReadyInput, context: Context<P>) -> omnia_sdk::Result<Readiness>
+where
+    P: StateStore + TableStore,
+{
+    let ReadyInput {} = input;
+    let provider = context.provider();
+    let store = TableStore::query(provider, ORDERS_DB.to_string(), "SELECT 1".to_string(), Vec::new())
+        .await
+        .is_ok_and(|rows| !rows.is_empty());
+    let cache = StateStore::get(provider, PROBE).await.is_ok();
+    Ok(Readiness { store, cache })
+}
+```
+
+A status that follows the outcome, `503` where the store failed, is set in the route function's encoder over the output, `|output: Readiness| (if output.store { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(output)).into_response()`. In a test, `ScriptedTables` answers the SQL probe as scripted — `.on_query(|sql, _| sql == "SELECT 1", vec![])` is the store down and one `Row` is the store up — while `Memory` answers every read, so the cache's failure is the host's to produce and no test arranges it.
+
+## A cache-aside read
+
+A record read by id through a cache in front of a store is one handler: the cache read first, a hit decoded and answered, a miss read from the store, written to the cache under its TTL, and answered, and a store miss `not_found`. A miss never answers an empty record or an empty list in place of the store's read, and the write path deletes the key after the store's update rather than refreshing it. A table the source loaded whole and refreshed on a schedule is the same shape over one key, as the [translation's fragment](translation.md#a-reference-table) spells it.
+
+```rust
+use omnia_sdk::api::Context;
+use omnia_sdk::{StateStore, TableStore, not_found, server_error};
+
+// How long a cached order stands, in seconds.
+pub(crate) const ORDER_TTL_SECS: u64 = 60;
+
+pub(crate) async fn get_order<P>(input: GetOrder, context: Context<P>) -> omnia_sdk::Result<Order>
+where
+    P: StateStore + TableStore,
+{
+    let GetOrder { id } = input;
+    let provider = context.provider();
+    let key = key(&id);
+    if let Some(bytes) = StateStore::get(provider, &key).await? {
+        return serde_json::from_slice(&bytes).map_err(|error| server_error!("order `{id}`: {error}"));
+    }
+    let order = read_order(provider, &id).await?.ok_or_else(|| not_found!("no order `{id}`"))?;
+    let bytes = serde_json::to_vec(&order).map_err(|error| server_error!("order `{id}`: {error}"))?;
+    StateStore::set(provider, &key, &bytes, Some(ORDER_TTL_SECS)).await?;
+    Ok(order)
+}
+```
+
+`read_order` is the part's own function over `TableStore::query`, answering `Ok(None)` for no row, and `key` the part's key function. Where the design makes the TTL a setting of the deployment, it is a `pub(crate) const` naming the setting, read through `Config::get` and parsed at the moment of use, as the [layout](layout.md) has every setting. In a test, `Memory` holds what `insert_state` put there, so a hit is arranged by inserting the record's bytes under the key and asserted by `provider.tables.statements()` being empty, and a miss by `on_query` answering the row and `provider.storage.state(&key)` holding the bytes after the call.
+
 ## Ids and time
 
 An id the design leaves to the program is `uuid::Uuid::new_v4().to_string()`, and a timestamp is `chrono::Utc::now()`, both from crates the root manifest pins and the stem's manifest names with `.workspace = true`. A key in the state store joins the stem and the id, `format!("orders/{id}")`, through one `key` function the module's readers and writers share, `pub(crate)` within the stem and `pub` where another stem reads the same entries.

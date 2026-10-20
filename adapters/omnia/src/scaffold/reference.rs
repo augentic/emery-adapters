@@ -3,14 +3,16 @@
 use std::collections::BTreeSet;
 use std::iter;
 
-use emery_sdk::{Doc, body, push_unique};
+use emery_sdk::target::Slice;
+use emery_sdk::{Doc, body, push_unique, words};
 
 const API: &str = "references/omnia-api.md";
+const HANDLERS: &str = "references/handlers.md";
 const TESTING: &str = "references/testing.md";
 const TRANSLATION: &str = "references/translation.md";
 
-// What the design's `## APIs and integrations` names the program reaching,
-// read by the words of its text.
+// What the slice's text and the design's `## APIs and integrations` name
+// the program reaching, read by the words of their text.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum Role {
     Consume,
@@ -36,7 +38,6 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
             "consumer",
             "consumers",
             "consumes",
-            "inbound",
             "subscribe",
             "subscribed",
             "subscribes",
@@ -71,24 +72,12 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
             "topics",
         ],
     ),
+    // `api`, `http`, and `rest` name the inbound surface as often as an
+    // upstream, and a `url` names a store's connection as often, so none of
+    // them selects the role.
     (
         Role::Upstream,
-        &[
-            "api",
-            "apis",
-            "endpoint",
-            "endpoints",
-            "fetch",
-            "fetched",
-            "fetches",
-            "graphql",
-            "http",
-            "https",
-            "rest",
-            "upstream",
-            "url",
-            "urls",
-        ],
+        &["endpoint", "endpoints", "fetch", "fetched", "fetches", "graphql", "upstream"],
     ),
     (
         Role::Identity,
@@ -181,6 +170,40 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
     ),
 ];
 
+// An idiom of the handlers reference the slice's own text calls for, by
+// the words of its requirements and brief alone, since the design's words
+// name what every slice shares.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) enum Idiom {
+    Probe,
+    CacheAside,
+}
+
+// Each idiom with the heading of its section and the words that select it.
+const IDIOMS: &[(Idiom, &str, &[&str])] = &[
+    (
+        Idiom::Probe,
+        "A probe",
+        &["deadline", "deadlines", "probe", "probed", "probes", "readiness", "timeout", "timeouts"],
+    ),
+    (
+        Idiom::CacheAside,
+        "A cache-aside read",
+        &[
+            "cache",
+            "cached",
+            "caches",
+            "caching",
+            "invalidate",
+            "invalidated",
+            "invalidates",
+            "invalidating",
+            "invalidation",
+            "ttl",
+        ],
+    ),
+];
+
 // The translation table's row for each role, by the words its first cell
 // opens with.
 const TRANSLATION_ROWS: &[(Role, &str)] = &[
@@ -217,10 +240,11 @@ const CAPABILITIES: &[Capability] = &[
     (Role::Broadcast, "pub trait Broadcast", "impl Sink", "`Broadcast`"),
 ];
 
-// What the scaffold laid, which decides the passages.
+// What the scaffold laid and the slice reaches, which decide the passages.
 pub(super) struct Needs {
     pub laid: BTreeSet<Laid>,
     pub roles: BTreeSet<Role>,
+    pub idioms: BTreeSet<Idiom>,
 }
 
 // A kind of item the scaffold laid for the slice.
@@ -243,23 +267,106 @@ pub(super) struct Passage {
     pub code: bool,
 }
 
-// The roles the design's APIs section names, by the words of its text; none
-// where the design has no such section.
-pub(super) fn roles(design: &str) -> BTreeSet<Role> {
-    let Some((_, section)) = section(design, "APIs and integrations") else {
-        return BTreeSet::new();
-    };
-    let words: BTreeSet<String> = section
-        .lines()
-        .flat_map(|line| line.split(|ch: char| !ch.is_ascii_alphanumeric()))
-        .filter(|word| !word.is_empty())
-        .map(str::to_ascii_lowercase)
-        .collect();
+// The roles the slice reaches, by the words of its own text and of the
+// design's APIs paragraphs that speak to it: a paragraph citing one of the
+// slice's requirement ids, or citing none, names what the slice reaches; one
+// citing other slices' ids alone names what they reach.
+pub(super) fn roles(slice: &Slice) -> BTreeSet<Role> {
+    let ids: Vec<&str> =
+        slice.requirements.iter().map(|requirement| requirement.id.as_str()).collect();
+    let mut spelled = own_words(slice);
+    if let Some((_, section)) = section(&slice.design, "APIs and integrations") {
+        for paragraph in section.split("\n\n") {
+            let cited = cited(paragraph);
+            if cited.is_empty() || cited.iter().any(|id| ids.contains(&id.as_str())) {
+                spell(paragraph, &mut spelled);
+            }
+        }
+    }
     ROLE_WORDS
         .iter()
-        .filter(|(_, spelled)| spelled.iter().any(|word| words.contains(*word)))
+        .filter(|(_, words)| words.iter().any(|word| spelled.contains(*word)))
         .map(|(role, _)| *role)
         .collect()
+}
+
+// The idioms the slice's own text calls for.
+pub(super) fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
+    let spelled = own_words(slice);
+    IDIOMS
+        .iter()
+        .filter(|(_, _, words)| words.iter().any(|word| spelled.contains(*word)))
+        .map(|(idiom, ..)| *idiom)
+        .collect()
+}
+
+// Every word the slice's own text spells: its requirements, their
+// scenarios, and its brief.
+fn own_words(slice: &Slice) -> BTreeSet<String> {
+    let mut spelled = BTreeSet::new();
+    for requirement in &slice.requirements {
+        spell(&requirement.subject, &mut spelled);
+        for paragraph in &requirement.statement {
+            spell(paragraph, &mut spelled);
+        }
+        for scenario in &requirement.scenarios {
+            let lines = iter::once(&scenario.name)
+                .chain(&scenario.given)
+                .chain([&scenario.when, &scenario.then])
+                .chain(&scenario.and);
+            for line in lines {
+                spell(line, &mut spelled);
+            }
+        }
+    }
+    for paragraph in &slice.brief {
+        spell(paragraph, &mut spelled);
+    }
+    spelled
+}
+
+// Adds every word `text` spells, lowercased: each run of ASCII
+// alphanumerics whole, and each word the lexicon's splitter cuts at a
+// camel-case boundary within one, so `PostgreSQL` spells `postgresql` and
+// `sql` both.
+fn spell(text: &str, into: &mut BTreeSet<String>) {
+    into.extend(
+        text.split(|ch: char| !ch.is_ascii_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_ascii_lowercase),
+    );
+    into.extend(words(text));
+}
+
+// The requirement ids the paragraph cites, a `REQ-a through REQ-b` range
+// expanded to every id within it.
+fn cited(paragraph: &str) -> Vec<String> {
+    const ID: &str = "REQ-";
+    const THROUGH: &str = " through REQ-";
+    let mut ids = Vec::new();
+    let mut rest = paragraph;
+    while let Some(at) = rest.find(ID) {
+        let (first, after) = digits(&rest[at + ID.len()..]);
+        rest = after;
+        if first.is_empty() {
+            continue;
+        }
+        ids.push(format!("{ID}{first}"));
+        if let Some(after) = after.strip_prefix(THROUGH) {
+            let (last, after) = digits(after);
+            if let (Ok(from), Ok(to)) = (first.parse::<u32>(), last.parse::<u32>()) {
+                ids.extend((from..=to).map(|n| format!("{ID}{n:0width$}", width = first.len())));
+                rest = after;
+            }
+        }
+    }
+    ids
+}
+
+// The leading run of ASCII digits and the text after it.
+fn digits(text: &str) -> (&str, &str) {
+    let rest = text.trim_start_matches(|ch: char| ch.is_ascii_digit());
+    text.split_at(text.len() - rest.len())
 }
 
 pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
@@ -307,6 +414,17 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     {
         let leads = iter::once("pub trait Config").chain(reached(&roles, |(_, lead, ..)| lead));
         passages.push(code(API, &heading, &paragraphs(fence, leads)));
+    }
+
+    // the idioms the slice's text calls for, each its section whole
+    if let Some(handlers) = body(docs, HANDLERS) {
+        for (idiom, lead, _) in IDIOMS {
+            if needs.idioms.contains(idiom)
+                && let Some((heading, idiom)) = section(handlers, lead)
+            {
+                passages.push(markdown(HANDLERS, &heading, idiom));
+            }
+        }
     }
 
     // the doubles the tests arrange, `Provider` and `MapConfig` always

@@ -78,9 +78,11 @@ impl TargetAdapter for Adapter {
                 );
                 let brief = scaffold.brief(PROSE);
                 let paths = scaffold.paths();
+                let types = scaffold.types();
                 let ctx = ctx.with_scaffold(target::Scaffold {
                     brief: &brief,
                     paths: &paths,
+                    types: &types,
                 });
                 target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)

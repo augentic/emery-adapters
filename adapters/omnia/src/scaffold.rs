@@ -18,7 +18,7 @@ use emery_sdk::{
 
 use self::lists::{Line, Lists, Place, Placement, Topics};
 use self::names::{Names, flat, number, pascal, screaming, snake};
-use self::reference::Role;
+use self::reference::{Idiom, Role};
 use self::render::{Call, Expr};
 use self::types::DesignKey;
 use crate::layout::{self, TOPICS, crate_dir, package};
@@ -32,6 +32,7 @@ pub struct Plan {
     existing: BTreeSet<String>,
     lists: Lists,
     roles: BTreeSet<Role>,
+    idioms: BTreeSet<Idiom>,
 }
 
 // A slice's skeleton as written, which the turn fills and the check holds
@@ -282,7 +283,8 @@ impl Scaffold {
             relaid,
             existing,
             lists,
-            roles: reference::roles(&slice.design),
+            roles: reference::roles(slice),
+            idioms: reference::idioms(slice),
         })
     }
 
@@ -307,6 +309,19 @@ impl Scaffold {
         paths.sort();
         paths.dedup();
         paths
+    }
+
+    // The design keys of the types laid into the modules the scaffold wrote,
+    // a marker among them, since its signature stands fenced in its doc; a
+    // held module holds whatever an earlier slice left, so its types are
+    // none.
+    pub fn types(&self) -> Vec<String> {
+        self.plan
+            .stems
+            .iter()
+            .filter(|stem| !stem.module.held)
+            .flat_map(|stem| stem.types.iter().map(|design_type| design_type.key.clone()))
+            .collect()
     }
 
     // The files of the tree once the skeleton was written, which the check

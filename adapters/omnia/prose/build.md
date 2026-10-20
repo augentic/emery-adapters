@@ -9,7 +9,7 @@ Then run the one check command, repair what it prints, and answer with one JSON 
 - `$WORKSPACE` — the project tree, lent writable. It sits on the commit the brief names.
 - **The slice's plan entry** — its id, name, requirements, the design types it owns, and the slices it depends on.
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
-- **The design, whole** — the types and sections every slice shares.
+- **The design, cut to this slice** — the sections every slice shares, with the `Type:` blocks cut to yours: a type the adapter laid for you is one line pointing at the scaffold section, since its signature stands in your module's doc; a type another slice owns stands whole where your slice's text names it, and is left out otherwise, listed by key at the end; a `(mechanism)` type always stands whole.
 - **What the adapter scaffolded for this slice before this turn** — per stem of the slice:
   - the files it wrote or found held, with their text;
   - the lines it added to the lists;

@@ -997,11 +997,13 @@ fn assert_omnia_scaffold_brief(brief: &str) {
         "Messaging — `omnia_sdk::api::messaging`",
         "pub trait StateStore",
         "a message is consumed",
+        "under \"A probe\"",
+        "under \"A cache-aside read\"",
     ] {
         assert!(
             !scaffolded.contains(absent),
-            "no `{absent}` for a routed slice with no `start` id, no consumer, no body route, and \
-             a design naming no store: {scaffolded}"
+            "no `{absent}` for a routed slice with no `start` id, no consumer, no body route, a \
+             design naming no store, and text calling for no idiom: {scaffolded}"
         );
     }
     assert!(
@@ -1223,6 +1225,117 @@ async fn omnia_scaffold_status() {
         "| `TableStore` |",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
+// The roles follow the slice, not the design whole: its own text selects a
+// role, a design paragraph citing one of its ids, inside a `through` range,
+// or citing none does too, while a paragraph citing other slices' ids alone
+// selects nothing, and the inbound surface's `HTTP`, `REST`, and `API`
+// select no upstream.
+#[tokio::test]
+async fn omnia_scaffold_roles_scoped() {
+    let project = omnia_tree().await;
+    let mut slice = omnia_slice();
+    slice.requirements[0].id = "REQ-002".to_owned();
+    slice.requirements[0].statement =
+        vec!["Answers the order by its id to a caller presenting a bearer token.".to_owned()];
+    slice.design = "# Design\n\n## APIs and integrations\n\nInbound HTTP surfaces, a REST API \
+                    over JSON: `GET /api/orders/{id}` answers the order (REQ-002).\n\nCache \
+                    (Redis via `ioredis:Redis`): order-by-id reads are cache-aside under \
+                    `orders-api:order:{id}` with a TTL of 60 seconds (REQ-001 through \
+                    REQ-003).\n\nBroker (Kafka via `kafkajs`): `order.placed` is published on \
+                    placement and consumed by the fulfilment worker (REQ-007 through \
+                    REQ-009).\n\nStore (PostgreSQL via `pg:Pool`): connection string from \
+                    `DATABASE_URL`; order reads use `SELECT * FROM orders WHERE id = $1`.\n"
+        .to_owned();
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    let (_, scaffolded) = brief
+        .split_once("What the adapter scaffolded for this slice before this turn:\n\n")
+        .expect("the brief carries the scaffold section after the design");
+    for carried in [
+        "pub trait Identity: Send + Sync {",
+        "pub trait StateStore: Send + Sync {",
+        "pub trait TableStore: Send + Sync {",
+        "impl FixedIdentity {",
+        "impl Memory {",
+        "impl ScriptedTables {",
+        "| a secret read from a vault",
+        "| a store: a SQL database",
+    ] {
+        assert!(
+            scaffolded.contains(carried),
+            "the slice's own words, a paragraph citing its id within a range, and an uncited \
+             paragraph select `{carried}`: {scaffolded}"
+        );
+    }
+    for absent in [
+        "pub trait Publish",
+        "pub trait HttpRequest",
+        "impl Sink",
+        "impl MatchedHttp",
+        "| a message is consumed",
+        "| a message is published",
+        "| an upstream REST or GraphQL call",
+        "Messaging — `omnia_sdk::api::messaging`",
+        "under \"A cache-aside read\"",
+    ] {
+        assert!(
+            !scaffolded.contains(absent),
+            "a paragraph citing other slices' ids alone and the inbound surface's words select \
+             no `{absent}`, and the design's words select no idiom: {scaffolded}"
+        );
+    }
+}
+
+// The handlers reference's idioms follow the slice's own words: a
+// requirement that probes a store carries the probe's section and not the
+// cache's, and one that reads through a cache the cache's and not the
+// probe's.
+#[tokio::test]
+async fn omnia_scaffold_idioms() {
+    for (subject, statement, carried, absent) in [
+        (
+            "health.ready",
+            "Answers whether the store answers a probe within its deadline.",
+            "A probe",
+            "A cache-aside read",
+        ),
+        (
+            "orders.read",
+            "Answers the order from the cache, else from the store, caching it under a TTL.",
+            "A cache-aside read",
+            "A probe",
+        ),
+    ] {
+        let project = omnia_tree().await;
+        let mut slice = omnia_slice();
+        subject.clone_into(&mut slice.requirements[0].subject);
+        slice.requirements[0].statement = vec![statement.to_owned()];
+        let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+
+        OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+        model.assert_exhausted();
+
+        let brief = &model.seen()[0].messages[0];
+        let section = format!("From `references/handlers.md`, under \"{carried}\":\n\n");
+        assert!(
+            brief.contains(&section),
+            "`{subject}` carries the `{carried}` idiom whole: {brief}"
+        );
+        assert!(
+            brief.contains("```rust\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{StateStore, "),
+            "the idiom's fence is quoted: {brief}"
+        );
+        assert!(
+            !brief.contains(&format!("under \"{absent}\"")),
+            "`{subject}` calls for no `{absent}` idiom: {brief}"
+        );
     }
 }
 
@@ -1554,6 +1667,16 @@ async fn omnia_scaffold_types() {
          read the value's fields where the behaviour needs them.\n\nMarkers, in fill order";
     assert!(brief.contains(cited), "the brief carries `{cited}`: {brief}");
     assert!(!brief.contains("whose signature the scaffold could not lay"), "{brief}");
+    let design = "The design, cut to this slice:\n\n# Design\n\nType: orders.Order — laid in the \
+                  tree by the adapter before this turn, as the scaffold section says.\n\nType: \
+                  orders.Address\n```\n```\n\nType: orders.OrderLine — laid in the tree by the \
+                  adapter before this turn, as the scaffold section says.\n\nType: orders.Page — \
+                  laid in the tree by the adapter before this turn, as the scaffold section \
+                  says.\n\nWhat the adapter scaffolded for this slice before this turn:";
+    assert!(
+        brief.contains(design),
+        "the laid types are pointed at and the one a laid field carries stands: {brief}"
+    );
 }
 
 // A Python model is laid the same way: an annotation its Rust type, a
