@@ -174,6 +174,9 @@ struct Refs<'a> {
     owned: &'a [(String, String)],
     params: &'a [String],
     design: &'a [String],
+    // The type whose fields are being laid, so a shared declared name resolves
+    // to itself rather than the first slice type that declared it.
+    at: usize,
 }
 
 // The scalar a field's laid type is, where it is one.
@@ -240,7 +243,7 @@ pub(super) fn lay(
     let mut bodies = Vec::new();
     let mut floats = Vec::new();
     let mut references = Vec::new();
-    for (read, name) in reads.iter().zip(names) {
+    for (at, (read, name)) in reads.iter().zip(names).enumerate() {
         let (body, laying) = match &read.shape {
             Shape::Opaque { is_enum } => (Body::Marker { is_enum: *is_enum }, Laying::default()),
             Shape::Enum(declared) => (declared.lay(), Laying::default()),
@@ -249,6 +252,7 @@ pub(super) fn lay(
                     owned: &owned,
                     params: &declared.generics,
                     design,
+                    at,
                 };
                 declared.lay(name, &refs, values)
             }
@@ -506,6 +510,11 @@ impl Refs<'_> {
     fn resolve(&self, name: &str) -> Ref<'_> {
         if self.params.iter().any(|param| param == name) {
             return Ref::Param;
+        }
+        if let Some((declared, rust)) = self.owned.get(self.at)
+            && declared == name
+        {
+            return Ref::Owned(rust, self.at);
         }
         if let Some((at, (_, rust))) =
             self.owned.iter().enumerate().find(|(_, (declared, _))| declared == name)

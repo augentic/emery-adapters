@@ -1619,7 +1619,10 @@ async fn omnia_scaffold_type_fallbacks() {
              ['paid'],\n  paid: [],\n};",
         ),
         ("orders.Order", "interface Order {\n  id: string;\n}"),
-        ("Order (src/orders.ts#L3)", "export interface Order {\n  code: string;\n}"),
+        (
+            "Order (src/orders.ts#L3)",
+            "export interface Order {\n  code: string;\n  child: Order;\n}",
+        ),
     ]
     .into_iter()
     .map(|(key, signature)| DesignType {
@@ -1638,7 +1641,8 @@ async fn omnia_scaffold_type_fallbacks() {
         "pub struct OrderRef {}\n",
         "pub struct Transitions {}\n",
         "pub struct Order {\n    /// The `id` field.\n    pub id: String,\n}\n",
-        "pub struct Order2 {\n    /// The `code` field.\n    pub code: String,\n}\n",
+        "pub struct Order2 {\n    /// The `code` field.\n    pub code: String,\n    /// The `child` \
+         field.\n    pub child: Order2,\n}\n",
     ] {
         let declaration = format!("{derives}{declared}");
         assert!(part.contains(&declaration), "the part declares `{declared}`: {part}");
