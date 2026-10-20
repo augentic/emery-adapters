@@ -1231,8 +1231,8 @@ async fn omnia_scaffold_status() {
 // The roles follow the slice, not the design whole: its own text selects a
 // role, a design paragraph citing one of its ids, inside a `through` range,
 // or citing none does too, while a paragraph citing other slices' ids alone
-// selects nothing, and the inbound surface's `HTTP`, `REST`, and `API`
-// select no upstream.
+// selects nothing, and the inbound surface's `HTTP`, `REST`, and `API` and
+// the store's `DATABASE_URL` and `order fetch` select no upstream.
 #[tokio::test]
 async fn omnia_scaffold_roles_scoped() {
     let project = omnia_tree().await;
@@ -1247,7 +1247,7 @@ async fn omnia_scaffold_roles_scoped() {
                     REQ-003).\n\nBroker (Kafka via `kafkajs`): `order.placed` is published on \
                     placement and consumed by the fulfilment worker (REQ-007 through \
                     REQ-009).\n\nStore (PostgreSQL via `pg:Pool`): connection string from \
-                    `DATABASE_URL`; order reads use `SELECT * FROM orders WHERE id = $1`.\n"
+                    `DATABASE_URL`; order fetch `SELECT * FROM orders WHERE id = $1`.\n"
         .to_owned();
     let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
 

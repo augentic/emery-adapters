@@ -73,12 +73,9 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
         ],
     ),
     // `api`, `http`, and `rest` name the inbound surface as often as an
-    // upstream, and a `url` names a store's connection as often, so none of
-    // them selects the role.
-    (
-        Role::Upstream,
-        &["endpoint", "endpoints", "fetch", "fetched", "fetches", "graphql", "upstream"],
-    ),
+    // upstream, a `url` names a store's connection as often, and a `fetch`
+    // a store's read, so none of them selects the role.
+    (Role::Upstream, &["endpoint", "endpoints", "graphql", "upstream"]),
     (
         Role::Identity,
         &[
