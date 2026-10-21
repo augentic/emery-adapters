@@ -7,7 +7,9 @@ use std::path::Path;
 
 use emery_sdk::serde_json::{self, Value, json};
 use emery_sdk::workspace::{self, Entry};
-use emery_sdk::{Claim, Context, Error, Evidence, Model, Seam, SourceContent, bad_request};
+use emery_sdk::{
+    Claim, Context, Error, Evidence, Model, Seam, SourceContent, bad_request, tracing,
+};
 use sha2::{Digest, Sha256};
 
 use crate::PROSE;
@@ -44,7 +46,47 @@ pub fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
         seams.push(seam(&path, &doc));
         facts.extend(crate::evidence::evidence(&doc).claims);
     }
+    trace(source, &seams, &facts);
     Ok(Survey { seams, facts })
+}
+
+/// The `survey facts` and `surveyed` trace events `evals` reads: what the
+/// model is shown, and the one surface each document is (its path, its stem).
+fn trace(source: &str, seams: &[Seam], facts: &[Claim]) {
+    if !tracing::enabled!(tracing::Level::TRACE) {
+        return;
+    }
+    let text = facts_text(seams, facts);
+    let json = Value::String(text).to_string();
+    tracing::trace!(%source, facts = %json, "survey facts");
+    let surfaces: Vec<Value> = seams
+        .iter()
+        .filter_map(|seam| {
+            let entry = seam.files.first()?;
+            let stem = seam.stems.first()?;
+            Some(json!({ "name": stem, "entry": entry, "stem": stem, "ids": [stem] }))
+        })
+        .collect();
+    let json = Value::Array(surfaces).to_string();
+    tracing::trace!(%source, surfaces = %json, "surveyed");
+}
+
+/// Each seam's text and the files it reads, then the facts joined without a
+/// model turn, one claim a line.
+fn facts_text(seams: &[Seam], facts: &[Claim]) -> String {
+    let mut text = String::new();
+    for seam in seams {
+        let mut seen = BTreeSet::new();
+        let files: Vec<&str> =
+            seam.files.iter().map(String::as_str).filter(|file| seen.insert(*file)).collect();
+        let _ = writeln!(text, "{}\n\nFiles: {}\n", seam.text, files.join(", "));
+    }
+    let _ = writeln!(text, "Facts joined without a model turn ({}):", facts.len());
+    for claim in facts {
+        let line = serde_json::to_string(claim).unwrap_or_default();
+        let _ = writeln!(text, "- {line}");
+    }
+    text
 }
 
 /// The seam of one document: its stem is the screen id the example claims carry.
@@ -167,6 +209,25 @@ mod tests {
         let ids: Vec<_> = claims.iter().filter_map(|c| c.id.as_deref()).collect();
         assert_eq!(ids, ["orders-api.t-1.orders.open"]);
         assert!(seam.text.contains("Screen `orders-api`"));
+    }
+
+    #[test]
+    fn facts_text_lists_each_seam_and_fact() {
+        let doc = json!({
+            "screen": "login",
+            "triggers": [{
+                "id": "t-1", "on": { "gesture": "submit" },
+                "does": [{ "kind": "call", "callee": "api:login", "evidence": [{ "path": "a.ts#L2" }] }],
+                "evidence": [{ "path": "a.ts#L1" }]
+            }]
+        });
+        let seams = vec![seam("ui-ir/login/behaviour.json", &doc)];
+        let facts = crate::evidence::evidence(&doc).claims;
+        let text = facts_text(&seams, &facts);
+        assert!(text.contains("Screen `login`"));
+        assert!(text.contains("Files: ui-ir/login/behaviour.json, a.ts\n"));
+        assert!(text.contains("Facts joined without a model turn (1):"));
+        assert!(text.contains("\"callee\":\"api:login\""));
     }
 
     #[test]
