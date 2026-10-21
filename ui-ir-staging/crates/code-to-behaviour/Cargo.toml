@@ -1,0 +1,32 @@
+[package]
+name = "code-to-behaviour"
+description = "Native, model-free reader of a React/TSX source tree (oxc) into ui-ir behaviour.json with file#L evidence, and its projection to Emery evidence. Not an Emery source adapter; see ui-ir-staging/README.md"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "code-to-behaviour"
+path = "src/bin/code-to-behaviour.rs"
+
+[dependencies]
+emery-sdk.workspace = true
+serde_json.workspace = true
+ui-ir-behaviour.workspace = true
+oxc_allocator = "0.154.0"
+oxc_ast = "0.154.0"
+oxc_parser = "0.154.0"
+oxc_span = "0.154.0"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+ui-ir-behaviour = { workspace = true, features = ["validate"] }

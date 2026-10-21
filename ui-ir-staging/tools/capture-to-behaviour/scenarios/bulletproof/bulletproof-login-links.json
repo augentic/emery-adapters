@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "id": "bulletproof-login-links",
+  "screen": "login",
+  "serve": {
+    "dir": "${SITES}/bulletproof-react/apps/react-vite/dist",
+    "spa_fallback": true
+  },
+  "network": {
+    "stubs": [
+      {
+        "method": "GET",
+        "origin": "http://127.0.0.1:8080",
+        "path": "/api/auth/me",
+        "status": 200,
+        "body": {
+          "data": null
+        }
+      }
+    ]
+  },
+  "start_path": "/auth/login",
+  "actions": [
+    {
+      "step_id": "register",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "link",
+        "name": "Register"
+      }
+    }
+  ]
+}

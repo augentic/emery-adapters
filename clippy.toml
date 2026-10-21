@@ -21,6 +21,8 @@ allowed-duplicate-crates = [
   "hashbrown",
   "io-lifetimes",
   "macro-string",
+  # oxc (code-to-behaviour) and jsonschema (ui-ir-behaviour's validate) pin different majors
+  "num-bigint",
   "prettyplease",
   "r-efi",
   "rand",

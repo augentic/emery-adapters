@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "shadcn-index-mobile",
+  "screen": "index",
+  "serve": {
+    "dir": "${EXPERIMENT}/react-html-capture/fixtures/shadcn-landing-page/dist",
+    "spa_fallback": true
+  },
+  "environment": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "network": {
+    "stubs": []
+  },
+  "start_path": "/",
+  "actions": [
+    {
+      "step_id": "open-sheet",
+      "action": "click",
+      "locator": {
+        "kind": "css",
+        "value": "button[aria-haspopup=\"dialog\"]"
+      }
+    },
+    {
+      "step_id": "sheet-features",
+      "action": "click",
+      "locator": {
+        "kind": "css",
+        "value": "[role=dialog] a[href=\"#features\"]"
+      }
+    },
+    {
+      "step_id": "reopen-sheet",
+      "action": "click",
+      "locator": {
+        "kind": "css",
+        "value": "button[aria-haspopup=\"dialog\"]"
+      }
+    },
+    {
+      "step_id": "close-sheet",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Close"
+      }
+    }
+  ]
+}

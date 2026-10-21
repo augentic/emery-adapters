@@ -1,0 +1,21 @@
+[package]
+name = "emery-behaviour"
+description = "Screen-behaviour source-adapter: ui-ir behaviour.json facts joined to inferred meaning"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+code-to-behaviour = { path = "../../ui-ir-staging/crates/code-to-behaviour" }
+emery-sdk.workspace = true
+sha2.workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "ui-ir-behaviour"
+description = "Staging copy of the ui-ir behaviour contract: the behaviour schema, the hand-written behaviour mapping table, and the node id rule. Moves into the ui-ir crate; see ui-ir-staging/README.md"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+validate = ["dep:jsonschema"]
+
+[dependencies]
+serde_json.workspace = true
+sha2.workspace = true
+jsonschema = { version = "0.33", default-features = false, optional = true }
+
+[[bin]]
+name = "ui-ir-behaviour"
+path = "src/bin/ui-ir-behaviour.rs"
+required-features = ["validate"]
+
+[lints]
+workspace = true

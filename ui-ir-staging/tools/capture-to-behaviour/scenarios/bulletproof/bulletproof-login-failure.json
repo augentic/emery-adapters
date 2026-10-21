@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "id": "bulletproof-login-failure",
+  "screen": "login",
+  "serve": {
+    "dir": "${SITES}/bulletproof-react/apps/react-vite/dist",
+    "spa_fallback": true
+  },
+  "network": {
+    "stubs": [
+      {
+        "method": "GET",
+        "origin": "http://127.0.0.1:8080",
+        "path": "/api/auth/me",
+        "status": 200,
+        "body": {
+          "data": null
+        }
+      },
+      {
+        "method": "POST",
+        "origin": "http://127.0.0.1:8080",
+        "path": "/api/auth/login",
+        "status": 401,
+        "body": {
+          "message": "Invalid credentials"
+        }
+      }
+    ]
+  },
+  "start_path": "/auth/login",
+  "actions": [
+    {
+      "step_id": "fill-email",
+      "action": "fill",
+      "locator": {
+        "kind": "css",
+        "value": "input[name=email]"
+      },
+      "value": "user@example.com"
+    },
+    {
+      "step_id": "fill-password",
+      "action": "fill",
+      "locator": {
+        "kind": "css",
+        "value": "input[name=password]"
+      },
+      "value": "password123"
+    },
+    {
+      "step_id": "submit",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Log in"
+      }
+    }
+  ]
+}

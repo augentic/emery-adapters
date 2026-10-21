@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "id": "fastapi-login-validation",
+  "screen": "login",
+  "serve": {
+    "dir": "${EXPERIMENT}/fastapi-html-capture/fixtures/frontend/dist",
+    "spa_fallback": true
+  },
+  "environment": {
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "network": {
+    "stubs": [],
+    "block_prefixes": [
+      "/api/"
+    ]
+  },
+  "start_path": "/login",
+  "actions": [
+    {
+      "step_id": "fill-email",
+      "action": "fill",
+      "locator": {
+        "kind": "test_id",
+        "value": "email-input"
+      },
+      "value": "not-an-email"
+    },
+    {
+      "step_id": "fill-password",
+      "action": "fill",
+      "locator": {
+        "kind": "test_id",
+        "value": "password-input"
+      },
+      "value": "short"
+    },
+    {
+      "step_id": "submit",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Log In"
+      }
+    }
+  ]
+}

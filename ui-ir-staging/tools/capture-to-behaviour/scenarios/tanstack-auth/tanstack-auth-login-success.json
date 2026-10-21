@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "id": "tanstack-auth-login-success",
+  "screen": "login",
+  "serve": {
+    "dir": "${SITES}/tanstack-router/examples/react/authenticated-routes/dist",
+    "spa_fallback": true
+  },
+  "network": {
+    "stubs": []
+  },
+  "start_path": "/login",
+  "actions": [
+    {
+      "step_id": "fill-username",
+      "action": "fill",
+      "locator": {
+        "kind": "css",
+        "value": "input[name=username]"
+      },
+      "value": "alice"
+    },
+    {
+      "step_id": "submit",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Login"
+      }
+    },
+    {
+      "step_id": "wait-dashboard",
+      "action": "wait_for",
+      "locator": {
+        "kind": "role",
+        "role": "heading",
+        "name": "Authenticated Route"
+      },
+      "timeout_ms": 8000
+    }
+  ]
+}

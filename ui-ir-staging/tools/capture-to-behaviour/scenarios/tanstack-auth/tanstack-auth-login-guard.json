@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "id": "tanstack-auth-login-guard",
+  "screen": "login",
+  "serve": {
+    "dir": "${SITES}/tanstack-router/examples/react/authenticated-routes/dist",
+    "spa_fallback": true
+  },
+  "network": {
+    "stubs": []
+  },
+  "start_path": "/login",
+  "actions": [],
+  "storage": {
+    "local_storage": {
+      "tanstack.auth.user": "alice"
+    }
+  }
+}

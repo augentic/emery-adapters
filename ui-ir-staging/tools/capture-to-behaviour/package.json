@@ -1,0 +1,20 @@
+{
+  "name": "capture-to-behaviour",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Record scripted Playwright runs of a built app and attach the observations to a ui-ir behaviour.json. Deterministic, model-free. Recording model adapted from rea-agents (MIT, morluto).",
+  "type": "module",
+  "bin": {
+    "capture-to-behaviour": "bin/capture-to-behaviour.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "license": "MIT OR Apache-2.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "playwright-core": "1.58.2"
+  }
+}

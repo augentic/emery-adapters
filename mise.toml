@@ -10,7 +10,7 @@ includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0
 # Add a new adapter here when it ships as a wasm32 guest component under
 # `adapters/`.
 [env]
-WASM32_PACKAGES = "emery-documentation emery-intent emery-python emery-typescript emery-node emery-omnia test-programs"
+WASM32_PACKAGES = "emery-behaviour emery-documentation emery-intent emery-python emery-typescript emery-node emery-omnia test-programs"
 MISE_EXPERIMENTAL = "1"
 
 # -------------------------------------

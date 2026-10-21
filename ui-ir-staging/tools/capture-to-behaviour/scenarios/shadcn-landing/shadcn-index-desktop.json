@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "id": "shadcn-index-desktop",
+  "screen": "index",
+  "serve": {
+    "dir": "${EXPERIMENT}/react-html-capture/fixtures/shadcn-landing-page/dist",
+    "spa_fallback": true
+  },
+  "environment": {
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "network": {
+    "stubs": []
+  },
+  "start_path": "/",
+  "actions": [
+    {
+      "step_id": "open-theme-menu",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Toggle theme"
+      }
+    },
+    {
+      "step_id": "choose-dark",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "menuitem",
+        "name": "Dark"
+      }
+    },
+    {
+      "step_id": "nav-features",
+      "action": "click",
+      "locator": {
+        "kind": "css",
+        "value": "header a[href=\"#features\"]"
+      }
+    }
+  ]
+}

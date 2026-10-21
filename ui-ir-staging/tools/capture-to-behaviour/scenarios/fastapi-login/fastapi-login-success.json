@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "id": "fastapi-login-success",
+  "screen": "login",
+  "serve": {
+    "dir": "${EXPERIMENT}/fastapi-html-capture/fixtures/frontend/dist",
+    "spa_fallback": true
+  },
+  "environment": {
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "network": {
+    "stubs": [
+      {
+        "method": "POST",
+        "origin": "http://127.0.0.1:8000",
+        "path": "/api/v1/login/access-token",
+        "status": 200,
+        "body": {
+          "access_token": "stub-token",
+          "token_type": "bearer"
+        }
+      },
+      {
+        "method": "GET",
+        "origin": "http://127.0.0.1:8000",
+        "path": "/api/v1/users/me",
+        "status": 200,
+        "body": {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "email": "user@example.com",
+          "is_active": true,
+          "is_superuser": false,
+          "full_name": "Stub User"
+        }
+      }
+    ],
+    "block_prefixes": [
+      "/api/"
+    ]
+  },
+  "start_path": "/login",
+  "actions": [
+    {
+      "step_id": "fill-email",
+      "action": "fill",
+      "locator": {
+        "kind": "test_id",
+        "value": "email-input"
+      },
+      "value": "user@example.com"
+    },
+    {
+      "step_id": "fill-password",
+      "action": "fill",
+      "locator": {
+        "kind": "test_id",
+        "value": "password-input"
+      },
+      "value": "correct-password"
+    },
+    {
+      "step_id": "submit",
+      "action": "click",
+      "locator": {
+        "kind": "role",
+        "role": "button",
+        "name": "Log In"
+      }
+    }
+  ]
+}
