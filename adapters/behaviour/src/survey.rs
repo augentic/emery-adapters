@@ -41,27 +41,31 @@ pub fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
             .map_err(|e| bad_request!("`{source}`: cannot read `{path}`: {e}"))?;
         let doc: Value = serde_json::from_str(&text)
             .map_err(|e| bad_request!("`{source}`: `{path}` is not JSON: {e}"))?;
-        let screen = emery_sdk::kebab(doc["screen"].as_str().unwrap_or("screen"))
-            .unwrap_or_else(|| "screen".to_owned());
-        let cited = cited(&doc);
-        let mut files = vec![path.clone()];
-        files.extend(cited.iter().map(|a| a.split('#').next().unwrap_or(a).to_owned()));
-        seams.push(Seam {
-            text: format!(
-                "Screen `{screen}` — behaviour document `{path}` — stem `{screen}`.\n\n\
+        seams.push(seam(&path, &doc));
+        facts.extend(crate::evidence::evidence(&doc).claims);
+    }
+    Ok(Survey { seams, facts })
+}
+
+/// The seam of one document: its stem is the screen id the example claims carry.
+fn seam(path: &str, doc: &Value) -> Seam {
+    let screen = crate::evidence::screen(doc);
+    let cited = cited(doc);
+    let mut files = vec![path.to_owned()];
+    files.extend(cited.iter().map(|a| a.split('#').next().unwrap_or(a).to_owned()));
+    Seam {
+        text: format!(
+            "Screen `{screen}` — behaviour document `{path}` — stem `{screen}`.\n\n\
                  The document is the fact layer: every trigger, effect, guard and validation rule \
                  with its `file#L` evidence, and `observed` entries from recorded runs. State what \
                  they are for; point every claim at the evidence the document gives and name the \
                  JSON pointer of the entry it explains in `behaviour-pointer`."
-            ),
-            files,
-            stems: vec![screen],
-            anchors: cited.into_iter().collect(),
-            ..Seam::default()
-        });
-        facts.extend(code_to_behaviour::evidence(&doc).claims);
+        ),
+        files,
+        stems: vec![screen],
+        anchors: cited.into_iter().collect(),
+        ..Seam::default()
     }
-    Ok(Survey { seams, facts })
 }
 
 impl Survey {
@@ -144,6 +148,25 @@ mod tests {
         });
         let got: Vec<_> = cited(&doc).into_iter().collect();
         assert_eq!(got, ["a.tsx#L1", "a.tsx#L4", "b.ts#L2-L3"]);
+    }
+
+    #[test]
+    fn a_camel_case_screen_gives_the_seam_stem_the_example_ids_use() {
+        let digest = format!("sha256:{}", "1".repeat(64));
+        let doc = json!({
+            "screen": "OrdersAPI",
+            "triggers": [{
+                "id": "t-1", "on": { "gesture": "tap" }, "does": [],
+                "evidence": [{ "path": "src/orders.tsx#L3" }],
+                "observed": [{ "recording": "orders", "step": "open", "replay_digest": digest, "confirms": [0] }]
+            }]
+        });
+        let seam = seam("behaviour.json", &doc);
+        assert_eq!(seam.stems, ["orders-api"]);
+        let claims = crate::evidence::evidence(&doc).claims;
+        let ids: Vec<_> = claims.iter().filter_map(|c| c.id.as_deref()).collect();
+        assert_eq!(ids, ["orders-api.t-1.orders.open"]);
+        assert!(seam.text.contains("Screen `orders-api`"));
     }
 
     #[test]

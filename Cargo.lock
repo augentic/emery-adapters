@@ -1195,7 +1195,6 @@ dependencies = [
 name = "emery-behaviour"
 version = "0.12.0"
 dependencies = [
- "code-to-behaviour",
  "emery-sdk",
  "sha2 0.10.9",
 ]

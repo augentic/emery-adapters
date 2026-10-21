@@ -16,6 +16,5 @@ crate-type = ["cdylib", "rlib"]
 workspace = true
 
 [dependencies]
-code-to-behaviour = { path = "../../ui-ir-staging/crates/code-to-behaviour" }
 emery-sdk.workspace = true
 sha2.workspace = true
