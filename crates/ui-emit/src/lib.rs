@@ -1,13 +1,12 @@
-//! A ui-ir design system (`composition.json`, `tokens.json`, `assets.json`) turned into a Vue app.
+//! A ui-ir design system (`composition.json`, `tokens.json`, `assets.json`) to a Vue app.
 //!
-//! Copied from vx's `vx-emit` (`augentic/vx`, `crates/vx-emit`) and trimmed to the deterministic
-//! Vue path: the composition model, the copy and event contracts it derives, the tokens and their
-//! CSS theme, and the Vue views. The Swift, Kotlin and Dioxus emitters, the Crux contract's Rust
-//! output, capabilities, services and permissions did not come across. Input is JSON only.
+//! [`vue`] validates a design-system directory, derives the copy and event contracts the
+//! composition implies, and renders the views, the theme sheet and the Vite app around them.
+//! [`write()`] and [`drift`] reconcile those files with a workspace. Input is JSON only.
 //!
 //! Everything here is deterministic. The same design system produces the same bytes, which is
-//! what makes the output reviewable as a diff and testable as a golden — and what makes it safe
-//! to overwrite on every run.
+//! what makes the output reviewable as a diff and testable as a golden, and what makes it safe to
+//! overwrite on every run.
 //!
 //! # Ownership
 //!
@@ -16,29 +15,24 @@
 //! deleted from the composition leaves a file behind, and deleting a file nobody claims is only
 //! safe when the claim is written on it.
 
-#![cfg_attr(
-    test,
-    allow(
-        clippy::assert_is_empty,
-        reason = "the unit tests are vx-emit's and vx-spec's, kept as written"
-    )
-)]
-
-pub mod contract;
-pub mod copy;
-pub mod design;
-pub mod format;
-pub mod model;
-pub mod naming;
-pub mod spec;
-pub mod theme;
-pub mod tokens;
-pub mod view;
+mod contract;
+mod copy;
+mod design;
+mod format;
+mod model;
+mod naming;
+mod spec;
+mod theme;
+mod tokens;
+mod view;
 
 use std::path::{Path, PathBuf};
-use std::{fs, io};
+use std::{error, fmt, fs, io};
 
 use serde_json::Value;
+
+pub use self::design::{Emit, vue};
+pub use self::view::vue::{PUBLIC, VIEWS};
 
 /// The line every generated file carries.
 pub const HEADER: &str = "Generated from design-system/ — do not edit manually.";
@@ -50,14 +44,13 @@ pub const HEADER: &str = "Generated from design-system/ — do not edit manually
 pub const OWNED_MARKER: &str = "do not edit manually.";
 
 /// Something that stopped the emit.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug)]
 pub enum Error {
-    /// The composition is not the shape the schema guarantees.
-    #[error("{0}")]
+    /// The design system does not validate, still has holes, or implies a contract no generated
+    /// file could satisfy.
     Malformed(String),
 
     /// A design-system document could not be read as JSON.
-    #[error("{}: {source}", .path.display())]
     Parse {
         /// The file that would not parse.
         path: PathBuf,
@@ -71,15 +64,9 @@ pub enum Error {
     /// Refused rather than clobbered. Somebody edited a generated file and removed its header, or
     /// wrote their own at a path the emitter now claims, and either way overwriting it silently
     /// loses work.
-    #[error(
-        "{} exists and is not generated — it has no `{OWNED_MARKER}` line, so it will not be \
-         overwritten",
-        .0.display()
-    )]
     NotOurs(PathBuf),
 
     /// The filesystem refused something.
-    #[error("{}: {source}", .path.display())]
     Io {
         /// The path being read or written.
         path: PathBuf,
@@ -87,6 +74,32 @@ pub enum Error {
         /// What the filesystem said.
         source: io::Error,
     },
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Malformed(message) => out.write_str(message),
+            Self::Parse { path, source } => write!(out, "{}: {source}", path.display()),
+            Self::NotOurs(path) => write!(
+                out,
+                "{} exists and is not generated — it has no `{OWNED_MARKER}` line, so it will not \
+                 be overwritten",
+                path.display()
+            ),
+            Self::Io { path, source } => write!(out, "{}: {source}", path.display()),
+        }
+    }
+}
+
+impl error::Error for Error {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            Self::Parse { source, .. } => Some(source),
+            Self::Io { source, .. } => Some(source),
+            Self::Malformed(_) | Self::NotOurs(_) => None,
+        }
+    }
 }
 
 /// One file the emit produces.
@@ -136,7 +149,7 @@ impl Report {
 /// # Errors
 ///
 /// When the file cannot be read or is not JSON.
-pub fn read(path: &Path) -> Result<Value, Error> {
+fn read(path: &Path) -> Result<Value, Error> {
     let text = fs::read_to_string(path).map_err(|source| Error::Io {
         path: path.to_owned(),
         source,
@@ -318,7 +331,7 @@ mod tests {
         assert_eq!(first.written, ["shared/src/contract.rs"]);
 
         let second = write(dir.path(), &files, &[]).expect("the second write");
-        assert!(second.written.is_empty());
+        assert_eq!(second.written, Vec::<String>::new());
         assert_eq!(second.unchanged, ["shared/src/contract.rs"]);
         assert!(second.is_clean());
     }

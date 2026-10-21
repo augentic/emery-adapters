@@ -1,6 +1,6 @@
 //! Cross-artifact reference resolution: token references against
-//! `tokens.yaml` categories and static asset references against
-//! `assets.yaml` ids.
+//! `tokens.json` categories and static asset references against
+//! `assets.json` ids.
 
 use serde_json::Value;
 
@@ -8,9 +8,7 @@ use super::finding::Finding;
 use crate::spec::assets::collect_asset_references;
 use crate::spec::shared::escape_pointer_token;
 
-pub(crate) fn resolve_token_references(
-    composition: &Value, tokens: &Value, errors: &mut Vec<Finding>,
-) {
+pub fn resolve_token_references(composition: &Value, tokens: &Value, errors: &mut Vec<Finding>) {
     walk_token_refs(composition, "", tokens, errors);
 }
 
@@ -18,8 +16,7 @@ fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut V
     match node {
         Value::Object(map) => {
             for (key, val) in map {
-                // A platform extension slot (`x-web`, `x-mobile`, `x-ios`, `x-android`): opaque
-                // platform facts (CSS, SF/Material names), not references.
+                // An extension slot (`x-*`): opaque facts for one target, not references.
                 if ui_ir::is_extension_slot(key) {
                     continue;
                 }
@@ -75,14 +72,13 @@ fn walk_token_refs(node: &Value, json_path: &str, tokens: &Value, errors: &mut V
 /// Refuses a border nothing states a colour for, at either end.
 ///
 /// A `border` token is a width. Figma keeps the colour on the frame that draws the stroke, so
-/// `tokens.yaml` usually cannot say one and `composition.yaml` says it per layer instead. Neither
-/// half is required on its own, but between them one of them has to answer, because the emitters
-/// have no third place to look: a border with no colour renders in `.clear` on iOS and
-/// `Transparent` on Android — a stroke that reserves its width and draws nothing, which looks like
-/// a spacing bug several files away from the artifact that caused it.
+/// `tokens.json` usually cannot say one and `composition.json` says it per layer instead. Neither
+/// half is required on its own, but between them one of them has to answer, because the emitter
+/// has no third place to look: a border with no colour reserves its width and draws nothing, which
+/// looks like a spacing bug several files away from the artifact that caused it.
 ///
-/// Reported here rather than in the emitters so it is one finding against the line that decided it,
-/// and so `vx spec` refuses the design system before `vx emit` is ever asked to render it.
+/// Reported here rather than in the emitter so it is one finding against the line that decided it,
+/// before anything is rendered.
 fn check_border_color(border: &Value, json_path: &str, tokens: &Value, errors: &mut Vec<Finding>) {
     // The object form states its own colour, or names a width that has to have one. The bare string
     // form is the width alone, so it always falls through to the token.
@@ -112,9 +108,9 @@ fn check_border_color(border: &Value, json_path: &str, tokens: &Value, errors: &
         json_path,
         format!(
             "border `{width}` is drawn in no colour -- this layer names none and `border.{width}` \
-             in tokens.yaml has none either, so it would render transparent. Give the layer a \
+             in tokens.json has none either, so it would render transparent. Give the layer a \
              `border: {{width: {width}, color: <colors token>}}`, or set `border.{width}.color` in \
-             tokens.yaml as the default for every layer that names this width bare.",
+             tokens.json as the default for every layer that names this width bare.",
         ),
     ));
 }
@@ -142,15 +138,13 @@ fn check_token_ref(
         errors.push(Finding::new(
             json_path,
             format!(
-                "composition references unknown {category} token `{name}` -- not present in tokens.yaml under `{category}.{name}`",
+                "composition references unknown {category} token `{name}` -- not present in tokens.json under `{category}.{name}`",
             ),
         ));
     }
 }
 
-pub(crate) fn resolve_asset_references(
-    composition: &Value, assets: &Value, errors: &mut Vec<Finding>,
-) {
+pub fn resolve_asset_references(composition: &Value, assets: &Value, errors: &mut Vec<Finding>) {
     let asset_ids = assets.get("assets").and_then(Value::as_object);
     let refs = collect_asset_references(composition);
     for asset_ref in &refs {
@@ -159,7 +153,7 @@ pub(crate) fn resolve_asset_references(
             errors.push(Finding::new(
                 asset_ref.path.clone(),
                 format!(
-                    "composition references unknown asset id `{}` -- not present in assets.yaml",
+                    "composition references unknown asset id `{}` -- not present in assets.json",
                     asset_ref.id,
                 ),
             ));

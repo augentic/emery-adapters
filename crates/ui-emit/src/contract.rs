@@ -1,43 +1,33 @@
-//! The Rust types the core and the shells agree about.
+//! The events a composition raises, and the values each event carries.
 //!
-//! This is the stage that makes a model-written core tractable. Emery asks a model to write a Crux
-//! core and then discovers, at compile time, that it named the field `taskTitle` where the
-//! generated `SwiftUI` reads `title` — a mismatch caught late, in a language the model was not
-//! looking at, and repaired by guessing which of the two to change.
-//!
-//! Here the composition decides. `bind: title` on a screen means `TaskListView` has a `title`
-//! field, and both the Swift that reads it and the Rust that fills it are generated from the same
-//! sentence. What is left for [`vx core`] is behaviour: a `Model`, an `update()`, and the effects
-//! it runs. That is a genuinely hard problem, and it is the only one left.
+//! The composition decides: `bind: title` on a screen is a `title` field in that screen's scope,
+//! and `event: EditTask(id)` on a row is an `EditTask` event carrying the row's `id`. The Vue
+//! emitter writes the events into `contract.ts`, and [`crate::design::vue`] refuses a composition
+//! whose events no generated file could satisfy.
 //!
 //! # What is derived, and from what
 //!
-//! | Composition | Rust |
+//! | Composition | Contract |
 //! | --- | --- |
-//! | a screen | `pub struct <Screen>View`, and a `ViewModel` variant |
-//! | `bind:` on a screen | a field on that screen's view |
-//! | `list.each: tasks` | `pub tasks: Vec<…>`, and an element struct from the row template |
-//! | `bind:` inside a row | a field on the element struct |
-//! | `event: EditTask(id)` | an `Event::EditTask` variant |
-//! | `event: Navigate(Cities)` | an `Event::Navigate(Route)` variant, one however many name it |
-//! | `states.<key>.when: <path>` | a `bool` field, when the condition is a bare path |
-//! | `states.<key>.when: <path>.is_empty` | nothing — the collection at `<path>` answers it |
-//! | `overlays.<key>` | a `bool` field |
-//! | every screen | a `Route` variant |
+//! | `bind:` on a screen | a field in the screen's scope |
+//! | `list.each: tasks` | a repeated field, and a row scope from the row template |
+//! | `bind:` inside a row | a field in the row's scope |
+//! | `event: EditTask(id)` | an `EditTask` event |
+//! | `event: Navigate(Cities)` | a `Navigate` event carrying a route, however many name it |
+//! | `states.<key>.when: <path>` | a flag field, when the condition is a bare path |
+//! | `states.<key>.when: <path>.is_empty` | nothing: the collection at `<path>` answers it |
+//! | `overlays.<key>` | a flag field, and a `Dismiss<Key>` event |
 //!
 //! # Event arguments
 //!
 //! An argument is a name, and [`Source`] is what that name turns out to mean: a field on the row in
-//! scope, a field on the screen, a screen the app navigates to, or — on a control that hands a
-//! value back — the value the user just produced. The type follows from wherever it resolved, so
-//! `ListNameChanged(value)` on a text field is a `String` because a text field produces one, not
-//! because `String` is the fallback.
+//! scope, a field on the screen, a screen the app navigates to, or (on a control that hands a value
+//! back) the value the user just produced. The type follows from wherever it resolved, so
+//! `ListNameChanged(value)` on a text field carries text because a text field produces it, not
+//! because text is the fallback.
 //!
-//! An argument that resolves to nothing is a [`Gap`]. `vx emit` refuses the whole run over one,
-//! because the alternative is a shell reading a member of a view model that has none — a compile
-//! error two languages away from the sentence that caused it, in a file nobody is allowed to edit.
-//!
-//! [`vx core`]: https://docs.rs/vx
+//! An argument that resolves to nothing is a [`Gap`], and the emit refuses the whole run over one:
+//! the alternative is a view raising an event with a value it does not have.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -45,16 +35,13 @@ use std::fmt;
 use crate::model::{
     Arg, BindKind, Collection, Condition, Event, FooterMenu, Item, Node, Screen, Surface,
 };
-use crate::naming::{pascal, snake};
+use crate::naming::pascal;
 
-/// The element field every row template gets whether it asked for one or not.
-///
-/// `ForEach(items, id: \.id)` and `key = { it.id }` are how both shells identify a row across a
-/// reorder, so a row without an `id` renders but animates wrongly and loses its selection. The
-/// design file never mentions it, and it is not a decision anybody would want to be asked about.
+/// The row field every row template gets whether it asked for one or not: the key a view
+/// identifies a row by across a reorder. The design file never mentions it.
 const ROW_IDENTITY: &str = "id";
 
-/// Everything the composition fixes about the core's types.
+/// Everything the composition fixes about its events and the values they carry.
 #[derive(Debug, Clone, Default)]
 pub struct Contract {
     /// One entry per screen, in slug order.
@@ -65,7 +52,7 @@ pub struct Contract {
 
     /// Event arguments nothing in scope names, in the order they were found.
     ///
-    /// Not an error here, because the contract is also what says *why* it is one. `vx emit`
+    /// Not an error here, because the contract is also what says *why* it is one. The emit
     /// refuses to write anything while this is non-empty.
     pub gaps: Vec<Gap>,
 
@@ -80,25 +67,22 @@ pub struct Contract {
     pub conflicts: Vec<Conflict>,
 }
 
-/// One screen's view model.
+/// One screen's scope: the fields its content binds and the rows it iterates.
 #[derive(Debug, Clone)]
 pub struct ScreenContract {
     /// The screen's kebab-case slug.
     pub slug: String,
 
-    /// The Rust type name, `TaskListView`.
+    /// The name a [`Conflict`] gives the screen's own fields, `TaskListView`.
     pub view: String,
-
-    /// The module the type lives in, `task_list`.
-    pub module: String,
 
     /// The view's fields.
     pub fields: Fields,
 
-    /// Element structs for the collections this screen iterates, in field order.
+    /// The row scopes of the collections this screen iterates, in field order.
     pub elements: Vec<Element>,
 
-    /// Every `Route` variant the app has, which is one per screen.
+    /// Every route the app has, which is one per screen.
     ///
     /// The whole set rather than this screen's own, because a route is the one thing an event
     /// argument can name that is not local to the screen raising it: `Navigate(Cities)` on the
@@ -108,32 +92,7 @@ pub struct ScreenContract {
 }
 
 impl ScreenContract {
-    /// The enum a bound variant's `field` holds, among this screen's row structs, matched on the
-    /// variants it spells too, so two lists each binding a `state` cannot be confused.
-    #[must_use]
-    pub fn choice(&self, field: &str, spelled: &[String]) -> Option<&str> {
-        self.elements.iter().find_map(|element| match element.fields.get(field) {
-            Some(Field::Choice { name, variants, .. }) if variants == spelled => {
-                Some(name.as_str())
-            }
-            _ => None,
-        })
-    }
-
-    /// Every bound variant's enum this screen's rows hold.
-    #[must_use]
-    pub fn choices(&self) -> Vec<&str> {
-        self.elements
-            .iter()
-            .flat_map(|element| element.fields.values())
-            .filter_map(|field| match field {
-                Field::Choice { name, .. } => Some(name.as_str()),
-                _ => None,
-            })
-            .collect()
-    }
-
-    /// Where a shell reads `argument` from, for an event raised by a control that produces
+    /// Where a view reads `argument` from, for an event raised by a control that produces
     /// `produces` and sits inside a row when `within_element`.
     ///
     /// The order is the whole decision:
@@ -185,10 +144,10 @@ fn holds(fields: &Fields, argument: &str) -> bool {
     matches!(fields.get(argument), Some(Field::Value(_)))
 }
 
-/// The element type a collection iterates.
+/// The row scope a collection iterates.
 #[derive(Debug, Clone)]
 pub struct Element {
-    /// The Rust type name, `TaskListTask`.
+    /// Its name, `TaskListTask`, unique across the contract.
     pub name: String,
 
     /// The element's fields, always including `id`.
@@ -201,82 +160,38 @@ pub struct Argument {
     /// The name as the composition wrote it, which is a path on the row in scope.
     pub name: String,
 
-    /// What the value is, which is what says both how Rust spells it and what it means.
+    /// What the value is.
     pub carries: Carried,
-}
-
-impl Argument {
-    /// How Rust spells this argument's type.
-    #[must_use]
-    pub const fn rust(&self) -> &'static str {
-        self.carries.rust()
-    }
 }
 
 /// What an event argument carries.
 ///
-/// Wider than [`BindKind`] for the same reason vx's `responses` is: `BindKind` is the vocabulary of
-/// what a design file can *depict* — text, a flag, a number, a moment — and a destination is none
-/// of those. Collapsing a route into text would make `Navigate` take a `String`, which is a screen
-/// name the core has to match on and the compiler cannot check, when the enum that makes it
-/// checkable is generated four hundred lines above it in the same file.
+/// Wider than [`BindKind`]: `BindKind` is the vocabulary of what a design file can *depict* (text,
+/// a flag, a number, a moment) and a destination is none of those.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Carried {
     /// A value the screen draws.
     Value(BindKind),
 
-    /// A screen to go to, spelled as the `Route` variant it is.
+    /// A screen to go to.
     Route,
 }
 
-impl Carried {
-    /// How Rust spells it.
-    #[must_use]
-    pub const fn rust(self) -> &'static str {
-        match self {
-            Self::Value(kind) => kind.rust(),
-            Self::Route => "Route",
-        }
-    }
-
-    /// What the value means, for the kinds where the type alone does not say.
-    #[must_use]
-    pub const fn unit(self) -> Option<&'static str> {
-        match self {
-            Self::Value(kind) => kind.unit(),
-            // `Route` is one screen per variant and says so in its own doc comment.
-            Self::Route => None,
-        }
-    }
-}
-
-/// Where a shell reads an event argument's value from.
-///
-/// One answer, used twice: [`derive()`] types the `Event` variant from it and the view emitters spell
-/// the read from it. They used to decide separately — the views spelled every argument as a read
-/// off the view model whether or not a field of that name existed — and an argument naming nothing
-/// became `viewModel.value` against a unit struct, which is a compile error in a file the operator
-/// is told not to edit.
+/// Where a view reads an event argument's value from; [`derive()`] types the event from it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     /// A field on the row in scope.
     Element,
 
-    /// A field on the screen's view model.
+    /// A field on the screen.
     ViewModel,
 
     /// The value the control itself just produced — what was typed, chosen, toggled or set.
     ///
-    /// The view model cannot answer this one: it holds what the core last pushed, which is the
-    /// value *before* the interaction. A control whose change event carried a view-model read
-    /// could only ever tell the core what it already knew, so text entry could not work at all.
+    /// The screen's fields cannot answer this one: they hold the value *before* the interaction.
     Produced(BindKind),
 
-    /// A screen, named by the `Route` variant it is spelled as.
-    ///
-    /// Carried without the variant because the argument already is one: a route variant is
-    /// `pascal(slug)`, which is exactly what the composition wrote inside the parentheses. Each
-    /// emitter spells that name for its own platform rather than reading it off a field.
+    /// A screen: the argument is the route, `pascal(slug)`, exactly as the composition wrote it.
     Route,
 
     /// Nothing in scope names it. See [`Gap`].
@@ -301,7 +216,7 @@ impl fmt::Display for Gap {
         write!(
             out,
             "{}: `{}` carries `{}`, and nothing on the screen is called that. Either bind a value \
-             of that name on the screen, or drop the argument and let the core hold what it needs.",
+             of that name on the screen, or drop the argument and let the app hold what it needs.",
             self.screen, self.event, self.argument,
         )
     }
@@ -309,15 +224,13 @@ impl fmt::Display for Gap {
 
 /// One event raised with two different argument lists.
 ///
-/// `Event` has one variant per name, so the first spelling is the one the contract declares and
-/// every site that disagrees is generated against a variant that cannot take what it passes — a
-/// shell writing `Event.CityDeleted` against a `CityDeleted(String)`. Caught here for the reason
-/// [`Gap`] is: left alone it surfaces as a compile error in Swift or Kotlin, in a generated file
-/// the operator is told not to edit, two languages from the sentence that caused it.
+/// An event has one shape per name, so the first spelling is the one the contract declares and
+/// every site that disagrees raises a shape `contract.ts` does not declare. Refused for the reason
+/// [`Gap`] is.
 ///
 /// Only the *number* of arguments is compared. Two sites naming different values of the same
 /// arity is ordinary — `Navigate(Today)` and `Navigate(Cities)` are one variant and one payload —
-/// and it is the shape of the variant that a shell is generated against.
+/// and it is the event's shape that a view is generated against.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Clash {
     /// The screen the disagreeing site is on.
@@ -337,7 +250,7 @@ impl fmt::Display for Clash {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             out,
-            "{}: `{}` is raised here and as `{}` elsewhere, and one `{}` variant cannot be both. \
+            "{}: `{}` is raised here and as `{}` elsewhere, and one `{}` event cannot be both. \
              Either raise it with the same arguments everywhere, or give the two a name each — \
              they are different things if they carry different values.",
             self.screen, self.raised, self.declared, self.event,
@@ -347,16 +260,15 @@ impl fmt::Display for Clash {
 
 /// One field bound as two kinds of value, where at least one is a typed display value.
 ///
-/// A struct field has one type. Before `format:` the first site to bind a name decided it and a
-/// later one disagreeing went unsaid, which was tolerable while every text was a `String`. A typed
-/// display value is a promise to the core about what to fill, so a site that reads the same field
-/// as something else is a shell generated against a type the field does not have.
+/// A field has one type. Without `format:` the first site to bind a name decides it and a later
+/// one disagreeing goes unsaid; a typed display value is a promise about what the field holds, so
+/// a site reading it as something else would be generated against a type the field does not have.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
     /// The screen the field is on.
     pub screen: String,
 
-    /// The struct holding it: the screen's view, or the row a collection iterates.
+    /// The scope holding it: the screen, or the row a collection iterates.
     pub owner: String,
 
     /// The field, as its bind path spells it.
@@ -384,26 +296,23 @@ impl fmt::Display for Conflict {
     }
 }
 
-/// A view's fields, in name order.
-///
-/// Ordered rather than insertion-ordered so that adding a `bind:` to the middle of a screen moves
-/// one line of the generated struct rather than all of them.
+/// A scope's fields, in name order.
 pub type Fields = BTreeMap<String, Field>;
 
-/// One field of a generated struct.
+/// One field of a scope.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Field {
-    /// A scalar the shell displays.
+    /// A scalar the view displays.
     Value(BindKind),
 
-    /// A repeated element, naming the struct its rows are.
+    /// A repeated field, naming the row scope its rows are.
     Repeated(String),
 
     /// A nested object, from a dotted bind path like `author.name`.
     Nested(Fields),
 
     /// A scalar two sites bind as different kinds, one of them a typed display value. Rendered as
-    /// the first, and reported as a [`Conflict`] that `vx emit` refuses.
+    /// the first, and reported as a [`Conflict`] that the emit refuses.
     Conflict {
         /// What the first site binds it as.
         kept: BindKind,
@@ -411,16 +320,9 @@ pub enum Field {
         other: BindKind,
     },
 
-    /// The value of a bound variant: an enum named `name` whose variants are the values the drawn
-    /// rows show, one per look, so the core cannot pick a value nothing can draw.
-    Choice {
-        /// The enum's name — the struct holding the field, then the field.
-        name: String,
-        /// Its Rust variants, in look order; the first is the default.
-        variants: Vec<String>,
-        /// The values they spell, in the same order, for the doc comments.
-        values: Vec<String>,
-    },
+    /// The value of a bound variant: one of the values the drawn rows show. Neither a scalar an
+    /// argument can name nor a nested object.
+    Choice,
 }
 
 /// Derives the contract from a parsed composition.
@@ -428,8 +330,8 @@ pub enum Field {
 pub fn derive(surface: &Surface) -> Contract {
     let mut contract = Contract::default();
 
-    // Every shell sends this before it renders anything, and the core has to have somewhere to
-    // initialise from. It is the one event no design file will ever draw.
+    // Every app raises this before it renders anything. It is the one event no design file will
+    // ever draw.
     contract.events.insert("Start".to_owned(), Vec::new());
 
     // Up front, because a navigation argument resolves against the screens the app ends up with
@@ -476,7 +378,7 @@ fn conflicts(screen: &str, owner: &str, fields: &Fields, into: &mut Vec<Conflict
                 other: *other,
             }),
             Field::Nested(inner) => conflicts(screen, owner, inner, into),
-            Field::Value(_) | Field::Repeated(_) | Field::Choice { .. } => {}
+            Field::Value(_) | Field::Repeated(_) | Field::Choice => {}
         }
     }
 }
@@ -514,7 +416,6 @@ fn menu_event(menu: &FooterMenu, contract: &mut Contract) {
 fn screen_contract(
     screen: &Screen, routes: &BTreeSet<String>, events: &mut BTreeMap<String, Vec<Argument>>,
 ) -> ScreenContract {
-    let module = snake(&screen.slug);
     let view = format!("{}View", pascal(&screen.slug));
 
     let mut fields = Fields::new();
@@ -537,7 +438,7 @@ fn screen_contract(
     }
 
     if let Some(header) = &screen.header {
-        // A bound title reads its field off the screen's view model exactly as a bound `text` does.
+        // A bound title reads its field from the screen exactly as a bound `text` does.
         if let Some(path) = header.bind() {
             insert(&mut fields, path, BindKind::Text);
         }
@@ -554,8 +455,8 @@ fn screen_contract(
         leaf(fab, &mut fields, events);
     }
     for overlay in &screen.overlays {
-        // The flag that presents it. The shell reads this to decide whether the sheet is up, and
-        // dismissing it is an event rather than a write, because the core owns the state.
+        // The flag that presents it. Dismissing it is an event rather than a write, because the
+        // state is the app's.
         insert(&mut fields, &overlay.key, BindKind::Flag);
         events.entry(format!("Dismiss{}", pascal(&overlay.key))).or_default();
         for node in &overlay.content {
@@ -564,15 +465,15 @@ fn screen_contract(
         }
     }
 
-    // A collection nested in content is the same `Vec<Row>` a body list is: its `each` is a field on
-    // the screen's view model, and its rows are an element struct of their own.
+    // A collection nested in content is the same as a body list: its `each` is a field on the
+    // screen, and its rows are a row scope of their own.
     for collection in nested {
         repeated(screen, collection, &mut fields, &mut elements, events);
     }
 
     for state in &screen.states {
-        // `when:` is a condition on the view model. A bare path is a field; an expression is
-        // something the core computes, and naming a field for it would be inventing one. An
+        // `when:` is a condition on the screen's fields. A bare path is a field; an expression is
+        // something the app computes, and naming a field for it would be inventing one. An
         // emptiness test is neither: the collection the body already declares answers it.
         if let Condition::Flag(path) = state.condition() {
             insert(&mut fields, &path, BindKind::Flag);
@@ -582,14 +483,13 @@ fn screen_contract(
     ScreenContract {
         slug: screen.slug.clone(),
         view,
-        module,
         fields,
         elements,
         routes: routes.clone(),
     }
 }
 
-/// Adds the field a collection iterates and the element structs it iterates over.
+/// Adds the field a collection iterates and the row scopes it iterates over.
 fn repeated(
     screen: &Screen, collection: &Collection, fields: &mut Fields, elements: &mut Vec<Element>,
     events: &mut BTreeMap<String, Vec<Argument>>,
@@ -610,9 +510,9 @@ fn nested_in<'a>(node: &'a Node, into: &mut Vec<&'a Collection>) {
     into.extend(node.collections());
 }
 
-/// The element structs a collection iterates, outermost first.
+/// The row scopes a collection iterates, outermost first.
 ///
-/// One for a flat list, two for a sectioned one — and the outer struct is what `each` holds, which
+/// One for a flat list, two for a sectioned one, and the outer scope is what `each` holds, which
 /// is why the caller reads the type off the front rather than assuming the row.
 fn elements_of(
     screen: &Screen, collection: &Collection, events: &mut BTreeMap<String, Vec<Argument>>,
@@ -635,12 +535,12 @@ fn elements_of(
     vec![sections, rows]
 }
 
-/// The element struct a collection's rows are.
+/// The row scope a collection's rows are.
 fn element(
     screen: &Screen, collection: &Collection, events: &mut BTreeMap<String, Vec<Argument>>,
 ) -> Element {
     // In a sectioned list `each` names the sections, so the rows take their name from the field a
-    // section holds them in — otherwise both structs would be called the same thing.
+    // section holds them in; otherwise both scopes would be called the same thing.
     let source = collection.section.as_ref().map_or(&collection.each, |section| &section.items);
     let name = format!("{}{}", pascal(&screen.slug), pascal(&singular(source)));
 
@@ -656,24 +556,7 @@ fn element(
         retype(node, &fields, events);
     }
 
-    name_choices(&name, &mut fields);
     Element { name, fields }
-}
-
-/// Names each bound variant's enum for the struct holding it and the field: `TodayHour` and
-/// `state` give `TodayHourState`, which is unique across the contract because the struct is.
-fn name_choices(owner: &str, fields: &mut Fields) {
-    for (path, field) in fields.iter_mut() {
-        if let Field::Choice { name, .. } = field {
-            *name = choice_name(owner, path);
-        }
-    }
-}
-
-/// The enum a bound variant's field holds, as every shell names it.
-#[must_use]
-pub fn choice_name(owner: &str, field: &str) -> String {
-    format!("{owner}{}", pascal(field))
 }
 
 /// Adds every field and event a subtree needs.
@@ -686,8 +569,8 @@ fn walk(node: &Node, fields: &mut Fields, events: &mut BTreeMap<String, Vec<Argu
                     record(event, fields, events);
                 }
             }
-            // A component placement whose instance binds a TEXT property reads that field off the
-            // view model in scope, exactly as a bound `text` does — the component itself has none.
+            // A component placement whose instance binds a TEXT property reads that field from
+            // the scope, exactly as a bound `text` does; the component itself has none.
             // One shown through a `format:` reads a typed value instead, formatted at the call site.
             for (name, arg) in &group.args {
                 if let Arg::Bind(path) = arg {
@@ -699,13 +582,8 @@ fn walk(node: &Node, fields: &mut Fields, events: &mut BTreeMap<String, Vec<Argu
                 }
             }
             // A row reading its variant from a field: the field holds one of the drawn values.
-            // Named once the struct holding it is, in `name_choices`.
             if let Some(bound) = &group.bound {
-                fields.entry(bound.field.clone()).or_insert_with(|| Field::Choice {
-                    name: String::new(),
-                    variants: bound.variants(),
-                    values: bound.looks.iter().map(|(value, _)| value.clone()).collect(),
-                });
+                fields.entry(bound.field.clone()).or_insert(Field::Choice);
             }
             for child in &group.items {
                 walk(child, fields, events);
@@ -724,12 +602,11 @@ fn leaf(item: &Item, fields: &mut Fields, events: &mut BTreeMap<String, Vec<Argu
         record(event, fields, events);
     }
 
-    // A custom element declares its contract rather than drawing it: `binds:` names the view-model
-    // fields it reads and `raises:` the events it sends. They are recorded exactly like a control's
-    // — so the `Event` enum and the view-model struct are unchanged in kind — but a custom element
-    // produces its own values, so its event arguments are not resolved against the screen the way
-    // `resolve` treats a drawn control's. They keep the `String` `record` gives an argument that
-    // names no field, which is the seam type `vx custom` implements against.
+    // A custom element declares its contract rather than drawing it: `binds:` names the fields it
+    // reads and `raises:` the events it sends. They are recorded exactly like a control's, but a
+    // custom element produces its own values, so its event arguments are not resolved against the
+    // screen the way `resolve` treats a drawn control's. They keep the text `record` gives an
+    // argument that names no field.
     if item.custom {
         for path in &item.binds {
             insert(fields, path, BindKind::Text);
@@ -774,8 +651,8 @@ fn resolve(
 /// Reports every site on a screen that raises an event the contract declared a different shape for.
 ///
 /// Read off the recorded arguments rather than by comparing sites with each other, because the
-/// recorded list *is* what the `Event` enum will hold: the first writer won, and a site that
-/// disagrees with it is a site the generated shell will not compile.
+/// recorded list *is* what `contract.ts` declares: the first writer won, and a site that disagrees
+/// with it raises a shape nothing declares.
 fn clashes(screen: &Screen, events: &BTreeMap<String, Vec<Argument>>, into: &mut Vec<Clash>) {
     for (event, ..) in sites(screen) {
         let Some(declared) = events.get(&event.name) else { continue };
@@ -890,10 +767,8 @@ fn retype_argument(
 
 /// Records an event, giving each argument the type of the field it names.
 ///
-/// An unfilled `TODO(event)` records nothing. `vx emit` refuses a spec with surviving holes, so
-/// this is only reachable under `--allow-holes` — but the variant it used to add was `Event::TODO`
-/// taking a `String` called `event`, which is a name the design file never said and the shells
-/// dispatch nowhere.
+/// An unfilled `TODO(event)` records nothing: the emit refuses surviving holes, so this is only
+/// reachable with holes allowed, and `TODO` is not an event the design file said.
 fn record(event: &Event, fields: &Fields, events: &mut BTreeMap<String, Vec<Argument>>) {
     if event.is_hole() {
         return;
@@ -942,7 +817,7 @@ fn retype(node: &Node, fields: &Fields, events: &mut BTreeMap<String, Vec<Argume
                 retype(child, fields, events);
             }
         }
-        // A row template holds no collection of its own; `vx spec` refuses one.
+        // A row template holds no collection of its own; validation refuses one.
         Node::Collection(_) => {}
     }
 }
@@ -957,8 +832,7 @@ fn lookup(fields: &Fields, name: &str) -> BindKind {
 
 /// Adds a field for a bind path.
 ///
-/// A dotted path is a nested object: `author.name` is a `name` on an `author`. Kept nested rather
-/// than flattened to `author_name`, because that is what the generated Swift reads.
+/// A dotted path is a nested object: `author.name` is a `name` on an `author`.
 ///
 /// The first site to bind a name decides its type. A later site binding it as another kind is a
 /// [`Conflict`] where either kind is a typed display value, and left unsaid otherwise, which is
@@ -981,7 +855,7 @@ fn insert(fields: &mut Fields, path: &str, kind: BindKind) {
     }
 }
 
-/// `tasks` becomes `task`, so a collection's element type is not `TaskListTasks`.
+/// `tasks` becomes `task`, so a collection's row scope is not `TaskListTasks`.
 ///
 /// The three suffixes a plural field name actually uses, and no attempt at English beyond them:
 /// a name with no plural ending keeps it, so `data` stays `TaskListData`. Irregulars come out
@@ -1005,41 +879,6 @@ mod tests {
 
     fn contract(document: &serde_json::Value) -> Contract {
         derive(&model::parse(document).expect("the composition parses"))
-    }
-
-    #[test]
-    fn a_list_screen_gets_a_view_a_row_and_the_events_the_row_raises() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "task-list": {
-                    "name": "TaskListScreen",
-                    "body": { "list": {
-                        "each": "tasks",
-                        "item": [{ "group": {
-                            "interaction": { "archetype": "tap-target", "event": "EditTask(id)" },
-                            "items": [
-                                { "text": { "bind": "title" } },
-                                { "checkbox": { "bind": "completed", "event": "Toggle(id)" } }
-                            ]
-                        }}]
-                    }}
-                }
-            }
-        }));
-
-        let screen = &contract.screens[0];
-        assert_eq!(screen.view, "TaskListView");
-        assert_eq!(screen.module, "task_list");
-        assert_eq!(screen.fields.get("tasks"), Some(&Field::Repeated("TaskListTask".to_owned())));
-
-        let row = &screen.elements[0];
-        assert_eq!(row.fields.get("id"), Some(&Field::Value(BindKind::Text)));
-        assert_eq!(row.fields.get("title"), Some(&Field::Value(BindKind::Text)));
-        assert_eq!(row.fields.get("completed"), Some(&Field::Value(BindKind::Flag)));
-
-        assert!(contract.events.contains_key("EditTask"));
-        assert!(contract.events.contains_key("Toggle"));
-        assert!(contract.events.contains_key("Start"), "every shell sends this one");
     }
 
     /// A sectioned list is two structs, and `each` holds the outer one.
@@ -1103,20 +942,6 @@ mod tests {
     }
 
     #[test]
-    fn an_argument_naming_nothing_the_row_declares_is_a_string() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "a": { "name": "A", "body": { "list": {
-                    "each": "rows",
-                    "item": [{ "text": { "bind": "title", "event": "Open(slug)" } }]
-                }}}
-            }
-        }));
-
-        assert_eq!(contract.events["Open"][0].rust(), "String");
-    }
-
-    #[test]
     fn a_drawn_state_becomes_a_flag_only_when_its_condition_is_a_path() {
         let contract = contract(&serde_json::json!({
             "screens": {
@@ -1135,7 +960,7 @@ mod tests {
 
         let fields = &contract.screens[0].fields;
         assert_eq!(fields.get("tasks_are_empty"), Some(&Field::Value(BindKind::Flag)));
-        assert_eq!(fields.len(), 1, "an expression is the core's business, not a field");
+        assert_eq!(fields.len(), 1, "an expression is the app's business, not a field");
     }
 
     #[test]
@@ -1174,9 +999,9 @@ mod tests {
         assert_eq!(author.get("name"), Some(&Field::Value(BindKind::Text)));
     }
 
-    /// A component placement whose instance binds a TEXT property reads that field off the screen's
-    /// view model, so the screen has to declare it. The component itself cannot: it has no view
-    /// model, only the arguments each call site passes. A literal argument is copy and adds nothing.
+    /// A component placement whose instance binds a TEXT property reads that field from the screen,
+    /// so the screen has to declare it. The component itself cannot: it has no scope, only the
+    /// arguments each call site passes. A literal argument is copy and adds nothing.
     #[test]
     fn a_bound_component_argument_is_a_screen_field() {
         let tile = |args: serde_json::Value| {
@@ -1201,7 +1026,7 @@ mod tests {
         assert_eq!(fields.len(), 1, "literal arguments are copy, not fields: {fields:?}");
     }
 
-    /// A bound header title reads its field off the screen's view model, so the screen declares it
+    /// A bound header title reads its field from the screen, so the screen declares it
     /// — and a field bound by a control in the bar's `below` rows is declared too. A literal title
     /// is copy and adds nothing.
     #[test]
@@ -1231,61 +1056,6 @@ mod tests {
         assert_eq!(singular("addresses"), "address");
         assert_eq!(singular("data"), "data", "a name with no plural ending keeps it");
         assert_eq!(singular("s"), "s", "and stripping one down to nothing is not an improvement");
-    }
-
-    /// The defect this resolution exists for: a control with no `bind:` raising an event that
-    /// carries a name no field answers to. It used to become a read off a view model that had no
-    /// such member, in a file nobody is allowed to edit.
-    #[test]
-    fn a_control_with_no_binding_types_its_event_from_the_value_the_control_produces() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "new-list": {
-                    "name": "NewList",
-                    "body": [
-                        { "text-field": { "placeholder": "List name",
-                                          "event": "ListNameChanged(value)" } },
-                        { "slider": { "event": "WidthChanged(value)" } },
-                        { "date-picker": { "event": "DateSelected(date)" } }
-                    ]
-                }
-            }
-        }));
-
-        assert!(contract.gaps.is_empty(), "{:?}", contract.gaps);
-        assert_eq!(contract.events["ListNameChanged"][0].rust(), "String");
-        assert_eq!(contract.events["WidthChanged"][0].rust(), "f64");
-        assert_eq!(
-            contract.events["DateSelected"][0].rust(),
-            "i64",
-            "a moment crosses the boundary as epoch milliseconds, bound or produced"
-        );
-    }
-
-    /// The bound case is the one that cannot be got from the view model *even though* the field
-    /// exists: the view model holds what the core last pushed, so a checkbox reporting `completed`
-    /// back would send the state it was switched away from.
-    #[test]
-    fn a_bound_control_reporting_its_own_value_reports_the_new_one() {
-        let surface = model::parse(&serde_json::json!({
-            "screens": {
-                "task-detail": {
-                    "name": "Task",
-                    "body": [{ "checkbox": { "bind": "draft.complete",
-                                             "event": "CompleteChanged(complete)" } }]
-                }
-            }
-        }))
-        .expect("the composition parses");
-
-        let contract = derive(&surface);
-        let screen = &contract.screens[0];
-
-        assert_eq!(
-            screen.source("complete", Some("draft.complete"), Some(BindKind::Flag), false),
-            Source::Produced(BindKind::Flag),
-        );
-        assert_eq!(contract.events["CompleteChanged"][0].rust(), "bool");
     }
 
     /// A row field named from a row is unchanged, and named from anywhere else is a gap: the
@@ -1322,8 +1092,6 @@ mod tests {
         assert!(gap.to_string().contains("nothing on the screen is called"), "{gap}");
     }
 
-    /// A button produces nothing, so an argument it names and the screen does not is unanswerable
-    /// — and saying so here is the whole point: the alternative surfaces in Xcode.
     /// A component's events reach the screen as closures taking nothing, so the value stays inside
     /// the component and the screen fills the argument from a scope that has no answer.
     #[test]
@@ -1343,36 +1111,6 @@ mod tests {
 
         assert_eq!(contract.gaps.len(), 1, "{:?}", contract.gaps);
         assert_eq!(contract.gaps[0].event, "ListNameChanged(value)");
-    }
-
-    /// The composition a tab bar produces, and the case the resolver had no scope for: `Cities`
-    /// is not a field on the today screen and never could be, because it is a destination. It
-    /// used to be reported as a gap, which refused the whole run over the one argument whose
-    /// meaning the contract generates four hundred lines above the event that carries it.
-    #[test]
-    fn an_argument_naming_a_screen_is_the_route_it_is_spelled_as() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "today": {
-                    "name": "Today",
-                    "body": [{ "text": { "content": "18°" } }],
-                    "footer": [
-                        { "icon-button": { "icon": "cities", "event": "Navigate(Cities)" } },
-                        { "icon-button": { "icon": "add", "event": "Navigate(AddCity)" } }
-                    ]
-                },
-                "cities": { "name": "Cities", "body": [{ "text": { "content": "saved" } }] },
-                "add-city": { "name": "AddCity", "body": [{ "text": { "content": "search" } }] }
-            }
-        }));
-
-        assert!(contract.gaps.is_empty(), "{:?}", contract.gaps);
-        assert_eq!(contract.events["Navigate"][0].carries, Carried::Route);
-        assert_eq!(
-            contract.events["Navigate"][0].rust(),
-            "Route",
-            "one variant however many destinations name it"
-        );
     }
 
     /// A kebab slug becomes one Pascal variant, and that spelling is what the annotation writes.
@@ -1401,27 +1139,8 @@ mod tests {
         );
     }
 
-    /// The field wins. A route is read after both lookups so that a screen binding a value whose
-    /// name collides with a destination still reads its own field rather than navigating.
-    #[test]
-    fn a_bound_field_outranks_a_route_of_the_same_name() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "today": {
-                    "name": "Today",
-                    "body": [{ "text": { "bind": "Cities", "event": "Pick(Cities)" } }]
-                },
-                "cities": { "name": "Cities", "body": [{ "text": { "content": "saved" } }] }
-            }
-        }));
-
-        assert_eq!(contract.screens[0].source("Cities", None, None, false), Source::ViewModel);
-        assert_eq!(contract.events["Pick"][0].rust(), "String");
-    }
-
     /// The defect a gap fix can walk straight into: dropping an argument on one of two sites that
-    /// name the same event leaves a variant the other site cannot call. It compiled here and
-    /// failed in Kotlin, on a file the operator may not edit.
+    /// name the same event leaves a shape the other site does not raise.
     #[test]
     fn one_event_raised_with_two_argument_lists_is_refused() {
         let contract = contract(&serde_json::json!({

@@ -4,9 +4,9 @@ use serde_json::{Value, json};
 
 /// A located finding.
 ///
-/// The path is a JSON Pointer into the composition. It is not decoration: `vx repair` puts it in
-/// the prompt, and a model given "the spec is invalid" edits the wrong thing far more often than
-/// one given "`/screens/0/body/items/3/icon/name` names an asset that does not exist".
+/// The path is a JSON Pointer into the composition, so the fix lands on the right line:
+/// "`/screens/0/body/items/3/icon/name` names an asset that does not exist" rather than "the spec
+/// is invalid".
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finding {
     path: String,

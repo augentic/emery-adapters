@@ -1,16 +1,14 @@
-//! `tokens.yaml` to `vue/src/theme.css`.
+//! `tokens.json` to `vue/src/theme.css`.
 //!
-//! The same custom properties the Dioxus sheet declares — `--vectis-color-*`, `--vectis-typeface-*`
-//! with its fallback stack, the spacing, radius, border, opacity and elevation scales and one
-//! `.vectis-type-*` class per text style — so a value is spelled the same way in both web shells.
-//!
-//! Two additions. `--vectis-offset-*` carries `tokens.offset`, the signed lengths a stack layer is
-//! moved by, which only this shell draws. And a reset: the Vue views state every visual fact the
-//! composition carries, so the user agent's own margins, button chrome and link colour are taken
+//! The custom properties of [`super::css`] (`--vectis-color-*`, `--vectis-typeface-*` with its
+//! fallback stack, the spacing, radius, border, opacity and elevation scales and one
+//! `.vectis-type-*` class per text style), and two additions. `--vectis-offset-*` carries
+//! `tokens.offset`, the signed lengths a stack layer is moved by. And a reset: the Vue views state
+//! every visual fact the composition carries, so the user agent's own margins, button chrome and link colour are taken
 //! away first rather than left to add facts the design system never stated.
 //!
 //! No `@font-face` rules. A typeface whose `source` is `system` is the browser's to resolve through
-//! its stack, and a pinned webfont is `vx assets`' business, which has no Vue install yet.
+//! its stack, and a pinned webfont is not installed by this emit.
 
 use super::css::{dark, root, scale, type_scale};
 use crate::tokens::Theme;
@@ -23,7 +21,7 @@ pub const PATH: &str = "vue/src/theme.css";
 ///
 /// What it takes away is what a browser adds on its own: margins, padding and borders on every
 /// box, the button's chrome, the link's colour and underline, and inline replaced elements sitting
-/// on a text baseline. Every box is `border-box`, because the sizes `composition.yaml` states are
+/// on a text baseline. Every box is `border-box`, because the sizes `composition.json` states are
 /// measured outer edges.
 const RESET: &str = "\n*, ::before, ::after {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n  border: 0 solid;\n}\n\nhtml, body {\n  margin: 0;\n  padding: 0;\n}\n\nbutton, input, select, textarea {\n  font: inherit;\n  color: inherit;\n  letter-spacing: inherit;\n  background: transparent;\n  text-align: inherit;\n}\n\nbutton {\n  cursor: pointer;\n}\n\na {\n  color: inherit;\n  text-decoration: inherit;\n}\n\nimg, svg {\n  display: block;\n}\n";
 
@@ -77,7 +75,7 @@ mod tests {
     }
 
     #[test]
-    fn the_sheet_shares_the_dioxus_names() {
+    fn the_sheet_declares_the_token_properties_and_the_reset() {
         let css = sheet();
         assert!(css.contains("--vectis-color-ink: #111111;"), "{css}");
         assert!(css.contains("--vectis-spacing-space-8: 8px;"), "{css}");

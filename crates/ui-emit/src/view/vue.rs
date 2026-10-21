@@ -1,11 +1,11 @@
-//! `composition.yaml` to Vue 3 single-file components.
+//! `composition.json` to Vue 3 single-file components.
 //!
-//! The web shell that draws everything the composition states, including what the native shells
-//! have no place for: a size's `min_*` / `max_*` bounds, a child's `align_self`, a stack child's
-//! `position` (a layer anchored to one of nine points and moved by `tokens.offset`), and the
-//! `x-web` facts a web capture keeps beside the core vocabulary (margins, verbatim CSS, inline SVG,
-//! link targets, the media a button carries). A fact the composition carries and this emitter
-//! cannot draw is written into the template as a comment rather than dropped.
+//! Draws everything the composition states, including a size's `min_*` / `max_*` bounds, a
+//! child's `align_self`, a stack child's `position` (a layer anchored to one of nine points and
+//! moved by `tokens.offset`), and the `x-web` facts a web capture keeps beside the core vocabulary
+//! (margins, verbatim CSS, inline SVG, link targets, the media a button carries). A fact the
+//! composition carries and this emitter cannot draw is written into the template as a comment
+//! rather than dropped.
 //!
 //! The output is a standalone Vite app under `vue/`: one `<Screen>Screen.vue` per screen, an
 //! `App.vue` that routes between them, `ui-strings.ts` from the copy contract, `contract.ts` with
@@ -31,7 +31,7 @@ use crate::{GeneratedFile, HEADER};
 /// The directory every generated file lives under, relative to the app.
 pub const ROOT: &str = "vue";
 
-/// The directory the views are written to, which `vx emit` may prune.
+/// The directory the views are written to, which [`crate::write()`] may prune.
 pub const VIEWS: &str = "vue/src/views";
 
 /// The directory the asset files are served from, relative to the app.
@@ -43,7 +43,7 @@ const POSITIONAL: &[&str] = &["position", "top", "right", "bottom", "left", "z-i
 
 /// Layout-container keys the emitter derives from the core vocabulary; a verbatim `x-web.css`
 /// value for one (say `grid-template-columns` on a box the page laid out as a block, where it was
-/// inert) would change what the core states.
+/// inert) would change what the core vocabulary states.
 const CORE_OWNED: &[&str] = &[
     "display",
     "flex-direction",
@@ -53,7 +53,7 @@ const CORE_OWNED: &[&str] = &[
     "grid-auto-flow",
 ];
 
-/// Every file the Vue shell needs: views, contract, copy, asset map and the Vite app around them.
+/// Every file the Vue app needs: views, contract, copy, asset map and the Vite app around them.
 ///
 /// `assets` is each asset's name to the path its web source is served at, relative to `public/`.
 /// `inline` is each vector icon asset's name to its SVG markup: an `icon` item naming one is drawn
@@ -224,7 +224,7 @@ impl Css {
 
 /// The template being written.
 #[derive(Debug, Default)]
-#[allow(clippy::struct_excessive_bools, reason = "independent facts collected during one walk")]
+#[expect(clippy::struct_excessive_bools, reason = "independent facts collected during one walk")]
 struct Out {
     text: String,
     depth: usize,
@@ -365,10 +365,6 @@ impl Out {
     }
 
     /// A group's children, with each stack layer wrapped in the box that anchors it.
-    #[expect(
-        clippy::branches_sharing_code,
-        reason = "kept as vx-emit wrote it, so the output stays byte-identical"
-    )]
     fn children(
         &mut self, items: &[Node], inner: Parent, padding: Option<&Padding>, copy: &Contract,
     ) {
@@ -405,7 +401,6 @@ impl Out {
                     ],
                 );
                 self.layered(node, &layer, copy);
-                self.close("div");
             } else {
                 self.open("div", &[(
                     "style",
@@ -415,8 +410,8 @@ impl Out {
                     ),
                 )]);
                 self.node(node, Parent::Row, copy);
-                self.close("div");
             }
+            self.close("div");
         }
     }
 
@@ -1160,22 +1155,27 @@ fn web_flag(web: Option<&Value>, key: &str) -> bool {
 }
 
 /// An inline SVG with the node's declarations folded into its root element's `style`.
-#[expect(
-    clippy::option_if_let_else,
-    reason = "kept as vx-emit wrote it; the two arms read as the two cases"
-)]
 fn inline_svg(markup: &str, declarations: &str) -> String {
     let Some(start) = markup.find("<svg") else { return markup.to_owned() };
     let open_end = markup[start..].find('>').map_or(markup.len(), |end| start + end);
     let open = &markup[start..open_end];
-    if let Some(at) = open.find(" style=\"") {
-        let insert = start + at + " style=\"".len();
-        format!("{}{}; {}", &markup[..insert], attribute(declarations), &markup[insert..])
-    } else {
-        let insert = start + "<svg".len();
-        format!("{} style=\"{}\"{}", &markup[..insert], attribute(declarations), &markup[insert..])
-    }
-    .replace('\n', " ")
+    open.find(" style=\"")
+        .map_or_else(
+            || {
+                let insert = start + "<svg".len();
+                format!(
+                    "{} style=\"{}\"{}",
+                    &markup[..insert],
+                    attribute(declarations),
+                    &markup[insert..]
+                )
+            },
+            |at| {
+                let insert = start + at + " style=\"".len();
+                format!("{}{}; {}", &markup[..insert], attribute(declarations), &markup[insert..])
+            },
+        )
+        .replace('\n', " ")
 }
 
 fn color(token: &str) -> String {

@@ -1,8 +1,8 @@
 //! What kind of value a bound text shows: `format` on the items and arguments that carry one.
 //!
 //! `format` says that a field is a typed value — a moment, a measurement, a number, a unit — which
-//! each platform formats with the device locale, so the core never writes weekday names or unit
-//! symbols as copy (`handoff-copy-source.md`). The schema owns the closed style list
+//! the view formats with the browser's locale, so nobody writes weekday names or unit symbols as
+//! copy. The schema owns the closed style list
 //! (`$defs/formatStyle`) and that a `format` sits beside a `bind`. Two facts it cannot reach are
 //! checked here:
 //!
@@ -33,9 +33,7 @@ use crate::spec::shared::escape_pointer_token;
 
 /// The closed `format` vocabulary.
 ///
-/// Mirrors `$defs/formatStyle` in `composition.schema.json` and
-/// `figma_ir::annotation::FORMAT_STYLES`, the list the designer's annotation is checked against;
-/// `tests/formats.rs` pins all three equal.
+/// Mirrors `$defs/formatStyle` in ui-ir's `composition.schema.json`.
 pub const FORMAT_STYLES: [&str; 18] = [
     "weekday",
     "time",
@@ -84,7 +82,7 @@ struct Use {
 }
 
 /// Check every `format` in the document, and every field shown in more than one place.
-pub(crate) fn check_formats(composition: &Value, errors: &mut Vec<Finding>) {
+pub fn check_formats(composition: &Value, errors: &mut Vec<Finding>) {
     let mut uses: BTreeMap<(String, String), Vec<Use>> = BTreeMap::new();
 
     for (root, path) in super::items::region_roots(composition) {

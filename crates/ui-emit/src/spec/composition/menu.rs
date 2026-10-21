@@ -14,7 +14,7 @@ use serde_json::Value;
 use super::finding::Finding;
 
 /// Runs the footer menu's cross-checks, when the composition has one.
-pub(crate) fn check_footer_menu(composition: &Value, errors: &mut Vec<Finding>) {
+pub fn check_footer_menu(composition: &Value, errors: &mut Vec<Finding>) {
     let Some(menu) = composition.get("footer_menu") else { return };
     let screens: BTreeSet<&str> = composition
         .get("screens")
@@ -173,6 +173,6 @@ mod tests {
 
     #[test]
     fn a_composition_without_a_menu_has_nothing_to_check() {
-        assert!(findings(&json!({ "version": 1, "screens": {} })).is_empty());
+        assert_eq!(findings(&json!({ "version": 1, "screens": {} })), Vec::new());
     }
 }

@@ -1,8 +1,7 @@
 //! Where a composition names an asset.
 //!
-//! Ported from the Vectis adapter's assets validator. Only the reference *collection* comes
-//! across: the rest of that module checks rendered platform exports against the asset inventory,
-//! which is `vx-assets`' concern rather than the spec's.
+//! The references are collected here and checked against `assets.json` by
+//! [`super::composition::refs`].
 
 use serde_json::Value;
 
@@ -11,7 +10,7 @@ use crate::spec::shared::escape_pointer_token;
 /// One asset reference found in a composition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AssetRef {
-    /// The referenced asset id, which is the `assets.yaml` key.
+    /// The referenced asset id, which is the `assets.json` key.
     pub id: String,
 
     /// JSON Pointer of the referencing key inside the composition.
@@ -144,6 +143,6 @@ mod tests {
     #[test]
     fn a_composition_with_no_assets_yields_none() {
         let composition = serde_json::json!({ "items": [{ "text": { "content": "hi" } }] });
-        assert!(collect_asset_references(&composition).is_empty());
+        assert_eq!(collect_asset_references(&composition), Vec::new());
     }
 }

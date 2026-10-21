@@ -1,7 +1,6 @@
 //! Helpers the composition checks share.
 //!
-//! Copied from vx-spec's `shared.rs`; only the pointer escaping came across. The schema
-//! validators stay with ui-ir, which owns the schemas (`ui-ir check`).
+//! The schema validators stay with ui-ir, which owns the schemas (`ui-ir check`).
 
 /// Escapes a JSON Pointer reference token (`~` becomes `~0`, `/` becomes `~1`).
 pub fn escape_pointer_token(token: &str) -> String {

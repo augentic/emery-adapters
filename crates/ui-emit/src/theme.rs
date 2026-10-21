@@ -1,10 +1,8 @@
 //! `tokens.json` to the Vue app's theme sheet.
 //!
-//! Copied from vx-emit's `theme.rs`, which fed four renderers (Swift, Kotlin, Dioxus, Vue); only
-//! the CSS the Vue sheet is built from came across. A category absent from the tokens emits no
-//! declarations rather than empty ones.
+//! A category absent from the tokens emits no declarations rather than empty ones.
 
-pub(crate) mod css;
+pub mod css;
 pub mod vue;
 
 use crate::tokens::Color;

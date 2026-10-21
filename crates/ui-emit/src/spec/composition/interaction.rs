@@ -1,12 +1,9 @@
 //! Interaction archetypes: what is tappable, and what a nested control
 //! does to the container's gesture.
 //!
-//! §4.4 of the design notes. A container's `event` used to reach the
-//! document only through `groupProps.additionalProperties`, so "the whole
-//! row is the target" and "only the circle is the target" were the same
-//! document and the shell writers coin-flipped between them. The
-//! `interaction` block makes the choice representable; these checks make
-//! it enforceable.
+//! Without an `interaction` block "the whole row is the target" and "only
+//! the circle is the target" are the same document. The block makes the
+//! choice representable; these checks make it enforceable.
 //!
 //! Three rules, each closing one way the choice can go missing:
 //! an interactive container declares an archetype from the closed set;
@@ -38,16 +35,9 @@ pub const ARCHETYPES: [&str; 9] = [
 /// Item types that own their own hit target, so an `event` on one needs
 /// no enclosing declaration to be unambiguous.
 ///
-/// Every type `figma-compile` gives an `event` to has to be in here, or a
-/// draft the compiler considers finished is one this crate rejects.
-/// `vx/tests/controls.rs` is the only thing holding the two together —
-/// the crates do not depend on each other, for the reasons
-/// `vx/tests/markers.rs` sets out. That test exists because `text-area`
-/// was once missing from this list while sitting in `KNOWN_ITEM_TYPES`,
-/// in the schema enum and in `figma-verify`'s `EDITABLE_ITEM_TYPES`: a
-/// text area owns its hit target exactly as `text-field` does, and every
-/// extract carrying one failed `vx spec` on an error naming the design
-/// file rather than the omission.
+/// Every type an extractor gives an `event` to has to be in here, or a
+/// design system the extractor considers finished is one this crate
+/// rejects.
 pub const CONTROL_ITEM_TYPES: [&str; 16] = [
     "button",
     "checkbox",
@@ -92,8 +82,8 @@ const ADMITS_CONTROLS: [&str; 5] = [
     "text-entry",
 ];
 
-/// Archetypes that admit swipe actions. `swipe-row` composes with the
-/// two row archetypes, so all three carry them.
+/// Archetypes that admit swipe actions: `swipe-row` and the two row
+/// archetypes it combines with.
 const ADMITS_SWIPE: [&str; 3] =
     ["row-with-leading-control", "row-with-trailing-control", "swipe-row"];
 
@@ -101,18 +91,12 @@ const ADMITS_SWIPE: [&str; 3] =
 struct Container<'a> {
     props: &'a Value,
     path: String,
-    /// Whether it sits in the row template of a `list`, which is the only place a row can be
-    /// swiped: the iOS shell's `.swipeActions` exists on a `List` row and nowhere else.
-    listed: bool,
 }
 
 /// Check every interactive container in the document.
-pub(crate) fn check_interactions(composition: &Value, errors: &mut Vec<Finding>) {
+pub fn check_interactions(composition: &Value, errors: &mut Vec<Finding>) {
     for (root, path) in super::items::region_roots(composition) {
-        // A body that is a list is handed over as its row template, the list itself already
-        // unwrapped.
-        let listed = path.ends_with("/list/item");
-        walk(root, &path, &BTreeSet::new(), listed, errors);
+        walk(root, &path, &BTreeSet::new(), errors);
     }
 }
 
@@ -122,15 +106,12 @@ pub(crate) fn check_interactions(composition: &Value, errors: &mut Vec<Finding>)
 /// `controls` carries the handles the nearest enclosing `interaction`
 /// named. A declaration accounts for the events on the nodes it names —
 /// and only those, which is what stops an `interaction` block from
-/// blanket-excusing every event beneath it. `listed` is whether this is
-/// inside a `list`'s row template.
-fn walk(
-    node: &Value, path: &str, controls: &BTreeSet<String>, listed: bool, errors: &mut Vec<Finding>,
-) {
+/// blanket-excusing every event beneath it.
+fn walk(node: &Value, path: &str, controls: &BTreeSet<String>, errors: &mut Vec<Finding>) {
     match node {
         Value::Array(entries) => {
             for (index, entry) in entries.iter().enumerate() {
-                walk(entry, &format!("{path}/{index}"), controls, listed, errors);
+                walk(entry, &format!("{path}/{index}"), controls, errors);
             }
         }
         Value::Object(map) => {
@@ -142,17 +123,14 @@ fn walk(
             };
             let child = format!("{path}/{}", escape_pointer_token(key));
             match key.as_str() {
-                "group" => walk_group(props, &child, controls, listed, errors),
+                "group" => walk_group(props, &child, controls, errors),
                 "list" | "grid" => {
-                    // A body list reached here already unwrapped (see `check_interactions`), so a
-                    // `list` key met on the walk is one nested in content. That renders as rows in
-                    // the enclosing stack rather than as a platform `List`, and has no row edge to
-                    // swipe from any more than a grid cell does.
+                    // A nested collection's rows start a scope of their own.
                     if let Some(items) = props.get("item") {
-                        walk(items, &format!("{child}/item"), &BTreeSet::new(), false, errors);
+                        walk(items, &format!("{child}/item"), &BTreeSet::new(), errors);
                     }
                 }
-                "form" => walk(props, &child, controls, listed, errors),
+                "form" => walk(props, &child, controls, errors),
                 item_type => check_item_event(item_type, props, &child, controls, errors),
             }
         }
@@ -160,13 +138,10 @@ fn walk(
     }
 }
 
-fn walk_group(
-    props: &Value, path: &str, controls: &BTreeSet<String>, listed: bool, errors: &mut Vec<Finding>,
-) {
+fn walk_group(props: &Value, path: &str, controls: &BTreeSet<String>, errors: &mut Vec<Finding>) {
     let container = Container {
         props,
         path: path.to_string(),
-        listed,
     };
     let interaction = props.get("interaction");
     let has_event = props.get("event").is_some();
@@ -189,7 +164,7 @@ fn walk_group(
     // through, because `collect_refs` reaches into it just the same.
     let scoped = interaction.map(control_refs);
     if let Some(items) = props.get("items") {
-        walk(items, &format!("{path}/items"), scoped.as_ref().unwrap_or(controls), listed, errors);
+        walk(items, &format!("{path}/items"), scoped.as_ref().unwrap_or(controls), errors);
     }
 }
 
@@ -251,73 +226,8 @@ fn check_container(container: &Container<'_>, interaction: &Value, errors: &mut 
         .count();
 
     check_shape(path, archetype, event.is_some(), controls.len(), swipes, errors);
-    if swipes > 0 && !container.listed {
-        errors.push(Finding::new(
-            format!("{path}/interaction"),
-            "swipe actions are revealed from a row of a `list`, and this container is not in one \
-             -- the iOS shell's swipe exists only on a list row, so outside one it would reveal \
-             nothing. Make the swiped rows the `item` of a `list` (any `style`, `cards` \
-             included), or drop `swipe_leading` / `swipe_trailing`"
-                .to_string(),
-        ));
-    }
-    check_swipe_labels(path, interaction, errors);
     check_container_event_agreement(container, interaction, errors);
     check_control_refs(container, &controls, errors);
-}
-
-/// Every revealed action the user has to read needs words someone wrote.
-///
-/// A delete is exempt: the platform has its own label for one ("Delete" and a trash glyph), and
-/// that is what the shell shows. Anything else would have to be named after its event, which is
-/// copy no designer wrote and no translator sees. An action whose event is still a hole is left
-/// alone, because whether it deletes is not decided yet; the hole is its own finding.
-fn check_swipe_labels(path: &str, interaction: &Value, errors: &mut Vec<Finding>) {
-    for key in ["swipe_leading", "swipe_trailing"] {
-        let Some(actions) = interaction.get(key).and_then(Value::as_array) else {
-            continue;
-        };
-        for (index, action) in actions.iter().enumerate() {
-            let Some(event) = action.get("event").and_then(Value::as_str) else {
-                continue;
-            };
-            let labelled = action.get("label").and_then(Value::as_str).is_some();
-            let destructive = action.get("destructive").and_then(Value::as_bool) == Some(true);
-            if labelled
-                || destructive
-                || deletes(event)
-                || crate::spec::holes::Kind::of(event).is_some()
-            {
-                continue;
-            }
-            errors.push(Finding::new(
-                format!("{path}/interaction/{key}/{index}"),
-                format!(
-                    "swipe action `{event}` has no `label` -- only a delete has a label the \
-                     platform supplies, and naming any other action after its event is copy \
-                     nobody wrote. Give it the `label` the design shows"
-                ),
-            ));
-        }
-    }
-}
-
-/// Whether an event, by its name, removes the element it is raised on.
-///
-/// Read from the `PascalCase` words of the variant name: `CityDeleted(id)` deletes, `CityPinned(id)`
-/// does not. `vx-emit`'s iOS shell reads the same words to give the button its destructive role.
-fn deletes(event: &str) -> bool {
-    let name = event.split('(').next().unwrap_or_default().trim();
-    let mut words = Vec::new();
-    let mut start = 0;
-    for (index, character) in name.char_indices().skip(1) {
-        if character.is_uppercase() {
-            words.push(&name[start..index]);
-            start = index;
-        }
-    }
-    words.push(&name[start..]);
-    words.iter().any(|word| matches!(*word, "Delete" | "Deleted" | "Remove" | "Removed"))
 }
 
 /// Each archetype's arity: whether it acts, whether it may (or must)

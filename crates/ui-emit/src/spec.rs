@@ -1,10 +1,8 @@
 //! Is this ui-ir design system safe to emit?
 //!
-//! Copied from vx-spec (`augentic/vx`, `crates/vx-spec`) and trimmed to what the Vue emit needs:
-//! the holes a source adapter leaves, and the cross-document checks no JSON Schema can express.
-//! The schemas themselves are ui-ir's, and `ui-ir check` runs them where the IR is written; so are
-//! vx's own `capabilities.yaml`, `behaviour.yaml` and `components.yaml`, which did not come
-//! across. Documents are read as JSON only, from the ui-ir layout's names.
+//! The holes an extractor leaves, and the cross-document checks no JSON Schema can express. The
+//! schemas themselves are ui-ir's, and `ui-ir check` runs them where the IR is written. Documents
+//! are read as JSON only, from the ui-ir layout's names.
 
 use std::path::Path;
 
@@ -13,10 +11,9 @@ use serde_json::Value;
 pub mod assets;
 pub mod composition;
 pub mod holes;
-pub(crate) mod shared;
+pub mod shared;
 
 pub use composition::Finding;
-pub use composition::formats::FORMAT_STYLES;
 pub use holes::Hole;
 
 /// The composition's filename, relative to the design-system directory.
@@ -31,9 +28,6 @@ pub const ASSETS: &str = ui_ir::layout::ASSETS;
 pub struct Report {
     /// Everything that makes the spec invalid.
     pub errors: Vec<Finding>,
-
-    /// Everything worth saying that does not make the spec invalid.
-    pub warnings: Vec<Finding>,
 
     /// Decisions the source did not contain (`TODO(...)` markers).
     ///
@@ -107,7 +101,7 @@ pub fn validate(dir: &Path) -> Result<Report, crate::Error> {
 
     composition::check(&composition, tokens.as_ref(), assets.as_ref(), &mut report);
     let mut bound = Vec::new();
-    composition::variants::check_bound_params(&composition, None, &mut bound);
+    composition::variants::check_bound_params(&composition, &mut bound);
     report.errors.extend(bound);
 
     Ok(report)
@@ -131,7 +125,7 @@ fn check_typefaces(tokens: &Value, report: &mut Report) {
             format!("/typography/{}/typeface", shared::escape_pointer_token(style)),
             format!(
                 "{TOKENS}: type style `{style}` names typeface `{slug}`, which `typefaces` does \
-                 not declare -- it would render in the platform's default face",
+                 not declare -- it would render in the browser's default face",
             ),
         ));
     }

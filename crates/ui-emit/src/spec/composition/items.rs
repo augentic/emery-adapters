@@ -80,9 +80,9 @@ struct Item<'a> {
 
 /// Check every item's type against the vocabulary and its `style`
 /// against the closure. `tokens` is `None` when the document has no
-/// sibling `tokens.yaml` — typography references then go unchecked,
+/// sibling `tokens.json` — typography references then go unchecked,
 /// the same way every other token reference does.
-pub(crate) fn check_items(composition: &Value, tokens: Option<&Value>, errors: &mut Vec<Finding>) {
+pub fn check_items(composition: &Value, tokens: Option<&Value>, errors: &mut Vec<Finding>) {
     let custom = declared_custom_items(composition);
     let mut items = Vec::new();
     for (root, path) in region_roots(composition) {
@@ -99,9 +99,8 @@ pub(crate) fn check_items(composition: &Value, tokens: Option<&Value>, errors: &
 }
 
 /// A custom item's `raises` and `binds` are the contract the annotation declared, carried through
-/// `figma-compile` untouched. They are the seam `contract::derive` reads the `Event` enum and the
-/// view-model fields off, so a malformed entry there is an event that never compiles or a field the
-/// core never grows — invisible until the shell fails to build. The schema cannot reach them: a
+/// extraction untouched. [`crate::contract::derive`] reads events and fields off them, so a
+/// malformed entry there is an event or a field nothing declares. The schema cannot reach them: a
 /// custom item is `additionalProperties`, so nothing but this says what shape its props take.
 fn check_custom_props(item: &Item<'_>, errors: &mut Vec<Finding>) {
     check_string_list(
@@ -203,7 +202,7 @@ fn check_type(item: &Item<'_>, custom: &BTreeSet<String>, errors: &mut Vec<Findi
         format!(
             "unknown item type `{}` -- it is outside the composition item vocabulary ({}) and is \
              not declared in this document's `custom_items`. Use a vocabulary item, or declare \
-             the type under `custom_items` so every shell writer knows it is deliberate",
+             the type under `custom_items` so the emitter knows it is deliberate",
             item.type_name,
             KNOWN_ITEM_TYPES.join(", "),
         ),
@@ -252,7 +251,7 @@ fn check_style(item: &Item<'_>, tokens: Option<&Value>, errors: &mut Vec<Finding
             path,
             format!(
                 "composition references unknown typography token `{style}` -- not present in \
-                 tokens.yaml under `typography.{style}`. On `{}`, `style` is a type scale \
+                 tokens.json under `typography.{style}`. On `{}`, `style` is a type scale \
                  reference, not a free-form variant name",
                 item.type_name,
             ),
@@ -265,7 +264,7 @@ fn check_style(item: &Item<'_>, tokens: Option<&Value>, errors: &mut Vec<Finding
 /// Walking from the regions rather than over the whole document is what
 /// keeps `provenance.sources[]` and other single-key maps from being
 /// read as items.
-pub(crate) fn region_roots(composition: &Value) -> Vec<(&Value, String)> {
+pub fn region_roots(composition: &Value) -> Vec<(&Value, String)> {
     let mut roots = Vec::new();
     for (screens, prefix) in screen_maps(composition) {
         for (slug, screen) in screens {
@@ -434,7 +433,7 @@ mod tests {
             "provenance": { "sources": [{ "kind": "manual" }] },
             "screens": { "home": { "name": "Home" } },
         });
-        assert!(findings(&doc, None).is_empty());
+        assert_eq!(findings(&doc, None), Vec::<String>::new());
     }
 
     #[test]
@@ -450,7 +449,7 @@ mod tests {
             "custom_items": [{ "name": "sparkline" }],
             "screens": { "home": { "name": "Home", "body": [{ "sparkline": {} }] } },
         });
-        assert!(findings(&declared, None).is_empty());
+        assert_eq!(findings(&declared, None), Vec::<String>::new());
     }
 
     #[test]
@@ -464,15 +463,15 @@ mod tests {
         };
 
         // A well-formed contract passes.
-        assert!(
+        assert_eq!(
             findings(
                 &doc(json!({ "month-grid": {
                     "raises": ["DateSelected(value)", "MonthChanged"],
                     "binds": ["visible_month", "task.due"]
                 } })),
                 None,
-            )
-            .is_empty()
+            ),
+            Vec::<String>::new()
         );
 
         // A malformed event and a malformed field each report against their entry.
@@ -497,14 +496,18 @@ mod tests {
         let tokens = json!({ "typography": { "body": { "size": 16 } } });
         let doc = |item: Value| json!({ "version": 1, "screens": { "home": { "name": "Home", "body": [item] } } });
 
-        assert!(findings(&doc(json!({ "text": { "style": "body" } })), Some(&tokens)).is_empty());
+        assert_eq!(
+            findings(&doc(json!({ "text": { "style": "body" } })), Some(&tokens)),
+            Vec::<String>::new()
+        );
         assert_eq!(
             findings(&doc(json!({ "text": { "style": "outlined" } })), Some(&tokens)).len(),
             1
         );
         // The schema owns the variant enums; the validator stays quiet.
-        assert!(
-            findings(&doc(json!({ "button": { "style": "outlined" } })), Some(&tokens)).is_empty()
+        assert_eq!(
+            findings(&doc(json!({ "button": { "style": "outlined" } })), Some(&tokens)),
+            Vec::<String>::new()
         );
         assert_eq!(
             findings(&doc(json!({ "image": { "style": "rounded" } })), Some(&tokens)).len(),

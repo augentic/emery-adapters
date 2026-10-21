@@ -1,8 +1,5 @@
-//! The CSS custom properties a token set declares, shared by the Vue sheet.
-//!
-//! Copied from vx-emit's `theme/dioxus.rs` (the Dioxus sheet the Vue one was built on): the
-//! `:root` scales, the dark scheme and the `.vectis-type-*` classes. The Dioxus sheet itself, its
-//! `@font-face` rules and font module did not come across.
+//! The CSS custom properties a token set declares: the `:root` scales, the dark scheme and the
+//! `.vectis-type-*` classes the Vue sheet is built from.
 
 use std::fmt::Write as _;
 
@@ -54,7 +51,7 @@ pub(super) fn root(css: &mut String, theme: &Theme) {
             let _ = writeln!(css, "  --{PREFIX}-border-{}: {}px;", token.name, scalar(token.width));
 
             // Usually absent — Figma keeps a border's width and its colour in different places, so
-            // the colour arrives per layer from `composition.yaml` and only a hand-authored border
+            // the colour arrives per layer from `composition.json` and only a hand-authored border
             // states a default here. Emitted when it is stated so the default is reachable.
             if let Some(color) = &token.color {
                 let _ = writeln!(
@@ -117,14 +114,13 @@ pub(super) fn scale(
 
 /// The elevation scale, and a shadow derived from it.
 ///
-/// The scale is mirrored as-is because that is what the token says and what `Elevation.swift`
-/// keeps: a bare number. The shadow is this target's addition, and the one place in the sheet where
-/// a value is not traceable to `tokens.yaml`.
+/// The scale is mirrored as-is because that is what the token says: a bare number. The shadow is this target's addition, and the one place in the sheet where
+/// a value is not traceable to `tokens.json`.
 ///
 /// It is here because CSS has no elevation primitive — a raised surface is a `box-shadow` or it is
 /// nothing — so a generated view that wants to honour `elevation: overlay` has to be given
 /// something to apply. The derivation is a fixed function of the token's own value rather than a
-/// table of taste, and the shadow colour is stated here rather than in `tokens.yaml` for the same
+/// table of taste, and the shadow colour is stated here rather than in `tokens.json` for the same
 /// reason a border's colour is not stated there: the design file never bound a variable to it.
 fn elevation(css: &mut String, theme: &Theme) {
     if theme.elevation.is_empty() {
@@ -136,7 +132,7 @@ fn elevation(css: &mut String, theme: &Theme) {
         let _ = writeln!(css, "  --{PREFIX}-elevation-{}: {};", token.name, scalar(token.value));
     }
 
-    css.push_str("\n  /* shadow, derived from elevation — see theme::dioxus::elevation */\n");
+    css.push_str("\n  /* shadow, derived from elevation — see `elevation` in the emitter */\n");
     for token in &theme.elevation {
         let _ = writeln!(css, "  --{PREFIX}-shadow-{}: {};", token.name, shadow(token.value));
     }
@@ -183,8 +179,7 @@ pub(super) fn dark(css: &mut String, theme: &Theme) {
 /// The type scale, one class per token.
 ///
 /// A class rather than a custom property because a text style is several declarations that travel
-/// together, and the whole reason `Typography.swift` emits styles rather than bare `Font`s is that
-/// splitting them loses the line height and the tracking at the call site. `.vectis-type-body-large`
+/// together, and splitting them loses the line height and the tracking at the call site. `.vectis-type-body-large`
 /// is the same idea: the generated view names the token, not its parts.
 pub(super) fn type_scale(css: &mut String, theme: &Theme) {
     for token in &theme.typography {
@@ -199,7 +194,7 @@ pub(super) fn type_scale(css: &mut String, theme: &Theme) {
 /// One text style's declarations, in the order a reader expects them.
 ///
 /// Everything optional is omitted rather than defaulted. A style that states no weight inherits
-/// one, which is what `weight: None` means and what the native emitters do with it.
+/// one, which is what `weight: None` means.
 fn declarations(token: &Typography) -> Vec<String> {
     let mut out = Vec::new();
 
@@ -214,11 +209,10 @@ fn declarations(token: &Typography) -> Vec<String> {
         out.push(format!("line-height: {}px;", scalar(height)));
     }
 
-    // In px, because that is how `.kerning()` reads the same number in `Typography.swift` and the
-    // two shells have to agree. The token is ambiguous — Figma states tracking as a percentage or
-    // in points and `tokens.yaml` records the bare number either way, so `overline`'s 15 against a
-    // 10px font is either 1.5px or 15px and nothing downstream can tell. Left as the native
-    // emitters read it rather than reinterpreted here, where the disagreement would be silent.
+    // In px. The token is ambiguous — Figma states tracking as a percentage or
+    // in points and `tokens.json` records the bare number either way, so `overline`'s 15 against a
+    // 10px font is either 1.5px or 15px and nothing downstream can tell. Left as stated rather
+    // than reinterpreted here, where the guess would be silent.
     if let Some(spacing) = token.letter_spacing {
         out.push(format!("letter-spacing: {}px;", scalar(spacing)));
     }
@@ -245,7 +239,7 @@ pub(super) fn quoted(family: &str) -> String {
 ///
 /// A guess, and a narrow one: a family whose name says it is monospaced gets the monospace stack,
 /// and everything else gets the UI sans stack. It matters because a webfont that has not loaded
-/// yet, or a native shell without the family installed, renders in the fallback — and the fallback
+/// yet, or a browser without the family installed, renders in the fallback — and the fallback
 /// being proportional where the design system said monospace is visible in a code block.
 pub(super) fn fallback(family: &str) -> &'static str {
     let name = family.to_ascii_lowercase();

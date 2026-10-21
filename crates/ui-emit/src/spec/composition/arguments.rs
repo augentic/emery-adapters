@@ -1,27 +1,19 @@
 //! How many arguments an event carries, where the composition says how many it must.
 //!
-//! `behaviour.yaml` declares no argument shapes, and it must not: the argument an event carries
-//! from a control is a fact about the control, which the UI lane owns (`handoff-event-arity.md`).
-//! Two such facts are mechanical, and each is checked here:
+//! The argument an event carries from a control is a fact about the control. Two such facts are
+//! mechanical, and each is checked here:
 //!
-//! - A control that produces a value sends it. `vx-emit` reads an argument that names no field as
-//!   *the value the control just produced*, so `QueryChanged(value)` on a `search-field` is how the
-//!   typed text reaches the core, and a bare `QueryChanged` is a search box whose text never does.
+//! - A control that produces a value sends it. The contract reads an argument that names no field
+//!   as *the value the control just produced*, so `QueryChanged(value)` on a `search-field` is how
+//!   the typed text reaches the app, and a bare `QueryChanged` is a search box whose text never
+//!   does.
 //! - A row of a `list` or `grid` is one of many, so what it raises has to say which. A bare
 //!   `CityOpened` on a row template opens no city in particular.
 //!
-//! Both were lost at once on 2026-09-23, when `vx repair` filled weather-test's event holes from a
-//! list of bare names and nothing here objected. `vx repair` retries on these findings, which is why
-//! each message spells out the argument it expects.
-//!
-//! A third fact is about the document rather than one site, and vx's `check_agreement` checks it: one
-//! event name carries one number of arguments wherever it is raised, because `vx-emit`'s contract
-//! declares one `Event` variant per name. `NightPaletteToggled` on one screen and
-//! `NightPaletteToggled(Hourly)` on another used to pass here and be refused only at `vx emit`, as a
-//! `Clash` (`handoff-preflight-parity.md`, item B). `vx verify` refuses the same in the design file;
-//! this is the second door, because `vx repair` writes events too. That check read vx-spec's
-//! behaviour vocabulary, which did not come across; here [`crate::contract::derive`] reports the
-//! disagreement as a `Clash` and [`crate::design::vue`] refuses it.
+//! Each message spells out the argument it expects. One event name carrying one number of
+//! arguments wherever it is raised is a fact about the document rather than one site:
+//! [`crate::contract::derive`] reports a disagreement as a `Clash` and [`crate::design::vue`]
+//! refuses it.
 //!
 //! A hole (`TODO(event)`) is not checked: it has no arity yet, and it is its own finding.
 
@@ -34,10 +26,9 @@ use crate::spec::shared::escape_pointer_token;
 ///
 /// A subset of [`super::interaction::CONTROL_ITEM_TYPES`]; the unit tests below pin it so.
 /// `switch` and `checkbox` are absent on purpose. A two-state control can raise a flip, whose new
-/// value is the negation of the one the core already holds, and the row it sits in raises the same
-/// event without being able to produce a value at all — weather-test's `NightPaletteToggled` is
-/// specified exactly that way. Requiring a `Bool` on the switch would split one event into two
-/// arities, which `vx-emit`'s contract rejects.
+/// value is the negation of the one the app already holds, and the row it sits in raises the same
+/// event without being able to produce a value at all. Requiring a flag on the switch would split
+/// one event into two arities, which the contract rejects.
 pub const VALUE_ITEM_TYPES: [&str; 9] = [
     "date-picker",
     "picker",
@@ -86,7 +77,7 @@ impl Site<'_> {
 }
 
 /// Check every event in the document.
-pub(crate) fn check_arguments(composition: &Value, errors: &mut Vec<Finding>) {
+pub fn check_arguments(composition: &Value, errors: &mut Vec<Finding>) {
     for (root, path) in super::items::region_roots(composition) {
         // A body that is a collection arrives already unwrapped to its row template.
         let row = ["/list/item", "/grid/item"]
@@ -207,7 +198,7 @@ fn check_event(
                 path,
                 format!(
                     "on screen `{screen}`, the `{item_type}` raises `{event}` with no argument, \
-                     so {} never reaches the core. A {item_type}'s event carries the value it \
+                     so {} never reaches the app. A {item_type}'s event carries the value it \
                      produced: write {fix}{}",
                     produces(item_type),
                     row.map_or(String::new(), |row| format!(
@@ -240,7 +231,7 @@ fn check_event(
             path,
             format!(
                 "on screen `{screen}`, {} raises `{event}` from a row of {row} with no argument, \
-                 so the core cannot tell which row it came from. An event raised from inside a \
+                 so the app cannot tell which row it came from. An event raised from inside a \
                  row template carries the field that identifies the row: write `{name}(id)`, \
                  using the identifying field the rows have",
                 site.describe(),
@@ -308,7 +299,7 @@ mod tests {
             "each": "tasks",
             "item": [{"text-field": {"event": "TitleEdited(id, value)"}}],
         }}}}});
-        assert!(findings(&composition).is_empty());
+        assert_eq!(findings(&composition), Vec::new());
     }
 
     #[test]
@@ -327,7 +318,7 @@ mod tests {
             "each": "cities",
             "item": [{"search-field": {"event": "TODO(event)"}}],
         }}}}});
-        assert!(findings(&composition).is_empty());
+        assert_eq!(findings(&composition), Vec::new());
     }
 
     #[test]
@@ -335,7 +326,7 @@ mod tests {
         let composition = json!({"screens": {"settings": {"body": [
             {"switch": {"bind": "night_palette", "event": "NightPaletteToggled"}},
         ]}}});
-        assert!(findings(&composition).is_empty());
+        assert_eq!(findings(&composition), Vec::new());
     }
 
     #[test]

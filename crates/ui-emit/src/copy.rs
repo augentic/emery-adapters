@@ -1,46 +1,28 @@
-//! Display copy and test identifiers, lifted out of the composition into the UI contract.
+//! Display copy, lifted out of the composition into `ui-strings.ts`.
 //!
-//! Every user-visible string in a composition is authored in one place — the Figma file — and
-//! ends up in three shells. Emitting it as a literal in each of them means three copies of the
-//! same words, none of which a translator can find, and a Maestro identifier spelled by hand in
-//! both the test and the view.
-//!
-//! So the strings come out first. `ui-contract/ui-strings.yaml` and `ui-contract/test-ids.yaml`
-//! are generated from the surface, the template's own `generate-bindings` turns them into
-//! `UiStrings` and `MaestroTestIds` for each shell, and the view emitters reference those
-//! constants rather than repeating the words. The contract is a projection of the composition
-//! rather than a document anybody maintains, which is what makes it safe to overwrite.
+//! Every user-visible string in a composition is collected once and keyed by a constant, and the
+//! Vue views read the constant rather than repeating the words, so a translator finds every string
+//! in one file. The contract is a projection of the composition rather than a document anybody
+//! maintains, which is what makes it safe to overwrite.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::model::{A11y, Arg, Body, Component, Header, Item, Node, Overlay, Screen, Surface};
-use crate::naming::upper_snake;
-use crate::{GeneratedFile, HEADER};
-
-/// Where the strings contract lives.
-pub const STRINGS: &str = "ui-contract/ui-strings.yaml";
-
-/// Where the test-id contract lives.
-pub const TEST_IDS: &str = "ui-contract/test-ids.yaml";
 
 /// The longest key a literal is allowed to produce, before disambiguation.
 ///
-/// A key is read in a diff and typed in a Maestro flow, and the words past the first handful
-/// stop distinguishing anything. Truncation can collide, which is what the numeric suffix is for.
+/// A key is read in a diff, and the words past the first handful stop distinguishing anything. Truncation can collide, which is what the numeric suffix is for.
 const LONGEST: usize = 40;
 
-/// The copy a composition asks for, keyed the way the shells will spell it.
+/// The copy a composition asks for, keyed the way `ui-strings.ts` spells it.
 #[derive(Debug, Clone, Default)]
 pub struct Contract {
-    /// Literal to its `UiStrings` constant.
+    /// Literal to its constant.
     strings: BTreeMap<String, String>,
-
-    /// Kebab-case test id to its `MaestroTestIds` constant.
-    test_ids: BTreeMap<String, String>,
 }
 
 impl Contract {
-    /// Collects every literal and test id the surface declares.
+    /// Collects every literal the surface declares.
     ///
     /// The walk is in render order — a screen's header before its body, screens before the
     /// components they call — so that two runs over the same composition assign the same keys.
@@ -62,7 +44,7 @@ impl Contract {
         contract
     }
 
-    /// The `UiStrings` constant for a literal, when the contract holds one.
+    /// The constant for a literal, when the contract holds one.
     #[must_use]
     pub fn string(&self, literal: &str) -> Option<&str> {
         self.strings.get(literal).map(String::as_str)
@@ -71,31 +53,6 @@ impl Contract {
     /// Every literal and the constant it is keyed by, in literal order.
     pub fn strings(&self) -> impl Iterator<Item = (&str, &str)> {
         self.strings.iter().map(|(literal, key)| (literal.as_str(), key.as_str()))
-    }
-
-    /// The `MaestroTestIds` constant for a test id, when the contract holds one.
-    #[must_use]
-    pub fn test_id(&self, id: &str) -> Option<&str> {
-        self.test_ids.get(id).map(String::as_str)
-    }
-
-    /// Whether the composition declares any copy at all.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.strings.is_empty() && self.test_ids.is_empty()
-    }
-
-    /// The two contract documents.
-    ///
-    /// Both are emitted even when empty. The template's binding generator reads them
-    /// unconditionally, and an absent file is a build failure where an empty mapping is a project
-    /// that has no copy yet.
-    #[must_use]
-    pub fn files(&self) -> Vec<GeneratedFile> {
-        vec![
-            GeneratedFile::new(STRINGS, document("strings", &self.strings)),
-            GeneratedFile::new(TEST_IDS, document("test_ids", &self.test_ids)),
-        ]
     }
 
     /// A bar's literal title and everything in its rows. A bound title is a field, not copy.
@@ -223,13 +180,6 @@ impl Contract {
     fn a11y(&mut self, a11y: &A11y) {
         self.text(a11y.label.as_deref());
         self.text(a11y.hint.as_deref());
-
-        if let Some(id) = &a11y.test_id
-            && !self.test_ids.contains_key(id)
-        {
-            let key = unique(&format!("MAESTRO_{}", upper_snake(id)), &self.test_ids);
-            self.test_ids.insert(id.clone(), key);
-        }
     }
 
     fn text(&mut self, literal: Option<&str>) {
@@ -298,38 +248,6 @@ fn unique(key: &str, taken: &BTreeMap<String, String>) -> String {
         .unwrap_or_else(|| key.to_owned())
 }
 
-/// One contract document: a comment, the section key, and the entries by constant name.
-fn document(section: &str, entries: &BTreeMap<String, String>) -> String {
-    use std::fmt::Write as _;
-
-    let mut yaml = format!("# {HEADER}\n{section}:");
-    if entries.is_empty() {
-        yaml.push_str(" {}\n");
-        return yaml;
-    }
-    yaml.push('\n');
-
-    // The file is keyed by constant name, which is the order a reader scans it in, but the map is
-    // keyed by value. Inverting here rather than storing both keeps one source of truth.
-    let mut by_key: Vec<(&str, &str)> =
-        entries.iter().map(|(value, key)| (key.as_str(), value.as_str())).collect();
-    by_key.sort_unstable();
-
-    for (key, value) in by_key {
-        let _ = writeln!(yaml, "  {key}: {}", quoted(value));
-    }
-    yaml
-}
-
-/// A YAML scalar that cannot be mistaken for anything else.
-///
-/// Always quoted. Deciding when a plain scalar is safe means reproducing the YAML resolver, and
-/// getting it wrong turns `NO` into `false` and `1.0` into a number somewhere downstream.
-fn quoted(value: &str) -> String {
-    let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
-    format!("\"{escaped}\"")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -357,18 +275,6 @@ mod tests {
     }
 
     #[test]
-    fn the_same_words_in_two_places_are_one_constant() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "a": { "name": "A", "body": [{ "button": { "content": "Save" } }] },
-                "b": { "name": "B", "body": [{ "button": { "content": "Save" } }] }
-            }
-        }));
-
-        assert_eq!(contract.files()[0].body.matches("SAVE").count(), 1);
-    }
-
-    #[test]
     fn two_literals_that_would_share_a_name_are_told_apart() {
         let contract = contract(&serde_json::json!({
             "screens": {
@@ -384,20 +290,6 @@ mod tests {
 
         assert_eq!(contract.string("Save"), Some("SAVE"));
         assert_eq!(contract.string("Save!"), Some("SAVE_2"));
-    }
-
-    #[test]
-    fn a_test_id_keeps_the_prefix_the_template_requires() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "a": {
-                    "name": "A",
-                    "body": [{ "button": { "content": "Add", "test_id": "add-task" } }]
-                }
-            }
-        }));
-
-        assert_eq!(contract.test_id("add-task"), Some("MAESTRO_ADD_TASK"));
     }
 
     #[test]
@@ -420,37 +312,6 @@ mod tests {
 
         assert_eq!(contract.string("Mark done"), Some("MARK_DONE"));
         assert_eq!(contract.string("Delete"), Some("DELETE"));
-    }
-
-    #[test]
-    fn a_composition_with_no_copy_still_emits_both_documents() {
-        let files = Contract::default().files();
-
-        assert_eq!(files[0].path, STRINGS);
-        assert!(files[0].body.ends_with("strings: {}\n"), "{}", files[0].body);
-        assert!(files[1].body.ends_with("test_ids: {}\n"), "{}", files[1].body);
-    }
-
-    #[test]
-    fn a_document_is_ordered_by_constant_and_quotes_every_value() {
-        let contract = contract(&serde_json::json!({
-            "screens": {
-                "a": {
-                    "name": "A",
-                    "body": [
-                        { "text": { "content": "Zebra" } },
-                        { "text": { "content": "Say \"hello\"" } }
-                    ]
-                }
-            }
-        }));
-
-        assert_eq!(
-            contract.files()[0].body,
-            format!(
-                "# {HEADER}\nstrings:\n  SAY_HELLO: \"Say \\\"hello\\\"\"\n  ZEBRA: \"Zebra\"\n"
-            ),
-        );
     }
 
     #[test]

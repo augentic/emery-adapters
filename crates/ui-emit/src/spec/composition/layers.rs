@@ -90,13 +90,13 @@ fn check_props(
                     .and_then(|tokens| tokens.get("offset"))
                     .and_then(Value::as_object)
                     .is_some_and(|names| names.contains_key(name));
-                // Without a tokens.yaml nothing resolves, and that absence is a finding of its own.
+                // Without a tokens.json nothing resolves, and that absence is a finding of its own.
                 if tokens.is_some() && !known {
                     errors.push(Finding::new(
                         format!("{path}/position/offset/{}", escape_pointer_token(axis)),
                         format!(
                             "composition references unknown offset token `{name}` -- not present \
-                             in tokens.yaml under `offset.{name}`"
+                             in tokens.json under `offset.{name}`"
                         ),
                     ));
                 }

@@ -1,10 +1,9 @@
 //! The composition document, parsed into the shape an emitter renders.
 //!
-//! `vx spec` has already run by the time anything here is constructed, so this layer is a
+//! Validation has already run by the time anything here is constructed, so this layer is a
 //! projection rather than a second set of rules: it reads what the schema guarantees and refuses
-//! only what it cannot render. Parsing into types — instead of walking a `Value` at the point of
-//! emission — is what keeps four emitters agreeing about what a document *says*, leaving them to
-//! disagree only about how to spell it.
+//! only what it cannot render. Parsing into types, instead of walking a `Value` at the point of
+//! emission, is what keeps the contracts and the views agreeing about what a document *says*.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,7 +11,7 @@ use serde_json::{Map, Value};
 
 use crate::Error;
 use crate::format::{Display, Format};
-use crate::naming::{camel, pascal};
+use crate::naming::pascal;
 
 /// Everything one composition document asks the emitters to produce.
 #[derive(Debug, Clone, Default)]
@@ -34,7 +33,7 @@ pub struct Surface {
     ///
     /// Not part of any screen. It is drawn once, by the root router around whichever screen is
     /// routed, so no screen file holds a copy of it and no component carries the selected tab as a
-    /// parameter. See `handoff-footer-menu.md`.
+    /// parameter.
     pub footer_menu: Option<FooterMenu>,
 }
 
@@ -44,16 +43,6 @@ pub struct FooterMenu {
     /// The event a tab raises, by name. Its one argument is the tab's route, which is not written
     /// in the composition; see [`Self::raises`]. A hole while `TODO(event)` is unfilled.
     pub event: Event,
-
-    /// The screens that draw the menu, in the composition's order.
-    pub screens: Vec<String>,
-
-    /// Which tab each screen shows selected, screen slug to tab route. A screen that draws the
-    /// menu and is absent here selects none.
-    pub selected: BTreeMap<String, String>,
-
-    /// The bar the tabs sit in, as drawn: a group with the bar's box and no items of its own.
-    pub bar: Group,
 
     /// The tabs, in the order the bar draws them.
     pub tabs: Vec<Tab>,
@@ -65,34 +54,11 @@ pub struct Tab {
     /// The screen it opens, a screen slug.
     pub route: String,
 
-    /// Its caption.
-    pub label: String,
-
-    /// Its icon, an `assets.yaml` key.
-    pub icon: String,
-
-    /// The tab drawn selected: its box from the selected look, holding the icon and the label,
-    /// and raising the menu's event when tapped.
-    pub selected: Group,
-
     /// The same tab drawn unselected.
     pub unselected: Group,
 }
 
 impl FooterMenu {
-    /// Whether `screen` draws the menu.
-    #[must_use]
-    pub fn shows_on(&self, screen: &str) -> bool {
-        self.screens.iter().any(|shown| shown == screen)
-    }
-
-    /// The tab `screen` shows selected, when it draws the menu and selects one.
-    #[must_use]
-    pub fn selected_on(&self, screen: &str) -> Option<&Tab> {
-        let route = self.selected.get(screen)?;
-        self.tabs.iter().find(|tab| &tab.route == route)
-    }
-
     /// The event a tap on `tab` raises: the menu's event, carrying the tab's route as the `Route`
     /// variant it is spelled as. `None` while the event is still a hole, which only
     /// `--allow-holes` reaches.
@@ -103,31 +69,6 @@ impl FooterMenu {
             args: vec![pascal(&tab.route)],
         })
     }
-
-    /// The bar as drawn with `selected` selected, or with no tab selected: the bar's box holding
-    /// every tab in the look that state draws it in.
-    ///
-    /// One whole bar per state rather than one condition per tab. Every renderer already draws a
-    /// group, and a bar is only ever in one of `tabs.len() + 1` states, so this keeps the menu on
-    /// the same path every other drawn group takes instead of teaching three walkers a conditional
-    /// node that nothing else in a composition needs.
-    #[must_use]
-    pub fn bar_with(&self, selected: Option<&str>) -> Group {
-        let mut bar = self.bar.clone();
-        bar.items = self
-            .tabs
-            .iter()
-            .map(|tab| {
-                let look = if selected == Some(tab.route.as_str()) {
-                    &tab.selected
-                } else {
-                    &tab.unselected
-                };
-                Node::Group(Box::new(look.clone()))
-            })
-            .collect();
-        bar
-    }
 }
 
 /// One `custom:` element the document declares: an out-of-scope depiction a model fills in.
@@ -135,9 +76,6 @@ impl FooterMenu {
 pub struct CustomItem {
     /// The kebab-case name, which is also the item type its instances carry.
     pub name: String,
-
-    /// The prose brief, the only thing a model has to build the element from.
-    pub brief: Option<String>,
 }
 
 /// One `component:` group, lifted out of the screens that use it.
@@ -145,9 +83,6 @@ pub struct CustomItem {
 pub struct Component {
     /// The kebab-case slug from `component:`.
     pub slug: String,
-
-    /// The generated type name, which is the slug unless the slug emits more than one variant.
-    pub name: String,
 
     /// The variant this is, as the subset of `params:` that tells the slug's placements apart.
     ///
@@ -158,46 +93,8 @@ pub struct Component {
     /// `state=default` from putting `Default` in every generated name.
     pub key: BTreeMap<String, String>,
 
-    /// Copy that differs between the placements sharing this variant, as parameters.
-    ///
-    /// Structural identity makes the *shape* shared, not the words in it: one `button` variant is
-    /// "Get Organised!" on the splash and "Cancel" in a dialog. The literal cannot be baked into
-    /// the lifted tree, so the position becomes a parameter and each call site passes its own.
-    pub copy: Vec<CopySlot>,
-
-    /// Artwork each placement chooses, as parameters holding an `assets.yaml` key.
-    ///
-    /// Declared by the design — an `INSTANCE_SWAP` property, or an exposed nested instance — and
-    /// passed at each call site as `{ asset: key }`. Never inferred from placements whose artwork
-    /// differs: a parameter list that changed shape with how the component happened to be used was
-    /// rejected for `MetricTile`.
-    pub assets: Vec<CopySlot>,
-
     /// The group as authored, minus its `component:` marker.
     pub group: Group,
-
-    /// Values the component binds, in first-appearance order — its parameters, because a
-    /// component cannot reach a view model.
-    pub bindings: Vec<Binding>,
-
-    /// Events the component raises, in first-appearance order — its callbacks, for the same
-    /// reason.
-    pub events: Vec<Callback>,
-}
-
-/// One piece of copy a component takes as a parameter, and where in its tree it sits.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CopySlot {
-    /// The parameter name, identical at the definition and at every call site.
-    pub name: String,
-
-    /// Child indices from the component's root down to the item that shows it.
-    pub path: Vec<usize>,
-
-    /// The component TEXT property this slot is, when the design declared it — the key each
-    /// placement's `args:` passes it under. `None` for a slot inferred from placements whose words
-    /// differ, which is read off each placement's tree instead.
-    pub arg: Option<String>,
 }
 
 /// What one placement passes to one of its component's properties.
@@ -212,79 +109,8 @@ pub enum Arg {
     /// A view-model field of the screen the placement sits on.
     Bind(String),
 
-    /// The `assets.yaml` key of the artwork the placement shows.
+    /// The `assets.json` key of the artwork the placement shows.
     Asset(String),
-}
-
-/// What a call site hands a [`CopySlot`]: literal copy, or a field to read.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Said<'a> {
-    /// Copy, to be looked up in the copy contract.
-    Literal(&'a str),
-
-    /// A view-model path, to be read through the frame in scope.
-    Bind(&'a str),
-
-    /// A view-model path holding a typed display value, to be read through the frame in scope and
-    /// formatted at the call site with the device locale.
-    ///
-    /// Formatted where it is passed rather than inside the component, because the slot is a
-    /// `String` every placement of the variant shares: one placement may hand it a literal
-    /// ("Hectopascals") while another hands it a bound unit, and only a string takes both.
-    Formatted(&'a str, Format),
-}
-
-/// What `placement` passes for `slot`: its declared argument when it has one, else the words its
-/// own tree draws at the slot's path.
-#[must_use]
-pub fn said<'a>(placement: &'a Group, slot: &CopySlot) -> Said<'a> {
-    match slot.arg.as_ref().and_then(|arg| placement.args.get(arg)) {
-        Some(Arg::Literal(words)) => Said::Literal(words),
-        Some(Arg::Bind(field)) => slot
-            .arg
-            .as_ref()
-            .and_then(|arg| placement.formats.get(arg))
-            .map_or(Said::Bind(field), |format| Said::Formatted(field, *format)),
-        Some(Arg::Asset(_)) | None => Said::Literal(
-            at_path(placement, &slot.path)
-                .and_then(|item| item.content.as_deref())
-                .unwrap_or_default(),
-        ),
-    }
-}
-
-/// The asset key `placement` passes for an [`Component::assets`] slot: its declared argument, else
-/// the artwork its own tree draws at the slot's path.
-#[must_use]
-pub fn shown<'a>(placement: &'a Group, slot: &CopySlot) -> &'a str {
-    match slot.arg.as_ref().and_then(|arg| placement.args.get(arg)) {
-        Some(Arg::Asset(key)) => key,
-        _ => {
-            at_path(placement, &slot.path).and_then(|item| item.name.as_deref()).unwrap_or_default()
-        }
-    }
-}
-
-/// One event a component raises, named by where it sits rather than by what it is called.
-///
-/// The distinction is the whole point. A component is lifted once, from the first placement that
-/// mentions its slug, and then *called* everywhere the slug appears — so every name in its
-/// signature has to be one that every placement agrees on. A bind path is such a name: it is read
-/// against whatever element is in scope, so two rows of the same card both bind `title`. An event
-/// name is not. `What this tap does` is a decision per placement, so one `button` set answers
-/// `CreateList` on one screen and `DeleteList` on another.
-///
-/// Naming the parameter after the event therefore built the struct from the first placement's
-/// vocabulary and every call from its own: `ButtonComponent` declared `onGetOrganised` while the
-/// confirmation dialog passed `onDeleteList`, and the shell did not compile. The site is the only
-/// thing the placements share, so the site is what names the parameter.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Callback {
-    /// The parameter name, identical at the definition and at every call site.
-    pub name: String,
-
-    /// The event this placement raises through it.
-    pub event: Event,
 }
 
 /// One screen.
@@ -292,9 +118,6 @@ pub struct Callback {
 pub struct Screen {
     /// The kebab-case slug, which is the map key.
     pub slug: String,
-
-    /// The human name, which becomes the navigation title.
-    pub name: String,
 
     /// How the screen frame arranges its body across the cross axis.
     ///
@@ -341,29 +164,13 @@ pub struct Screen {
 /// A screen's navigation bar.
 #[derive(Debug, Clone, Default)]
 pub struct Header {
-    /// The title, when the header sets one: literal copy, or a field of the screen's view model.
+    /// The title, when the header sets one: literal copy, or a field of the screen.
     ///
     /// Two of the shapes a placement's [`Arg`] takes, and for the same reason. A title the
     /// design declares data (`bind:` on the drawn text) has no fixed words, and a `String` here
     /// could only have carried the one sample the designer happened to draw. Never
     /// [`Arg::Asset`]: the parse reads only `bind:`, and the emitters treat one as no title.
     pub title: Option<Arg>,
-
-    /// The typography token the title is drawn in, when the design states one.
-    pub style: Option<String>,
-
-    /// The colour token the title is drawn in, when the design states one.
-    pub color: Option<String>,
-
-    /// Where the title sits across the bar, when the design states it.
-    pub align: Option<String>,
-
-    /// The bar's own inset, when the design binds one.
-    ///
-    /// A header is rendered as the row the design drew rather than handed to the platform's
-    /// navigation bar, and a row insets its own contents. Without this the bar sits flush against
-    /// the screen edge, and the 20pt gutter the file states has nowhere to arrive.
-    pub padding: Option<Padding>,
 
     /// Leading (back or close) items.
     pub leading: Vec<Node>,
@@ -376,9 +183,6 @@ pub struct Header {
     /// Inside the bar: its padding insets them as it insets the title row. `add-city` draws its
     /// search field here, and it rendered beside the title while this did not exist.
     pub below: Vec<Node>,
-
-    /// The spacing token between the title row and each row `below` it.
-    pub gap: Option<String>,
 }
 
 impl Header {
@@ -411,18 +215,6 @@ impl Header {
             Some(Arg::Bind(field)) => Some(field),
             _ => None,
         }
-    }
-
-    /// Whether the region holds nothing to draw.
-    ///
-    /// Replaces the old `is_drawn`, which asked whether the title carried its own font so the
-    /// emitter could choose between a toolbar view and `navigationTitle`. Neither exists now — a
-    /// header is emitted as the row the design drew it as, and a title with no `style` is that row
-    /// with unstyled text in it rather than a different kind of bar. The only question left is
-    /// whether there is a row at all.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.title.is_none() && self.nodes().next().is_none()
     }
 }
 
@@ -480,25 +272,8 @@ pub struct Collection {
     /// List chrome, or `None` for a grid.
     pub style: Option<ListStyle>,
 
-    /// The spacing token between rows, when the design bound one.
-    pub gap: Option<String>,
-
-    /// The spacing token insetting the rows from the screen edges, when the design bound one.
-    pub inset: Option<String>,
-
-    /// A fixed column count, for a grid.
-    pub columns: Option<u32>,
-
     /// The grouping, when the rows arrive under headings rather than flat.
     pub section: Option<Section>,
-
-    /// Which way the rows run. Only a collection nested in content says: a body list is a platform
-    /// list and always runs down the screen.
-    pub direction: Direction,
-
-    /// Whether the rows scroll along [`Self::direction`] inside the content around them. Only a
-    /// collection nested in content says; a body list is the screen's scroll already.
-    pub scroll: bool,
 
     /// The template rendered once per element.
     pub item: Vec<Node>,
@@ -507,9 +282,9 @@ pub struct Collection {
 impl Node {
     /// Every collection nested in this subtree, in document order.
     ///
-    /// Not descending into one it finds: `vx spec` refuses a collection inside another's row
-    /// template, because a row is one element's view and has no view model of its own to hold a
-    /// second `Vec`.
+    /// Not descending into one it finds: validation refuses a collection inside another's row
+    /// template, because a row is one element's view and has no scope of its own to hold a second
+    /// list.
     #[must_use]
     pub fn collections(&self) -> Vec<&Collection> {
         fn gather<'a>(node: &'a Node, into: &mut Vec<&'a Collection>) {
@@ -529,15 +304,6 @@ impl Node {
     }
 }
 
-impl Collection {
-    /// Whether this is a grid rather than a list. The schema requires `columns` on every grid and
-    /// admits it on no list, so the column count is what tells the two apart once parsed.
-    #[must_use]
-    pub const fn is_grid(&self) -> bool {
-        self.columns.is_some()
-    }
-}
-
 /// The grouping of a sectioned list: `each` names the sections, and each section carries a heading
 /// and its own rows.
 ///
@@ -551,15 +317,6 @@ pub struct Section {
 
     /// The field on a section holding its rows.
     pub items: String,
-
-    /// The typography token the heading is drawn in, when every drawn section agreed on one.
-    ///
-    /// Only [`ListStyle::Cards`] reads it. The other styles hand the heading to a platform
-    /// sectioned list, which has its own opinion and is welcome to it.
-    pub style: Option<String>,
-
-    /// The colour token the heading is drawn in, when every drawn section agreed on one.
-    pub color: Option<String>,
 }
 
 /// How much system list chrome a list wears.
@@ -593,14 +350,8 @@ impl ListStyle {
 /// One alternate rendering of a screen.
 #[derive(Debug, Clone)]
 pub struct State {
-    /// The state key, which is the map key.
-    pub key: String,
-
     /// The view-model condition that selects it.
     pub when: String,
-
-    /// Whether it replaces the body or the whole screen.
-    pub replaces: Replaces,
 
     /// This state's header, falling back to the screen's.
     pub header: Option<Header>,
@@ -623,24 +374,18 @@ impl State {
     }
 }
 
-/// What a state's `when:` says, classified once so that the contract and the two view emitters
-/// cannot disagree about it.
-///
-/// They used to each decide for themselves what a path looked like, and they decided differently:
-/// the contract accepted any case and the views only accepted lower case. `when: lists.isEmpty`
-/// then became a field on the view model *and* a bare `lists.isEmpty` in the Swift — an
-/// identifier that resolves to nothing, in a file no one is allowed to edit.
+/// What a state's `when:` says, classified once so that the contract and the views cannot disagree
+/// about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Condition {
-    /// A bare path naming a `bool` on the view model: `loading`.
+    /// A bare path naming a flag on the screen: `loading`.
     Flag(String),
 
     /// A path whose last segment tests emptiness, naming the collection it tests: `tasks.is_empty`
     /// gives `tasks`.
     ///
     /// Held apart from [`Self::Flag`] because it is not a field — the collection the body already
-    /// declares answers it — and because the two platforms spell the test differently: a Swift
-    /// property, a Kotlin call.
+    /// declares answers it.
     Empty(String),
 
     /// Anything else: an expression the composition wrote out, which no emitter has any business
@@ -651,9 +396,8 @@ pub enum Condition {
 impl Condition {
     /// The segments an emptiness test can be written as.
     ///
-    /// `is_empty` is what the Rust side of the project reaches for and what the documented example
-    /// uses; `isEmpty` is what somebody filling in a `TODO(condition)` by hand reaches for after
-    /// reading the generated Swift. Both mean the same thing, and neither is worth an escalation.
+    /// `is_empty` is what the documented example uses; `isEmpty` and `is-empty` are what somebody
+    /// filling in a `TODO(condition)` by hand reaches for. All mean the same thing.
     const EMPTY: [&'static str; 3] = ["is_empty", "isEmpty", "is-empty"];
 
     fn parse(when: &str) -> Self {
@@ -683,46 +427,17 @@ fn is_path(when: &str) -> bool {
         })
 }
 
-/// How much of the screen a state stands in for.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Replaces {
-    /// Only the body region changes.
-    Body,
-
-    /// The whole screen changes.
-    Screen,
-}
-
 /// A dialog, sheet or snackbar presented over a screen.
 #[derive(Debug, Clone)]
 pub struct Overlay {
     /// The overlay key, which is the map key.
     pub key: String,
 
-    /// How it is presented.
-    pub kind: OverlayKind,
-
     /// The title, when it has one.
     pub title: Option<String>,
 
-    /// The event that presents it.
-    pub trigger: Option<String>,
-
     /// The overlay's content.
     pub content: Vec<Node>,
-}
-
-/// How an overlay is presented.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OverlayKind {
-    /// A modal dialog.
-    Dialog,
-
-    /// A bottom sheet.
-    Sheet,
-
-    /// A transient message.
-    Snackbar,
 }
 
 /// A node in a content tree.
@@ -813,9 +528,6 @@ pub struct Group {
 /// A variant a row reads from its own field, and how the row draws at each value of it.
 #[derive(Debug, Clone)]
 pub struct Bound {
-    /// The variant axis, as `params:` keys it — `state`.
-    pub axis: String,
-
     /// The row field holding the value, a path on the element in scope.
     pub field: String,
 
@@ -823,16 +535,8 @@ pub struct Bound {
     ///
     /// Each is the template with the look's drawing laid over it, position by position — what the
     /// row reads and raises is the template's — and with the axis fixed to its value in `params`,
-    /// which is what `lift` splits on and [`Surface::called_by`] matches.
+    /// which is what `lift` splits on.
     pub looks: Vec<(String, Group)>,
-}
-
-impl Bound {
-    /// The Rust variant each value is spelled as in the contract's enum, in look order.
-    #[must_use]
-    pub fn variants(&self) -> Vec<String> {
-        self.looks.iter().map(|(value, _)| crate::naming::look_variant(&self.axis, value)).collect()
-    }
 }
 
 /// A leaf node: one of the known item types, plus its properties.
@@ -843,16 +547,6 @@ pub struct Item {
 
     /// Literal text, for the items that carry one.
     pub content: Option<String>,
-
-    /// The component parameter supplying this item's copy, inside a lifted component.
-    ///
-    /// Set only on a component's own tree, and only where the placements disagreed about the
-    /// words. Everywhere else the copy is the same at every call site and stays a literal.
-    pub copy_param: Option<String>,
-
-    /// The component parameter supplying this item's artwork, inside a lifted component — an
-    /// [`Component::assets`] slot, set where the item draws a declared asset property.
-    pub asset_param: Option<String>,
 
     /// Inside a component, the property this item draws, from the composition's `arg:`.
     pub arg: Option<String>,
@@ -958,8 +652,8 @@ impl Item {
     ///
     /// A button reports that it was pressed and nothing else; a text field reports what is now in
     /// it. That difference decides what an event raised here can carry: `ListNameChanged(value)`
-    /// on a text field means the text, and there is nowhere else for it to come from — the view
-    /// model holds what the core last pushed, which is the value *before* the keystroke.
+    /// on a text field means the text, and there is nowhere else for it to come from: the screen's
+    /// fields hold the value *before* the keystroke.
     #[must_use]
     pub fn produces(&self) -> Option<BindKind> {
         match self.kind.as_str() {
@@ -968,8 +662,7 @@ impl Item {
             }
 
             // A `radio` is one button of a group rather than the group, so what it hands back is
-            // its own checked state — which is also the only thing Compose's `RadioButton` can
-            // report, and it can only ever report it as chosen.
+            // its own checked state.
             "checkbox" | "switch" | "radio" => Some(BindKind::Flag),
             "slider" | "stepper" => Some(BindKind::Number),
             "date-picker" => Some(BindKind::Moment),
@@ -1058,9 +751,8 @@ impl BackgroundImage {
 /// as a variable and its colour on the frame, so one width is drawn in as many colours as the design
 /// has uses for it — the real export draws `thin` in `border-default` on 27 layers, `brand-primary`
 /// on 10 and `semantic-error` on 2, and `thick` in four different swatches. Asking `tokens.border`
-/// for the answer asks a question the file does not answer, which is why those entries reach
-/// `vx repair` as holes it correctly refuses: a plurality would have drawn 12 of 39 hairlines and 8
-/// of 10 thick borders in the wrong colour.
+/// for the answer asks a question the file does not answer: a plurality would have drawn 12 of 39
+/// hairlines and 8 of 10 thick borders in the wrong colour.
 #[derive(Debug, Clone)]
 pub struct Border {
     /// The `tokens.border` entry supplying the width.
@@ -1194,20 +886,11 @@ pub struct A11y {
 
     /// The accessibility hint.
     pub hint: Option<String>,
-
-    /// The accessibility role.
-    pub role: Option<String>,
-
-    /// The Maestro test id.
-    pub test_id: Option<String>,
 }
 
 /// A declared interaction on a container.
 #[derive(Debug, Clone)]
 pub struct Interaction {
-    /// Which archetype's guarantees apply.
-    pub archetype: Archetype,
-
     /// The event the container itself raises.
     pub event: Option<Event>,
 
@@ -1225,12 +908,6 @@ pub struct Interaction {
 }
 
 impl Interaction {
-    /// Whether this interaction reveals anything on a swipe.
-    #[must_use]
-    pub const fn has_swipes(&self) -> bool {
-        !self.swipe_leading.is_empty() || !self.swipe_trailing.is_empty()
-    }
-
     /// Every event this interaction can raise, in a stable order.
     pub fn events(&self) -> impl Iterator<Item = &Event> {
         self.event
@@ -1242,92 +919,14 @@ impl Interaction {
     }
 }
 
-/// The nine interaction archetypes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Archetype {
-    /// Not interactive.
-    Static,
-
-    /// A control that owns its own hit target.
-    Control,
-
-    /// The whole container is the tap target.
-    TapTarget,
-
-    /// A tappable row with a control at its leading edge.
-    RowWithLeadingControl,
-
-    /// A tappable row with a control at its trailing edge.
-    RowWithTrailingControl,
-
-    /// A tappable grid cell.
-    GridCell,
-
-    /// A row with edge-revealed actions.
-    SwipeRow,
-
-    /// A focusable text field.
-    TextEntry,
-
-    /// A chip that carries a selected state.
-    SelectableChip,
-}
-
-impl Archetype {
-    fn parse(raw: &str) -> Option<Self> {
-        Some(match raw {
-            "static" => Self::Static,
-            "control" => Self::Control,
-            "tap-target" => Self::TapTarget,
-            "row-with-leading-control" => Self::RowWithLeadingControl,
-            "row-with-trailing-control" => Self::RowWithTrailingControl,
-            "grid-cell" => Self::GridCell,
-            "swipe-row" => Self::SwipeRow,
-            "text-entry" => Self::TextEntry,
-            "selectable-chip" => Self::SelectableChip,
-            _ => return None,
-        })
-    }
-
-    /// Whether the whole container is one tap target — the archetypes whose guarantee is that you
-    /// cannot miss the row.
-    ///
-    /// `Control` is one of them because its primary target *is* the container: the archetype table
-    /// names it "a container acting as one control, owning its own target". Left out, a frame
-    /// annotated `control` emitted its children and dropped the event on the floor — which is the
-    /// annotation a button drawn as a variant set reaches for, because `item-type: button` would
-    /// discard the depiction its `importance` axis lives in.
-    ///
-    /// A leaf control needs no block at all — it is a control by item type — so admitting this one
-    /// does not put a `Button` around a `TextField`.
-    #[must_use]
-    pub const fn is_whole_container_tappable(self) -> bool {
-        matches!(
-            self,
-            Self::Control
-                | Self::TapTarget
-                | Self::GridCell
-                | Self::RowWithLeadingControl
-                | Self::RowWithTrailingControl
-                | Self::SwipeRow
-        )
-    }
-}
-
 /// One nested control that consumes its own tap.
 #[derive(Debug, Clone)]
 pub struct Control {
-    /// The handle of the node this control targets.
-    pub handle: String,
-
     /// The event it raises.
     pub event: Event,
 
     /// The name of the equivalent accessibility custom action.
     pub a11y_action: Option<String>,
-
-    /// Whether the tap also reaches the container.
-    pub propagates: bool,
 }
 
 /// One edge-revealed swipe action.
@@ -1336,26 +935,14 @@ pub struct Swipe {
     /// The event it raises.
     pub event: Event,
 
-    /// The glyph shown in the revealed action.
-    pub icon: Option<String>,
-
     /// The label shown in the revealed action.
     pub label: Option<String>,
-
-    /// The background colour token.
-    pub background: Option<String>,
-
-    /// The foreground colour token.
-    pub tint: Option<String>,
-
-    /// Whether the action is destructive.
-    pub destructive: bool,
 }
 
-/// A core event, parsed out of its `Name(arg, arg)` spelling.
+/// An event, parsed out of its `Name(arg, arg)` spelling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
-    /// The variant name, exactly as the core spells it.
+    /// The event name, exactly as the composition spells it.
     pub name: String,
 
     /// Argument expressions, as authored.
@@ -1399,8 +986,7 @@ impl Event {
     /// `parse` reads it as the event `TODO` taking one argument called `event`, because the
     /// spelling of a marker is the spelling of a nullary-plus-argument event and nothing in the
     /// grammar separates them. A hole is a decision nobody has made, so the name it parses to is
-    /// not one the contract may declare — `Event::TODO` is a variant no shell dispatches and no
-    /// `behaviour.yaml` is allowed to name, which is how `crates/vx/tests/behaviour.rs` found it.
+    /// not one the contract may declare.
     #[must_use]
     pub fn is_hole(&self) -> bool {
         crate::spec::holes::Kind::of(&self.spelled()).is_some()
@@ -1416,29 +1002,10 @@ impl Event {
     }
 }
 
-/// One value a component reads from the element in scope.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Binding {
-    /// The parameter this value arrives as, in the neutral spelling each emitter cases for itself.
-    ///
-    /// The authored path wherever every placement binds the same one, which is the common case and
-    /// the readable one: a row in a list binds `title` on each of its elements, so `title` is what
-    /// the parameter should be called. Positional — `value`, `value2` — only where the placements
-    /// disagree, because there is then no single path to name it after. See `name_bindings`.
-    pub name: String,
-
-    /// The authored bind path.
-    pub path: String,
-
-    /// What the item displaying it needs the value to be.
-    pub kind: BindKind,
-}
-
 /// The type a bound value must have for the item that displays it.
 ///
-/// Inferred from the item kind rather than declared, because the composition describes a UI and
-/// the core owns the types. A wrong guess is a compile error at the call site, not a silent
-/// defect, which is what makes inferring it acceptable at all.
+/// Inferred from the item kind rather than declared, because the composition describes a UI, not
+/// the types behind it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BindKind {
     /// Displayed as text.
@@ -1452,19 +1019,16 @@ pub enum BindKind {
 
     /// Displayed as a point in time.
     ///
-    /// Epoch milliseconds on all three sides, rather than each platform's own date type. `Date` and
-    /// `LocalDateTime` do not cross the FFI, and a formatted string is a display decision made in
-    /// the core, where the locale is not known. An integer is the one spelling that is the same
-    /// value on both shells; turning it into a `Date` is vx's Swift view emitter's job, at the one
-    /// line that needs one.
+    /// Epoch milliseconds, a `number` in `contract.ts`: a formatted string would be a display
+    /// decision made where the locale is not known.
     Moment,
 
     /// Displayed through a `format:`: a typed value the view formats with the device locale.
     ///
     /// Declared rather than inferred, which is the exception to the rule above: a `text` shows a
-    /// `String` unless the composition says what kind of value it is, and then the core fills a
+    /// string unless the composition says what kind of value it is, and then the app fills a
     /// moment, a measurement, a unit or a number, and writes no words. Separate from [`Self::Moment`],
-    /// which is what a date picker hands back and is a bare `i64`.
+    /// which is what a date picker hands back.
     Displayed(Display),
 }
 
@@ -1501,58 +1065,7 @@ impl BindKind {
             Self::Flag => "a flag".to_owned(),
             Self::Number => "a number".to_owned(),
             Self::Moment => "a date picker's epoch milliseconds".to_owned(),
-            Self::Displayed(display) => format!("a `{}` shown through `format:`", display.rust()),
-        }
-    }
-
-    /// What the number means, for the kinds where the type alone does not say.
-    ///
-    /// `i64` is not a unit. The shells divide and multiply by a thousand at the one line that turns
-    /// the integer into a `Date`, and the core — which is written against the generated contract
-    /// and nothing else — has no way to see that line. Left unsaid, a core picked seconds, and
-    /// every due date in the built app rendered in the year 57774.
-    #[must_use]
-    pub const fn unit(self) -> Option<&'static str> {
-        match self {
-            Self::Moment => Some("Epoch milliseconds, which is what both shells send and expect."),
-            Self::Displayed(display) => Some(display.unit()),
-            Self::Text | Self::Flag | Self::Number => None,
-        }
-    }
-
-    /// How Rust spells it.
-    #[must_use]
-    pub const fn rust(self) -> &'static str {
-        match self {
-            Self::Text => "String",
-            Self::Flag => "bool",
-            Self::Number => "f64",
-            Self::Moment => "i64",
-            Self::Displayed(display) => display.rust(),
-        }
-    }
-
-    /// How Swift spells it.
-    #[must_use]
-    pub const fn swift(self) -> &'static str {
-        match self {
-            Self::Text => "String",
-            Self::Flag => "Bool",
-            Self::Number => "Double",
-            Self::Moment => "Int64",
-            Self::Displayed(display) => display.swift(),
-        }
-    }
-
-    /// How Kotlin spells it.
-    #[must_use]
-    pub const fn kotlin(self) -> &'static str {
-        match self {
-            Self::Text => "String",
-            Self::Flag => "Boolean",
-            Self::Number => "Double",
-            Self::Moment => "Long",
-            Self::Displayed(display) => display.kotlin(),
+            Self::Displayed(display) => format!("a `{}` shown through `format:`", display.name()),
         }
     }
 }
@@ -1585,8 +1098,8 @@ impl Direction {
 ///
 /// # Errors
 ///
-/// When the document is not the shape the composition schema guarantees, which downstream of
-/// `vx spec` means the caller skipped it.
+/// When the document is not the shape the composition schema guarantees, which after validation
+/// means the caller skipped it.
 pub fn parse(document: &Value) -> Result<Surface, Error> {
     let screens = document.get("screens").and_then(Value::as_object).ok_or_else(|| {
         Error::Malformed("composition has no `screens` mapping to emit".to_owned())
@@ -1597,8 +1110,7 @@ pub fn parse(document: &Value) -> Result<Surface, Error> {
         surface.screens.push(screen(slug, entry));
     }
 
-    // The document declares its custom elements once, at the root, each with the brief `vx custom`
-    // builds it from. Read them before the item walk marks their instances, so an instance's kind
+    // The document declares its custom elements once, at the root. Read them before the item walk marks their instances, so an instance's kind
     // is recognised as a declared name rather than an unknown item type.
     surface.custom = document
         .get("custom_items")
@@ -1609,7 +1121,6 @@ pub fn parse(document: &Value) -> Result<Surface, Error> {
                 .filter_map(|entry| {
                     Some(CustomItem {
                         name: string(entry, "name")?,
-                        brief: string(entry, "description"),
                     })
                 })
                 .collect()
@@ -1733,35 +1244,24 @@ fn format_disagreement(component: &Component, placement: &Group) -> Option<Strin
 /// # Errors
 ///
 /// A look without its `order` or its icon size. The schema requires both, so this is only reached
-/// by skipping `vx spec`; it is refused rather than drawn in a conventional order at the asset's
+/// by skipping validation; it is refused rather than drawn in a conventional order at the asset's
 /// own size, which is a guess at two facts the file carries.
 fn footer_menu(menu: &Value) -> Result<FooterMenu, Error> {
     let mut built = FooterMenu {
         event: Event::parse(&string(menu, "event").unwrap_or_default()),
-        screens: string_list(menu, "screens"),
-        selected: menu
-            .get("selected")
-            .and_then(Value::as_object)
-            .map(|map| {
-                map.iter()
-                    .filter_map(|(screen, tab)| Some((screen.clone(), tab.as_str()?.to_owned())))
-                    .collect()
-            })
-            .unwrap_or_default(),
-        bar: group(menu.get("bar").unwrap_or(&Value::Null)),
         tabs: Vec::new(),
     };
 
     for tab in menu.get("tabs").and_then(Value::as_array).into_iter().flatten() {
-        // All three are required by the schema, and `vx spec` holds each to more than presence: a
-        // route is a key under `screens` (`composition::menu`), an icon an `assets.yaml` key
+        // All three are required by the schema, and validation holds each to more than presence: a
+        // route is a key under `screens` (`composition::menu`), an icon an `assets.json` key
         // (`assets::collect_asset_references`), and a label is not blank. So none of these can be
         // missing here unless the gate was skipped, and an empty one is refused rather than drawn
         // as a tab that shows nothing.
         let field = |key: &str| {
             string(tab, key).filter(|value| !value.trim().is_empty()).ok_or_else(|| {
                 Error::Malformed(format!(
-                    "a footer_menu tab has no `{key}`, or a blank one. Run `vx spec`."
+                    "a footer_menu tab has no `{key}`, or a blank one. Run `ui-ir check`."
                 ))
             })
         };
@@ -1771,9 +1271,6 @@ fn footer_menu(menu: &Value) -> Result<FooterMenu, Error> {
         let raises = built
             .raises(&Tab {
                 route: route.clone(),
-                label: String::new(),
-                icon: String::new(),
-                selected: Group::default(),
                 unselected: Group::default(),
             })
             .map(|event| event.spelled());
@@ -1786,7 +1283,7 @@ fn footer_menu(menu: &Value) -> Result<FooterMenu, Error> {
             let refused = |what: &str| {
                 Error::Malformed(format!(
                     "footer_menu tab `{route}` has no {what} in its `{key}` look, which a drawn \
-                     tab cannot be drawn without. Run `vx spec`."
+                     tab cannot be drawn without. Run `ui-ir check`."
                 ))
             };
             let icon_first = match order.as_ref().and_then(Value::as_array).map(Vec::as_slice) {
@@ -1813,7 +1310,6 @@ fn footer_menu(menu: &Value) -> Result<FooterMenu, Error> {
             let words = Node::Item(Box::new(item_from("text", &Value::Object(text))));
             drawn.items = if icon_first { vec![glyph, words] } else { vec![words, glyph] };
             drawn.interaction = Some(Interaction {
-                archetype: Archetype::TapTarget,
                 event: raises.as_deref().map(Event::parse),
                 long_press: None,
                 controls: Vec::new(),
@@ -1824,11 +1320,8 @@ fn footer_menu(menu: &Value) -> Result<FooterMenu, Error> {
         };
 
         built.tabs.push(Tab {
-            selected: look("selected")?,
             unselected: look("unselected")?,
             route,
-            label,
-            icon,
         });
     }
 
@@ -1881,9 +1374,9 @@ fn collect_placements(node: &Node, into: &mut BTreeMap<String, Vec<Group>>) {
 
 /// One slug's placements, as the components they need.
 ///
-/// Two questions, in order. Which variant axes tell the placements apart — those split the slug
-/// into separate components, because a variant is different artwork rather than different content.
-/// Then, within one variant, which copy differs — that becomes a parameter.
+/// Which variant axes tell the placements apart: those split the slug into separate components,
+/// because a variant is different artwork rather than different content. Each component is its
+/// first placement's tree.
 fn lift(slug: &str, placements: &[Group]) -> Vec<Component> {
     let varying = varying_axes(placements);
 
@@ -1898,34 +1391,10 @@ fn lift(slug: &str, placements: &[Group]) -> Vec<Component> {
 
     variants
         .into_iter()
-        .map(|(key, group)| {
-            let mut lifted = group[0].clone();
-            let (mut copy, assets) = declared_args(&mut lifted);
-            let taken: BTreeSet<String> =
-                copy.iter().chain(&assets).map(|slot| slot.name.clone()).collect();
-            let inferred = varying_copy(&group, &taken);
-            for slot in &inferred {
-                if let Some(item) = at_path_mut(&mut lifted, &slot.path) {
-                    item.copy_param = Some(slot.name.clone());
-                }
-            }
-            copy.extend(inferred);
-
-            let mut bindings = Vec::new();
-            let mut events = Vec::new();
-            gather(&lifted, &mut bindings, &mut events);
-            name_bindings(&mut bindings, &group);
-
-            Component {
-                slug: slug.to_owned(),
-                name: component_name(slug, &key),
-                key: key.into_iter().collect(),
-                copy,
-                assets,
-                group: lifted,
-                bindings,
-                events,
-            }
+        .map(|(key, group)| Component {
+            slug: slug.to_owned(),
+            key: key.into_iter().collect(),
+            group: group[0].clone(),
         })
         .collect()
 }
@@ -1957,187 +1426,6 @@ fn varying_axes(placements: &[Group]) -> Vec<String> {
     }
 
     varying.into_iter().collect()
-}
-
-/// The component's declared properties, one slot per property, marking every item that draws one
-/// so it renders the parameter rather than the first placement's words or artwork. Returns the copy
-/// slots — texts — and the asset slots — icons and images — apart, because they are different types
-/// at every definition and every call site.
-///
-/// Declared, so nothing is compared: a property is a parameter whether or not the placements happen
-/// to agree, because the call site states it. The walk stops at a nested component, whose items
-/// draw *its* properties and which is called with its own `args:` rather than inlined.
-fn declared_args(lifted: &mut Group) -> (Vec<CopySlot>, Vec<CopySlot>) {
-    let mut copy: Vec<CopySlot> = Vec::new();
-    let mut assets: Vec<CopySlot> = Vec::new();
-    mark_args(lifted, &mut Vec::new(), &mut copy, &mut assets);
-    (copy, assets)
-}
-
-fn mark_args(
-    group: &mut Group, prefix: &mut Vec<usize>, copy: &mut Vec<CopySlot>,
-    assets: &mut Vec<CopySlot>,
-) {
-    for (index, node) in group.items.iter_mut().enumerate() {
-        prefix.push(index);
-        match node {
-            Node::Group(child) if child.component.is_none() => {
-                mark_args(child, prefix, copy, assets);
-            }
-            // A collection's rows read their element, not the component's parameters.
-            Node::Group(_) | Node::Collection(_) => {}
-            Node::Item(item) => {
-                if let Some(arg) = item.arg.clone() {
-                    let name = camel(&arg);
-                    let artwork = matches!(item.kind.as_str(), "icon" | "image" | "avatar");
-                    let slots = if artwork { &mut *assets } else { &mut *copy };
-                    if !slots.iter().any(|slot| slot.name == name) {
-                        slots.push(CopySlot {
-                            name: name.clone(),
-                            path: prefix.clone(),
-                            arg: Some(arg),
-                        });
-                    }
-                    if artwork {
-                        item.asset_param = Some(name);
-                    } else {
-                        item.copy_param = Some(name);
-                    }
-                }
-            }
-        }
-        prefix.pop();
-    }
-}
-
-/// The positions where the placements of one variant show different words.
-///
-/// Only positions no TEXT property declares: those are [`declared_args`]' already, and comparing
-/// them would name a declared `label` `label2`. `taken` holds the declared names, which an inferred
-/// slot's ordinal skips.
-fn varying_copy(placements: &[&Group], taken: &BTreeSet<String>) -> Vec<CopySlot> {
-    let first = placements[0];
-    let mut found = Vec::new();
-    let mut paths = Vec::new();
-    copy_positions(first, &mut Vec::new(), &mut paths);
-
-    let mut position = 0;
-    for path in paths {
-        if at_path(first, &path).is_some_and(|item| item.arg.is_some()) {
-            continue;
-        }
-        let mine = at_path(first, &path).and_then(|item| item.content.as_deref());
-        let differs = placements[1..]
-            .iter()
-            .any(|other| at_path(other, &path).and_then(|item| item.content.as_deref()) != mine);
-        if differs {
-            let name = loop {
-                position += 1;
-                let name = ordinal(position, "label");
-                if !taken.contains(&name) {
-                    break name;
-                }
-            };
-            found.push(CopySlot {
-                name,
-                path,
-                arg: None,
-            });
-        }
-    }
-
-    found
-}
-
-/// A slot name from its position: the bare stem first, then numbered.
-///
-/// Shared by the copy slots and the bind slots so that `label`/`label2` and `value`/`value2` cannot
-/// drift apart, and so the common component — one slot of its kind — reads without a number.
-fn ordinal(position: usize, stem: &str) -> String {
-    if position == 1 { stem.to_owned() } else { format!("{stem}{position}") }
-}
-
-/// Settles what to call the bind slots, now that every placement of this variant has been seen.
-///
-/// The authored path is a good parameter name exactly when every placement binds the same one, and a
-/// collection's rows always do — each element of `tasks` has its own `title` — which is why naming
-/// the parameter after the path survived this long. Two hardcoded placements are the case that
-/// breaks it: the settings screen draws one `setting-row/switch` bound to `night_palette` and
-/// another bound to `show_precipitation`, and a component declaring `nightPalette` is one the second
-/// placement cannot call. It was a Swift and Kotlin compile error in generated code, which is the
-/// one kind `vx fix` may not repair.
-///
-/// So a slot the placements disagree about is numbered instead, exactly as [`varying_copy`] numbers
-/// the words they disagree about. The call site then has to read the name off the component rather
-/// than off its own tree, because there is no longer one path it could derive it from.
-fn name_bindings(bindings: &mut [Binding], placements: &[&Group]) {
-    let spellings: Vec<Vec<String>> = placements
-        .iter()
-        .map(|placement| {
-            let mut found = Vec::new();
-            gather(placement, &mut found, &mut Vec::new());
-            found.into_iter().map(|binding| binding.path).collect()
-        })
-        .collect();
-
-    // A placement that gathered a different number of slots is one no positional correspondence can
-    // be read off, so nothing is renamed. Structural identity says this cannot happen; if it ever
-    // does, the authored paths are what the output already used, and an arbitrary rename would be
-    // worse than a name that reads oddly.
-    if spellings.iter().any(|found| found.len() != bindings.len()) {
-        return;
-    }
-
-    let mut numbered = 0;
-    for (index, binding) in bindings.iter_mut().enumerate() {
-        if spellings.iter().all(|found| found[index] == binding.path) {
-            continue;
-        }
-        numbered += 1;
-        binding.name = ordinal(numbered, "value");
-    }
-}
-
-fn copy_positions(group: &Group, prefix: &mut Vec<usize>, into: &mut Vec<Vec<usize>>) {
-    for (index, node) in group.items.iter().enumerate() {
-        prefix.push(index);
-        match node {
-            Node::Group(child) => copy_positions(child, prefix, into),
-            Node::Item(item) => {
-                if item.content.is_some() {
-                    into.push(prefix.clone());
-                }
-            }
-            Node::Collection(_) => {}
-        }
-        prefix.pop();
-    }
-}
-
-/// The item a [`CopySlot`] path points at, which a call site walks to read its own words.
-#[must_use]
-pub fn at_path<'a>(group: &'a Group, path: &[usize]) -> Option<&'a Item> {
-    let (index, rest) = path.split_first()?;
-    match group.items.get(*index)? {
-        Node::Group(child) => at_path(child, rest),
-        Node::Item(item) if rest.is_empty() => Some(item),
-        Node::Item(_) | Node::Collection(_) => None,
-    }
-}
-
-fn at_path_mut<'a>(group: &'a mut Group, path: &[usize]) -> Option<&'a mut Item> {
-    let (index, rest) = path.split_first()?;
-    match group.items.get_mut(*index)? {
-        Node::Group(child) => at_path_mut(child, rest),
-        Node::Item(item) if rest.is_empty() => Some(item),
-        Node::Item(_) | Node::Collection(_) => None,
-    }
-}
-
-/// The generated type name: the slug, plus whatever tells its variants apart.
-fn component_name(slug: &str, key: &[(String, String)]) -> String {
-    let variant: String = key.iter().map(|(_, value)| pascal(value)).collect();
-    format!("{}{variant}Component", pascal(slug))
 }
 
 impl Screen {
@@ -2172,147 +1460,6 @@ fn region<'a>(
         into.extend(body.nodes());
     }
     into.extend(footer.iter());
-}
-
-impl Surface {
-    /// The component a placement calls, matched on its slug and the variant it selects.
-    ///
-    /// The key holds only the axes that tell the slug's variants apart, so a placement matches on
-    /// those and may state any number of others.
-    #[must_use]
-    pub fn called_by(&self, group: &Group) -> Option<&Component> {
-        let slug = group.component.as_ref()?;
-        self.components.iter().find(|component| {
-            &component.slug == slug
-                && component.key.iter().all(|(axis, value)| {
-                    group.params.get(axis).map_or(value.is_empty(), |v| v == value)
-                })
-        })
-    }
-}
-
-/// Every value a subtree reads and every event it raises, in first-appearance order.
-///
-/// A component's parameter list, because a generated component has no view model and no core of
-/// its own. The walk order is what makes the list agree between the definition and each call site;
-/// see [`Callback`] for why the events are named from it rather than from themselves.
-pub fn gather(group: &Group, bindings: &mut Vec<Binding>, events: &mut Vec<Callback>) {
-    let mut sites = Sites::default();
-    walk_slots(group, bindings, events, &mut sites);
-}
-
-/// Running counts per kind of event site, so a second one of a kind is `onTap2` rather than a
-/// duplicate `onTap`.
-#[derive(Default)]
-struct Sites {
-    tap: usize,
-    long_press: usize,
-    leading: usize,
-    trailing: usize,
-    items: BTreeMap<String, usize>,
-
-    /// Handles already spoken for by a `controls[]` entry.
-    ///
-    /// A nested control is written twice — once as the item that draws it, once as the block that
-    /// says what it does — and `ref` is what ties the two together. Both carry the event, so
-    /// without this the checkbox in a task row takes two parameters that mean one thing.
-    claimed: BTreeSet<String>,
-}
-
-impl Sites {
-    /// `on<Stem>` the first time and `on<Stem><n>` after it, which keeps the common component —
-    /// one tap and nothing else — reading as `onTap`.
-    fn name(counter: usize, stem: &str) -> String {
-        if counter == 1 { format!("on{stem}") } else { format!("on{stem}{counter}") }
-    }
-}
-
-fn walk_slots(
-    group: &Group, bindings: &mut Vec<Binding>, events: &mut Vec<Callback>, sites: &mut Sites,
-) {
-    if let Some(interaction) = &group.interaction {
-        if let Some(event) = &interaction.event {
-            sites.tap += 1;
-            events.push(Callback {
-                name: Sites::name(sites.tap, "Tap"),
-                event: event.clone(),
-            });
-        }
-        if let Some(event) = &interaction.long_press {
-            sites.long_press += 1;
-            events.push(Callback {
-                name: Sites::name(sites.long_press, "LongPress"),
-                event: event.clone(),
-            });
-        }
-        // A nested control names itself: `ref` is required on one, and it is the handle the
-        // composition already uses to point at the child.
-        for control in &interaction.controls {
-            sites.claimed.insert(control.handle.clone());
-            events.push(Callback {
-                name: format!("on{}", pascal(&control.handle)),
-                event: control.event.clone(),
-            });
-        }
-        for (edge, swipes) in [
-            ("SwipeLeading", &interaction.swipe_leading),
-            ("SwipeTrailing", &interaction.swipe_trailing),
-        ] {
-            for swipe in swipes {
-                let counter = if edge == "SwipeLeading" {
-                    sites.leading += 1;
-                    sites.leading
-                } else {
-                    sites.trailing += 1;
-                    sites.trailing
-                };
-                events.push(Callback {
-                    name: Sites::name(counter, edge),
-                    event: swipe.event.clone(),
-                });
-            }
-        }
-    }
-
-    for node in &group.items {
-        match node {
-            Node::Group(child) => walk_slots(child, bindings, events, sites),
-            // Unreachable from a lifted component: `parse` refuses a component holding one.
-            Node::Collection(_) => {}
-            Node::Item(item) => {
-                // The path names the parameter for now, and `name_bindings` settles it once every
-                // placement has been seen — this walk sees one tree and cannot know whether the
-                // others spell it the same way. Deduped on the path and the kind rather than on the
-                // whole binding, so that the name settled later cannot split one slot into two.
-                if let Some(path) = &item.bind {
-                    let kind = BindKind::of_item(item);
-                    if !bindings.iter().any(|held| held.path == *path && held.kind == kind) {
-                        bindings.push(Binding {
-                            name: path.clone(),
-                            path: path.clone(),
-                            kind,
-                        });
-                    }
-                }
-                if let Some(event) = &item.event
-                    && !item.handle.as_ref().is_some_and(|handle| sites.claimed.contains(handle))
-                {
-                    let name = item.handle.as_ref().map_or_else(
-                        || {
-                            let counter = sites.items.entry(item.kind.clone()).or_default();
-                            *counter += 1;
-                            Sites::name(*counter, &pascal(&item.kind))
-                        },
-                        |handle| format!("on{}", pascal(handle)),
-                    );
-                    events.push(Callback {
-                        name,
-                        event: event.clone(),
-                    });
-                }
-            }
-        }
-    }
 }
 
 /// Marks every custom-item instance in a screen, across all of its regions.
@@ -2371,7 +1518,6 @@ fn mark_custom(node: &mut Node, names: &BTreeSet<&str>) {
 fn screen(slug: &str, entry: &Value) -> Screen {
     Screen {
         slug: slug.to_owned(),
-        name: string(entry, "name").unwrap_or_else(|| slug.to_owned()),
         align: string(entry, "align"),
         justify: string(entry, "justify"),
         background: string(entry, "background"),
@@ -2380,7 +1526,7 @@ fn screen(slug: &str, entry: &Value) -> Screen {
         body: entry.get("body").map(body),
         footer: nodes(entry.get("footer")),
         fab: entry.get("fab").map(|value| item_from("fab", value)),
-        states: map_entries(entry.get("states"), state),
+        states: map_entries(entry.get("states"), |_, value| state(value)),
         overlays: map_entries(entry.get("overlays"), overlay),
     }
 }
@@ -2391,14 +1537,9 @@ fn map_entries<T>(node: Option<&Value>, parse_one: fn(&str, &Value) -> T) -> Vec
         .unwrap_or_default()
 }
 
-fn state(key: &str, entry: &Value) -> State {
+fn state(entry: &Value) -> State {
     State {
-        key: key.to_owned(),
         when: string(entry, "when").unwrap_or_default(),
-        replaces: match string(entry, "replaces").as_deref() {
-            Some("screen") => Replaces::Screen,
-            _ => Replaces::Body,
-        },
         header: entry.get("header").map(header),
         body: entry.get("body").map(body),
         footer: nodes(entry.get("footer")),
@@ -2409,13 +1550,7 @@ fn state(key: &str, entry: &Value) -> State {
 fn overlay(key: &str, entry: &Value) -> Overlay {
     Overlay {
         key: key.to_owned(),
-        kind: match string(entry, "kind").as_deref() {
-            Some("sheet") => OverlayKind::Sheet,
-            Some("snackbar") => OverlayKind::Snackbar,
-            _ => OverlayKind::Dialog,
-        },
         title: string(entry, "title"),
-        trigger: string(entry, "trigger"),
         content: nodes(entry.get("content")),
     }
 }
@@ -2426,14 +1561,9 @@ fn header(entry: &Value) -> Header {
             Value::String(words) => Some(Arg::Literal(words.clone())),
             _ => string(title, "bind").map(Arg::Bind),
         }),
-        style: string(entry, "style"),
-        color: string(entry, "color"),
-        align: string(entry, "align"),
-        padding: entry.get("padding").map(padding),
         leading: nodes(entry.get("leading")),
         trailing: nodes(entry.get("trailing")),
         below: nodes(entry.get("below")),
-        gap: string(entry, "gap"),
     }
 }
 
@@ -2462,17 +1592,10 @@ fn collection(list: &Value) -> Collection {
     Collection {
         each: string(list, "each").unwrap_or_default(),
         style: None,
-        gap: string(list, "gap"),
-        inset: string(list, "inset"),
-        columns: None,
         section: list.get("section").map(|section| Section {
             title: string(section, "title").unwrap_or_default(),
             items: string(section, "items").unwrap_or_default(),
-            style: string(section, "style"),
-            color: string(section, "color"),
         }),
-        direction: Direction::parse(string(list, "direction").as_deref()),
-        scroll: list.get("scroll").and_then(Value::as_bool).unwrap_or(false),
         item: nodes(list.get("item")),
     }
 }
@@ -2480,7 +1603,6 @@ fn collection(list: &Value) -> Collection {
 /// The pattern a `grid` holds, wherever it sits.
 fn grid_collection(grid: &Value) -> Collection {
     Collection {
-        columns: grid.get("columns").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()),
         section: None,
         ..collection(grid)
     }
@@ -2575,7 +1697,7 @@ fn drawn_group(props: &Value) -> Group {
 }
 
 /// The one `params` entry a row binds, with a placement per look. `None` for a group binding none,
-/// and for one binding several, which `vx spec` refuses.
+/// and for one binding several, which validation refuses.
 fn bound(props: &Value, template: &Group) -> Option<Bound> {
     let params = props.get("params")?.as_object()?;
     let mut bound = params.iter().filter_map(|(axis, value)| Some((axis, string(value, "bind")?)));
@@ -2599,11 +1721,7 @@ fn bound(props: &Value, template: &Group) -> Option<Bound> {
         })
         .collect();
 
-    Some(Bound {
-        axis: axis.clone(),
-        field,
-        looks,
-    })
+    Some(Bound { field, looks })
 }
 
 /// Lays what `template` reads and raises over `look`, position by position: a look is only how the
@@ -2659,8 +1777,6 @@ fn item_from(kind: &str, props: &Value) -> Item {
     Item {
         kind: kind.to_owned(),
         content: string(props, "content"),
-        copy_param: None,
-        asset_param: None,
         arg: string(props, "arg"),
         bind: string(props, "bind"),
         format: string(props, "format").as_deref().and_then(Format::parse),
@@ -2739,9 +1855,6 @@ fn string_list(props: &Value, key: &str) -> Vec<String> {
 
 fn interaction(props: &Value) -> Interaction {
     Interaction {
-        archetype: string(props, "archetype")
-            .and_then(|raw| Archetype::parse(&raw))
-            .unwrap_or(Archetype::Static),
         event: string(props, "event").map(|raw| Event::parse(&raw)),
         long_press: string(props, "long_press").map(|raw| Event::parse(&raw)),
         controls: array(props.get("controls"), control),
@@ -2758,21 +1871,15 @@ fn array<T>(node: Option<&Value>, parse_one: fn(&Value) -> T) -> Vec<T> {
 
 fn control(entry: &Value) -> Control {
     Control {
-        handle: string(entry, "ref").unwrap_or_default(),
         event: Event::parse(&string(entry, "event").unwrap_or_default()),
         a11y_action: string(entry, "a11y_action"),
-        propagates: entry.get("propagates").and_then(Value::as_bool).unwrap_or(false),
     }
 }
 
 fn swipe(entry: &Value) -> Swipe {
     Swipe {
         event: Event::parse(&string(entry, "event").unwrap_or_default()),
-        icon: string(entry, "icon"),
         label: string(entry, "label"),
-        background: string(entry, "background"),
-        tint: string(entry, "tint"),
-        destructive: entry.get("destructive").and_then(Value::as_bool).unwrap_or(false),
     }
 }
 
@@ -2815,7 +1922,7 @@ fn border(value: &Value) -> Option<Border> {
     })
 }
 
-/// Uniform or per side. The logical sides (`start` / `end`) read as left / right: the shells lay
+/// Uniform or per side. The logical sides (`start` / `end`) read as left / right: the views lay
 /// out left to right, and a physical side, when both are given, wins.
 fn padding(value: &Value) -> Padding {
     value.as_str().map_or_else(
@@ -2859,8 +1966,6 @@ fn a11y(props: &Value) -> A11y {
     A11y {
         label: string(props, "label"),
         hint: string(props, "hint"),
-        role: string(props, "role"),
-        test_id: string(props, "test_id"),
     }
 }
 
@@ -2935,7 +2040,7 @@ mod tests {
     }
 
     /// A component is rendered with its parameters alone, so a collection inside one has nothing to
-    /// iterate. The refusal is read by a person at `vx emit`, so it has to read as one sentence.
+    /// iterate. The refusal is read by a person, so it has to read as one sentence.
     #[test]
     fn a_component_holding_a_collection_is_refused_in_plain_words() {
         let document = serde_json::json!({ "version": 1, "screens": { "today": { "body": [
@@ -2976,249 +2081,5 @@ mod tests {
 
         assert_eq!(collection.each, "tasks");
         assert_eq!(collection.item.len(), 1);
-    }
-
-    /// A text drawing a declared TEXT property is a parameter named for the property, whatever the
-    /// placements' words — and each call site passes its own argument, literal or bound, rather than
-    /// whatever the first placement's tree happened to draw.
-    #[test]
-    fn a_declared_argument_is_a_named_parameter_each_placement_fills() {
-        let tile = |label: &str, value: Value, drawn: Option<&str>| {
-            serde_json::json!({ "group": {
-                "component": "metric-tile",
-                "args": { "label": label, "dew-point": value },
-                "items": [
-                    { "text": { "arg": "label", "content": label } },
-                    { "text": { "arg": "dew-point", "content": drawn } },
-                    { "text": { "content": "Now" } }
-                ]
-            } })
-        };
-        let document = serde_json::json!({ "screens": { "today": { "name": "Today", "body": [
-            tile("HUMIDITY", serde_json::json!({ "bind": "dew_point" }), None),
-            tile("HUMIDITY", serde_json::json!("11°"), Some("11°"))
-        ] } } });
-
-        let surface = parse(&document).expect("the document parses");
-        let component = &surface.components[0];
-
-        let names: Vec<&str> = component.copy.iter().map(|slot| slot.name.as_str()).collect();
-        assert_eq!(names, ["label", "dewPoint"], "declared even where the placements agree");
-        assert_eq!(component.copy[1].arg.as_deref(), Some("dew-point"));
-
-        let Some(Node::Group(first)) = surface.screens[0].nodes().first().copied() else {
-            panic!("the first placement is a group");
-        };
-        assert_eq!(said(first, &component.copy[0]), Said::Literal("HUMIDITY"));
-        assert_eq!(said(first, &component.copy[1]), Said::Bind("dew_point"));
-    }
-
-    /// An icon drawing a declared asset property is an asset parameter, not copy, and each call
-    /// site passes the key it chose — not the first placement's artwork, which is what drew every
-    /// weather tile as a droplet.
-    #[test]
-    fn a_declared_asset_argument_is_an_asset_parameter_each_placement_fills() {
-        let tile = |label: &str, icon: &str| {
-            serde_json::json!({ "group": {
-                "component": "metric-tile",
-                "args": { "label": label, "icon": { "asset": icon } },
-                "items": [
-                    { "icon": { "arg": "icon", "name": icon } },
-                    { "text": { "arg": "label", "content": label } }
-                ]
-            } })
-        };
-        let document = serde_json::json!({ "screens": { "today": { "name": "Today", "body": [
-            tile("HUMIDITY", "icon-drop-16"),
-            tile("WIND", "icon-wind")
-        ] } } });
-
-        let surface = parse(&document).expect("the document parses");
-        let component = &surface.components[0];
-
-        let copy: Vec<&str> = component.copy.iter().map(|slot| slot.name.as_str()).collect();
-        let assets: Vec<&str> = component.assets.iter().map(|slot| slot.name.as_str()).collect();
-        assert_eq!(copy, ["label"]);
-        assert_eq!(assets, ["icon"]);
-        assert_eq!(
-            at_path(&component.group, &component.assets[0].path).unwrap().asset_param.as_deref(),
-            Some("icon")
-        );
-
-        let nodes = surface.screens[0].nodes();
-        let [Node::Group(first), Node::Group(second)] = nodes[..] else {
-            panic!("two placements");
-        };
-        assert_eq!(shown(first, &component.assets[0]), "icon-drop-16");
-        assert_eq!(shown(second, &component.assets[0]), "icon-wind");
-    }
-
-    #[test]
-    fn a_component_is_lifted_once_however_many_screens_use_it() {
-        let row = serde_json::json!({
-            "group": {
-                "component": "task-row",
-                "items": [{ "text": { "bind": "title" } }],
-                "interaction": { "archetype": "tap-target", "event": "EditTask(id)" }
-            }
-        });
-        let document = serde_json::json!({
-            "screens": {
-                "a": { "name": "A", "body": [row] },
-                "b": { "name": "B", "body": [row] }
-            }
-        });
-
-        let surface = parse(&document).expect("the document parses");
-        assert_eq!(surface.components.len(), 1);
-
-        let component = &surface.components[0];
-        assert_eq!(component.slug, "task-row");
-        assert_eq!(
-            component.bindings,
-            [Binding {
-                name: "title".to_owned(),
-                path: "title".to_owned(),
-                kind: BindKind::Text
-            }],
-            "both placements bind the same path, so the path names the parameter",
-        );
-        assert_eq!(
-            component.events,
-            [Callback {
-                name: "onTap".to_owned(),
-                event: Event::parse("EditTask(id)")
-            }]
-        );
-        assert!(component.group.component.is_none(), "the marker does not survive the lift");
-    }
-
-    /// One `button` slug, four placements: two variants, and copy that varies inside each.
-    fn buttons() -> Value {
-        let placement = |importance: &str, says: &str, event: &str| {
-            serde_json::json!({
-                "group": {
-                    "component": "button",
-                    "params": { "importance": importance, "state": "default" },
-                    "background": if importance == "primary" { "brand-primary" } else { "surface-background" },
-                    "interaction": { "archetype": "control", "event": event },
-                    "items": [{ "text": { "content": says } }]
-                }
-            })
-        };
-
-        serde_json::json!({
-            "screens": {
-                "splash": {
-                    "name": "Splash",
-                    "body": [placement("primary", "Get Organised!", "CreateList")]
-                },
-                "confirm": {
-                    "name": "Confirm",
-                    "body": [
-                        placement("primary", "Cancel", "Dismiss"),
-                        placement("destructive", "Delete", "DeleteList")
-                    ]
-                }
-            }
-        })
-    }
-
-    #[test]
-    fn a_variant_axis_that_varies_splits_the_slug_into_its_own_components() {
-        let surface = parse(&buttons()).expect("the document parses");
-
-        let names: Vec<_> = surface.components.iter().map(|one| one.name.as_str()).collect();
-        assert_eq!(names, ["ButtonDestructiveComponent", "ButtonPrimaryComponent"]);
-
-        // `state` is `default` at every placement, so it names nothing. Were it in the key, every
-        // component would be a `…DefaultComponent`.
-        for component in &surface.components {
-            assert_eq!(component.key.keys().collect::<Vec<_>>(), ["importance"]);
-        }
-
-        // The reason the split matters: the variants are drawn differently, and keying on the slug
-        // alone gave all of them the first placement's artwork.
-        let destructive = &surface.components[0];
-        let primary = &surface.components[1];
-        assert_eq!(destructive.group.style.background.as_deref(), Some("surface-background"));
-        assert_eq!(primary.group.style.background.as_deref(), Some("brand-primary"));
-    }
-
-    #[test]
-    fn copy_that_differs_between_placements_of_one_variant_becomes_a_parameter() {
-        let surface = parse(&buttons()).expect("the document parses");
-        let primary =
-            surface.components.iter().find(|one| one.name.contains("Primary")).expect("primary");
-
-        // Two primary placements, "Get Organised!" and "Cancel".
-        assert_eq!(primary.copy.len(), 1);
-        assert_eq!(primary.copy[0].name, "label");
-        assert_eq!(
-            at_path(&primary.group, &primary.copy[0].path).unwrap().copy_param.as_deref(),
-            Some("label")
-        );
-
-        // The destructive variant has one placement, so nothing varies and the word stays a
-        // literal rather than becoming a parameter nobody needs.
-        let destructive = surface
-            .components
-            .iter()
-            .find(|one| one.name.contains("Destructive"))
-            .expect("destructive");
-        assert!(destructive.copy.is_empty());
-    }
-
-    #[test]
-    fn a_placement_resolves_to_the_variant_its_params_select() {
-        let surface = parse(&buttons()).expect("the document parses");
-        let confirm =
-            surface.screens.iter().find(|screen| screen.slug == "confirm").expect("confirm");
-        let items = confirm.body.as_ref().expect("a body").nodes();
-
-        let called = |node: &Node| {
-            let Node::Group(group) = node else { panic!("a placement is a group") };
-            surface.called_by(group).expect("the placement resolves").name.clone()
-        };
-        assert_eq!(called(&items[0]), "ButtonPrimaryComponent");
-        assert_eq!(called(&items[1]), "ButtonDestructiveComponent");
-    }
-
-    #[test]
-    fn two_placements_of_one_component_agree_on_the_parameter_name() {
-        let placement = |event: &str| {
-            serde_json::json!({
-                "group": {
-                    "component": "button",
-                    "interaction": { "archetype": "control", "event": event },
-                    "items": [{ "text": { "content": "Go" } }]
-                }
-            })
-        };
-
-        let document = serde_json::json!({
-            "screens": {
-                "splash": { "name": "Splash", "body": [placement("CreateList")] },
-                "confirm": { "name": "Confirm", "body": [placement("DeleteList")] }
-            }
-        });
-
-        let surface = parse(&document).expect("the document parses");
-        let component = &surface.components[0];
-
-        // The lift takes the first placement, so naming the parameter after the event it happened
-        // to raise is what put `onCreateList` in the signature and `onDeleteList` at the second
-        // call site. The site names it instead, and the two agree.
-        assert_eq!(component.events.len(), 1);
-        assert_eq!(component.events[0].name, "onTap");
-
-        for screen in &surface.screens {
-            let mut bindings = Vec::new();
-            let mut events = Vec::new();
-            let node = &screen.body.as_ref().expect("the screen has a body").nodes()[0];
-            let Node::Group(group) = node else { panic!("the placement is a group") };
-            gather(group, &mut bindings, &mut events);
-            assert_eq!(events[0].name, component.events[0].name);
-        }
     }
 }

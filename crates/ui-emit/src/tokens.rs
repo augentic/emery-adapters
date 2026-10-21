@@ -1,9 +1,8 @@
-//! The typed view of `tokens.yaml` the platform renderers consume.
+//! The typed view of `tokens.json` the theme sheet is written from.
 //!
-//! Parsing is schema-shaped but deliberately lenient. `vx spec` is the authority on whether a
-//! document is valid and has already said so; anything this model cannot interpret is dropped
-//! rather than guessed at, so a token that reaches a renderer is always one the renderer can
-//! spell.
+//! Parsing is schema-shaped but deliberately lenient. `ui-ir check` is the authority on whether a
+//! document is valid; anything this model cannot interpret is dropped rather than guessed at, so a
+//! token that reaches the sheet is always one the sheet can spell.
 
 use serde_json::Value;
 
@@ -24,26 +23,23 @@ pub struct Color {
 
 /// One `typefaces.<name>` entry.
 ///
-/// Extraction has always written these — `figma-compile` emits one per distinct family the text
-/// styles name — but nothing read them, so every entry in the type scale rendered in whatever the
-/// platform's system font happened to be. A design system that states Inter and renders in San
-/// Francisco is wrong in the same quiet way a line height thrown away in a comment was wrong.
+/// One per distinct family the text styles name. Without them every entry in the type scale would
+/// render in whatever the browser's default face happened to be.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Typeface {
     /// The kebab-case token name, as `typography.<style>.typeface` refers to it.
     pub name: String,
 
-    /// The family name to ask the platform for.
+    /// The family name to ask the browser for.
     pub family: String,
 
-    /// The font stack to fall back to, as the design system states it, for the shells that take
-    /// one. Only CSS does; Swift and Kotlin fall back to the system face whatever this says.
+    /// The font stack to fall back to, as the design system states it.
     pub fallback: Option<String>,
 
     /// How the family is obtained, as `typefaces.<name>.source` states it: `system`,
-    /// `google-fonts` or `bundled`. A `system` family is the platform's to supply, so nothing is
-    /// planned for download — which is how a web extract's CSS system stack (`-apple-system`,
-    /// `system-ui`) reaches a CSS shell as itself rather than as a font to fetch.
+    /// `google-fonts` or `bundled`. A `system` family is the browser's to supply, so nothing is
+    /// planned for download: a web extract's CSS system stack (`system-ui`, say) reaches the sheet
+    /// as itself rather than as a font to fetch.
     pub source: Option<String>,
 }
 
@@ -53,13 +49,13 @@ pub struct Typography {
     /// The kebab-case token name.
     pub name: String,
 
-    /// A reference to a `typefaces` token. `None` leaves the platform default.
+    /// A reference to a `typefaces` token. `None` leaves the inherited face.
     pub typeface: Option<String>,
 
     /// The point or sp size.
     pub size: f64,
 
-    /// A numeric weight on the 100–900 ladder. `None` leaves the platform default.
+    /// A numeric weight on the 100–900 ladder. `None` leaves the inherited weight.
     pub weight: Option<u16>,
 
     /// The line height, in the same unit as [`Self::size`].
@@ -91,8 +87,8 @@ pub struct Border {
     /// A reference to a `colors` token, when the design system states a default for this width.
     ///
     /// Usually absent. Figma keeps a border's width and its colour in different places, so
-    /// extraction reads the colour per layer into `composition.yaml` and leaves this for a border
-    /// somebody authored by hand. `vx emit` refuses a composition border that states no colour and
+    /// extraction reads the colour per layer into `composition.json` and leaves this for a border
+    /// somebody authored by hand. Validation refuses a composition border that states no colour and
     /// names a width that has none either, so nothing renders an unstated one.
     pub color: Option<String>,
 
@@ -112,14 +108,14 @@ pub struct Shadow {
     /// Offset downward.
     pub y: f64,
 
-    /// The CSS blur radius (`SwiftUI`'s `radius` is half of it).
+    /// The CSS blur radius.
     pub blur: f64,
 
     /// `#RRGGBB` or `#RRGGBBAA`.
     pub color: String,
 }
 
-/// Everything one `tokens.yaml` can be rendered from.
+/// Everything one `tokens.json` can be rendered from.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Theme {
     /// `colors` entries.
@@ -155,9 +151,7 @@ pub struct Theme {
 
 /// The named weights on the shared 100–900 ladder.
 ///
-/// Both platforms render the same rung under their own spelling: Swift's `.ultraLight` and
-/// Kotlin's `FontWeight.Thin` are both 100, so the ladder is the thing the two agree about and
-/// the names are what each language calls its rungs.
+/// The design system names a rung; CSS takes its number.
 const LADDER: [(&str, u16); 9] = [
     ("ultra-light", 100),
     ("thin", 200),
@@ -211,18 +205,6 @@ impl Theme {
             && self.border.is_empty()
             && self.offset.is_empty()
             && self.shadow.is_empty()
-    }
-
-    /// A colour token by name.
-    #[must_use]
-    pub fn color(&self, name: &str) -> Option<&Color> {
-        self.colors.iter().find(|token| token.name == name)
-    }
-
-    /// A typeface token by name.
-    #[must_use]
-    pub fn typeface(&self, name: &str) -> Option<&Typeface> {
-        self.typefaces.iter().find(|token| token.name == name)
     }
 }
 
@@ -290,10 +272,7 @@ fn borders(document: &Value) -> Vec<Border> {
         .collect()
 }
 
-/// One category's entries.
-///
-/// The maps are ordered, so the emitted order is a function of the token names rather than of
-/// where they happen to sit in the YAML — reordering the file changes nothing downstream.
+/// The `shadow` category.
 fn shadows(document: &Value) -> Vec<Shadow> {
     entries(document, "shadow")
         .filter_map(|(name, entry)| {
@@ -308,6 +287,8 @@ fn shadows(document: &Value) -> Vec<Shadow> {
         .collect()
 }
 
+/// One category's entries, in the order the file states them (`serde_json`'s `preserve_order`), so
+/// the sheet lists tokens as the design system does.
 fn entries<'a>(document: &'a Value, category: &str) -> impl Iterator<Item = (String, &'a Value)> {
     document
         .get(category)
@@ -378,31 +359,6 @@ mod tests {
 "##;
 
     #[test]
-    fn every_category_parses() {
-        let theme = Theme::parse(SAMPLE).expect("the sample parses");
-
-        assert_eq!(theme.colors.len(), 2);
-        assert_eq!(theme.color("primary").expect("primary").light, "#0066CC");
-        assert_eq!(theme.typography.len(), 2);
-        assert_eq!(theme.spacing.len(), 2);
-        assert_eq!(theme.border[0].color.as_deref(), Some("outline"));
-        assert!(!theme.is_empty());
-    }
-
-    #[test]
-    fn a_style_keeps_the_typeface_it_names() {
-        let theme = Theme::parse(SAMPLE).expect("the sample parses");
-        let of = |name: &str| {
-            theme.typography.iter().find(|token| token.name == name).expect("a token").clone()
-        };
-
-        assert_eq!(of("body").typeface.as_deref(), Some("inter"));
-        assert_eq!(theme.typeface("inter").expect("inter").family, "Inter");
-        assert_eq!(of("display").typeface, None, "a style may state none");
-        assert_eq!(theme.typeface("helvetica"), None);
-    }
-
-    #[test]
     fn a_weight_normalises_however_it_was_written() {
         let theme = Theme::parse(SAMPLE).expect("the sample parses");
         let of = |name: &str| {
@@ -414,11 +370,11 @@ mod tests {
     }
 
     #[test]
-    fn the_order_is_the_token_names_rather_than_the_file() {
-        let theme = Theme::parse(SAMPLE).expect("the sample parses");
+    fn the_order_is_the_file_s_not_the_token_names() {
+        let theme = Theme::parse(r#"{"spacing": {"xs": 4, "md": 16}}"#).expect("it parses");
         let names: Vec<&str> = theme.spacing.iter().map(|token| token.name.as_str()).collect();
 
-        assert_eq!(names, ["md", "xs"], "authored xs first");
+        assert_eq!(names, ["xs", "md"], "authored xs first");
     }
 
     #[test]

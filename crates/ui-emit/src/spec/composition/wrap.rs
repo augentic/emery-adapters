@@ -3,8 +3,7 @@
 //! `wrap: true` says the children flow onto further lines, but not how many fit on one: that is
 //! the children's width against the row's, and a target laying the row out as a grid takes its
 //! column width from the children. So every child must state one, and all must state the same
-//! one. A child that hugs, fills, or disagrees leaves the renderer to guess at the columns, and
-//! guessing is what put the weather app's four metric tiles on one line.
+//! one. A child that hugs, fills, or disagrees leaves the renderer to guess at the columns.
 
 use serde_json::Value;
 

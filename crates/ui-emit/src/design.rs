@@ -1,8 +1,7 @@
 //! A ui-ir design-system directory to the Vue app's files.
 //!
-//! The Vue half of vx's `vx emit` (`crates/vx/src/cmd/emit.rs`), as a library call: validate,
-//! parse, derive the copy and event contracts, refuse a contract no generated file could satisfy,
-//! then render the views and the theme. Nothing is written here; [`crate::write()`] and
+//! Validate, parse, derive the copy and event contracts, refuse a contract no generated file could
+//! satisfy, then render the views and the theme. Nothing is written here; [`crate::write()`] and
 //! [`crate::drift`] reconcile the files with a workspace, and the caller copies [`Emit::assets`].
 
 use std::collections::BTreeMap;
@@ -23,7 +22,7 @@ pub struct Emit {
     pub files: Vec<GeneratedFile>,
 
     /// Each asset's name to its web source, relative to the design-system directory; the caller
-    /// copies each to the same path under [`view::vue::PUBLIC`].
+    /// copies each to the same path under [`crate::PUBLIC`].
     pub assets: BTreeMap<String, String>,
 
     /// Assets that have no web source, so the Vue app cannot serve them.

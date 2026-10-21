@@ -1,5 +1,17 @@
 //! The Vue app for the fastapi-login design system, pinned byte for byte.
 //!
+//! `fixtures/fastapi-login/design-system` is the login page of the full-stack `FastAPI` template
+//! (`fastapi/full-stack-fastapi-template`, MIT), extracted by ui-ir's `web-to-ir`
+//! (`augentic/ui-ir-experiment`, `experiment/behaviour` at `c5decdf`) from the committed capture
+//! `captures/fastapi-template/login`:
+//!
+//! ```sh
+//! web-to-ir extract captures/fastapi-template/login <out>/design-system --screen login
+//! ```
+//!
+//! `composition.json`, `tokens.json`, `assets.json` and the four SVGs are copied as written. The
+//! composition carries 11 `TODO(...)` holes, so the golden is emitted with holes allowed.
+//!
 //! `UI_EMIT_BLESS=1 cargo test -p ui-emit --test golden` rewrites the golden from the current emit.
 
 use std::collections::BTreeSet;
@@ -28,7 +40,7 @@ fn listed(root: &Path, dir: &Path, into: &mut BTreeSet<String>) {
 fn the_fastapi_login_design_system_emits_the_golden_vue_app() {
     let input = manifest().join("tests/fixtures").join(CASE).join("design-system");
     let golden = manifest().join("tests/golden").join(CASE);
-    let emit = ui_emit::design::vue(&input, true).expect("the design system emits");
+    let emit = ui_emit::vue(&input, true).expect("the design system emits");
 
     if std::env::var_os("UI_EMIT_BLESS").is_some() {
         let _ = fs::remove_dir_all(&golden);
@@ -64,16 +76,16 @@ fn the_fastapi_login_design_system_emits_the_golden_vue_app() {
 #[test]
 fn holes_stop_the_emit_unless_allowed() {
     let input = manifest().join("tests/fixtures").join(CASE).join("design-system");
-    let error = ui_emit::design::vue(&input, false).expect_err("the fixture has holes");
+    let error = ui_emit::vue(&input, false).expect_err("the fixture has holes");
     assert!(error.to_string().contains("still has holes"), "{error}");
 }
 
 #[test]
 fn an_emit_written_twice_leaves_the_workspace_clean() {
     let input = manifest().join("tests/fixtures").join(CASE).join("design-system");
-    let emit = ui_emit::design::vue(&input, true).expect("the design system emits");
+    let emit = ui_emit::vue(&input, true).expect("the design system emits");
     let app = tempfile::tempdir().expect("a temporary directory");
-    let pruned = [Path::new(ui_emit::view::vue::VIEWS)];
+    let pruned = [Path::new(ui_emit::VIEWS)];
 
     let first = ui_emit::write(app.path(), &emit.files, &pruned).expect("the first write");
     assert_eq!(first.written.len(), emit.files.len());
