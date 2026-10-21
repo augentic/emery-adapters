@@ -33,7 +33,7 @@ tracing.workspace = true
 workspace = true
 
 [workspace]
-members = ["adapters/*", "crates/*", "evals", "ui-ir-staging/crates/*"]
+members = ["adapters/*", "crates/*", "evals"]
 resolver = "3"
 
 [workspace.package]
@@ -99,7 +99,6 @@ emery-sdk = "0.39.0"
 test-programs = { path = "crates/test-programs" }
 
 sha2 = "0.10.9"
-ui-ir-behaviour = { path = "ui-ir-staging/crates/ui-ir-behaviour" }
 
 [patch.crates-io]
 emery-prose = { git = "https://github.com/augentic/emery" }
