@@ -197,6 +197,7 @@ pub fn tests(stem: &Stem) -> String {
     }
     uses.add("omnia_test::guest", &["MapConfig", "Provider"]);
     if sending {
+        uses.add("serde_json", &["Value"]);
         uses.add("tower", &["ServiceExt as _"]);
     }
     source.push(uses);
@@ -229,13 +230,17 @@ fn provider() -> Fn {
         ])
 }
 
-// One request through the router of the stem `ident` names.
+// One request through the router of the stem `ident` names, its body read
+// as JSON so a test asserts fields and never bytes.
 fn send(ident: &str) -> Fn {
     Fn::new("send")
-        .comments(["One request through the stem's router, answered as its status and body."])
+        .comments([
+            "One request through the stem's router, answered as its status and its body as JSON:",
+            "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
+        ])
         .asynchronous()
         .params(["provider: Provider", "request: Request<Body>"])
-        .returns("(StatusCode, Vec<u8>)")
+        .returns("(StatusCode, Value)")
         .body([
             format!(
                 "    let router = {ident}::router().with_state(Client::new(\"test\", provider));"
@@ -244,7 +249,14 @@ fn send(ident: &str) -> Fn {
             "    let status = response.status();".to_owned(),
             "    let body = to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");"
                 .to_owned(),
-            "    (status, body.to_vec())".to_owned(),
+            "    let body = if body.is_empty() {".to_owned(),
+            "        Value::Null".to_owned(),
+            "    } else {".to_owned(),
+            "        serde_json::from_slice(&body)".to_owned(),
+            "            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))"
+                .to_owned(),
+            "    };".to_owned(),
+            "    (status, body)".to_owned(),
         ])
 }
 

@@ -275,15 +275,81 @@ where
 {
     let ReadyInput {} = input;
     let provider = context.provider();
-    let store = TableStore::query(provider, ORDERS_DB.to_string(), "SELECT 1".to_string(), Vec::new())
-        .await
-        .is_ok_and(|rows| !rows.is_empty());
+    let store =
+        TableStore::query(provider, ORDERS_DB.to_string(), "SELECT 1".to_string(), Vec::new())
+            .await
+            .is_ok_and(|rows| !rows.is_empty());
     let cache = StateStore::get(provider, PROBE).await.is_ok();
     Ok(Readiness { store, cache })
 }
 ```
 
-A status that follows the outcome, `503` where the store failed, is set in the route function's encoder over the output, `|output: Readiness| (if output.store { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE }, Json(output)).into_response()`. In a test, `ScriptedTables` answers the SQL probe as scripted — `.on_query(|sql, _| sql == "SELECT 1", vec![])` is the store down and one `Row` is the store up — while `Memory` answers every read, so the cache's failure is the host's to produce and no test arranges it.
+A status that follows the outcome, `503` where the store failed, is set in a route function of the part's own over `handle_with`, whose encoder reads the output, named in `routes()`; the scaffold lays that function beside a probe's `GET` handler with its encoder answering `StatusCode::OK`, so the status is the encoder's one expression to change, and the function below is whole with the `use` lines it needs, since `into_response` is a method of `axum::response::IntoResponse`, which must be in scope, the `where` clause names the capability traits, and the decoder names its error type. Every test of the probe arranges the store's answer on `ScriptedTables`, since a statement the double holds no rule for panics naming it: `.on_query(|sql, _| sql == "SELECT 1", vec![])` is the store down; one `Row { index: "1".into(), fields: Vec::new() }` is the store up, `Row` being the `omnia-wasi-sql` crate's, named in the stem's manifest as `omnia-wasi-sql.workspace = true`. `Memory` answers every read, so the cache's failure is the host's to produce and no test arranges it.
+
+```rust
+use axum::Json;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::MethodRouter;
+use omnia_sdk::api::http::{MethodFilter, RawRequest, handle_with};
+use omnia_sdk::api::{Client, DecodeError};
+use omnia_sdk::{StateStore, TableStore};
+
+// In `routes()`: `.route(HEALTH_READY, ready_route())`, as the scaffold registers it.
+
+// The `GET /health/ready` route: `200` where the store answered, `503` where it did not.
+pub(crate) fn ready_route<P>() -> MethodRouter<Client<P>>
+where
+    P: StateStore + TableStore + Send + Sync + 'static,
+{
+    handle_with(
+        MethodFilter::GET,
+        ready,
+        |_: RawRequest<'_>| -> Result<ReadyInput, DecodeError> { Ok(ReadyInput {}) },
+        |output: Readiness| {
+            let status =
+                if output.store { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+            (status, Json(output)).into_response()
+        },
+    )
+}
+
+// In `tests/<part>.rs`, over the scaffolded `provider()` and `send`:
+use omnia_test::guest::ScriptedTables;
+use omnia_wasi_sql::Row;
+
+// REQ-004 health.ready: The store is down
+//   Given the store answers no row
+//   When readiness is asked
+//   Then it is answered 503 with the store unready
+#[tokio::test]
+async fn the_store_is_down() {
+    let provider =
+        provider().tables(ScriptedTables::default().on_query(|sql, _| sql == "SELECT 1", vec![]));
+    let request = Request::get("/health/ready").body(Body::empty()).expect("request");
+    let (status, body) = send(provider, request).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
+    assert_eq!(body["store"], false);
+}
+
+// REQ-004 health.ready: The store is up
+//   Given the store answers a row
+//   When readiness is asked
+//   Then it is answered 200 with the store ready
+#[tokio::test]
+async fn the_store_is_up() {
+    let up = vec![Row {
+        index: "1".into(),
+        fields: Vec::new(),
+    }];
+    let provider =
+        provider().tables(ScriptedTables::default().on_query(|sql, _| sql == "SELECT 1", up));
+    let request = Request::get("/health/ready").body(Body::empty()).expect("request");
+    let (status, body) = send(provider, request).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["store"], true);
+}
+```
 
 ## A cache-aside read
 

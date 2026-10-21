@@ -60,6 +60,8 @@ A tree that does not compile cannot run its tests or build the guest.
 A lint failure alone leaves the tests, the guest build, and the formatter worth running. The fifth runs whatever came before.
 A check that passed is run again only where a repair touched what it reads. The checks are slow, and the turn has one budget.
 Run them as few times as the repairs demand. Answer once the last run is clean or its failure is yours to report.
+Where every check passes at its first run and the fifth names `Cargo.lock` at most, there is nothing to repair: answer the passing verdict in your next reply, with no further command.
+A name a reference's example uses, `ORDER_PLACED`, `place_order`, is the example's, not the tree's: the tree is not searched for it, and its absence is no failure.
 
 ## The rules held
 

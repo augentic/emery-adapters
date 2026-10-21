@@ -8,12 +8,13 @@ mod render;
 mod trigger;
 mod types;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
+use emery_sdk::target::{DesignType, Guarded, Requirement, Scenario, Slice};
 use emery_sdk::{
-    Error, NoFollow, Route, Standing, bad_request, push_unique, server_error, standing, write_whole,
+    Error, NoFollow, Route, Standing, bad_request, push_unique, server_error, standing, unique,
+    write_whole,
 };
 
 use self::lists::{Line, Lists, Place, Placement, Topics};
@@ -106,8 +107,8 @@ struct Handler {
     stated: Vec<Stated>,
     marker: String,
     // The route function over `handle_with` scaffolded beside a `POST`
-    // handler, and beside one whose scenarios state a status other than
-    // `200`, so another status is one token's edit.
+    // handler, beside one whose scenarios state a status other than `200`,
+    // and beside a probe's `GET`, so another status is one token's edit.
     route_fn: Option<String>,
 }
 
@@ -268,11 +269,13 @@ impl Scaffold {
         }
 
         let design_keys = types::design_keys(&slice.design);
+        let idioms = reference::idioms(slice);
+        let probing = idioms.contains(&Idiom::Probe);
         let mut lists = Lists::default();
         let mut stems = Vec::new();
         for plan in plans {
             let mut stem = plan.stem;
-            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
+            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics, probing);
             stem.read(root)?;
             stem.place_lines(root, &mut lists)?;
             stems.push(stem);
@@ -284,7 +287,7 @@ impl Scaffold {
             existing,
             lists,
             roles: reference::roles(slice),
-            idioms: reference::idioms(slice),
+            idioms,
         })
     }
 
@@ -293,22 +296,30 @@ impl Scaffold {
         &self.written
     }
 
-    // Every file the scaffold wrote or found and every list it adds a line
-    // to, sorted: what the turn changes through `edit_files` alone.
-    pub fn paths(&self) -> Vec<String> {
-        let mut paths: Vec<String> = self
-            .plan
-            .stems
-            .iter()
-            .flat_map(|stem| {
-                stem.files()
-                    .map(|file| file.path.clone())
-                    .chain(stem.lines.iter().map(|line| line.path.clone()))
-            })
-            .collect();
-        paths.sort();
-        paths.dedup();
-        paths
+    // Every file the scaffold wrote or found and every list it holds a line
+    // in, each with what a whole write of it must keep, sorted by path: a
+    // module its requirement ids and the items the scaffold named, a test
+    // file its ids and its tests, and a manifest, an entry, or a list every
+    // line it holds, so a list is added to and never cut.
+    pub fn guarded(&self) -> Vec<Guarded> {
+        let mut keeps: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        for stem in &self.plan.stems {
+            for kind in Kind::ALL {
+                let Some(file) = stem.file(kind) else { continue };
+                let tokens = match kind {
+                    Kind::Module => stem.module_tokens(),
+                    Kind::Tests => stem.test_tokens(),
+                    Kind::Manifest | Kind::Entry => lines_of(&stem.text(kind).unwrap_or_default()),
+                };
+                keeps.entry(&file.path).or_default().extend(tokens);
+            }
+            for line in stem.lines.iter().filter(|line| line.placement != Placement::Unanchored) {
+                let tokens =
+                    self.plan.lists.held(&line.path).map_or_else(|| lines_of(&line.text), lines_of);
+                keeps.entry(&line.path).or_default().extend(tokens);
+            }
+        }
+        keeps.into_iter().map(|(path, tokens)| Guarded::new(path, unique(tokens))).collect()
     }
 
     // The design keys of the types laid into the modules the scaffold wrote,
@@ -433,7 +444,7 @@ impl Stem {
     // its reserved name.
     fn plan(
         &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
-        topics: &mut Topics,
+        topics: &mut Topics, probing: bool,
     ) {
         let mut namespaces = Namespaces::default();
         let reads: Vec<types::Read> =
@@ -494,7 +505,7 @@ impl Stem {
             }
         }
         for (route, group) in routed {
-            self.handler(route, &group, &mut namespaces);
+            self.handler(route, &group, &mut namespaces, probing);
         }
         for (topic, group) in consumed {
             self.consumer(topic, &group, &mut namespaces, topics);
@@ -506,8 +517,13 @@ impl Stem {
     }
 
     // One handler for the requirements served at `route`, over the path's
-    // one constant.
-    fn handler(&mut self, route: &Route, group: &[&Requirement], namespaces: &mut Namespaces) {
+    // one constant; its route function where the method is `POST`, a
+    // scenario states a status, or the slice probes and the method is
+    // `GET`, since a probe's status follows the outcome.
+    fn handler(
+        &mut self, route: &Route, group: &[&Requirement], namespaces: &mut Namespaces,
+        probing: bool,
+    ) {
         let suffix = number(&group[0].id);
         let base = handler_base(group, &route.to_string());
         let name = namespaces.values.reserve(&base, &format!("_{suffix}"));
@@ -521,7 +537,9 @@ impl Stem {
                 self.paths.push((constant.clone(), route.path.clone()));
                 constant
             };
-        let route_fn = (route.method == "POST" || states_status(group))
+        let encoded =
+            route.method == "POST" || states_status(group) || (probing && route.method == "GET");
+        let route_fn = encoded
             .then(|| namespaces.values.reserve(&format!("{name}_route"), &format!("_{suffix}")));
         let stated = stated_of(group);
         self.handlers.push(Handler {
@@ -596,10 +614,6 @@ impl Stem {
         }
     }
 
-    fn files(&self) -> impl Iterator<Item = &File> {
-        Kind::ALL.into_iter().filter_map(|kind| self.file(kind))
-    }
-
     fn render(&self, kind: Kind) -> String {
         match kind {
             Kind::Manifest => render::manifest(self),
@@ -614,6 +628,58 @@ impl Stem {
     fn text(&self, kind: Kind) -> Option<String> {
         let file = self.file(kind)?;
         Some(if file.held { file.text.clone() } else { self.render(kind) })
+    }
+
+    // What a whole write of the part must keep: each requirement's id, and
+    // each item the scaffold named as its declaration spells it, `fn read`,
+    // `struct ReadInput`, `const ORDERS_ID`, so the entry's calls and the
+    // tests' names still resolve; a held part is an earlier slice's, so
+    // nothing of it is the scaffold's to hold.
+    fn module_tokens(&self) -> Vec<String> {
+        if self.module.held {
+            return Vec::new();
+        }
+        let mut tokens = Vec::new();
+        for handler in &self.handlers {
+            tokens.extend(handler.stated.iter().map(|stated| stated.id.clone()));
+            tokens.push(format!("fn {}", handler.name));
+            tokens.push(format!("struct {}", handler.input));
+            tokens.push(format!("struct {}", handler.output));
+            tokens.push(format!("const {}", handler.constant));
+            if let Some(route_fn) = &handler.route_fn {
+                tokens.push(format!("fn {route_fn}"));
+            }
+        }
+        for consumer in &self.consumers {
+            tokens.extend(consumer.stated.iter().map(|stated| stated.id.clone()));
+            tokens.push(format!("fn {}", consumer.name));
+            tokens.push(format!("struct {}", consumer.input));
+        }
+        for function in &self.functions {
+            tokens.push(function.stated.id.clone());
+            tokens.push(format!("fn {}", function.name));
+        }
+        tokens.extend(self.types.iter().map(Type::declaration));
+        if !self.handlers.is_empty() {
+            tokens.push("fn routes".to_owned());
+        }
+        if !self.consumers.is_empty() {
+            tokens.push("fn topics".to_owned());
+        }
+        tokens
+    }
+
+    // What a whole write of the tests must keep: each scenario's
+    // requirement id and its test's name, which the check looks the
+    // scenario up by.
+    fn test_tokens(&self) -> Vec<String> {
+        if self.tests.as_ref().is_none_or(|file| file.held) {
+            return Vec::new();
+        }
+        self.scenarios
+            .iter()
+            .flat_map(|test| [test.id.clone(), format!("fn {}", test.name)])
+            .collect()
     }
 
     // The stem's lines in the root lists, the constant of each topic the
@@ -830,6 +896,12 @@ fn shared_lead<'a>(tails: &[Vec<&'a str>]) -> Vec<&'a str> {
         shared.min(first.iter().zip(tail).take_while(|(a, b)| a == b).count())
     });
     first[..shared].to_vec()
+}
+
+// Every non-blank line of `text`, trimmed, as the tokens a whole write of a
+// list or a fixed file must keep.
+fn lines_of(text: &str) -> Vec<String> {
+    text.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToOwned::to_owned).collect()
 }
 
 // Creates the file the plan found absent, its directories made one at a

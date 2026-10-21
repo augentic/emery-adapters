@@ -1,6 +1,6 @@
-//! Renders the brief a build turn reads of the scaffold: each stem's files
-//! and lines, the design types laid, the markers to fill, the check, and
-//! the reference passages the slice's shapes need.
+//! Renders what a build turn reads of the scaffold: the brief — each stem's
+//! files and lines, the design types laid, the markers to fill, the check —
+//! and, apart from it, the reference passages the slice's shapes need.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
@@ -18,18 +18,33 @@ const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --
 const HELD: &str =
     "The tree already held it, so nothing was written over it; read it for what stands.";
 
-// How much of the brief the inlined texts may take: the files first, the
-// references after them, a text past the budget named by its path alone.
+// How much of the turn the inlined texts may take: the brief's files first,
+// the passages after them, a text past the budget named by its path alone.
 struct Budget {
     left: u64,
 }
 
+// The brief and the passages, the one budget shared between them.
+pub struct Texts {
+    pub brief: String,
+    pub passages: String,
+}
+
 impl Scaffold {
-    pub fn brief(&self, docs: &[Doc]) -> String {
+    // The brief and, apart from it, the passages the slice's shapes select
+    // from the references, so the SDK renders the brief as the slice's own
+    // text and the passages after it as no text of the slice.
+    pub fn texts(&self, docs: &[Doc]) -> Texts {
         let mut budget = Budget { left: INLINE_BYTES };
+        let brief = self.brief(&mut budget);
+        let passages = self.passages(docs, &mut budget);
+        Texts { brief, passages }
+    }
+
+    fn brief(&self, budget: &mut Budget) -> String {
         let mut text = String::new();
         for stem in &self.plan.stems {
-            stem.brief_files(&mut budget, &mut text);
+            stem.brief_files(budget, &mut text);
             stem.brief_markers(&mut text);
         }
         if !self.plan.start.is_empty() {
@@ -60,7 +75,6 @@ impl Scaffold {
              the steps before it passed and the check is done.\n",
             self.check()
         );
-        self.brief_references(docs, &mut budget, &mut text);
         text.trim_end().to_owned()
     }
 
@@ -77,7 +91,10 @@ impl Scaffold {
         )
     }
 
-    fn brief_references(&self, docs: &[Doc], budget: &mut Budget, text: &mut String) {
+    // The passages the laid shapes, the roles, and the idioms select, each
+    // quoted whole under its source and heading while the budget holds;
+    // empty where none is selected or none fits.
+    fn passages(&self, docs: &[Doc], budget: &mut Budget) -> String {
         let mut laid = BTreeSet::new();
         for stem in &self.plan.stems {
             if !stem.handlers.is_empty() {
@@ -116,13 +133,13 @@ impl Scaffold {
             quoted.push_str(&entry);
         }
         if quoted.is_empty() {
-            return;
+            return String::new();
         }
-        text.push_str(
+        format!(
             "What the references spell for these shapes, quoted; `read_doc` answers the rest of \
-             each document:\n\n",
-        );
-        text.push_str(&quoted);
+             each document:\n\n{}",
+            quoted.trim_end()
+        )
     }
 }
 
@@ -409,10 +426,11 @@ impl Handler {
             },
             |route_fn| {
                 format!(
-                    "Its `Ok` is answered as JSON under the status `{route_fn}` names, \
-                     `StatusCode::OK`; for another status on an `Ok`, a `201` or a `503`, \
-                     change it there, and answer an error status, a `404`, as the error the \
-                     errors passage maps to it."
+                    "Its `Ok` is answered as JSON under the status the encoder in `{route_fn}` \
+                     names, `StatusCode::OK`, which is this slice's to decide there: a `201` \
+                     for a creation, or one read off the output, `503` where a probe found its \
+                     store down; an error status, a `404`, is the error the errors passage \
+                     maps to it."
                 )
             },
         )

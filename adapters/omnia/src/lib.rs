@@ -76,12 +76,13 @@ impl TargetAdapter for Adapter {
                     scaffolded = scaffold.written().len(),
                     "scaffolded the slice's skeleton"
                 );
-                let brief = scaffold.brief(PROSE);
-                let paths = scaffold.paths();
+                let texts = scaffold.texts(PROSE);
+                let files = scaffold.guarded();
                 let types = scaffold.types();
                 let ctx = ctx.with_scaffold(target::Scaffold {
-                    brief: &brief,
-                    paths: &paths,
+                    brief: &texts.brief,
+                    passages: &texts.passages,
+                    files: &files,
                     types: &types,
                 });
                 target::build(&ctx, PROSE, |report| {

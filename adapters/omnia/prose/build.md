@@ -30,10 +30,11 @@ Work in this order. Do not skip ahead.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
-Write through the two tools alone.
+Write through this call's tools alone.
 
 - `edit_files` changes within a file. Each edit's `find` must match one place in the file. Several edits may go in one call.
-- `write_files` writes a file whole. Use it only for a file of your own that the brief does not name. Its `delete` removes a file.
+- `write_files` writes a file whole. A scaffolded file sent whole must still hold every marker and name the skeleton holds; one that drops any is refused naming them. Its `delete` removes a file of your own.
+- `restore_files` puts a scaffolded file back as it was scaffolded, where your edits have lost its shape.
 - A refused `find` names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more. Do not guess.
 - The shell runs the check command and nothing else. A file the shell writes, through a redirect, a heredoc, `cp`, or a script, is not yours and is a finding.
 - Nothing outside `$WORKSPACE` is reachable. Do not read the registry sources under `.cargo`. Do not run `rg`, `find`, or `ls` over them.
@@ -255,7 +256,7 @@ The merge keeps every form it is given, and the verify then has two.
 - No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock` is the exemplar's guest template, scaffolded when the repository was initialised.
   Read one where you need its text. Write or report none.
 - No change to the root `Cargo.toml` outside its two stem lists. A pin, a lint, or a feature changed there is a finding with the lines named.
-- No scaffolded file written whole. Edit it.
+- No scaffolded file written whole without what its skeleton holds. Edit it, or send it whole with every marker and name kept.
 - No file left behind by a check or a test, beside your files and `Cargo.lock`. Remove such a stray through `delete`.
 
 ## The `start` stem

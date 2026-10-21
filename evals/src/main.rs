@@ -103,7 +103,12 @@ impl Backend {
     const fn knobs(self) -> &'static [&'static str] {
         match self {
             Self::Cursor => &["CURSOR_MAX_TOOL_CALLS"],
-            Self::GenAi => &["GENAI_MAX_TOOL_CALLS", "GENAI_MAX_ROUNDS", "GENAI_MAX_CANDIDATES"],
+            Self::GenAi => &[
+                "GENAI_MAX_TOOL_CALLS",
+                "GENAI_MAX_ROUNDS",
+                "GENAI_MAX_CANDIDATES",
+                "GENAI_MAX_REPEATS",
+            ],
         }
     }
 }
@@ -119,16 +124,42 @@ fn main() -> ExitCode {
 }
 
 // What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--build`, `--rebuild <card>`, `--oracle <card>`) with
-// the target a build goes through.
+// mode (`--facts`, `--build`, `--rebuild <card>`, `--resume <card> --at
+// <wave>`, `--oracle <card>`) with the target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
-    rebuild: Option<String>,
+    again: Option<Again>,
     // the card whose `omnia` build the reference's fixtures are driven through
     oracle: Option<String>,
     // the target a build runs through; none where no build runs
     target: Option<Target>,
+}
+
+// A build of a card's committed plans again: fresh, or on from a wave of the
+// chain the card's build left.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Again {
+    Rebuild { card: String },
+    Resume { card: String, wave: usize },
+}
+
+impl Again {
+    // One case's plan built again under the new card, as this mode has it.
+    fn run(
+        &self, eval_dir: &Path, card_name: &str, case: &Case, settings: &Settings,
+    ) -> io::Result<Run> {
+        match self {
+            Self::Rebuild { card } => {
+                eprintln!("eval: case `{}` rebuilt from `{card}`", case.name);
+                rebuilt(eval_dir, card, card_name, case, settings)
+            }
+            Self::Resume { card, wave } => {
+                eprintln!("eval: case `{}` resumed from `{card}` at wave {wave}", case.name);
+                resumed(eval_dir, card, *wave, card_name, case, settings)
+            }
+        }
+    }
 }
 
 impl Args {
@@ -136,11 +167,18 @@ impl Args {
         let mut argv = argv;
         let mut filter: BTreeSet<String> = BTreeSet::new();
         let mut rebuild: Option<String> = None;
+        let mut resume: Option<String> = None;
+        let mut at: Option<usize> = None;
         let mut oracle: Option<String> = None;
         let mut target: Option<Target> = None;
         while let Some(arg) = argv.next() {
             if arg == "--rebuild" {
                 rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
+            } else if arg == "--resume" {
+                resume = Some(argv.next().ok_or("`--resume` names a card")?);
+            } else if arg == "--at" {
+                let wave = argv.next().ok_or("`--at` names a wave")?;
+                at = Some(wave.parse().map_err(|error| format!("`--at {wave}`: {error}"))?);
             } else if arg == "--oracle" {
                 oracle = Some(argv.next().ok_or("`--oracle` names a card")?);
             } else if arg == "--target" {
@@ -150,16 +188,40 @@ impl Args {
                 filter.insert(arg);
             }
         }
+        let again = match (rebuild, resume, at) {
+            (Some(_), Some(_), _) => {
+                return Err(
+                    "`--rebuild` and `--resume` each build a card's plans again; name one".into()
+                );
+            }
+            (Some(card), None, None) => Some(Again::Rebuild { card }),
+            (_, None, Some(_)) => {
+                return Err("`--at` names the wave a `--resume` resumes at".into());
+            }
+            (None, Some(card), Some(wave)) => {
+                if wave < 2 {
+                    return Err(
+                        "`--at` names a wave past the first; a resume at wave 1 is a `--rebuild`"
+                            .into(),
+                    );
+                }
+                Some(Again::Resume { card, wave })
+            }
+            (None, Some(_), None) => {
+                return Err("`--resume` names the wave to resume at through `--at`".into());
+            }
+            (None, None, None) => None,
+        };
         let facts_only = filter.remove("--facts");
-        let build = filter.remove("--build") || rebuild.is_some();
+        let build = filter.remove("--build") || again.is_some();
         if facts_only && filter.is_empty() {
             return Err("`--facts` names a case or an adapter".into());
         }
         if facts_only && build {
             return Err("`--facts` spends no turn, so it cannot `--build`".into());
         }
-        if rebuild.is_some() && filter.is_empty() {
-            return Err("`--rebuild` names a case or an adapter".into());
+        if again.is_some() && filter.is_empty() {
+            return Err("`--rebuild` and `--resume` name a case or an adapter".into());
         }
         if oracle.is_some() {
             if filter.is_empty() {
@@ -168,7 +230,7 @@ impl Args {
             if facts_only || build {
                 return Err(
                     "`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
-                            `--build`, or `--rebuild`"
+                            `--build`, `--rebuild`, or `--resume`"
                         .into(),
                 );
             }
@@ -176,12 +238,15 @@ impl Args {
                 return Err("`--oracle` reads an `omnia` build; `--target` names another".into());
             }
         } else if target.is_some() && !build {
-            return Err("`--target` chooses what `--build` or `--rebuild` builds through".into());
+            return Err(
+                "`--target` chooses what `--build`, `--rebuild`, or `--resume` builds through"
+                    .into(),
+            );
         }
         Ok(Self {
             filter,
             facts_only,
-            rebuild,
+            again,
             oracle,
             target: build.then(|| target.unwrap_or_default()),
         })
@@ -198,7 +263,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let Args {
         filter,
         facts_only,
-        rebuild,
+        again,
         oracle,
         target,
     } = Args::parse(env::args().skip(1))?;
@@ -226,15 +291,14 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
 
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
     let mut settings = Settings::from_env(root, &adapters, target)?;
-    settings.rebuild = rebuild;
+    settings.again = again;
 
-    if let Some(card) = settings.rebuild.clone() {
+    if let Some(again) = settings.again.clone() {
         let started = now();
         let card_name = started.replace(':', "-");
         let mut reports = Vec::with_capacity(cases.len());
         for case in &cases {
-            eprintln!("eval: case `{}` rebuilt from `{card}`", case.name);
-            let run = rebuilt(&eval_dir, &card, &card_name, case, &settings)?;
+            let run = again.run(&eval_dir, &card_name, case, &settings)?;
             eprintln!("eval: `{}` {}", case.name, run.summary());
             let attempt = Attempt {
                 grade: grade(&case.expected, &run),
@@ -370,8 +434,8 @@ struct Settings {
     // the backend's budget variables the caller set; the runner inherits
     // them, the card names them
     knobs: Vec<(String, String)>,
-    // the card whose committed plans this invocation builds again
-    rebuild: Option<String>,
+    // the card whose committed plans this invocation builds again, and how
+    again: Option<Again>,
 }
 
 impl Settings {
@@ -443,7 +507,7 @@ impl Settings {
             model: env::var(model).unwrap_or_else(|_| default.to_owned()),
             rust_log: env::var("RUST_LOG").ok(),
             knobs,
-            rebuild: None,
+            again: None,
         })
     }
 
@@ -915,6 +979,8 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
 // the engine creates sits at `TARGET_REPO` whichever target the run names.
 const TARGET_NAME: &str = "target";
 const TARGET_REPO: &str = ".emery/vcs/repos/target";
+// The same repository beneath `.emery`, for a copy of that directory alone.
+const TARGET_REPO_IN_EMERY: &str = "vcs/repos/target";
 
 // The `[target]` table of a staged project: the target's component staged
 // in the store, under the one name. Both targets scaffold a whole tree, so
@@ -2011,6 +2077,7 @@ fn build(
         history: history(project, revision),
         tail: tail.join("\n"),
         fidelity: None,
+        rewound: None,
     };
     // the host's pass is read beside the build, never in its place: a
     // toolchain the host lacks leaves the cells empty and the card whole
@@ -2039,7 +2106,97 @@ fn build(
 fn rebuilt(
     eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
 ) -> io::Result<Run> {
-    const TAG: &str = "run-1";
+    let Restaged {
+        project,
+        revision,
+        mut run,
+    } = restaged(eval_dir, card, card_name, case, settings, false)?;
+    eprintln!("eval: `{}` rebuilding revision `{revision}` at {}", case.name, settings.build_rung);
+    run.build = Some(build(&project, settings, case, RUN_1, &revision, run.spec.as_ref())?);
+    Ok(run)
+}
+
+// Builds the plan `run-1` of `case` committed under `card` on from `wave`.
+// The staged project is copied as `rebuilt` copies it, with the repository
+// the earlier build created, and the label `emery/<revision>` in it is moved
+// to the last commit of wave `wave - 1`, a merge of that wave or its seal,
+// so the engine resumes there: the slices the chain names are not built
+// again, the plan's other slices are built in waves over that tree, and the
+// first slice this invocation's model builds is one of `wave`'s. The run
+// records the card, the wave, and the commit resumed from.
+fn resumed(
+    eval_dir: &Path, card: &str, wave: usize, card_name: &str, case: &Case, settings: &Settings,
+) -> io::Result<Run> {
+    let Restaged {
+        project,
+        revision,
+        mut run,
+    } = restaged(eval_dir, card, card_name, case, settings, true)?;
+    let repository = project.join(TARGET_REPO);
+    let label = format!("emery/{revision}");
+    let chain = log(&repository, &format!("refs/heads/{label}"));
+    if chain.is_empty() {
+        return Err(io::Error::other(format!(
+            "`{RUN_1}` of `{}` left no `{label}` in `{TARGET_REPO}` to resume from",
+            case.name
+        )));
+    }
+    let before = wave - 1;
+    let at = chain
+        .iter()
+        .find(|landed| landed.wave == Some(before) || landed.sealed() == Some(before))
+        .ok_or_else(|| {
+            io::Error::other(format!(
+                "`{RUN_1}` of `{}` merged and sealed nothing in wave {before}, so there is no \
+                 commit to resume wave {wave} from",
+                case.name
+            ))
+        })?;
+    git(&repository, &["branch", "-f", &label, &at.commit])?;
+    let slices = chain
+        .iter()
+        .skip_while(|landed| landed.commit != at.commit)
+        .filter_map(|landed| landed.slice.clone())
+        .collect();
+    eprintln!(
+        "eval: `{}` resuming revision `{revision}` from `{}` ({}) at {}",
+        case.name,
+        short(&at.commit),
+        at.subject,
+        settings.build_rung
+    );
+    let mut built = build(&project, settings, case, RUN_1, &revision, run.spec.as_ref())?;
+    built.rewound = Some(Rewound {
+        card: card.to_owned(),
+        wave,
+        commit: at.commit.clone(),
+        subject: at.subject.clone(),
+        slices,
+    });
+    run.build = Some(built);
+    Ok(run)
+}
+
+const RUN_1: &str = "run-1";
+
+// A staged project copied under a new card for a build again, with the
+// revision its `run-1` committed and that run as the specify left it.
+struct Restaged {
+    project: PathBuf,
+    revision: String,
+    run: Run,
+}
+
+// Copies the staged project of `run-1` of `case` under `card` to the new card:
+// the sources, `.emery/storage`, and the run's files less the earlier build's,
+// and the repository the earlier build created where `with_repository`, never
+// the engine's clones or working copies. Its `emery.toml` gains a `[target]`
+// table for this invocation's target, and the run is read back from the files
+// the earlier run kept, exactly as `run` read them.
+fn restaged(
+    eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
+    with_repository: bool,
+) -> io::Result<Restaged> {
     let source = eval_dir.join(card).join(&case.name);
     let project = eval_dir.join(card_name).join(&case.name);
     if !source.is_dir() {
@@ -2048,18 +2205,19 @@ fn rebuilt(
             format!("no staged project at `{}`", source.display()),
         ));
     }
-    let stdout = fs::read_to_string(source.join(format!("{TAG}.stdout")))?;
-    let stderr = fs::read_to_string(source.join(format!("{TAG}.stderr")))?;
+    let stdout = fs::read_to_string(source.join(format!("{RUN_1}.stdout")))?;
+    let stderr = fs::read_to_string(source.join(format!("{RUN_1}.stderr")))?;
     let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
     let revision = envelope
         .as_ref()
         .and_then(|out| out["revision"].as_str())
         .ok_or_else(|| {
-            io::Error::other(format!("`{TAG}` of `{}` committed no revision", case.name))
+            io::Error::other(format!("`{RUN_1}` of `{}` committed no revision", case.name))
         })?
         .to_owned();
 
-    // the project copied, the engine's repositories and the earlier build's files left behind
+    // the project copied, the engine's working copies and the earlier
+    // build's files left behind
     if project.exists() {
         fs::remove_dir_all(&project)?;
     }
@@ -2075,6 +2233,12 @@ fn rebuilt(
         if entry.file_type()?.is_dir() {
             if name == ".emery" {
                 copy_tree_whole(&entry.path().join("storage"), &target.join("storage"))?;
+                if with_repository {
+                    copy_tree_whole(
+                        &entry.path().join(TARGET_REPO_IN_EMERY),
+                        &target.join(TARGET_REPO_IN_EMERY),
+                    )?;
+                }
             } else {
                 copy_tree_whole(&entry.path(), &target)?;
             }
@@ -2087,14 +2251,14 @@ fn rebuilt(
     // its component staged
     let config = fs::read_to_string(source.join("emery.toml"))?;
     let (sources, _) = config.split_once("[target]").ok_or_else(|| {
-        io::Error::other(format!("`{TAG}` of `{}` was staged with no `[target]`", case.name))
+        io::Error::other(format!("`{RUN_1}` of `{}` was staged with no `[target]`", case.name))
     })?;
     let target =
-        settings.target.ok_or_else(|| io::Error::other("a rebuild builds through a target"))?;
+        settings.target.ok_or_else(|| io::Error::other("a build again builds through a target"))?;
     let table = target_table(settings, target)?;
     fs::write(project.join("emery.toml"), format!("{sources}{table}"))?;
 
-    // the run as the earlier specify left it, then this invocation's build
+    // the run as the earlier specify left it
     let rung =
         settings.ladder.first().copied().ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
     let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
@@ -2120,13 +2284,14 @@ fn rebuilt(
     for (artifact, slot) in
         [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
     {
-        let text = fs::read_to_string(source.join(format!("{TAG}.{artifact}.json")))?;
+        let text = fs::read_to_string(source.join(format!("{RUN_1}.{artifact}.json")))?;
         *slot = Some(serde_json::from_str(&text)?);
     }
-    eprintln!("eval: `{}` rebuilding revision `{revision}` at {}", case.name, settings.build_rung);
-    run.build = Some(build(&project, settings, case, TAG, &revision, run.spec.as_ref())?);
-
-    Ok(run)
+    Ok(Restaged {
+        project,
+        revision,
+        run,
+    })
 }
 
 // The reference comparison alone over the tree `run-1` of the case staged at
@@ -2237,6 +2402,20 @@ struct Build {
     // the host's own pass over the tree the chain stands at; none where the
     // build left no tree
     fidelity: Option<Fidelity>,
+    // the chain this build resumed, for a `--resume`; none for a build from
+    // the root
+    rewound: Option<Rewound>,
+}
+
+// Where a `--resume` build started: the card whose chain it resumed, the
+// wave it resumed at, the commit the label was moved to, and the slices
+// that chain names, which the engine resumed rather than built.
+struct Rewound {
+    card: String,
+    wave: usize,
+    commit: String,
+    subject: String,
+    slices: Vec<String>,
 }
 
 // The failure envelope: its code and message.
@@ -2378,16 +2557,18 @@ impl Build {
             history: history(project, revision),
             tail: tail.join("\n"),
             fidelity: None,
+            rewound: None,
         })
     }
 
     fn summary(&self, slices: usize) -> String {
         match self.exit {
             Some(0) => format!(
-                "ok in {}s, {}/{slices} merged in {} waves",
+                "ok in {}s, {}/{slices} merged in {} waves{}",
                 self.wall.as_secs(),
                 self.integrated().len(),
-                self.waves()
+                self.waves(),
+                self.resumption()
             ),
             Some(code) => {
                 let failed = self.failure.as_ref().map_or(String::new(), |failure| {
@@ -2395,9 +2576,9 @@ impl Build {
                         self.wave_failed().map_or(String::new(), |k| format!(" in wave {k}"));
                     format!(" `{}`{wave}", failure.code)
                 });
-                format!("exit {code}{failed} after {}s", self.wall.as_secs())
+                format!("exit {code}{failed} after {}s{}", self.wall.as_secs(), self.resumption())
             }
-            None => format!("killed after {}s", self.wall.as_secs()),
+            None => format!("killed after {}s{}", self.wall.as_secs(), self.resumption()),
         }
     }
 
@@ -2407,6 +2588,24 @@ impl Build {
 
     fn code(&self) -> Option<&str> {
         self.failure.as_ref().map(|failure| failure.code.as_str())
+    }
+
+    // The slices this build built: the merged ones less those the resumed
+    // chain already named.
+    fn built(&self) -> Vec<Integrated> {
+        let resumed = self.rewound.as_ref().map(|rewound| rewound.slices.as_slice());
+        self.integrated()
+            .into_iter()
+            .filter(|slice| !resumed.is_some_and(|resumed| resumed.contains(&slice.id)))
+            .collect()
+    }
+
+    // The resumed and built counts, led by `, `, for a build that resumed;
+    // empty for one from the root.
+    fn resumption(&self) -> String {
+        self.rewound.as_ref().map_or_else(String::new, |rewound| {
+            format!(", {} resumed, {} built", rewound.slices.len(), self.built().len())
+        })
     }
 
     // The slices the build merged, in build order.
@@ -4852,11 +5051,33 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
     for (knob, value) in &settings.knobs {
         let _ = write!(budget, " · `{knob}={value}`");
     }
-    let rebuilt = settings.rebuild.as_deref().map_or_else(String::new, |card| {
-        format!(
+    let rebuilt = settings.again.as_ref().map_or_else(String::new, |again| match again {
+        Again::Rebuild { card } => format!(
             " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
              specify columns and completions repeat that card's"
-        )
+        ),
+        Again::Resume { card, wave } => {
+            let commits: Vec<String> = reports
+                .iter()
+                .filter_map(|report| {
+                    let rewound =
+                        report.runs.first()?.first()?.run.build.as_ref()?.rewound.as_ref()?;
+                    Some(format!(
+                        "`{}` from `{}` ({})",
+                        report.case.name,
+                        short(&rewound.commit),
+                        rewound.subject
+                    ))
+                })
+                .collect();
+            format!(
+                " · RESUME: each plan is `run-1`'s of `target/eval/{card}/`, its label moved to \
+                 the last commit of wave {} and built on from wave {wave} ({}); the specify \
+                 columns and completions repeat that card's",
+                wave - 1,
+                commits.join(", ")
+            )
+        }
     });
     let (timeout, inactivity) = settings.backend.rung();
     let mut card = format!(
@@ -5357,7 +5578,7 @@ fn build_findings(
 }
 
 // How the build ended: where the label stands, or the failure's code, exit,
-// and first line.
+// and first line; then, for a build that resumed, where it resumed from.
 fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) -> fmt::Result {
     let exit = build.exit.map_or_else(|| "killed".to_owned(), |code| format!("exit {code}"));
     match (&build.failure, build.exit) {
@@ -5365,10 +5586,14 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
             let envelope = build.envelope.as_ref();
             let label = envelope.and_then(|out| out["label"].as_str()).unwrap_or("");
             let head = envelope.and_then(|out| out["head"].as_str()).unwrap_or("");
-            let resumed = envelope
-                .and_then(|out| out["resumed"].as_array())
-                .filter(|resumed| !resumed.is_empty())
-                .map_or_else(String::new, |resumed| format!(", {} resumed", resumed.len()));
+            let resumed = if build.rewound.is_some() {
+                build.resumption()
+            } else {
+                envelope
+                    .and_then(|out| out["resumed"].as_array())
+                    .filter(|resumed| !resumed.is_empty())
+                    .map_or_else(String::new, |resumed| format!(", {} resumed", resumed.len()))
+            };
             writeln!(
                 f,
                 "\nBuild: {merged}/{} slices merged in {} waves in {}s{resumed}; `{label}` at `{}`",
@@ -5376,25 +5601,45 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
                 build.waves(),
                 build.wall.as_secs(),
                 short(head),
-            )
+            )?;
         }
         (Some(failure), _) => {
             let first = failure.message.lines().next().unwrap_or("");
             writeln!(
                 f,
-                "\nBuild failed `{}` ({exit}) after {}s, {merged}/{} slices merged: {first}",
+                "\nBuild failed `{}` ({exit}) after {}s, {merged}/{} slices merged{}: {first}",
                 failure.code,
                 build.wall.as_secs(),
                 run.slices(),
-            )
+                build.resumption(),
+            )?;
         }
         (None, _) => writeln!(
             f,
-            "\nBuild failed ({exit}) after {}s with no envelope:\n\n```\n{}\n```",
+            "\nBuild failed ({exit}) after {}s with no envelope{}:\n\n```\n{}\n```",
             build.wall.as_secs(),
+            build.resumption(),
             build.tail
-        ),
+        )?,
     }
+    if let Some(rewound) = &build.rewound {
+        let slices = if rewound.slices.is_empty() {
+            "no slice".to_owned()
+        } else {
+            rewound.slices.join(", ")
+        };
+        writeln!(
+            f,
+            "\nResumed from `{}` at wave {}: the label moved to `{}` ({}), the chain naming \
+             {slices}; built this run: {}",
+            rewound.card,
+            rewound.wave,
+            short(&rewound.commit),
+            rewound.subject,
+            build.built().iter().map(|slice| slice.id.as_str()).collect::<Vec<_>>().join(", ")
+        )?;
+    }
+    Ok(())
 }
 
 // A commit as the card spells it: its first eight characters.
@@ -5870,6 +6115,7 @@ mod tests {
             history,
             tail: String::new(),
             fidelity: None,
+            rewound: None,
         }
     }
 
@@ -5974,6 +6220,98 @@ mod tests {
             ["--oracle", "card", "--target", "omnia", "train"].map(String::from).into_iter(),
         );
         assert!(omnia.is_ok(), "the oracle reads an omnia build");
+    }
+
+    #[test]
+    fn resume_args() {
+        let args = Args::parse(
+            ["--resume", "card", "--at", "3", "--target", "omnia", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            args.again,
+            Some(Again::Resume {
+                card: "card".to_owned(),
+                wave: 3
+            })
+        );
+        assert_eq!(args.target, Some(Target::Omnia), "a resume builds");
+        let rebuild =
+            Args::parse(["--rebuild", "card", "express-orders"].map(String::from).into_iter())
+                .unwrap();
+        assert_eq!(
+            rebuild.again,
+            Some(Again::Rebuild {
+                card: "card".to_owned()
+            })
+        );
+        for argv in [
+            &["--resume", "card", "express-orders"][..],
+            &["--resume", "card", "--at", "1", "express-orders"][..],
+            &["--resume", "card", "--at", "two", "express-orders"][..],
+            &["--resume", "card", "--at", "2"][..],
+            &["--rebuild", "card", "--at", "2", "express-orders"][..],
+            &["--at", "2", "express-orders"][..],
+            &["--rebuild", "card", "--resume", "card", "--at", "2", "express-orders"][..],
+            &["--resume", "card", "--at", "2", "--facts", "express-orders"][..],
+        ] {
+            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
+        }
+    }
+
+    // A resumed build's chain holds the slices it resumed beside the ones it
+    // built; the counts tell them apart.
+    #[test]
+    fn resumed_build_counts() {
+        let stderr = timed("build-SLICE-004", "ok", 100_000) + &timed("verify", "ok", 20_000);
+        let history = vec![
+            Landed {
+                commit: "444444444444".to_owned(),
+                subject: "SLICE-004 customers".to_owned(),
+                revision: Some("rev".to_owned()),
+                slice: Some("SLICE-004".to_owned()),
+                wave: Some(3),
+                requirements: vec!["REQ-004".to_owned()],
+                covered: vec!["REQ-004".to_owned()],
+                files: vec!["crates/customers/src/lib.rs".to_owned()],
+            },
+            Landed {
+                commit: "333333333333".to_owned(),
+                subject: "SLICE-003 health".to_owned(),
+                revision: Some("rev".to_owned()),
+                slice: Some("SLICE-003".to_owned()),
+                wave: Some(2),
+                requirements: vec!["REQ-003".to_owned()],
+                covered: vec!["REQ-003".to_owned()],
+                files: vec!["crates/health/src/lib.rs".to_owned()],
+            },
+            Landed {
+                commit: "111111111111".to_owned(),
+                subject: "Wave 1 verified".to_owned(),
+                revision: Some("rev".to_owned()),
+                slice: None,
+                wave: None,
+                requirements: Vec::new(),
+                covered: Vec::new(),
+                files: vec!["Cargo.lock".to_owned()],
+            },
+        ];
+        let mut build = build_from(1, "", &stderr, history);
+        assert_eq!(build.resumption(), "", "a build from the root resumed nothing");
+        build.rewound = Some(Rewound {
+            card: "card".to_owned(),
+            wave: 3,
+            commit: "333333333333".to_owned(),
+            subject: "SLICE-003 health".to_owned(),
+            slices: vec!["SLICE-003".to_owned()],
+        });
+        assert_eq!(build.integrated().len(), 2);
+        let this_run = build.built();
+        assert_eq!(this_run.len(), 1);
+        assert_eq!(this_run[0].id, "SLICE-004");
+        assert_eq!(build.resumption(), ", 1 resumed, 1 built");
     }
 
     #[test]

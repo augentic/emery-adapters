@@ -6,7 +6,7 @@ Operator-invoked, never CI. The component suites in [tests/source.rs](../tests/s
 
 ## Running
 
-The prerequisites are the live examples' ([examples/README.md](../examples/README.md)): a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; an `omnia` build card's second arm needs `emery-dev` and a local Ollama server besides ([The small-model arm](#the-small-model-arm)). Build both binaries, then run from the repository root; every path the runner resolves is relative to it.
+The prerequisites are the live examples' ([examples/README.md](../examples/README.md)): a sibling [emery](https://github.com/augentic/emery) checkout, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; an `omnia` build card's second arm needs `emery-dev` and the pod's vLLM server or a local Ollama server besides ([The small-model arm](#the-small-model-arm)). Build both binaries, then run from the repository root; every path the runner resolves is relative to it.
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release
@@ -19,6 +19,7 @@ cargo run -p evals -- --facts fastapi-routers  # survey facts alone, no model tu
 cargo run -p evals -- --build express-orders   # specify, then build the plan
 cargo run -p evals -- --build --target omnia express-orders  # the same, through omnia
 cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z express-orders  # build that card's plan again
+cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at 3 --target omnia express-orders  # build on from wave 3 of that card's chain
 cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train  # the reference oracle over that card's omnia build, no turn spent
 ```
 
@@ -26,7 +27,7 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai --bin emery-dev` in the engine checkout), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, and `GENAI_MAX_CANDIDATES` as the knobs the card names; the backend is named in the card's header |
+| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai --bin emery-dev` in the engine checkout), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, `GENAI_MAX_CANDIDATES`, and `GENAI_MAX_REPEATS` as the knobs the card names; the backend is named in the card's header |
 | `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | The target `--build` builds through, the one `--target` names alone |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
@@ -34,7 +35,7 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Budget rungs, each `CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`, which a specify climbs; under `emery-dev` the pair is `GENAI_TIMEOUT_SECS/GENAI_SHELL_TIMEOUT_SECS`, the second figure the cap on one shell command, since genai reads silence no other way |
 | `EVAL_BUILD_RUNG` | `1200/240` | The one rung every `emery build` runs at, in the same shape; a slice's turn writes a tree and repairs its findings, and the engine resumes a build but climbs nothing, so it starts a rung up. Under `emery-dev` its second figure bounds the longest `cargo` step of a build turn, so a cold compile that outruns it is raised here, `1200/1200`, and recorded by the header |
 | `CURSOR_MODEL` | `auto` | Recorded in the card. Pin it before comparing two: `auto` differs run to run. Under `emery-dev` the model is `GENAI_MODEL` (`gpt-5.5` unless set), recorded the same way |
-| `CURSOR_MAX_TOOL_CALLS` | unset | The backend's tool calls a turn may make (128 unless set), the budget a build turn's `write_files` calls spend; the runner inherits it. Named in the card's header when set, as `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, and `GENAI_MAX_CANDIDATES` are under `emery-dev` |
+| `CURSOR_MAX_TOOL_CALLS` | unset | The backend's tool calls a turn may make (128 unless set), the budget a build turn's `write_files` calls spend; the runner inherits it. Named in the card's header when set, as `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, `GENAI_MAX_CANDIDATES`, and `GENAI_MAX_REPEATS` are under `emery-dev` |
 | `RUST_LOG` | set by the runner | The SDK and every adapter the case runs at `trace`, either backend's completion and tool-call lines and the tool-call arguments beside them (`omnia_cursor::tools=trace`, `omnia_genai=debug,omnia_genai::tools=trace`); the card reads the trace lines. A caller's value is kept |
 
 The defaults suit a sibling release build. Set the paths when `CARGO_TARGET_DIR` puts the artifacts elsewhere, or to point at an experiment's build.
@@ -79,7 +80,7 @@ cargo build -p emery-omnia --target wasm32-wasip2 --release
 EVAL_RUNS=1 cargo run -p evals -- --build --target omnia express-orders
 ```
 
-An `omnia` build card is run twice, the same command under `emery-dev` and `qwen3-coder:30b` after it ([The small-model arm](#the-small-model-arm)), so every change the small model reads is measured under it.
+An `omnia` build card is run twice, the same command under `emery-dev` and `openai::Qwen/Qwen3-Coder-Next-FP8` on a RunPod H200 after it ([The small-model arm](#the-small-model-arm)), so every change the small model reads is measured under it.
 
 Both targets scaffold a whole tree at the init, so the repository the engine creates is the base the eval builds over, with nothing of a project beside it. A build turn runs the toolchain as well as composing, and repairs the findings the adapter's gates answer its report with, so every build runs at `EVAL_BUILD_RUNG` rather than the specify's rung: `CURSOR_TIMEOUT_SECS` is process-wide and caps every turn alike, and the engine resumes a failed build from its label but climbs no ladder. A slice that outlasts the build rung is sized wrongly before it is budgeted wrongly — the engine floors a stem past twelve requirements at its sub-stems, and a plan whose slices still run long is the slicing prompt's to cut finer.
 
@@ -102,28 +103,79 @@ The build findings carry one line, `reference oracle 18/22; crates 3 vs 2, Rust 
 
 `--rebuild <card> [--target <name>] [case|adapter..]` builds the plan `run-1` of each named case committed under an earlier card again, under this invocation's `EMERY_BIN`, target, `CURSOR_MODEL`, and `EVAL_JOBS`, so one revision is built under several arms — a plan is target-neutral, so the arms may build it through different targets — and the plan's own variance is out of the comparison. The staged project is copied whole under the new card, less the engine's repositories and working copies and the earlier build's files; the `[target]` table of `emery.toml` is rewritten for this invocation's target, so the engine creates a repository holding no label afresh and builds every slice over its root; and the run's specify is read back from the files the earlier run kept, so the card's specify columns and completions repeat the source card's, which its header says. The card the rebuild stands on must still be under `target/eval/`.
 
+`--resume <card> --at <wave> [--target <name>] [case|adapter..]` builds the same plan on from one wave of the chain the earlier card's build left, so one slice's turn is measured over the tree the earlier arm built up to it rather than over a tree of this arm's own. The staged project is copied as `--rebuild` copies it, with the repository the earlier build created (`.emery/vcs/repos/target`) and never its integration copy or worktrees, and the label `emery/<revision>` in it is moved to the last commit of wave `<wave> - 1` — a slice merged in it or its `Wave <k> verified` seal — so the engine's own resume does the rest: the slices the chain still names are `resumed` and not built again, the plan's other slices are built in waves over that tree, a `start` slice among them building as nothing and its wave verified, and the first slice this invocation's model builds is one of wave `<wave>`'s. The build runs on to the end or its failure, so every later slice gets an attempt over the earlier arm's tree too. `--at` names a wave past the first; a resume at wave 1 is a `--rebuild`. The card's header names the source card, the wave, and the commit the label was moved to, and the build line and the build notes count the slices `resumed` and the ones `built` this run apart; the specify columns repeat the source card's, as under `--rebuild`.
+
 ### The small-model arm
 
-Every `omnia` build card is one command run twice over one component: under the release `emery` and `composer-2.5`, then under `emery-dev` and `qwen3-coder:30b` over a local Ollama server ([the protocol](cards/README.md#protocol), "An omnia card is a pair"). Whoever runs the round runs both, an agent asked to run the eval included: it starts the server where none answers, runs the small-model arm after the large-model one, and stops the server before it reads the card. The arm needs three things beyond the release build's:
-
-- `emery-dev`, the same runtime over [omnia-genai](https://github.com/augentic/omnia-backends/tree/main/crates/genai), built in the engine checkout under the `genai` feature; the runner reads the backend from the binary's name.
-- Ollama with the model pulled: `qwen3-coder:30b`, 19 GB on disk and 25 GB resident with every layer on the GPU of a 36 GB Mac, so nothing else heavy runs beside the arm.
-- The server running with its context length set, since Ollama's default silently truncates a brief that inlines a slice's files and the design, in a shell of its own kept running for the arm.
+Every `omnia` build card is one command run twice over one component: under the release `emery` and `composer-2.5`, then under `emery-dev` and a small open-weights model ([the protocol](cards/README.md#protocol), "An omnia card is a pair"). The model is `Qwen/Qwen3-Coder-Next-FP8` (79.7B total / 3B active, fine-grained 128×128 block-scaled FP8 safetensors, 74.9 GiB) served by vLLM on a RunPod pod with one NVIDIA H200 and reached through an SSH tunnel as `GENAI_MODEL=openai::Qwen/Qwen3-Coder-Next-FP8`; the local `qwen3-coder:30b` under Ollama on the Mac is the fallback where no pod is up. Whoever runs the round runs both arms, an agent asked to run the eval included: it brings the server up where none answers, runs the small-model arm after the large-model one, and closes the tunnel or stops the local server before it reads the card. The arm needs `emery-dev`, the same runtime over [omnia-genai](https://github.com/augentic/omnia-backends/tree/main/crates/genai) built in the engine checkout under the `genai` feature — the runner reads the backend from the binary's name — and a server with its context length set (`--max-model-len 262144` under vLLM, `OLLAMA_CONTEXT_LENGTH=131072` under the local fallback).
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release --features genai --bin emery-dev
+```
+
+**On the pod.** `runpodctl` 3.0.1 with the account's API key in `~/.runpod/config.toml`, and the key pair it generated at `~/.runpod/ssh/runpodctl-ssh-key`. The pod is `kfon5fxhta2bcr` (`qwen3-coder-next`, `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`, 24 vCPU, 251 GB, one H200 of 143 GB, 30 GB of container disk, and the 120 GB network volume `cxsks2la1u` mounted at `/workspace`, $5.29 an hour while it runs); its SSH port and, on Community Cloud, its address change when it resets, so read them again before each run.
+
+```bash
+runpodctl pod list                                  # the pod and whether it runs
+runpodctl ssh info kfon5fxhta2bcr                   # the ssh line: root@<ip> -p <port> with the key
+ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<ip> 'curl -s http://127.0.0.1:11434/v1/models'   # the model loaded, max_model_len 262144
+```
+
+The server runs through `/workspace/start-vllm.sh`, its log at `/workspace/vllm.log`: the script restores `/opt/vllm-venv` (vLLM 0.32.0 with `nvidia-cuda-nvcc==13.0.88` for Hopper `sm_90a` DeepGEMM FP8 kernels) from `/workspace/vllm-venv.tar.zst` when a container reset cleared the root disk, stages `/workspace/models/Qwen3-Coder-Next-FP8` into `/dev/shm/Qwen3-Coder-Next-FP8` when RAM was cleared, sets `VLLM_CACHE_ROOT=/workspace/.cache/vllm` so the warmed `torch.compile` and 1,253 DeepGEMM cubins survive resets, and runs `vllm serve /dev/shm/Qwen3-Coder-Next-FP8 --served-model-name Qwen/Qwen3-Coder-Next-FP8 --host 0.0.0.0 --port 11434 --max-model-len 262144 --gpu-memory-utilization 0.92 --enable-prefix-caching --enable-auto-tool-choice --tool-call-parser qwen3_coder --tool-strict-level function`. (`--tool-strict-level function` puts `xgrammar` into `OrFormat([tools_structural_tag, output_format])` so each round constrains tool calls to `<tool_call>\n<function=…>` and constrains any non-tool reply to the request's `response_format` JSON schema.)
+
+```bash
+ssh -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<ip> 'nohup /workspace/start-vllm.sh > /workspace/vllm.log 2>&1 < /dev/null &'
+```
+
+The run owns a tunnel of its own, `127.0.0.1:11435` to the pod's `11434`, kept in a shell of its own for the arm; never the pod's proxy URL (`https://<pod>-11434.proxy.runpod.net`), whose edge cuts a request at 100 s while a completion's round is one request. A dropped tunnel is one `BadGateway` retry per slice and then the run's failure, so a long run wraps the tunnel in a reconnect loop that reads the pod's address and port from `runpodctl ssh info` again on each turn of the loop, since both change when the pod resets, and runs the loop under `caffeinate -dims` so the Mac never sleeps under it.
+
+```bash
+caffeinate -dims zsh -c 'while true; do
+  ssh -N -L 11435:127.0.0.1:11434 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o ExitOnForwardFailure=yes \
+    -i ~/.runpod/ssh/runpodctl-ssh-key -p <port> root@<ip>
+  rc=$?; echo "$(date -u +%H:%M:%SZ) tunnel closed (exit $rc); reopening in 10 s"; sleep 10
+done' &
+curl -s http://127.0.0.1:11435/v1/models      # the server answers through the tunnel with Qwen/Qwen3-Coder-Next-FP8
+
+EMERY_BIN=../emery/target/release/emery-dev OPENAI_API_KEY=local \
+  GENAI_MODEL=openai::Qwen/Qwen3-Coder-Next-FP8 GENAI_ENDPOINT=http://127.0.0.1:11435/v1/ \
+  EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 GENAI_MAX_ROUNDS=64 GENAI_MAX_CANDIDATES=3 GENAI_MAX_REPEATS=5 \
+  cargo run -p evals -- --rebuild 2026-10-19T04-08-24Z --target omnia express-orders
+kill %1                                       # the tunnel; the pod and its server stay up, and are the operator's to stop
+```
+
+**The arm as probes.** Where a round changes what one slice's turn reads rather than the plan, the arm is run as probes instead of one `--rebuild`: one `--resume` per wave of the large-model arm's chain, each over the tree the large model built up to that wave, so every slice is measured at least once over a tree the small model did not have to build first and a probe that builds on yields whole-build evidence too. Round H's five probes are waves 2 through 6 of `2026-10-21T06-28-53Z` (`health`, `customers`, `orders-reading`, `orders-placement`, `orders-mutations`), run one at a time under the same knobs; a control under the earlier round's artifacts (`EMERY_BIN` and `EMERY_OMNIA_WASM` pointed at copies kept outside `target/`) runs first on the same command, so what the server or the knobs alone move is read before the round's items are.
+
+```bash
+for k in 2 3 4 5 6; do
+  EMERY_BIN=../emery/target/release/emery-dev OPENAI_API_KEY=local \
+    GENAI_MODEL=openai::Qwen/Qwen3-Coder-Next-FP8 GENAI_ENDPOINT=http://127.0.0.1:11435/v1/ \
+    EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 GENAI_MAX_ROUNDS=64 GENAI_MAX_CANDIDATES=3 GENAI_MAX_REPEATS=5 \
+    cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at $k --target omnia express-orders
+done
+EMERY_BIN=/tmp/roundG/emery-dev EMERY_OMNIA_WASM=/tmp/roundG/emery_omnia.wasm OPENAI_API_KEY=local \
+  GENAI_MODEL=openai::Qwen/Qwen3-Coder-Next-FP8 GENAI_ENDPOINT=http://127.0.0.1:11435/v1/ \
+  EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 GENAI_MAX_ROUNDS=64 GENAI_MAX_CANDIDATES=3 GENAI_MAX_REPEATS=5 \
+  cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at 2 --target omnia express-orders   # the control
+```
+
+The server's own log says what the backend's token counts cannot: `grep 'Engine 000:' /workspace/vllm.log` gives the prompt throughput, generation throughput, GPU KV cache usage, and prefix cache hit rate. On the pod, vLLM holds 74.9 GiB of weights and 50.2 GiB of hybrid attention/Mamba (`align`) KV cache (`2,165,911` tokens, `8.26×` concurrency at `262,144` max context), evaluates cold prompts at ~18,200 tokens a second, and generates a single stream at 177 tokens a second (against Ollama's 1,226–1,508 prefill and 42.3–47.0 decode on `05-21-29Z` and `07-04-07Z`).
+
+**On the Mac, the fallback.** `qwen3-coder:30b`, 19 GB on disk and 25 GB resident with every layer on the GPU of a 36 GB Mac, so nothing else heavy runs beside the arm; the server in a shell of its own, stopped after the arm since the model stays resident until it is.
+
+```bash
 ollama pull qwen3-coder:30b
 OLLAMA_CONTEXT_LENGTH=131072 OLLAMA_FLASH_ATTENTION=1 OLLAMA_KV_CACHE_TYPE=q8_0 \
   OLLAMA_KEEP_ALIVE=-1 OLLAMA_NUM_PARALLEL=1 ollama serve
 curl -s http://127.0.0.1:11434/api/tags    # the server answers with the models it serves
 
 EMERY_BIN=../emery/target/release/emery-dev GENAI_MODEL=qwen3-coder:30b GENAI_ENDPOINT=http://127.0.0.1:11434/ \
-  EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 \
+  EVAL_RUNS=1 EVAL_JOBS=1 EVAL_BUILD_RUNG=7200/600 GENAI_MAX_ROUNDS=64 GENAI_MAX_CANDIDATES=3 \
   cargo run -p evals -- --rebuild 2026-10-19T04-08-24Z --target omnia express-orders
 pkill -f 'ollama serve'                    # the model stays resident until the server stops
 ```
 
-The knobs are the small-model band's, and move only where a round names the move and its header records it: `EVAL_JOBS=1`, since the server answers one completion at a time; `EVAL_BUILD_RUNG=7200/600`, the cap on one build turn, since a small model's turn runs toward its tool-call cap rather than converging early, over the cap on one shell command, the longest `cargo` step a turn may run, raised (`7200/1200`) where a card's turns die in the shell at it; `GENAI_MAX_TOOL_CALLS` and `GENAI_MAX_ROUNDS` (128 each) and `GENAI_MAX_CANDIDATES` (2) at the backend's defaults; at the server, `OLLAMA_KEEP_ALIVE=-1` keeps the model resident between turns and `OLLAMA_NUM_PARALLEL=1` gives the one completion the whole context. A bare `GENAI_MODEL` names an Ollama model at `GENAI_ENDPOINT`; `openai::<name>` with `OPENAI_API_KEY` names a vLLM or any OpenAI-compatible server. The card's header records the backend, the model, and every knob set, and `--facts` under `emery-dev` needs no server at all. The arm takes hours where the large-model arm takes under one; its card is read against the small-model band, C1 (`2026-10-19T22-47-32Z`) until a card passes it, and a difference between the two arms of one round is the model's alone, since the plan, the component, and the knobs are one.
+The knobs are the small-model band's, and move only where a round names the move and its header records it: `EVAL_JOBS=1`, since one slice runs at a time; `EVAL_BUILD_RUNG=7200/600`, the cap on one build turn over the cap on one shell command, the longest `cargo` step a turn may run, raised (`7200/1200`) where a card's turns die in the shell at it; `GENAI_MAX_TOOL_CALLS` at the backend's default (128), `GENAI_MAX_ROUNDS=64` (halved from 128 after Round G's `07-04-07Z` so a stuck turn fails fast into the engine's retry instead of spending 64 tail rounds at peak context), `GENAI_MAX_CANDIDATES=3`, one above the backend's default, since the correction round is where the small model did its best work and the second candidate is where it ran out on `2026-10-20T21-42-12Z` (Round G names the move), and `GENAI_MAX_REPEATS=5`, the backend's default written out so the header records it: the identical tool call failing that many times in a row ends the completion as `exhausted`, where Round G's turns spent their rounds on one refused write (Round H names it). A bare `GENAI_MODEL` names an Ollama model at `GENAI_ENDPOINT`; `openai::<name>` with `OPENAI_API_KEY` names a vLLM or any OpenAI-compatible server, where `omnia-genai` also sends the turn's JSON schema as `response_format`. The card's header records the backend, the model, and every knob set, and `--facts` under `emery-dev` needs no server at all. A card is read against the band of its model: under `Qwen3-Coder-Next` the latest card of the model (`2026-10-21T05-21-29Z` and `2026-10-21T07-04-07Z`) until one passes it; under the 30b, C1 (`2026-10-19T22-47-32Z`). A difference between the two arms of one round is the model's alone, since the plan, the component, and the knobs are one; a difference between two small-model cards of one model is the round's.
 
 ### Experiment arms
 
