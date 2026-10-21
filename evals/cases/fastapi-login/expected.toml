@@ -1,0 +1,118 @@
+# The login screen of fastapi/full-stack-fastapi-template at cb740b65 (MIT),
+# read as screen behaviour rather than as code: the `behaviour` adapter's
+# first case. The fixture is the template's `frontend/` trimmed to the eight
+# modules `ui-ir/login/behaviour.json` cites, byte-equal to the pinned
+# commit, beside that document and the repository's licence. The document is
+# ui-ir's (`augentic/ui-ir-experiment`, branch `experiment/behaviour`):
+# `code-to-behaviour` read the tree statically and `capture-to-behaviour`
+# recorded five Playwright runs against the running template — the guard,
+# links, validation, a failed and a successful sign-in — so twelve triggers,
+# one guard, and three validation rules carry `file#L` evidence and five of
+# them `observed` steps. The adapter cuts one seam per document, stem
+# `login` from its `screen`, and joins the document's `call` and `example`
+# claims without a model turn; every `requirement` and `criterion` is the
+# model's, marked `inferred`.
+#
+# A baseline, not a target: written from the document, the cited code, and
+# `--facts` before any graded run, so a later card reads where the
+# extraction stands. The theme menu, the footer links, and the logo are
+# shared components the login route renders; the document lists their
+# triggers as the screen's, so they are expected here.
+
+[[source]]
+name = "behaviour"
+adapter = "behaviour"
+fixture = "evals/cases/fastapi-login/fixture"
+stems = ["login"]
+
+# --- surfaces: one document, one screen ---
+
+[[source.surface]]
+entry = "ui-ir/login/behaviour.json"
+stem = "login"
+
+# --- requirements: the guard, the sign-in, its outcomes, the links, the chrome ---
+
+# the route's `beforeLoad`: `isLoggedIn()` throws a redirect to `/`;
+# recorded by `fastapi-login-guard`
+[[requirement]]
+stem = "login"
+anchor = "src/routes/login.tsx#L38-L41"
+gloss = "A visitor already signed in who opens the login page is taken to the home page"
+
+# the form's submit hands the validated email and password to the login
+# mutation, unless one is already pending
+[[requirement]]
+stem = "login"
+anchor = "src/routes/login.tsx#L65-L68"
+gloss = "Submitting the form signs in with the email and password, once at a time"
+
+# `LoginService.loginAccessToken` is `POST /api/v1/login/access-token`
+# (src/client/sdk.gen.ts#L28-L37); the token it answers is kept in local storage
+[[requirement]]
+stem = "login"
+anchor = "src/hooks/useAuth.ts#L41-L46"
+gloss = "Signing in exchanges the credentials for an access token and keeps the token"
+
+# recorded by `fastapi-login-success`: the page lands on `/`
+[[requirement]]
+stem = "login"
+anchor = "src/hooks/useAuth.ts#L50-L52"
+gloss = "A successful sign-in goes to the home page"
+
+# recorded by `fastapi-login-failure`
+[[requirement]]
+stem = "login"
+anchor = "src/hooks/useCustomToast.ts#L10-L14"
+gloss = "A failed sign-in shows an error toast titled \"Something went wrong!\""
+
+# recorded by `fastapi-login-links`, step `forgot-password`
+[[requirement]]
+stem = "login"
+anchor = "src/routes/login.tsx#L108-L113"
+gloss = "\"Forgot your password?\" goes to password recovery"
+
+# recorded by `fastapi-login-links`, step `sign-up`
+[[requirement]]
+stem = "login"
+anchor = "src/routes/login.tsx#L134-L136"
+gloss = "\"Sign up\" goes to the sign-up page"
+
+[[requirement]]
+stem = "login"
+anchor = "src/components/ui/password-input.tsx#L30-L37"
+gloss = "The password field's button shows or hides the password"
+
+[[requirement]]
+stem = "login"
+anchor = "src/components/Common/Appearance.tsx#L82-L101"
+gloss = "The theme menu sets the light, dark, or system theme"
+
+[[requirement]]
+stem = "login"
+anchor = "src/components/Common/Footer.tsx#L28-L39"
+gloss = "The footer links open the project's GitHub, X, and LinkedIn pages in a new tab"
+
+[[requirement]]
+stem = "login"
+anchor = "src/components/Common/Logo.tsx#L59"
+gloss = "The logo links to the home page"
+
+# --- criteria: the form schema's rules, each at the line that binds it ---
+
+# recorded by `fastapi-login-validation`, step `fill-password`
+[[criterion]]
+stem = "login"
+anchor = "src/routes/login.tsx#L26"
+gloss = "The email must be an email address, else \"Invalid email address\""
+
+[[criterion]]
+stem = "login"
+anchor = "src/routes/login.tsx#L29"
+gloss = "The password is required, else \"Password is required\""
+
+# recorded by `fastapi-login-validation`, step `submit`
+[[criterion]]
+stem = "login"
+anchor = "src/routes/login.tsx#L30"
+gloss = "The password has at least 8 characters, else \"Password must be at least 8 characters\""

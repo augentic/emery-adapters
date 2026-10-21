@@ -1,0 +1,20 @@
+[package]
+name = "ui-emit"
+description = "A ui-ir design system to a Vue app, deterministically"
+
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = { workspace = true, features = ["preserve_order"] }
+ui-ir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

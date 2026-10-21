@@ -1,0 +1,864 @@
+{
+  "guards": [
+    {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L39-L41"
+        }
+      ],
+      "go": "/",
+      "observed": [
+        {
+          "confirms": [
+            "self"
+          ],
+          "recording": "fastapi-login-guard",
+          "replay_digest": "sha256:ee32b73558615b396ad7e11377863c817eb722eb7f7d573735868a7f27de6df2",
+          "requests": [
+            "GET /login 200",
+            "GET http://127.0.0.1:8000/api/v1/users/me 200"
+          ],
+          "step": "start",
+          "url_after": "/",
+          "url_before": "/login"
+        }
+      ],
+      "route": "/login",
+      "when": {
+        "evidence": [
+          {
+            "path": "src/routes/login.tsx#L38"
+          }
+        ],
+        "expr": "isLoggedIn()",
+        "x-web": {
+          "storage": [
+            {
+              "key": "access_token",
+              "op": "get"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "routes": [
+    {
+      "declared": false,
+      "evidence": [
+        {
+          "path": "src/components/Common/Logo.tsx#L59"
+        },
+        {
+          "path": "src/hooks/useAuth.ts#L51"
+        },
+        {
+          "path": "src/routes/login.tsx#L39-L41"
+        }
+      ],
+      "observed": [
+        {
+          "recording": "fastapi-login-guard",
+          "replay_digest": "sha256:ee32b73558615b396ad7e11377863c817eb722eb7f7d573735868a7f27de6df2",
+          "step": "start",
+          "url_after": "/"
+        },
+        {
+          "recording": "fastapi-login-success",
+          "replay_digest": "sha256:67590cc95b764142459021e9706bb7a05608c20811d03676a92aef04fcc0c532",
+          "step": "submit",
+          "url_after": "/"
+        }
+      ],
+      "path": "/"
+    },
+    {
+      "declared": true,
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L35"
+        }
+      ],
+      "observed": [
+        {
+          "recording": "fastapi-login-failure",
+          "replay_digest": "sha256:6250c794f76b5f857fbf56dbed32a283b031fdead586f58ab97adc11d75cbadd",
+          "step": "start",
+          "url_after": "/login"
+        },
+        {
+          "recording": "fastapi-login-links",
+          "replay_digest": "sha256:6250c794f76b5f857fbf56dbed32a283b031fdead586f58ab97adc11d75cbadd",
+          "step": "start",
+          "url_after": "/login"
+        },
+        {
+          "recording": "fastapi-login-success",
+          "replay_digest": "sha256:6250c794f76b5f857fbf56dbed32a283b031fdead586f58ab97adc11d75cbadd",
+          "step": "start",
+          "url_after": "/login"
+        },
+        {
+          "recording": "fastapi-login-validation",
+          "replay_digest": "sha256:6250c794f76b5f857fbf56dbed32a283b031fdead586f58ab97adc11d75cbadd",
+          "step": "start",
+          "url_after": "/login"
+        }
+      ],
+      "path": "/login"
+    },
+    {
+      "declared": false,
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L109"
+        }
+      ],
+      "observed": [
+        {
+          "recording": "fastapi-login-links",
+          "replay_digest": "sha256:14428d4a649df44372db62294526ec2b9a4ddab20118ad24d0196090671db398",
+          "step": "forgot-password",
+          "url_after": "/recover-password"
+        }
+      ],
+      "path": "/recover-password"
+    },
+    {
+      "declared": false,
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L134"
+        }
+      ],
+      "observed": [
+        {
+          "recording": "fastapi-login-links",
+          "replay_digest": "sha256:676dacc49b718a9759879d12afa9f534941c54364a35bd8d5fd1af716a0c4e97",
+          "step": "sign-up",
+          "url_after": "/signup"
+        }
+      ],
+      "path": "/signup"
+    }
+  ],
+  "screen": "login",
+  "state": {
+    "src/components/ui/password-input.tsx:PasswordInput.showPassword": {
+      "evidence": [
+        {
+          "path": "src/components/ui/password-input.tsx#L13"
+        }
+      ],
+      "initial": false,
+      "kind": "flag"
+    },
+    "src/routes/login.tsx:Login.password": {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L55-L63"
+        }
+      ],
+      "initial": "",
+      "kind": "field"
+    },
+    "src/routes/login.tsx:Login.username": {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L55-L63"
+        }
+      ],
+      "initial": "",
+      "kind": "field"
+    }
+  },
+  "transitions": [],
+  "triggers": [
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/Common/Appearance.tsx#L75"
+            }
+          ],
+          "kind": "toggle",
+          "overlay": "menu"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Appearance.tsx#L75"
+        }
+      ],
+      "id": "t-0f217ec7c8f2",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": null,
+          "in_overlay": false,
+          "name": null,
+          "role": "button",
+          "text": "Toggle theme"
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-cf2331bab5423b71"
+        ]
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/Common/Footer.tsx#L31"
+            }
+          ],
+          "kind": "open_url",
+          "url": "https://x.com/fastapi"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Footer.tsx#L29"
+        },
+        {
+          "path": "src/components/Common/Footer.tsx#L31"
+        }
+      ],
+      "id": "t-1d231f7009fa",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "https://x.com/fastapi",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": ""
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-e4d223935ad88f73"
+        ]
+      },
+      "x-web": {
+        "new_tab": true
+      }
+    },
+    {
+      "does": [
+        {
+          "args": [
+            "dark"
+          ],
+          "callee": "src/components/theme-provider.tsx:useTheme().setTheme",
+          "evidence": [
+            {
+              "path": "src/components/Common/Appearance.tsx#L92"
+            }
+          ],
+          "kind": "call"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Appearance.tsx#L90"
+        },
+        {
+          "path": "src/components/Common/Appearance.tsx#L92"
+        }
+      ],
+      "id": "t-1edd7725ba1f",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": null,
+          "in_overlay": true,
+          "name": null,
+          "role": "menuitem",
+          "text": "Dark"
+        },
+        "match_status": "none",
+        "nodes": []
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/Common/Footer.tsx#L31"
+            }
+          ],
+          "kind": "open_url",
+          "url": "https://linkedin.com/company/fastapi"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Footer.tsx#L29"
+        },
+        {
+          "path": "src/components/Common/Footer.tsx#L31"
+        }
+      ],
+      "id": "t-46f526479c24",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "https://linkedin.com/company/fastapi",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": ""
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-3b7b91f50001c2c2"
+        ]
+      },
+      "x-web": {
+        "new_tab": true
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/routes/login.tsx#L134"
+            }
+          ],
+          "kind": "navigate",
+          "to": "/signup"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L134"
+        }
+      ],
+      "id": "t-67226029527b",
+      "observed": [
+        {
+          "confirms": [
+            0
+          ],
+          "recording": "fastapi-login-links",
+          "replay_digest": "sha256:676dacc49b718a9759879d12afa9f534941c54364a35bd8d5fd1af716a0c4e97",
+          "requests": [],
+          "step": "sign-up",
+          "url_after": "/signup",
+          "url_before": "/login"
+        }
+      ],
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "/signup",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": "Sign up"
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-3b2c3f2589e33adf"
+        ]
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/Common/Logo.tsx#L59"
+            }
+          ],
+          "kind": "navigate",
+          "to": "/"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Logo.tsx#L59"
+        }
+      ],
+      "id": "t-6d9216bbe0c6",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "/",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": null
+        },
+        "match_status": "none",
+        "nodes": []
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/routes/login.tsx#L109"
+            }
+          ],
+          "kind": "navigate",
+          "to": "/recover-password"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L108"
+        },
+        {
+          "path": "src/routes/login.tsx#L109"
+        }
+      ],
+      "id": "t-7cf5ea410387",
+      "observed": [
+        {
+          "confirms": [
+            0
+          ],
+          "recording": "fastapi-login-links",
+          "replay_digest": "sha256:14428d4a649df44372db62294526ec2b9a4ddab20118ad24d0196090671db398",
+          "requests": [],
+          "step": "forgot-password",
+          "url_after": "/recover-password",
+          "url_before": "/login"
+        }
+      ],
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "/recover-password",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": "Forgot your password?"
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-e9c81083291e57cf"
+        ]
+      }
+    },
+    {
+      "does": [
+        {
+          "args": [
+            "light"
+          ],
+          "callee": "src/components/theme-provider.tsx:useTheme().setTheme",
+          "evidence": [
+            {
+              "path": "src/components/Common/Appearance.tsx#L85"
+            }
+          ],
+          "kind": "call"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Appearance.tsx#L83"
+        },
+        {
+          "path": "src/components/Common/Appearance.tsx#L85"
+        }
+      ],
+      "id": "t-b349b9425b1a",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": null,
+          "in_overlay": true,
+          "name": null,
+          "role": "menuitem",
+          "text": "Light"
+        },
+        "match_status": "none",
+        "nodes": []
+      }
+    },
+    {
+      "does": [
+        {
+          "args": [
+            "system"
+          ],
+          "callee": "src/components/theme-provider.tsx:useTheme().setTheme",
+          "evidence": [
+            {
+              "path": "src/components/Common/Appearance.tsx#L97"
+            }
+          ],
+          "kind": "call"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Appearance.tsx#L97"
+        }
+      ],
+      "id": "t-e1fabfc6fb7d",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": null,
+          "in_overlay": true,
+          "name": null,
+          "role": "menuitem",
+          "text": "System"
+        },
+        "match_status": "none",
+        "nodes": []
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/ui/password-input.tsx#L35"
+            }
+          ],
+          "kind": "set",
+          "state": "src/components/ui/password-input.tsx:PasswordInput.showPassword",
+          "value": null
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/ui/password-input.tsx#L30"
+        },
+        {
+          "path": "src/components/ui/password-input.tsx#L35"
+        }
+      ],
+      "id": "t-e6937b44f453",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": null,
+          "in_overlay": false,
+          "name": null,
+          "role": "button",
+          "text": ""
+        },
+        "match_status": "multiple",
+        "nodes": [
+          "login/n-0ea9f0065953579e",
+          "login/n-985a042afecbda81"
+        ]
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/components/Common/Footer.tsx#L31"
+            }
+          ],
+          "kind": "open_url",
+          "url": "https://github.com/fastapi/fastapi"
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/components/Common/Footer.tsx#L29"
+        },
+        {
+          "path": "src/components/Common/Footer.tsx#L31"
+        }
+      ],
+      "id": "t-f313a35dbc66",
+      "on": {
+        "gesture": "tap",
+        "match": {
+          "href": "https://github.com/fastapi/fastapi",
+          "in_overlay": false,
+          "name": null,
+          "role": "link",
+          "text": ""
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-fbe5a4b4e0be58b1"
+        ]
+      },
+      "x-web": {
+        "new_tab": true
+      }
+    },
+    {
+      "does": [
+        {
+          "evidence": [
+            {
+              "path": "src/routes/login.tsx#L74"
+            }
+          ],
+          "fields": [
+            "username",
+            "password"
+          ],
+          "kind": "validate"
+        },
+        {
+          "args": [],
+          "callee": "src/client/sdk.gen.ts:LoginService.loginAccessToken",
+          "evidence": [
+            {
+              "path": "src/routes/login.tsx#L67"
+            },
+            {
+              "path": "src/hooks/useAuth.ts#L42-L44"
+            }
+          ],
+          "kind": "call",
+          "on_failure": [
+            {
+              "evidence": [
+                {
+                  "path": "src/hooks/useCustomToast.ts#L11-L13"
+                }
+              ],
+              "kind": "show",
+              "surface": "toast",
+              "title": "Something went wrong!",
+              "tone": "error"
+            }
+          ],
+          "on_success": [
+            {
+              "args": [
+                "access_token"
+              ],
+              "callee": "global:localStorage.setItem",
+              "evidence": [
+                {
+                  "path": "src/hooks/useAuth.ts#L45"
+                }
+              ],
+              "kind": "call",
+              "x-web": {
+                "storage": {
+                  "key": "access_token",
+                  "op": "set"
+                }
+              }
+            },
+            {
+              "evidence": [
+                {
+                  "path": "src/hooks/useAuth.ts#L51"
+                }
+              ],
+              "kind": "navigate",
+              "to": "/"
+            }
+          ],
+          "operation": {
+            "evidence": [
+              {
+                "path": "src/client/sdk.gen.ts#L28-L37"
+              }
+            ],
+            "method": "POST",
+            "url": "/api/v1/login/access-token"
+          }
+        }
+      ],
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L73"
+        },
+        {
+          "path": "src/routes/login.tsx#L74"
+        }
+      ],
+      "guard": [
+        {
+          "evidence": [
+            {
+              "path": "src/routes/login.tsx#L66"
+            }
+          ],
+          "expr": "loginMutation.isPending"
+        }
+      ],
+      "id": "t-f756f9af1acd",
+      "observed": [
+        {
+          "bodies": [
+            {
+              "content_type": "application/x-www-form-urlencoded",
+              "fields": [
+                "password",
+                "username"
+              ],
+              "request": "POST http://127.0.0.1:8000/api/v1/login/access-token"
+            }
+          ],
+          "confirms": [
+            1,
+            "1.on_failure.0"
+          ],
+          "recording": "fastapi-login-failure",
+          "replay_digest": "sha256:55d8d972c228aa5c622d2eb0dfc6a933d95722179bc6d9d16024a2c8f0ea6fa8",
+          "requests": [
+            "POST http://127.0.0.1:8000/api/v1/login/access-token 400"
+          ],
+          "step": "submit",
+          "url_after": "/login",
+          "url_before": "/login"
+        },
+        {
+          "bodies": [
+            {
+              "content_type": "application/x-www-form-urlencoded",
+              "fields": [
+                "password",
+                "username"
+              ],
+              "request": "POST http://127.0.0.1:8000/api/v1/login/access-token"
+            }
+          ],
+          "confirms": [
+            1,
+            "1.on_success.1"
+          ],
+          "recording": "fastapi-login-success",
+          "replay_digest": "sha256:67590cc95b764142459021e9706bb7a05608c20811d03676a92aef04fcc0c532",
+          "requests": [
+            "GET http://127.0.0.1:8000/api/v1/users/me 200",
+            "GET http://127.0.0.1:8000/api/v1/users/me 200",
+            "POST http://127.0.0.1:8000/api/v1/login/access-token 200"
+          ],
+          "step": "submit",
+          "unexplained": [
+            "GET http://127.0.0.1:8000/api/v1/users/me 200",
+            "GET http://127.0.0.1:8000/api/v1/users/me 200"
+          ],
+          "url_after": "/",
+          "url_before": "/login"
+        },
+        {
+          "confirms": [
+            0
+          ],
+          "recording": "fastapi-login-validation",
+          "replay_digest": "sha256:ca050a1bd133150777df0dcf12a3d07d4455792b797effe3985c314503591f13",
+          "requests": [],
+          "step": "submit",
+          "url_after": "/login",
+          "url_before": "/login"
+        }
+      ],
+      "on": {
+        "gesture": "submit",
+        "match": {
+          "href": null,
+          "in_overlay": false,
+          "name": null,
+          "role": "form",
+          "text": null
+        },
+        "match_status": "unique",
+        "nodes": [
+          "login/n-70f240ff628d7ae3"
+        ],
+        "submitters": [
+          {
+            "evidence": [
+              {
+                "path": "src/routes/login.tsx#L127"
+              }
+            ],
+            "match": {
+              "href": null,
+              "in_overlay": false,
+              "name": null,
+              "role": "button",
+              "text": "Log In"
+            },
+            "match_status": "unique",
+            "nodes": [
+              "login/n-6e27065a22e717bc"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "validation": [
+    {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L29"
+        }
+      ],
+      "field": "password",
+      "message": "Password is required",
+      "nodes": [
+        "login/n-779fd86ea2334d90"
+      ],
+      "rule": "min_length",
+      "value": 1
+    },
+    {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L30"
+        }
+      ],
+      "field": "password",
+      "message": "Password must be at least 8 characters",
+      "nodes": [
+        "login/n-779fd86ea2334d90"
+      ],
+      "observed": [
+        {
+          "confirms": [
+            "self"
+          ],
+          "recording": "fastapi-login-validation",
+          "replay_digest": "sha256:ca050a1bd133150777df0dcf12a3d07d4455792b797effe3985c314503591f13",
+          "step": "submit"
+        }
+      ],
+      "rule": "min_length",
+      "value": 8
+    },
+    {
+      "evidence": [
+        {
+          "path": "src/routes/login.tsx#L26"
+        }
+      ],
+      "field": "username",
+      "message": "Invalid email address",
+      "nodes": [
+        "login/n-b2e7f6ff8a3a5f86"
+      ],
+      "observed": [
+        {
+          "confirms": [
+            "self"
+          ],
+          "recording": "fastapi-login-validation",
+          "replay_digest": "sha256:00ac0209b060645311c89169d0b7cb079de9573e7ee6dcfde621b9fd67c61597",
+          "step": "fill-password"
+        }
+      ],
+      "rule": "email"
+    }
+  ],
+  "version": 1
+}

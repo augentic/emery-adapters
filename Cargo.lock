@@ -1135,6 +1135,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emery-behaviour"
+version = "0.12.0"
+dependencies = [
+ "emery-sdk",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "emery-documentation"
 version = "0.12.0"
 dependencies = [
@@ -4282,6 +4290,8 @@ version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
+ "foldhash 0.2.0",
+ "indexmap",
  "itoa",
  "memchr",
  "serde",
@@ -5067,6 +5077,22 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "ui-emit"
+version = "0.12.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "ui-ir",
+]
+
+[[package]]
+name = "ui-ir"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
 
 [[package]]
 name = "unarray"

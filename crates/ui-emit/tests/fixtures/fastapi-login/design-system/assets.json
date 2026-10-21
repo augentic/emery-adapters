@@ -1,0 +1,45 @@
+{
+  "assets": {
+    "img-e3c1bb4ea8-fastapi-logo-light": {
+      "alt": "FastAPI",
+      "kind": "vector",
+      "role": "illustration",
+      "source": "assets/e3c1bb4ea8-fastapi-logo-light.svg",
+      "sources": {
+        "web": "assets/e3c1bb4ea8-fastapi-logo-light.svg"
+      }
+    },
+    "svg-1": {
+      "kind": "vector",
+      "role": "icon",
+      "source": "assets/svg-1.svg",
+      "sources": {
+        "web": "assets/svg-1.svg"
+      }
+    },
+    "svg-2": {
+      "kind": "vector",
+      "role": "icon",
+      "source": "assets/svg-2.svg",
+      "sources": {
+        "web": "assets/svg-2.svg"
+      }
+    },
+    "svg-3": {
+      "kind": "vector",
+      "role": "icon",
+      "source": "assets/svg-3.svg",
+      "sources": {
+        "web": "assets/svg-3.svg"
+      }
+    }
+  },
+  "provenance": {
+    "sources": [
+      {
+        "kind": "code"
+      }
+    ]
+  },
+  "version": 1
+}

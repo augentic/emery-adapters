@@ -27,7 +27,7 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 | Variable | Default | Role |
 | --- | --- | --- |
 | `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai --bin emery-dev` in the engine checkout), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, and `GENAI_MAX_CANDIDATES` as the knobs the card names; the backend is named in the card's header |
-| `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
+| `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM`, `EMERY_BEHAVIOUR_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | The target `--build` builds through, the one `--target` names alone |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs`, the width cap; unset leaves the engine's default, which the backend's agent pool (`CURSOR_MAX_AGENTS`, 8) bounds in practice |
@@ -123,7 +123,7 @@ Each case is a directory under [cases/](cases/) holding an `expected.toml` and, 
 
 `expected.toml` names the run's sources, then the claims a reviewer would write from each:
 
-- `[[source]]`: the `adapter` (`typescript`, `python`, `documentation`, `intent`); a `fixture` path from the repository root, or an inline `description`; a `name` the specification cites it by (the adapter's name when absent); a `rank`, the integer the staged `emery.toml` carries as the source's authority, `1` the highest, the adapter's kind deciding when absent; the `stems` the source's requirements lead with; and the `[[source.surface]]` pairs (`entry`, `stem`) its survey must decide.
+- `[[source]]`: the `adapter` (`typescript`, `python`, `documentation`, `intent`, `behaviour`); a `fixture` path from the repository root, or an inline `description`; a `name` the specification cites it by (the adapter's name when absent); a `rank`, the integer the staged `emery.toml` carries as the source's authority, `1` the highest, the adapter's kind deciding when absent; the `stems` the source's requirements lead with; and the `[[source.surface]]` pairs (`entry`, `stem`) its survey must decide.
 - `[[requirement]]`, `[[criterion]]`, `[[decision]]`: each a `stem` (or a list), an `anchor` (`path#Ln` or `path#Ln-Lm`, under the source's tree), a one-line `gloss`, and a `source` where the case has several.
 - `[[absent]]`: a span no accepted `requirement` claim should anchor within — an `anchor` (a file, or lines of one), a `gloss`, and a `source` where the case has several, never a `stem` — the readiness and lifecycle code (credentials, prefetch, clients, signal handlers, `listen`) whose behaviour is the design's. A requirement claim held to the span, half or more of its lines within it, is a hit; the notes print `absent hits: N` per run with each hit's span and claim, and the stability section the band across runs. Recall alone cannot show a run stating what the specification should leave out, since dropping an item only shrinks the denominator.
 - `reference`, optional: the path from the repository root of a hand-written omnia guest of the same behaviour, which a `--build --target omnia` run measures the built tree against and whose recorded fixtures it drives through the built guest ([Reference comparison](#reference-comparison)).
@@ -173,6 +173,14 @@ Six cases read prose alone, each written before any run to a shape the shipped s
 | [narrative](cases/narrative/expected.toml) | Three headless prose pieces at the root: no heading to anchor at, only a first line to name by | `bookings`, `returns`, `membership` |
 | [cross-cut](cases/cross-cut/expected.toml) | Twenty documents past `INLINE_BYTES`, cut by audience into `guides/`, `reference/`, `policies/` while the subjects cut across them. Written to break the directory cut | `membership`, `sign-in`, `password-reset`, `catalogue`, `loans`, `reservations`, `returns`, `damage`, `notifications` |
 | [nestjs-docs](cases/nestjs-docs/expected.toml) | The vendored NestJS boilerplate's own `docs/`: the real-tree case | `auth`, `files`, `serialization`, `translations`, `database`, `architecture` |
+
+### `behaviour`
+
+One case reads a screen's `behaviour.json` (ui-ir's fact layer: triggers, effects, guards, and validation rules with `file#L` evidence, and the steps recorded runs observed) beside the modules it cites. The adapter cuts one seam per document without a turn, so its `surveyed` line is the document and its screen's stem, and `--facts` prints each seam's text and the `call` and `example` claims joined without a model turn. Experimental: the adapter lives on `experiment/behaviour-layer`.
+
+| Case | What it probes | Stems |
+| --- | --- | --- |
+| [fastapi-login](cases/fastapi-login/expected.toml) | The full-stack FastAPI template's login screen at cb740b65, the `frontend/` trimmed to the eight cited modules and committed: a guard, the sign-in and its two outcomes, two links, the password toggle, the theme menu, the footer, and the logo; three schema rules as criteria. A baseline written from the document, the code, and `--facts` | `login` |
 
 ### Several sources
 

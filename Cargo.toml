@@ -79,6 +79,7 @@ proc-macro2 = { version = "1.0.107", default-features = false, features = ["span
 semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+tempfile = "3.27.0"
 syn = { version = "3.0.9", default-features = false, features = ["full", "parsing", "visit"] }
 tokio = { version = "1.53.3", features = ["macros", "rt-multi-thread", "sync", "time"] }
 toml = "1.1.8"
@@ -97,6 +98,12 @@ emery-prose = "0.39.0"
 emery-sdk = "0.39.0"
 
 test-programs = { path = "crates/test-programs" }
+# The ui-ir contract, from the sibling checkout the emery-ui layout puts beside this one
+# (`augentic/ui-ir-experiment`). Experimental: CI has no such checkout, so only a local build
+# resolves it until ui-ir is a git or registry dependency.
+ui-ir = { path = "../ui-ir/crates/ui-ir", default-features = false }
+
+sha2 = "0.10.9"
 
 [patch.crates-io]
 emery-prose = { git = "https://github.com/augentic/emery" }

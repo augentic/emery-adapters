@@ -1,0 +1,94 @@
+/* Generated from design-system/ — do not edit manually. */
+
+*, ::before, ::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  text-align: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+img, svg {
+  display: block;
+}
+
+:root {
+  /* colors */
+  --vectis-color-color-0a0a0a: #0a0a0a;
+  --vectis-color-color-18181b: #18181b;
+  --vectis-color-color-27a495: #27a495;
+  --vectis-color-color-a1a1a1: #a1a1a1;
+  --vectis-color-color-fafafa: #fafafa;
+  --vectis-color-color-ffffff0b: #ffffff0b;
+  --vectis-color-color-ffffff26: #ffffff26;
+
+  /* typefaces */
+  --vectis-typeface-apple-system: -apple-system, system-ui, Segoe UI, Roboto, Helvetica Neue, Noto Sans, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
+
+  /* spacing */
+  --vectis-spacing-space-108p86: 108.86px;
+  --vectis-spacing-space-12: 12px;
+  --vectis-spacing-space-16: 16px;
+  --vectis-spacing-space-24: 24px;
+  --vectis-spacing-space-4: 4px;
+  --vectis-spacing-space-40: 40px;
+  --vectis-spacing-space-8: 8px;
+
+  /* cornerRadius */
+  --vectis-corner-radius-radius-8: 8px;
+
+  /* border */
+  --vectis-border-border-1: 1px;
+
+  /* shadow */
+  --vectis-box-shadow-shadow-677a96d2: 0px 1px 2px #0000000D;
+}
+
+.vectis-type-apple-system-14-medium-lh14 {
+  font-family: var(--vectis-typeface-apple-system);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.vectis-type-apple-system-14-medium-lh20 {
+  font-family: var(--vectis-typeface-apple-system);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.vectis-type-apple-system-14-regular-lh20 {
+  font-family: var(--vectis-typeface-apple-system);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+
+.vectis-type-apple-system-24-bold-lh32 {
+  font-family: var(--vectis-typeface-apple-system);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 32px;
+}
