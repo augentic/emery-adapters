@@ -27,7 +27,7 @@ A positional argument names a case or an adapter; with none, every case runs. A 
 
 | Variable | Default | Role |
 | --- | --- | --- |
-| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai --bin emery-dev` in the engine checkout), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, `GENAI_MAX_CANDIDATES`, `GENAI_MAX_REPEATS`, and `GENAI_MAX_TOKENS` as the knobs the card names; the backend is named in the card's header |
+| `EMERY_BIN` | `../emery/target/release/emery` | The binary under test. A file named `emery-dev` is the genai runtime (`cargo build --release --features genai` in the engine checkout, the `emery` it builds copied under that name; the `emery-dev` bin target went with the engine's #371), and the runner then sets and records that backend's variables in place of Cursor's: `GENAI_MODEL` for the model, `GENAI_TIMEOUT_SECS`/`GENAI_SHELL_TIMEOUT_SECS` for a rung, `GENAI_MAX_TOOL_CALLS`, `GENAI_MAX_ROUNDS`, `GENAI_MAX_CANDIDATES`, `GENAI_MAX_REPEATS`, and `GENAI_MAX_TOKENS` as the knobs the card names; the backend is named in the card's header |
 | `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | One per adapter a selected case uses |
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | The target `--build` builds through, the one `--target` names alone |
 | `EVAL_RUNS` | `3` | Runs per case. Three tells a stable id from a lucky one |
@@ -110,8 +110,11 @@ The build findings carry one line, `reference oracle 18/22; crates 3 vs 2, Rust 
 Every `omnia` build card is one command run twice over one component: under the release `emery` and `composer-2.5`, then under `emery-dev` and a small open-weights model ([the protocol](cards/README.md#protocol), "An omnia card is a pair"). The model is `Qwen/Qwen3-Coder-Next-FP8` (79.7B total / 3B active, fine-grained 128×128 block-scaled FP8 safetensors, 74.9 GiB) served by vLLM on a RunPod pod with one NVIDIA H200 and reached through an SSH tunnel as `GENAI_MODEL=openai::Qwen/Qwen3-Coder-Next-FP8`; the local `qwen3-coder:30b` under Ollama on the Mac is the fallback where no pod is up. Whoever runs the round runs both arms, an agent asked to run the eval included: it brings the server up where none answers, runs the small-model arm after the large-model one, and closes the tunnel or stops the local server before it reads the card. The arm needs `emery-dev`, the same runtime over [omnia-genai](https://github.com/augentic/omnia-backends/tree/main/crates/genai) built in the engine checkout under the `genai` feature — the runner reads the backend from the binary's name — and a server with its context length set (`--max-model-len 262144` under vLLM, `OLLAMA_CONTEXT_LENGTH=131072` under the local fallback).
 
 ```bash
-cargo build --manifest-path ../emery/Cargo.toml --release --features genai --bin emery-dev
+cargo build --manifest-path ../emery/Cargo.toml --release --features genai --target-dir ../emery/target/genai \
+  && cp ../emery/target/genai/release/emery ../emery/target/release/emery-dev
 ```
+
+The feature builds the one `emery` binary over `omnia-genai` in place of Cursor, so it is built into a target directory of its own and copied under the name the runner reads the backend from, leaving the release `emery` in place.
 
 **On the pod.** `runpodctl` 3.0.1 with the account's API key in `~/.runpod/config.toml`, and the key pair it generated at `~/.runpod/ssh/runpodctl-ssh-key`. The pod is `kfon5fxhta2bcr` (`qwen3-coder-next`, `runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404`, 24 vCPU, 251 GB, one H200 of 143 GB, 30 GB of container disk, and the 120 GB network volume `cxsks2la1u` mounted at `/workspace`, $5.29 an hour while it runs); its SSH port and, on Community Cloud, its address change when it resets, so read them again before each run.
 
