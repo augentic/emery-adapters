@@ -88,7 +88,6 @@ wasip3 = "0.9.0"
 omnia = { version = "0.37.0", default-features = false, features = ["jit"] }
 omnia-sdk = { version = "0.37.0", default-features = false }
 omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
-# omnia-template = { path = "../omnia-exemplar/templates/guest" }
 omnia-test = { version = "0.37.0", default-features = false }
 omnia-wasi-model = "0.37.0"
 omnia-wasi-otel = "0.37.0"
@@ -104,11 +103,11 @@ test-programs = { path = "crates/test-programs" }
 emery-prose = { path = "../emery/crates/prose" }
 emery-sdk = { path = "../emery/crates/sdk" }
 
-omnia = { git = "https://github.com/augentic/omnia" }
-omnia-sdk = { git = "https://github.com/augentic/omnia" }
-omnia-test = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
-omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
+# omnia = { git = "https://github.com/augentic/omnia" }
+# omnia-sdk = { git = "https://github.com/augentic/omnia" }
+# omnia-test = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-model = { git = "https://github.com/augentic/omnia" }
+# omnia-wasi-otel = { git = "https://github.com/augentic/omnia" }
 # omnia = { path = "../omnia/crates/omnia" }
 # omnia-sdk = { path = "../omnia/crates/omnia-sdk" }
 # omnia-test = { path = "../omnia/crates/omnia-test" }
