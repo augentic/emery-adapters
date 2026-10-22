@@ -83,11 +83,12 @@ impl Prepared<'_> {
 
         let size: usize = self.documents.iter().map(|doc| doc.text.len()).sum();
         let fits = u64::try_from(size).unwrap_or(u64::MAX) <= INLINE_BYTES;
-        let stems: Vec<&str> = {
-            let set: BTreeSet<&str> =
-                subjects.iter().map(|subject| subject.stem.as_str()).collect();
-            set.into_iter().collect()
-        };
+        let stems: Vec<&str> = subjects
+            .iter()
+            .map(|subject| subject.stem.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
         let cut = Cut {
             prepared: self,
             stems: &stems,
@@ -144,9 +145,6 @@ impl Cut<'_> {
 
     fn text(&self, subjects: &[&Subject], files: &[String], stem: Option<&str>) -> String {
         let source = self.prepared.source();
-        let plural = |n: usize, one: &'static str, many: &'static str| {
-            if n == 1 { one } else { many }
-        };
         let counted = format!(
             "{} {} in {} {}",
             subjects.len(),
@@ -159,11 +157,7 @@ impl Cut<'_> {
                 format!(
                     "Every subject of the source `{source}` — {counted} under the {} {}.",
                     plural(self.stems.len(), "stem", "stems"),
-                    self.stems
-                        .iter()
-                        .map(|stem| format!("`{stem}`"))
-                        .collect::<Vec<_>>()
-                        .join(", "),
+                    quoted(self.stems.iter().copied()),
                 )
             },
             |stem| format!("Stem `{stem}` of the source `{source}` — {counted}."),
@@ -171,8 +165,8 @@ impl Cut<'_> {
 
         text.push_str(
             "\n\nEach subject the survey named, the lines it spans, its stem, and the id its \
-             `requirement` and `criterion` claims lead with. Mine the spans listed and nothing \
-             outside them:\n",
+             `requirement`, `criterion`, and `retire` claims lead with. Mine the spans listed and \
+             nothing outside them:\n",
         );
         for subject in subjects {
             let _ = write!(
@@ -187,32 +181,26 @@ impl Cut<'_> {
         }
 
         if !self.unreached.is_empty() {
-            let listed: Vec<String> =
-                self.unreached.iter().map(|path| format!("`{path}`")).collect();
             let _ = write!(
                 text,
                 "\n\nThe survey placed {} under no subject — an index, a readme, a glossary, a \
                  changelog: {}. {} in `$SOURCE_DIR` for context and never a `path`.",
                 plural(self.unreached.len(), "this document", "these documents"),
-                listed.join(", "),
+                quoted(self.unreached.iter().map(String::as_str)),
                 plural(self.unreached.len(), "It is", "They are"),
             );
         }
 
         if let Some(stem) = stem {
-            let others: Vec<String> = self
-                .stems
-                .iter()
-                .filter(|other| **other != stem)
-                .map(|other| format!("`{other}`"))
-                .collect();
+            let others: Vec<&str> =
+                self.stems.iter().copied().filter(|&other| other != stem).collect();
             if !others.is_empty() {
                 let _ = write!(
                     text,
                     "\n\nThe other {} of this tree — {} — {} other calls'; claim nothing under \
                      {}, and nothing from a document this call does not list.",
                     plural(others.len(), "stem", "stems"),
-                    others.join(", "),
+                    quoted(others.iter().copied()),
                     plural(others.len(), "is", "are"),
                     plural(others.len(), "it", "them"),
                 );
@@ -226,6 +214,14 @@ impl Cut<'_> {
 
         text
     }
+}
+
+const fn plural(n: usize, one: &'static str, many: &'static str) -> &'static str {
+    if n == 1 { one } else { many }
+}
+
+fn quoted<'s>(items: impl IntoIterator<Item = &'s str>) -> String {
+    items.into_iter().map(|item| format!("`{item}`")).collect::<Vec<_>>().join(", ")
 }
 
 // Matches the `surveyed` trace event shape that `evals` reads.

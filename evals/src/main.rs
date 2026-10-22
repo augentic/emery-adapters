@@ -370,7 +370,7 @@ struct Settings {
     // the backend's budget variables the caller set; the runner inherits
     // them, the card names them
     knobs: Vec<(String, String)>,
-    // the card whose committed plans this invocation builds again
+    // the card whose sealed plans this invocation builds again
     rebuild: Option<String>,
 }
 
@@ -871,9 +871,10 @@ fn cases(root: &Path, filter: &BTreeSet<String>) -> Result<Vec<Case>, Box<dyn st
 
 // Copies each source's fixture into a project of its own beneath `dir` —
 // `emery` mounts its invocation directory, so the tree must sit inside it,
-// and the revision store the run commits under stays with the case — and
-// each adapter's component into the binary's store under the `eval:`
-// reference the project names. Each source's tree sits under its name.
+// and the engine's state and the repositories its runs seal and build into
+// stay with the case — and each adapter's component into the binary's store
+// under the `eval:` reference the project names. Each source's tree sits
+// under its name; a `--build` run adds its `[target]` table before it runs.
 fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     let project = dir.join(&case.name);
     if project.exists() {
@@ -903,26 +904,29 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
         }
         config.push('\n');
     }
-    if let Some(target) = settings.target {
-        config.push_str(&target_table(settings, target)?);
-    }
     fs::write(project.join("emery.toml"), config)?;
 
     Ok(project)
 }
 
-// The `[target] name` every staged project builds under, so the repository
-// the engine creates sits at `TARGET_REPO` whichever target the run names.
-const TARGET_NAME: &str = "target";
-const TARGET_REPO: &str = ".emery/vcs/repos/target";
+// The repository the engine creates for run `n` of a case, under `[target]
+// name = "run-N"`. One repository per run: `apply` seals a revision over the
+// current one where a repository holds it, so a second run sealing into the
+// first's would build over the first's tree, and a greenfield build needs a
+// repository of its own.
+fn repository(project: &Path, n: usize) -> PathBuf {
+    project.join(format!(".emery/vcs/repos/run-{n}"))
+}
 
-// The `[target]` table of a staged project: the target's component staged
-// in the store, under the one name. Both targets scaffold a whole tree, so
-// the engine creates the repository beneath the project itself, one root commit
-// holding its ignore rule, and no URL is named.
-fn target_table(settings: &Settings, target: Target) -> io::Result<String> {
+// Points the project's `emery.toml` at run `n`'s repository and stages
+// `target`'s component in the store. Both targets scaffold a whole tree, so
+// no URL is named and `apply` creates the repository beneath the project.
+fn retarget(project: &Path, settings: &Settings, target: Target, n: usize) -> io::Result<()> {
+    let path = project.join("emery.toml");
+    let config = fs::read_to_string(&path)?;
+    let sources = config.split_once("[target]").map_or(config.as_str(), |(sources, _)| sources);
     let reference = settings.stage_component(target.name())?;
-    Ok(format!("[target]\nname = \"{TARGET_NAME}\"\nadapter = \"{reference}\"\n"))
+    fs::write(&path, format!("{sources}[target]\nname = \"run-{n}\"\nadapter = \"{reference}\"\n"))
 }
 
 fn toml_escaped(text: &str) -> String {
@@ -958,7 +962,7 @@ fn git(at: &Path, args: &[&str]) -> io::Result<String> {
 }
 
 // What a fixture's checkout may hold that no run reads: dependencies,
-// environments, caches, build output, and the revision store of an earlier
+// environments, caches, build output, and the engine's state of an earlier
 // run; `*.egg-info` by its suffix.
 const UNCOPIED: &[&str] = &[
     "node_modules",
@@ -1358,8 +1362,7 @@ struct Run {
     wall: Duration,
     exit: Option<i32>,
     tail: String,
-    diff: Option<Value>,
-    // the committed plan's slices grouped into the sets ready to build at
+    // the staged plan's slices grouped into the sets ready to build at
     // once, as the specify envelope reports them
     waves: Option<Value>,
     // each seam's accepted evidence, under the source it was mined from
@@ -1376,7 +1379,8 @@ struct Run {
     plan: Option<Value>,
     // the summary of a stillborn attempt this run was put again after
     dead: Option<String>,
-    // the build of the committed plan, on `--build` after a specify that landed
+    // the build of the plan, sealed with `apply` first, on `--build` after a
+    // specify that landed
     build: Option<Build>,
 }
 
@@ -1693,7 +1697,7 @@ impl Run {
 
     // Every place the specification's own words name a technology, in the
     // order the gates read them: each accepted `requirement` and
-    // `criterion` claim's id and body, then the committed specification's
+    // `criterion` claim's id and body, then the staged specification's
     // preamble paragraphs and scenario lines. Each is one the SDK's or the
     // engine's gate should have returned for correction, so the list is
     // expected empty.
@@ -1763,7 +1767,7 @@ impl Run {
     }
 
     // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
-    // is three waves of one, two, and one slices; `0` where no plan was committed.
+    // is three waves of one, two, and one slices; `0` where no plan was staged.
     fn waves(&self) -> String {
         let widths: Vec<String> = self
             .waves
@@ -1910,18 +1914,15 @@ fn run(
     if !facts.is_empty() {
         fs::write(project.join(format!("{tag}.facts.md")), facts_text(&facts))?;
     }
-    let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
-    tail.reverse();
 
-    // what the run committed, read back through `show`
+    // what the run staged, read back through `show --staged`
     let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
     let mut run = Run {
         n,
         rung,
         wall,
         exit: output.status.code(),
-        tail: tail.join("\n"),
-        diff: envelope.as_ref().and_then(|out| out.get("diff").cloned()),
+        tail: tail(&stderr),
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
@@ -1937,8 +1938,14 @@ fn run(
         for (artifact, slot) in
             [("spec", &mut run.spec), ("design", &mut run.design), ("plan", &mut run.plan)]
         {
-            let shown =
-                emery(project, settings, &rust_log, rung, &["show", artifact], Turns::Live)?;
+            let shown = emery(
+                project,
+                settings,
+                &rust_log,
+                rung,
+                &["show", artifact, "--staged"],
+                Turns::Live,
+            )?;
             let envelope: Value = serde_json::from_slice(&shown.stdout)?;
             fs::write(
                 project.join(format!("{tag}.{artifact}.json")),
@@ -1955,15 +1962,18 @@ fn run(
         )?;
     }
 
-    // the plan is built once the specify landed, as the ladder reads it: a
-    // starved run climbs a rung instead, and a failed one has no plan
+    // the plan is sealed and built once the specify landed, as the ladder
+    // reads it: a starved run climbs a rung instead, and a failed one has no
+    // plan
     let revision = envelope.as_ref().and_then(|out| out["revision"].as_str());
     if let Some(revision) = revision
-        && settings.target.is_some()
+        && let Some(target) = settings.target
         && run.passed()
     {
+        retarget(project, settings, target, n)?;
+        apply(project, settings, case, tag, revision)?;
         eprintln!("eval: `{}` run {n} building at {}", case.name, settings.build_rung);
-        let built = build(project, settings, case, tag, revision, run.spec.as_ref())?;
+        let built = build(project, settings, case, n, tag, revision, run.spec.as_ref())?;
         run.build = Some(built);
     }
 
@@ -1971,15 +1981,49 @@ fn run(
 }
 
 const SPECIFY: &[&str] = &["specify", "--config", "emery.toml"];
+const APPLY: &[&str] = &["apply", "--config", "emery.toml"];
 
-// One `emery build` of the revision the run committed, at the build rung,
-// into the repository the engine creates for the case, then the host's own
-// pass over the tree it left; the build's log and envelope are kept as
+// One `emery apply` of the staged candidate `revision`, sealing it as the
+// root commit of the repository the engine creates for the run's `[target]`,
+// so `build` finds it there; the log and envelope are kept as
+// `<tag>.apply.stderr` / `<tag>.apply.stdout`. A seal spends no turn, so one
+// that fails, or seals another revision than the one staged, is the
+// harness's error, never the run's.
+fn apply(
+    project: &Path, settings: &Settings, case: &Case, tag: &str, revision: &str,
+) -> io::Result<()> {
+    let rust_log = settings.rust_log(case);
+    let output = emery(project, settings, &rust_log, settings.build_rung, APPLY, Turns::Live)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    fs::write(project.join(format!("{tag}.apply.stderr")), stderr.as_bytes())?;
+    fs::write(project.join(format!("{tag}.apply.stdout")), &output.stdout)?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "`{tag}` of `{}`: `emery apply` exited {}:\n{}",
+            case.name,
+            output.status.code().map_or_else(|| "killed".to_owned(), |code| code.to_string()),
+            tail(&stderr)
+        )));
+    }
+    let envelope: Value = serde_json::from_slice(&output.stdout)?;
+    let sealed = envelope["revision"].as_str().unwrap_or("");
+    if sealed != revision {
+        return Err(io::Error::other(format!(
+            "`{tag}` of `{}`: `emery apply` sealed `{sealed}`, not the staged `{revision}`",
+            case.name
+        )));
+    }
+    Ok(())
+}
+
+// One `emery build` of the revision run `n` sealed, at the build rung, into
+// the repository the engine created for it, then the host's own pass over
+// the tree it left; the build's log and envelope are kept as
 // `<tag>.build.stderr` / `<tag>.build.stdout`, the pass as
 // `<tag>.fidelity.md`.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn build(
-    project: &Path, settings: &Settings, case: &Case, tag: &str, revision: &str,
+    project: &Path, settings: &Settings, case: &Case, n: usize, tag: &str, revision: &str,
     spec: Option<&Value>,
 ) -> io::Result<Build> {
     let rust_log = settings.rust_log(case);
@@ -1996,8 +2040,6 @@ fn build(
     let stdout = String::from_utf8_lossy(&output.stdout);
     fs::write(project.join(format!("{tag}.build.stderr")), stderr.as_bytes())?;
     fs::write(project.join(format!("{tag}.build.stdout")), stdout.as_bytes())?;
-    let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
-    tail.reverse();
     let target =
         settings.target.ok_or_else(|| io::Error::other("a build runs through a target"))?;
 
@@ -2008,13 +2050,13 @@ fn build(
         envelope: serde_json::from_str(&stdout).ok(),
         failure: failure(&stderr),
         completions: completions(&stderr),
-        history: history(project, revision),
-        tail: tail.join("\n"),
+        history: history(project, n, revision),
+        tail: tail(&stderr),
         fidelity: None,
     };
     // the host's pass is read beside the build, never in its place: a
     // toolchain the host lacks leaves the cells empty and the card whole
-    if let Some(tree) = Tree::left(project, revision, &build) {
+    if let Some(tree) = Tree::left(project, n, revision, &build) {
         eprintln!("eval: `{tag}` host checks over {tree}");
         match Fidelity::read(project, tag, &tree, &build, spec, target, reference.as_ref()) {
             Ok(fidelity) => {
@@ -2028,18 +2070,21 @@ fn build(
     Ok(build)
 }
 
-// Builds the plan `run-1` of `case` committed under `card` again. The staged
-// project is copied whole under the new card, less the engine's clones and
-// working copies and the repository the earlier build created, and its
-// `emery.toml` gains a `[target]` table for this invocation's target, so the
-// engine creates a repository with no label afresh and builds every slice over
-// its root; the run's specify is read back from the
-// files the earlier run kept, exactly as `run` read them, so the card's
-// specify columns repeat the source card's.
+// Builds the plan `run-1` of `case` sealed under `card` again. The staged
+// project is copied whole under the new card, less the engine's state, its
+// clones and working copies, the repository the earlier run sealed and built
+// into, and the earlier build's files; that repository is cloned at its root
+// commit alone, the `Revision` commit holding the three documents, so the
+// engine reads the revision from the head's tree, finds no label, and builds
+// every slice over the root; the `[target]` table of `emery.toml` is
+// rewritten for this invocation's target; and the run's specify is read back
+// from the files the earlier run kept, exactly as `run` read them, so the
+// card's specify columns repeat the source card's.
 fn rebuilt(
     eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
 ) -> io::Result<Run> {
     const TAG: &str = "run-1";
+    const N: usize = 1;
     let source = eval_dir.join(card).join(&case.name);
     let project = eval_dir.join(card_name).join(&case.name);
     if !source.is_dir() {
@@ -2054,12 +2099,21 @@ fn rebuilt(
     let revision = envelope
         .as_ref()
         .and_then(|out| out["revision"].as_str())
-        .ok_or_else(|| {
-            io::Error::other(format!("`{TAG}` of `{}` committed no revision", case.name))
-        })?
+        .ok_or_else(|| io::Error::other(format!("`{TAG}` of `{}` staged no revision", case.name)))?
         .to_owned();
+    let sealed = repository(&source, N);
+    if !sealed.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "`{TAG}` of `{}` sealed no revision: no repository at `{}`",
+                case.name,
+                sealed.display()
+            ),
+        ));
+    }
 
-    // the project copied, the engine's repositories and the earlier build's files left behind
+    // the project copied, the engine's state and the earlier build's files left behind
     if project.exists() {
         fs::remove_dir_all(&project)?;
     }
@@ -2068,44 +2122,37 @@ fn rebuilt(
         let entry = entry?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
-        if name_str.contains(".build") || name_str.contains(".fidelity") {
+        if name == ".emery"
+            || [".apply", ".build", ".fidelity", ".oracle"]
+                .iter()
+                .any(|part| name_str.contains(part))
+        {
             continue;
         }
         let target = project.join(&name);
         if entry.file_type()?.is_dir() {
-            if name == ".emery" {
-                copy_tree_whole(&entry.path().join("storage"), &target.join("storage"))?;
-            } else {
-                copy_tree_whole(&entry.path(), &target)?;
-            }
+            copy_tree_whole(&entry.path(), &target)?;
         } else {
             fs::copy(entry.path(), target)?;
         }
     }
 
-    // the config's `[target]` table rewritten for this invocation's target,
-    // its component staged
-    let config = fs::read_to_string(source.join("emery.toml"))?;
-    let (sources, _) = config.split_once("[target]").ok_or_else(|| {
-        io::Error::other(format!("`{TAG}` of `{}` was staged with no `[target]`", case.name))
-    })?;
+    // the sealed revision at the root of a repository of its own, and the
+    // config's `[target]` table rewritten for this invocation's target
+    clone_root(&sealed, &repository(&project, N), &revision)?;
     let target =
         settings.target.ok_or_else(|| io::Error::other("a rebuild builds through a target"))?;
-    let table = target_table(settings, target)?;
-    fs::write(project.join("emery.toml"), format!("{sources}{table}"))?;
+    retarget(&project, settings, target, N)?;
 
     // the run as the earlier specify left it, then this invocation's build
     let rung =
         settings.ladder.first().copied().ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
-    let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
-    tail.reverse();
     let mut run = Run {
-        n: 1,
+        n: N,
         rung,
         wall: Duration::ZERO,
         exit: Some(0),
-        tail: tail.join("\n"),
-        diff: envelope.as_ref().and_then(|out| out.get("diff").cloned()),
+        tail: tail(&stderr),
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
@@ -2124,9 +2171,39 @@ fn rebuilt(
         *slot = Some(serde_json::from_str(&text)?);
     }
     eprintln!("eval: `{}` rebuilding revision `{revision}` at {}", case.name, settings.build_rung);
-    run.build = Some(build(&project, settings, case, TAG, &revision, run.spec.as_ref())?);
+    run.build = Some(build(&project, settings, case, N, TAG, &revision, run.spec.as_ref())?);
 
     Ok(run)
+}
+
+// Clones the repository a run sealed `revision` into, at `from`, to `to` at
+// its head alone, with no remote or label: the engine creates a repository
+// with the `Revision` commit as its root and never moves its head off it, so
+// the clone holds the revision and nothing built over it. A head standing
+// anywhere else is refused, naming what stands there.
+fn clone_root(from: &Path, to: &Path, revision: &str) -> io::Result<()> {
+    let repos = to.parent().ok_or_else(|| io::Error::other("a repository sits under a project"))?;
+    fs::create_dir_all(repos)?;
+    git(
+        repos,
+        &[
+            "clone",
+            "--quiet",
+            "--single-branch",
+            "--no-hardlinks",
+            &from.display().to_string(),
+            &to.display().to_string(),
+        ],
+    )?;
+    git(to, &["remote", "remove", "origin"])?;
+    let subject = git(to, &["log", "-1", "--format=%s", "HEAD"])?;
+    if subject != format!("Revision {revision}") {
+        return Err(io::Error::other(format!(
+            "`{}` holds `{subject}` at its head, not `Revision {revision}`",
+            from.display()
+        )));
+    }
+    Ok(())
 }
 
 // The reference comparison alone over the tree `run-1` of the case staged at
@@ -2137,6 +2214,7 @@ fn rebuilt(
 // `run-1.oracle.log`.
 fn oracle(project: &Path, reference: &Reference) -> io::Result<(PathBuf, String)> {
     const TAG: &str = "run-1";
+    const N: usize = 1;
     if !project.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -2148,9 +2226,9 @@ fn oracle(project: &Path, reference: &Reference) -> io::Result<(PathBuf, String)
     let revision = envelope
         .as_ref()
         .and_then(|out| out["revision"].as_str())
-        .ok_or_else(|| io::Error::other(format!("`{TAG}` committed no revision")))?;
-    let build = Build::recorded(project, TAG, Target::Omnia, revision)?;
-    let tree = Tree::left(project, revision, &build).ok_or_else(|| {
+        .ok_or_else(|| io::Error::other(format!("`{TAG}` staged no revision")))?;
+    let build = Build::recorded(project, N, TAG, Target::Omnia, revision)?;
+    let tree = Tree::left(project, N, revision, &build).ok_or_else(|| {
         io::Error::other(format!(
             "`{TAG}` left no tree: its build set no label and no integration copy of its own stands"
         ))
@@ -2204,7 +2282,7 @@ fn export_tip(tree: &Tree, export: &Path) -> io::Result<Vec<String>> {
 }
 
 // A copy of a directory tree skipping nothing, for a staged project's
-// sources and `.emery/storage`.
+// sources.
 fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
@@ -2245,13 +2323,15 @@ struct Failure {
     message: String,
 }
 
-// One commit on the build's first-parent chain: a slice's merge, read
-// from its trailers, a `Wave <k> verified` seal, or the root the engine created.
+// One commit on the build's first-parent chain: a slice's merge, read from
+// its trailers, a `Wave <k> verified` seal, `Initialise`, or the `Revision`
+// root `apply` sealed.
 #[derive(Debug, PartialEq, Eq)]
 struct Landed {
     commit: String,
     subject: String,
-    // the `Revision:` trailer a merge and a seal carry; the root none
+    // the `Revision:` trailer a merge, a wave seal, and the `Revision` root
+    // carry; `Initialise` none
     revision: Option<String>,
     slice: Option<String>,
     wave: Option<usize>,
@@ -2261,9 +2341,18 @@ struct Landed {
 }
 
 impl Landed {
-    // The wave a `Wave <k> verified` seal closed; a merge and the root none.
+    // The wave a `Wave <k> verified` seal closed; a merge, `Initialise`, and
+    // the root none.
     fn sealed(&self) -> Option<usize> {
         self.subject.strip_prefix("Wave ")?.strip_suffix(" verified")?.parse().ok()
+    }
+
+    // Whether a build of `revision` made this commit — a slice merge or a
+    // wave seal — rather than the `Revision` root `apply` sealed before it
+    // or `Initialise`.
+    fn built(&self, revision: &str) -> bool {
+        self.revision.as_deref() == Some(revision)
+            && (self.slice.is_some() || self.sealed().is_some())
     }
 }
 
@@ -2351,7 +2440,9 @@ impl Build {
     // A build read back from the files `build` kept beside its run, with the
     // chain it left where it stands: the exit is the envelope's success or
     // the failure's class, and the wall time, unkept, is zero.
-    fn recorded(project: &Path, tag: &str, target: Target, revision: &str) -> io::Result<Self> {
+    fn recorded(
+        project: &Path, n: usize, tag: &str, target: Target, revision: &str,
+    ) -> io::Result<Self> {
         let stdout = fs::read_to_string(project.join(format!("{tag}.build.stdout")))?;
         let stderr = fs::read_to_string(project.join(format!("{tag}.build.stderr")))?;
         let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
@@ -2366,8 +2457,6 @@ impl Build {
             }),
             (None, None) => None,
         };
-        let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
-        tail.reverse();
         Ok(Self {
             target,
             wall: Duration::ZERO,
@@ -2375,8 +2464,8 @@ impl Build {
             envelope,
             failure,
             completions: completions(&stderr),
-            history: history(project, revision),
-            tail: tail.join("\n"),
+            history: history(project, n, revision),
+            tail: tail(&stderr),
             fidelity: None,
         })
     }
@@ -2618,26 +2707,32 @@ fn failure(stderr: &str) -> Option<Failure> {
     })
 }
 
-// The chain the build left, read where it stands: the integration copy a
-// failed run leaves for inspection, else the label a landed run set in the
-// repository the engine created. The project is staged once for every run of a
-// case, so the copy standing may be an earlier run's, left by a build that
-// failed after cutting it, when this run's failed before it cut one: the
-// copy is this run's only where its chain holds a commit under this run's
-// revision. A chain nowhere, a run that ended before any was cut, is empty.
-fn history(project: &Path, revision: &str) -> Vec<Landed> {
+// The chain the build of run `n` left, read where it stands: the integration
+// copy a failed run leaves for inspection, else the label a landed run set
+// in the repository the engine created for the run. The project is staged
+// once for every run of a case and the integration copy sits at one path, so
+// the copy standing may be an earlier run's, left by a build that failed
+// after cutting it, when this run's failed before it cut one, and the label
+// `apply` set before the build holds the `Revision` commit alone: either
+// chain is this build's only where it holds a slice merge or a wave seal of
+// this revision. A chain holding neither is empty.
+fn history(project: &Path, n: usize, revision: &str) -> Vec<Landed> {
     let integration = project.join(".emery/vcs/integration");
     if integration.is_dir() {
         let left = log(&integration, "HEAD");
-        if left.iter().any(|landed| landed.revision.as_deref() == Some(revision)) {
+        if left.iter().any(|landed| landed.built(revision)) {
             return left;
         }
     }
-    let repository = project.join(TARGET_REPO);
+    let repository = repository(project, n);
     if !repository.is_dir() {
         return Vec::new();
     }
-    log(&repository, &format!("refs/heads/emery/{revision}"))
+    let labelled = log(&repository, &format!("refs/heads/emery/{revision}"));
+    if labelled.iter().any(|landed| landed.built(revision)) {
+        return labelled;
+    }
+    Vec::new()
 }
 
 // The first-parent chain from `tip`, newest first; empty where `tip` is
@@ -2688,24 +2783,31 @@ fn chain(text: &str) -> Vec<Landed> {
 // --- the host's pass over the tree a build left ---
 
 // Where a build left its tree: the label in the repository the engine created
-// once the run landed, else the integration copy's head a failed run
-// leaves, read only where its chain is this run's.
+// for the run once the run landed, else the integration copy's head a failed
+// run leaves, read only where its chain is this run's.
 enum Tree {
     Label { repository: PathBuf, label: String },
     Integration(PathBuf),
 }
 
 impl Tree {
-    fn left(project: &Path, revision: &str, build: &Build) -> Option<Self> {
+    fn left(project: &Path, n: usize, revision: &str, build: &Build) -> Option<Self> {
         if build.landed() {
             return Some(Self::Label {
-                repository: project.join(TARGET_REPO),
+                repository: repository(project, n),
                 label: format!("emery/{revision}"),
             });
         }
         let integration = project.join(".emery/vcs/integration");
-        (!build.history.is_empty() && integration.is_dir())
-            .then_some(Self::Integration(integration))
+        if integration.is_dir()
+            && log(&integration, "HEAD").iter().any(|landed| landed.built(revision))
+        {
+            return Some(Self::Integration(integration));
+        }
+        (!build.history.is_empty()).then(|| Self::Label {
+            repository: repository(project, n),
+            label: format!("emery/{revision}"),
+        })
     }
 
     // The repository to read and the tip within it.
@@ -2833,9 +2935,11 @@ impl Target {
 
     // Whether a tracked path is one the layout admits: a root file, the entry
     // or the runner, a file under a stem's directory, or a stem's test file
-    // or directory.
+    // or directory. The sealed specification under `spec/` is the engine's,
+    // held in every tree a build lands in and written by no slice, so it is
+    // never outside.
     fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
-        if self.root_files().contains(&path) {
+        if path.starts_with(SPECIFICATION) || self.root_files().contains(&path) {
             return true;
         }
         match self {
@@ -3096,6 +3200,10 @@ impl Target {
         routes
     }
 }
+
+// The root-level directory `emery apply` seals the three documents under, in
+// every repository a build lands in.
+const SPECIFICATION: &str = "spec/";
 
 // The omnia layout's two root lists and the topic table of `common`.
 const ROUTE_LIST: &str = "src/routes.rs";
@@ -4039,16 +4147,21 @@ fn facts(project: &Path, settings: &Settings, case: &Case) -> io::Result<String>
     fs::write(project.join("facts.stderr"), stderr.as_bytes())?;
     let facts = survey_facts(&stderr);
     if facts.is_empty() {
-        let mut tail: Vec<&str> = stderr.lines().rev().take(5).collect();
-        tail.reverse();
         let adapters: Vec<&str> = case.expected.adapters().collect();
         return Err(io::Error::other(format!(
             "no `survey facts` line from {adapters:?} (does any survey? is each at `trace` in \
              RUST_LOG?); the run ended:\n{}",
-            tail.join("\n")
+            tail(&stderr)
         )));
     }
     Ok(facts_text(&facts))
+}
+
+// The last five lines of a log, in order, for a failed run's summary.
+fn tail(text: &str) -> String {
+    let mut lines: Vec<&str> = text.lines().rev().take(5).collect();
+    lines.reverse();
+    lines.join("\n")
 }
 
 // One source's facts bare; several each under a heading naming the source.
@@ -5584,27 +5697,6 @@ fn stability(f: &mut Formatter<'_>, label: &str, attempts: &[&Attempt]) -> fmt::
         }
     }
 
-    // what each later revision changed
-    for run in runs.iter().skip(1) {
-        if let Some(diff) = &run.diff {
-            writeln!(
-                f,
-                "- run {} diff vs the previous revision: spec +{} -{} ~{}, design +{} -{} ~{}, plan \
-                 +{} -{} ~{}",
-                run.n,
-                len(&diff["spec"]["added"]),
-                len(&diff["spec"]["removed"]),
-                len(&diff["spec"]["changed"]),
-                len(&diff["design"]["added"]),
-                len(&diff["design"]["removed"]),
-                len(&diff["design"]["changed"]),
-                len(&diff["plan"]["added"]),
-                len(&diff["plan"]["removed"]),
-                len(&diff["plan"]["changed"]),
-            )?;
-        }
-    }
-
     Ok(())
 }
 
@@ -5776,10 +5868,6 @@ impl Display for Jaccard {
     }
 }
 
-fn len(value: &Value) -> usize {
-    value.as_array().map_or(0, Vec::len)
-}
-
 // --- time ---
 
 // The UTC wall clock as `YYYY-MM-DDTHH:MM:SSZ`, for the scorecard's name and title.
@@ -5830,7 +5918,6 @@ mod tests {
             wall: Duration::ZERO,
             exit,
             tail: String::new(),
-            diff: None,
             waves: None,
             evidence: accepted(stderr),
             completions: completions(stderr),
@@ -6733,6 +6820,93 @@ mod tests {
         assert_eq!(completions[1].shell, ShellUse::default());
     }
 
+    // A run's repository as the engine leaves it: the `Revision` root the
+    // head stays on, and the label a build moved over the slices it merged.
+    #[test]
+    fn rebuild_clones_the_sealed_root() {
+        let root = scratch("sealed-root", &[("spec/spec.json", "{}\n")]);
+        let commit = |message: &str| {
+            git(&root, &["add", "--all"]).unwrap();
+            git(&root, &["commit", "--quiet", "--message", message]).unwrap();
+        };
+        git(&root, &["init", "--quiet", "--initial-branch=main"]).unwrap();
+        commit("Revision feb4bd36\n\nRevision: feb4bd36");
+        git(&root, &["checkout", "--quiet", "--detach"]).unwrap();
+        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        commit("Initialise");
+        git(&root, &["branch", "emery/feb4bd36"]).unwrap();
+        git(&root, &["checkout", "--quiet", "main"]).unwrap();
+        let project = scratch("sealed-root-rebuilt", &[]);
+        let clone = repository(&project, 1);
+
+        clone_root(&root, &clone, "feb4bd36").unwrap();
+        let subject = git(&clone, &["log", "-1", "--format=%s", "HEAD"]).unwrap();
+        let branches = git(&clone, &["branch", "--all", "--format=%(refname:short)"]).unwrap();
+        let tracked = git(&clone, &["ls-files"]).unwrap();
+        let other = clone_root(&root.join("missing"), &repository(&project, 2), "feb4bd36");
+        git(&root, &["reset", "--quiet", "--hard", "emery/feb4bd36"]).unwrap();
+        let moved = clone_root(&root, &repository(&project, 3), "feb4bd36");
+        fs::remove_dir_all(&root).unwrap();
+        fs::remove_dir_all(&project).unwrap();
+
+        assert_eq!(clone, project.join(".emery/vcs/repos/run-1"));
+        assert_eq!(subject, "Revision feb4bd36");
+        assert_eq!(branches, "main", "neither the label nor a remote stands in the clone");
+        assert_eq!(tracked, "spec/spec.json");
+        assert!(other.is_err(), "a repository nothing sealed is refused");
+        let moved = moved.unwrap_err().to_string();
+        assert!(moved.contains("holds `Initialise` at its head"), "{moved}");
+    }
+
+    // `apply` labels the `Revision` commit before `build` runs, and a build
+    // that fails in wave 1 before any slice merges leaves only `Initialise`
+    // over it in `.emery/vcs/integration`; neither commit is a build's, so
+    // the run's history and tree are empty until a slice merges, and an
+    // earlier run's integration copy is never read as this run's.
+    #[test]
+    fn history_ignores_unbuilt_revision_root() {
+        let project = scratch("unbuilt-root", &[]);
+        let commit = |repo: &Path, file: &str, message: &str| {
+            fs::write(repo.join(file), "{}\n").unwrap();
+            git(repo, &["add", "--all"]).unwrap();
+            git(repo, &["commit", "--quiet", "--message", message]).unwrap();
+        };
+        let repo1 = repository(&project, 1);
+        let repo2 = repository(&project, 2);
+        let integration = project.join(".emery/vcs/integration");
+        for dir in [&repo1, &repo2, &integration] {
+            fs::create_dir_all(dir).unwrap();
+            git(dir, &["init", "--quiet", "--initial-branch=main"]).unwrap();
+        }
+        commit(&repo1, "spec.json", "Revision aaaaaaaa\n\nRevision: aaaaaaaa");
+        git(&repo1, &["branch", "emery/aaaaaaaa"]).unwrap();
+        commit(&repo2, "spec.json", "Revision bbbbbbbb\n\nRevision: bbbbbbbb");
+        git(&repo2, &["branch", "emery/bbbbbbbb"]).unwrap();
+        commit(&integration, "spec.json", "Revision aaaaaaaa\n\nRevision: aaaaaaaa");
+        commit(&integration, "init.txt", "Initialise");
+
+        let unbuilt = build_from(1, "", "", history(&project, 1, "aaaaaaaa"));
+        let unbuilt_tree = Tree::left(&project, 1, "aaaaaaaa", &unbuilt);
+
+        commit(
+            &integration,
+            "orders.rs",
+            "SLICE-001 orders\n\nSlice: SLICE-001\nRevision: aaaaaaaa\nWave: 1",
+        );
+        let run1 = build_from(1, "", "", history(&project, 1, "aaaaaaaa"));
+        let run1_tree = Tree::left(&project, 1, "aaaaaaaa", &run1);
+        let run2 = build_from(1, "", "", history(&project, 2, "bbbbbbbb"));
+        let run2_tree = Tree::left(&project, 2, "bbbbbbbb", &run2);
+        fs::remove_dir_all(&project).unwrap();
+
+        assert_eq!(unbuilt.history.len(), 0);
+        assert!(unbuilt_tree.is_none());
+        assert_eq!(run1.history.len(), 3);
+        assert!(matches!(run1_tree, Some(Tree::Integration(_))));
+        assert_eq!(run2.history.len(), 0, "run 2 merged nothing and ignores run 1's copy");
+        assert!(run2_tree.is_none(), "run 1's integration copy is never read for run 2");
+    }
+
     // An envelope carrying `sealed` is read before the chain: each seal's
     // paths less the lockfile, a lock-only seal an empty list.
     #[test]
@@ -6786,6 +6960,8 @@ mod tests {
             "src/orders/reading/package.json",
             "test/orders.test.ts",
             "test/orders/reading.test.ts",
+            "spec/spec.json",
+            "spec/plan.json",
         ] {
             assert!(Target::Node.within_layout(path, &stems), "`{path}` is within the layout");
         }
@@ -6795,6 +6971,8 @@ mod tests {
             "src/orders-reading/index.ts",
             "test/helpers.ts",
             "src/x.ts",
+            "src/spec/spec.json",
+            "spec.json",
         ] {
             assert!(!Target::Node.within_layout(path, &stems), "`{path}` is outside the layout");
         }
@@ -6824,6 +7002,7 @@ mod tests {
             "crates/orders/src/reading.rs",
             "crates/orders/tests/reading.rs",
             "crates/start/src/lib.rs",
+            "spec/design.json",
         ] {
             assert!(Target::Omnia.within_layout(path, &stems), "`{path}` is within the layout");
         }

@@ -6,7 +6,7 @@ use std::marker::PhantomData;
 use std::path::Path;
 
 use emery_sdk::survey::{Inventory, Surface};
-use emery_sdk::{ClaimKind, Context, Doc, Error, Evidence, SourceAdapter, SourceInput};
+use emery_sdk::{Claim, ClaimKind, Context, Doc, Error, Evidence, SourceAdapter, SourceInput};
 use omnia_test::guest::Scripted;
 use omnia_test::host::{Scratch, scratch};
 use omnia_test::{Exchange, Seen};
@@ -219,8 +219,8 @@ fn signature<'e>(evidence: &'e Evidence, name: &str) -> &'e str {
         .claims
         .iter()
         .filter(|claim| claim.kind == ClaimKind::Type)
-        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
-        .and_then(|claim| claim.extras.get("signature").and_then(|s| s.as_str()))
+        .find(|claim| claim.type_name() == Some(name))
+        .and_then(Claim::signature)
         .unwrap_or_else(|| panic!("`{name}` is declared"))
 }
 
@@ -231,9 +231,11 @@ fn declared(evidence: &Evidence) -> Vec<&str> {
         .iter()
         .filter(|claim| claim.kind == ClaimKind::Type)
         .map(|claim| {
-            let signature = claim.extras.get("signature").and_then(|s| s.as_str());
-            assert!(signature.is_some_and(|s| !s.is_empty()), "a declaration carries its text");
-            claim.extras.get("name").and_then(|n| n.as_str()).expect("a declaration is named")
+            assert!(
+                claim.signature().is_some_and(|s| !s.is_empty()),
+                "a declaration carries its text"
+            );
+            claim.type_name().expect("a declaration is named")
         })
         .collect();
     names.sort_unstable();
@@ -615,12 +617,7 @@ async fn documentation_decision() {
     check_evidence(&inline);
     model.assert_exhausted();
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
-    system(&seen[0], prompt::survey(emery_documentation::PROSE));
-    for request in &seen[1..] {
-        system(request, prompt::extract(emery_documentation::PROSE));
-    }
+    DOCUMENTATION.surveyed(&model, 2);
     let exchanges = checked(&model);
     let finding = exchanges[0].outcome.as_ref().expect_err("the statement naming it is refused");
     assert!(
@@ -631,13 +628,81 @@ async fn documentation_decision() {
     let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
     assert_eq!(kinds, [ClaimKind::Requirement, ClaimKind::Decision]);
     let decision = &evidence.claims[1];
-    assert_eq!(
-        decision.extras.get("decision").and_then(|d| d.as_str()),
-        Some(RULE),
-        "the decision carries the line verbatim"
-    );
+    assert_eq!(decision.decision(), Some(RULE), "the decision carries the line verbatim");
     assert_eq!(decision.path.as_deref(), Some("docs/password-reset.md#L3"), "anchored at the line");
     assert_eq!(decision.id, None, "a decision carries no id");
+}
+
+// A page that withdraws a reset path: the `retire` whose id leads with
+// another stem is refused, since the stem check reaches the kind, and the
+// answer that leads it with the subject's stem is accepted, the withdrawal
+// reaching the evidence anchored at the line under the id of the behaviour
+// withdrawn.
+#[tokio::test]
+async fn documentation_retire() {
+    const WITHDRAWAL: &str =
+        "Security questions are no longer offered as a way to reset a password.";
+    let project = scratch();
+    project.write(
+        "docs/password-reset.md",
+        format!(
+            "# Password reset\n\nA user requests a reset link by email.\n\nDeprecated: \
+             {WITHDRAWAL}\n"
+        ),
+    );
+    let survey =
+        inventory(&[("Password reset", "docs/password-reset.md#L1", "password-reset")], &[]);
+    let claims = |id: &str| {
+        serde_json::json!({
+            "claims": [
+                {
+                    "kind": "requirement",
+                    "id": "password-reset.request",
+                    "path": "docs/password-reset.md#L3",
+                    "statement": "A user requests a reset link by email.",
+                },
+                {
+                    "kind": "retire",
+                    "id": id,
+                    "path": "docs/password-reset.md#L5",
+                    "statement": WITHDRAWAL,
+                },
+            ]
+        })
+        .to_string()
+    };
+    let strayed = claims("accounts.security-questions");
+    let corrected = claims("password-reset.security-questions");
+    let answer = answer();
+    let model = Scripted::answering([&survey, &strayed, &corrected, &answer]);
+
+    let evidence = DOCUMENTATION.accepted(&workspace(&project), &model).await;
+    check_evidence(&evidence);
+    let inline = DOCUMENTATION.accepted(&value(INLINE), &model).await;
+    check_evidence(&inline);
+    model.assert_exhausted();
+
+    DOCUMENTATION.surveyed(&model, 2);
+    let exchanges = checked(&model);
+    let finding = exchanges[0].outcome.as_ref().expect_err("the strayed id is refused");
+    assert!(
+        finding.contains(
+            "- claim 1: id `accounts.security-questions` leads with `accounts`, not a stem of \
+             this seam (`password-reset`)"
+        ),
+        "the finding names the claim and the seam's stem: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the corrected answer is accepted");
+    let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
+    assert_eq!(kinds, [ClaimKind::Requirement, ClaimKind::Retire]);
+    let retire = &evidence.claims[1];
+    assert_eq!(
+        retire.id.as_deref(),
+        Some("password-reset.security-questions"),
+        "the id names the behaviour withdrawn"
+    );
+    assert_eq!(retire.statement(), WITHDRAWAL, "the statement carries the withdrawal");
+    assert_eq!(retire.path.as_deref(), Some("docs/password-reset.md#L5"), "anchored at the line");
 }
 
 // A tree past the inline budget is one seam per stem, each over the documents
@@ -933,11 +998,7 @@ async fn intent_decision() {
     check_evidence(&inline);
     model.assert_exhausted();
 
-    let seen = model.seen();
-    assert_eq!(seen.len(), 3, "two rounds over the tree, one over the value");
-    for request in &seen {
-        system(request, prompt::extract(emery_intent::PROSE));
-    }
+    INTENT.prompted(&model, 2);
     let exchanges = model.exchanges();
     let finding = exchanges[0].outcome.as_ref().expect_err("the statement naming it is refused");
     assert!(
@@ -951,12 +1012,78 @@ async fn intent_decision() {
         assert_eq!(kinds, [ClaimKind::Intent, ClaimKind::Requirement, ClaimKind::Decision]);
         let decision = &evidence.claims[2];
         assert_eq!(
-            decision.extras.get("decision").and_then(|d| d.as_str()),
+            decision.decision(),
             Some(DIRECTIVE),
             "the decision carries the directive verbatim"
         );
         assert_eq!(decision.id, None, "a decision carries no id");
         assert_eq!(decision.path, None, "an intent claim has no file");
+    }
+}
+
+// A brief that withdraws a behaviour: the `retire` whose statement names
+// the technology is refused, since the technology gate reaches the kind, and
+// the answer that states the withdrawal by role beside a `decision` carrying
+// the directive is accepted, the withdrawal reaching the evidence under the
+// id of the behaviour withdrawn, with no requirement stating the negative,
+// over the tree and the value alike.
+#[tokio::test]
+async fn intent_retire() {
+    const DIRECTIVE: &str = "Stop publishing order events to Kafka.";
+    const WITHDRAWAL: &str = "Order events are no longer published to the outbound stream.";
+    let project = scratch();
+    project.write("intent.md", DIRECTIVE);
+    let named = serde_json::json!({
+        "claims": [
+            { "kind": "intent", "id": KEY, "statement": DIRECTIVE },
+            {
+                "kind": "retire",
+                "id": "orders.publish-events",
+                "statement": "Order events are no longer published to Kafka.",
+            },
+        ]
+    })
+    .to_string();
+    let retired = serde_json::json!({
+        "claims": [
+            { "kind": "intent", "id": KEY, "statement": DIRECTIVE },
+            {
+                "kind": "retire",
+                "id": "orders.publish-events",
+                "statement": WITHDRAWAL,
+            },
+            { "kind": "decision", "decision": DIRECTIVE },
+        ]
+    })
+    .to_string();
+    let model = Scripted::answering([&named, &retired, &retired]);
+
+    let evidence = INTENT.accepted(&workspace(&project), &model).await;
+    check_evidence(&evidence);
+    let inline = INTENT.accepted(&value(DIRECTIVE), &model).await;
+    check_evidence(&inline);
+    model.assert_exhausted();
+
+    INTENT.prompted(&model, 2);
+    let exchanges = model.exchanges();
+    let finding = exchanges[0].outcome.as_ref().expect_err("the statement naming it is refused");
+    assert!(
+        finding.contains("- claim 1: `statement` names the technology `kafka`;"),
+        "the finding names the claim and the technology: {finding}"
+    );
+    assert_eq!(exchanges[1].outcome, Ok(String::new()), "the retired answer is accepted");
+    assert_eq!(exchanges[2].outcome, Ok(String::new()), "and over the value");
+    for evidence in [&evidence, &inline] {
+        let kinds: Vec<ClaimKind> = evidence.claims.iter().map(|claim| claim.kind).collect();
+        assert_eq!(kinds, [ClaimKind::Intent, ClaimKind::Retire, ClaimKind::Decision]);
+        let retire = &evidence.claims[1];
+        assert_eq!(
+            retire.id.as_deref(),
+            Some("orders.publish-events"),
+            "the id names the behaviour withdrawn"
+        );
+        assert_eq!(retire.statement(), WITHDRAWAL, "the statement carries the withdrawal by role");
+        assert_eq!(retire.path, None, "an intent claim has no file");
     }
 }
 
@@ -2538,7 +2665,7 @@ fn table_claim<'e>(evidence: &'e Evidence, name: &str) -> (Option<&'e str>, Opti
         .claims
         .iter()
         .filter(|claim| claim.kind == ClaimKind::Type)
-        .find(|claim| claim.extras.get("name").and_then(|n| n.as_str()) == Some(name))
+        .find(|claim| claim.type_name() == Some(name))
         .unwrap_or_else(|| panic!("`{name}` is declared"));
     (claim.path.as_deref(), claim.synopsis.as_deref())
 }

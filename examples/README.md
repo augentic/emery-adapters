@@ -2,7 +2,7 @@
 
 Live `specify` and `build` runs through [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor).
 
-`specify` loads the named source adapters, extracts claims, and commits a revision under `.emery/storage/blobstore/`. `show` prints it. `build` builds the current plan through one target adapter.
+`specify` loads the named source adapters, extracts claims, and stages one candidate revision in `.emery/storage`. `show <artifact> --staged` prints it. `apply` seals the staged candidate under `spec/` in the target's repository as the current revision, at one commit labelled `emery/<revision>`, and `specify --apply` does both in one run. `show <artifact>` prints the current revision, and `build` builds its plan through one target adapter.
 
 Run from the repository root. `emery` mounts that directory as the project, and every path an `emery.toml` names must sit inside it.
 
@@ -11,6 +11,7 @@ Run from the repository root. `emery` mounts that directory as the project, and 
 1. The [emery](https://github.com/augentic/emery) repository as a sibling checkout.
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge) on `PATH`. [Install](#installing-cursor-sdk-bridge).
 3. `CURSOR_API_KEY` in `.env`, or `export CURSOR_API_KEY=<key>`.
+4. No `.emery/` left by a pre-0.39 run. The engine then kept the revision in `.emery/storage`, so the labelled commit in the repository its `build` created holds no `spec/`, which every verb now refuses as `spec-mismatch`. Remove the directory (`rm -rf .emery`) and regenerate with a fresh `specify`; a revision under the old grammar is unreadable either way.
 
 ### Build adapters and copy to cache
 
@@ -33,26 +34,45 @@ set -a; source .env; set +a
 ```bash
 cargo run --manifest-path ../emery/Cargo.toml -- specify -v --config examples/emery.toml
 
-# show (project) outputs
-cargo run --manifest-path ../emery/Cargo.toml -- show spec
-cargo run --manifest-path ../emery/Cargo.toml -- show design
-cargo run --manifest-path ../emery/Cargo.toml -- show plan
+# show the staged candidate; no config needed
+cargo run --manifest-path ../emery/Cargo.toml -- show spec --staged
+cargo run --manifest-path ../emery/Cargo.toml -- show design --staged
+cargo run --manifest-path ../emery/Cargo.toml -- show plan --staged
 ```
 
-Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.12.0.wasm`). Replacing the file is how a rebuild takes effect.
+Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.12.0.wasm`). Replacing the file is how a rebuild takes effect. A config with no `[target]` table stages a candidate for `show --staged`; sealing it, and showing the current revision, need one.
+
+## Apply
+
+[emery.toml](emery.toml) names `emery:omnia` as its target and no `repository`. After `specify`, seal the staged candidate:
+
+```bash
+cargo run --manifest-path ../emery/Cargo.toml -- apply --config examples/emery.toml
+
+# show the current revision
+cargo run --manifest-path ../emery/Cargo.toml -- show spec --config examples/emery.toml
+```
+
+`apply` creates `.emery/vcs/repos/omnia`, seals the three documents under `spec/` there as the commit `Revision <revision>`, labels it `emery/<revision>`, and clears the staged candidate. A later `apply` seals over that commit, so the repository carries each revision in turn. `specify --apply` stages and seals in one run.
+
+`<revision>` is the id `apply` prints — `sealed revision <revision> as emery/<revision> at <commit>` — and the repository lists the label any time:
+
+```bash
+git -C .emery/vcs/repos/omnia branch --list 'emery/*'
+```
 
 ## Build
 
-[emery.toml](emery.toml) names `emery:omnia` as its target. After `specify`, copy the adapter and build the current plan:
+After `apply`, copy the adapter and build the current plan:
 
 ```bash
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-# switch to HEAD to view the build in `.emery/vcs/repos/omnia`
+# switch to the label to view the build; `emery/<revision>` as listed above
 git -C .emery/vcs/repos/omnia checkout emery/<revision>
 ```
 
-The adapter builds into `.emery/vcs/repos/omnia` and labels the result `emery/<revision>`. It leaves this checkout unchanged and pushes nothing. Clone the branch, or push it from that repository.
+The adapter builds into `.emery/vcs/repos/omnia` over the `Revision` commit and moves the label `emery/<revision>` to the result. It leaves this checkout unchanged and pushes nothing. Clone the branch, or push it from that repository.
 
 A `[target] repository` URL builds into a clone of that repository from its default branch instead, and `repository = "."` into this checkout's own repository from its sealed head. The init scaffolds only the files of the layout the tree lacks, so a held project's files stand; a repository that is not an omnia guest is better left for the created one.
 
