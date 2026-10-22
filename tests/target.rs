@@ -78,8 +78,8 @@ const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
-const OMNIA_PIN: &str = "omnia-sdk = \"0.36.0\"\n";
-const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.37.0\"\n";
+const OMNIA_PIN: &str = "omnia-sdk = \"0.37.0\"\n";
+const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.38.0\"\n";
 
 // The three root files the node target's initialisation scaffolds, as the crate
 // embeds them.
@@ -1569,7 +1569,10 @@ async fn omnia_scaffold_idioms() {
             .split_once("What the references spell for these shapes, quoted; `read_doc` answers the rest of each document:\n\n")
             .expect("the passages are introduced once");
         assert!(
-            before.ends_with("`restore_files` puts one back as it was scaffolded.\n\n"),
+            before.ends_with(
+                "`restore_files` puts one back as it was scaffolded, the turn's edits to it \
+                 discarded: recovery after a refusal, not a step.\n\n"
+            ),
             "the passages follow the scaffold section and its guard sentence: {before}"
         );
         assert!(

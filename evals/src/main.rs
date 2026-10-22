@@ -126,7 +126,8 @@ fn main() -> ExitCode {
 
 // What the command line asks for: the cases or adapters named, and the
 // mode (`--facts`, `--build`, `--rebuild <card>`, `--resume <card> --at
-// <wave>`, `--oracle <card>`) with the target a build goes through.
+// <wave>` with `--drifted` to admit a seed the template has moved under,
+// `--oracle <card>`) with the target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
@@ -138,11 +139,13 @@ struct Args {
 }
 
 // A build of a card's committed plans again: fresh, or on from a wave of the
-// chain the card's build left.
+// chain the card's build left. A resume reads the component's template
+// against the seed it resumes before the put and refuses one the template
+// has moved under, unless `drifted` admits it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Again {
     Rebuild { card: String },
-    Resume { card: String, wave: usize },
+    Resume { card: String, wave: usize, drifted: bool },
 }
 
 impl Again {
@@ -155,9 +158,9 @@ impl Again {
                 eprintln!("eval: case `{}` rebuilt from `{card}`", case.name);
                 rebuilt(eval_dir, card, card_name, case, settings)
             }
-            Self::Resume { card, wave } => {
+            Self::Resume { card, wave, drifted } => {
                 eprintln!("eval: case `{}` resumed from `{card}` at wave {wave}", case.name);
-                resumed(eval_dir, card, *wave, card_name, case, settings)
+                resumed(eval_dir, card, *wave, *drifted, card_name, case, settings)
             }
         }
     }
@@ -206,13 +209,17 @@ impl Args {
                             .into(),
                     );
                 }
-                Some(Again::Resume { card, wave })
+                let drifted = filter.remove("--drifted");
+                Some(Again::Resume { card, wave, drifted })
             }
             (None, Some(_), None) => {
                 return Err("`--resume` names the wave to resume at through `--at`".into());
             }
             (None, None, None) => None,
         };
+        if filter.remove("--drifted") {
+            return Err("`--drifted` admits the seed a `--resume` resumes over".into());
+        }
         let facts_only = filter.remove("--facts");
         let build = filter.remove("--build") || again.is_some();
         if facts_only && filter.is_empty() {
@@ -2128,10 +2135,14 @@ fn rebuilt(
 // would build it again, a wave of its own verified again before `wave`'s
 // slice; every such slice but the first is sealed over the moved label as
 // an empty commit under the engine's own message, so one seed verify stands
-// before the slice. The run records the card, the wave, the commit resumed
-// from, and the slices resumed, the sealed ones among them.
+// before the slice. Before the label is moved, the component's template is
+// read against the tree at that commit for the `omnia` target, and a seed
+// the template has moved under is refused with the drift unless `drifted`
+// admits it. The run records the card, the wave, the commit resumed from,
+// and the slices resumed, the sealed ones among them.
 fn resumed(
-    eval_dir: &Path, card: &str, wave: usize, card_name: &str, case: &Case, settings: &Settings,
+    eval_dir: &Path, card: &str, wave: usize, drifted: bool, card_name: &str, case: &Case,
+    settings: &Settings,
 ) -> io::Result<Run> {
     let Restaged {
         project,
@@ -2158,6 +2169,31 @@ fn resumed(
                 case.name
             ))
         })?;
+    if settings.target == Some(Target::Omnia) {
+        let scratch = eval_dir.join(card_name).join(format!("{}.seed", case.name));
+        match seed_drift(&repository, &at.commit, &scratch)? {
+            None => eprintln!(
+                "eval: `{}` seed at `{}` holds the component's template",
+                case.name,
+                short(&at.commit)
+            ),
+            Some(drift) if !drifted => {
+                return Err(io::Error::other(format!(
+                    "`{card}` seeds wave {wave} of `{}` with a tree laid from an earlier \
+                     template than the component staged carries, so its seed verify would be \
+                     refused by the template's findings before any slice is built:\n{drift}\n\
+                     resume a card built under this component, `--build` one, or admit the \
+                     seed with `--drifted` and read the seed verify as the drift's repair",
+                    case.name
+                )));
+            }
+            Some(drift) => eprintln!(
+                "eval: `{}` resumes a seed the template has moved under, admitted by \
+                 `--drifted`:\n{drift}",
+                case.name
+            ),
+        }
+    }
     git(&repository, &["branch", "-f", &label, &at.commit])?;
     let mut slices: Vec<String> = chain
         .iter()
@@ -2202,6 +2238,81 @@ fn resumed(
     });
     run.build = Some(built);
     Ok(run)
+}
+
+// The template the staged component embeds, read against the seed a resume
+// starts from. A tree `omnia init` laid from an earlier template holds the
+// earlier pins in its root manifest and the earlier bodies in its static
+// files, and the seed verify that opens a resume is refused by the gate's
+// `manifest_drift` or its static-file finding before any slice of the wave
+// is built — the template's finding, not the model's. So the drift is read
+// here from the commit the resume starts at, through `omnia-template` at
+// this workspace's lock, the template `emery_omnia.wasm` built from the
+// same lock embeds: the root manifest held outside its two stem lists and
+// every static file byte for byte, as the gate holds them. The files are
+// read out of the commit into `scratch`, which is removed after; a file the
+// commit lacks is left lacking, which the hold reads as drift. The drift as
+// the gate would spell it, or none where the seed stands as the template
+// spells it.
+fn seed_drift(repository: &Path, commit: &str, scratch: &Path) -> io::Result<Option<String>> {
+    if scratch.exists() {
+        fs::remove_dir_all(scratch)?;
+    }
+    fs::create_dir_all(scratch)?;
+    let statics = omnia_template::ENTRIES
+        .iter()
+        .filter(|entry| entry.role == omnia_template::Role::Static)
+        .map(|entry| entry.path);
+    for path in statics.chain([omnia_template::Manifest::PATH]) {
+        let Some(body) = git_file(repository, commit, path)? else {
+            continue;
+        };
+        let file = scratch.join(path);
+        if let Some(parent) = file.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(file, body)?;
+    }
+    let held = |err: omnia_template::Error| io::Error::other(err.to_string());
+    let manifest = omnia_template::Manifest::new(scratch).drift().map_err(held)?;
+    let files = omnia_template::drift(scratch).map_err(held)?;
+    fs::remove_dir_all(scratch)?;
+    let drift: Vec<String> = [manifest, files]
+        .iter()
+        .filter(|drift| !drift.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    Ok((!drift.is_empty()).then(|| drift.join("\n")))
+}
+
+// The bytes of `path` in `commit` of the repository at `at`, whole and
+// untrimmed; none where the commit holds no such file.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the eval creates and reads its repositories with the host's git"
+)]
+fn git_file(at: &Path, commit: &str, path: &str) -> io::Result<Option<Vec<u8>>> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(at)
+        .args(["cat-file", "-e", &format!("{commit}:{path}")])
+        .output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(at)
+        .args(["show", &format!("{commit}:{path}")])
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "git show `{commit}:{path}` at `{}`: {}",
+            at.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(Some(output.stdout))
 }
 
 const RUN_1: &str = "run-1";
@@ -5144,7 +5255,7 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
             " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
              specify columns and completions repeat that card's"
         ),
-        Again::Resume { card, wave } => {
+        Again::Resume { card, wave, drifted } => {
             let commits: Vec<String> = reports
                 .iter()
                 .filter_map(|report| {
@@ -5158,10 +5269,15 @@ fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &
                     ))
                 })
                 .collect();
+            let admitted = if *drifted {
+                "; the seed admitted by `--drifted`, the template having moved under it"
+            } else {
+                ""
+            };
             format!(
                 " · RESUME: each plan is `run-1`'s of `target/eval/{card}/`, its label moved to \
-                 the last commit of wave {} and built on from wave {wave} ({}); the specify \
-                 columns and completions repeat that card's",
+                 the last commit of wave {} and built on from wave {wave} ({}){admitted}; the \
+                 specify columns and completions repeat that card's",
                 wave - 1,
                 commits.join(", ")
             )
@@ -6322,10 +6438,26 @@ mod tests {
             args.again,
             Some(Again::Resume {
                 card: "card".to_owned(),
-                wave: 3
+                wave: 3,
+                drifted: false
             })
         );
         assert_eq!(args.target, Some(Target::Omnia), "a resume builds");
+        let drifted = Args::parse(
+            ["--resume", "card", "--at", "2", "--drifted", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            drifted.again,
+            Some(Again::Resume {
+                card: "card".to_owned(),
+                wave: 2,
+                drifted: true
+            })
+        );
+        assert_eq!(drifted.filter, BTreeSet::from(["express-orders".to_owned()]));
         let rebuild =
             Args::parse(["--rebuild", "card", "express-orders"].map(String::from).into_iter())
                 .unwrap();
@@ -6344,6 +6476,8 @@ mod tests {
             &["--at", "2", "express-orders"][..],
             &["--rebuild", "card", "--resume", "card", "--at", "2", "express-orders"][..],
             &["--resume", "card", "--at", "2", "--facts", "express-orders"][..],
+            &["--rebuild", "card", "--drifted", "express-orders"][..],
+            &["--build", "--drifted", "express-orders"][..],
         ] {
             assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
         }

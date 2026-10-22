@@ -265,7 +265,7 @@ version = "0.3.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.crc32fast]]
-version = "1.5.2"
+version = "1.5.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.crossbeam-channel]]
@@ -756,6 +756,98 @@ criteria = "safe-to-deploy"
 version = "0.1.4"
 criteria = "safe-to-deploy"
 
+[[exemptions.omnia]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-cli]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-compile]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-core]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-guest-macros]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-host-macros]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-link]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-plugin]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-sdk]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-test]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-blobstore]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-config]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-docstore]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-http]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-identity]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-keyvalue]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-messaging]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-model]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-otel]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-sql]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-vault]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-vcs]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.omnia-wasi-websocket]]
+version = "0.37.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.once_cell]]
 version = "1.12.0"
 criteria = "safe-to-deploy"
@@ -982,6 +1074,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.redox_syscall]]
 version = "0.5.18"
+criteria = "safe-to-deploy"
+
+[[exemptions.redox_syscall]]
+version = "0.9.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.reqwest]]
@@ -1237,7 +1333,7 @@ version = "0.4.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio]]
-version = "1.54.0"
+version = "1.54.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.tokio-macros]]

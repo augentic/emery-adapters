@@ -1257,6 +1257,7 @@ name = "evals"
 version = "0.12.0"
 dependencies = [
  "emery-sdk",
+ "omnia-template",
  "serde",
  "serde_json",
  "toml",

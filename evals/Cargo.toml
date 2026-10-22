@@ -11,10 +11,9 @@ publish.workspace = true
 [lints]
 workspace = true
 
-# Native: the runner spawns the shipped `emery` binary and reads what it
-# logs, so nothing here is compiled for `wasm32`.
 [dependencies]
 emery-sdk.workspace = true
+omnia-template.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 toml.workspace = true
