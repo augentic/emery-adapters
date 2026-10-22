@@ -11,6 +11,7 @@ Run from the repository root. `emery` mounts that directory as the project, and 
 1. The [emery](https://github.com/augentic/emery) repository as a sibling checkout.
 2. [cursor-sdk-bridge](https://github.com/cursor/sdk-bridge) on `PATH`. [Install](#installing-cursor-sdk-bridge).
 3. `CURSOR_API_KEY` in `.env`, or `export CURSOR_API_KEY=<key>`.
+4. No `.emery/` left by a pre-0.39 run. The engine then kept the revision in `.emery/storage`, so the labelled commit in the repository its `build` created holds no `spec/`, which every verb now refuses as `spec-mismatch`. Remove the directory (`rm -rf .emery`) and regenerate with a fresh `specify`; a revision under the old grammar is unreadable either way.
 
 ### Build adapters and copy to cache
 
