@@ -108,6 +108,7 @@ impl Backend {
                 "GENAI_MAX_ROUNDS",
                 "GENAI_MAX_CANDIDATES",
                 "GENAI_MAX_REPEATS",
+                "GENAI_MAX_TOKENS",
             ],
         }
     }
@@ -2122,8 +2123,13 @@ fn rebuilt(
 // to the last commit of wave `wave - 1`, a merge of that wave or its seal,
 // so the engine resumes there: the slices the chain names are not built
 // again, the plan's other slices are built in waves over that tree, and the
-// first slice this invocation's model builds is one of `wave`'s. The run
-// records the card, the wave, and the commit resumed from.
+// first slice this invocation's model builds is one of `wave`'s. A slice of
+// an earlier wave that merged nothing is not in the chain, so the engine
+// would build it again, a wave of its own verified again before `wave`'s
+// slice; every such slice but the first is sealed over the moved label as
+// an empty commit under the engine's own message, so one seed verify stands
+// before the slice. The run records the card, the wave, the commit resumed
+// from, and the slices resumed, the sealed ones among them.
 fn resumed(
     eval_dir: &Path, card: &str, wave: usize, card_name: &str, case: &Case, settings: &Settings,
 ) -> io::Result<Run> {
@@ -2153,11 +2159,32 @@ fn resumed(
             ))
         })?;
     git(&repository, &["branch", "-f", &label, &at.commit])?;
-    let slices = chain
+    let mut slices: Vec<String> = chain
         .iter()
         .skip_while(|landed| landed.commit != at.commit)
         .filter_map(|landed| landed.slice.clone())
         .collect();
+
+    // the earlier waves' empty slices sealed, all but the first
+    let envelope = fs::read_to_string(
+        eval_dir.join(card).join(&case.name).join(format!("{RUN_1}.build.stdout")),
+    )
+    .ok()
+    .and_then(|stdout| serde_json::from_str::<Value>(&stdout).ok());
+    let mut empty = envelope.as_ref().map(|out| empty_before(out, wave)).unwrap_or_default();
+    empty.retain(|slice| !slices.contains(&slice.id));
+    for slice in empty.iter().skip(1) {
+        let head = git(&repository, &["rev-parse", &format!("refs/heads/{label}")])?;
+        let tree = git(&repository, &["rev-parse", &format!("{head}^{{tree}}")])?;
+        let message = slice.message(&revision, &head);
+        let commit = git(&repository, &["commit-tree", &tree, "-p", &head, "-m", &message])?;
+        git(&repository, &["update-ref", &format!("refs/heads/{label}"), &commit])?;
+        eprintln!(
+            "eval: `{}` sealed `{} {}` of wave {} over the label, merged as nothing",
+            case.name, slice.id, slice.name, slice.wave
+        );
+        slices.push(slice.id.clone());
+    }
     eprintln!(
         "eval: `{}` resuming revision `{revision}` from `{}` ({}) at {}",
         case.name,
@@ -2416,6 +2443,67 @@ struct Rewound {
     commit: String,
     subject: String,
     slices: Vec<String>,
+}
+
+// A slice an earlier build merged as nothing, read from its envelope: no
+// commit names it in the chain, so a resume builds it again unless a commit
+// does.
+#[derive(Debug, PartialEq, Eq)]
+struct Empty {
+    id: String,
+    name: String,
+    wave: usize,
+    requirements: Vec<String>,
+    covered: Vec<String>,
+}
+
+impl Empty {
+    // The message the engine seals a slice under, as `emery_engine::vcs::Message`
+    // spells it, over `base`: the first line `<id> <name>`, then the seven
+    // trailers, every one present, so the engine's resume reads the slice
+    // back from the label's chain.
+    fn message(&self, revision: &str, base: &str) -> String {
+        format!(
+            "{id} {name}\n\nSlice: {id}\nRevision: {revision}\nRequirements: {requirements}\n\
+             Covered: {covered}\nAdapter: {TARGET_NAME}\nBase: {base}\nWave: {wave}",
+            id = self.id,
+            name = self.name,
+            requirements = self.requirements.join(", "),
+            covered = self.covered.join(", "),
+            wave = self.wave,
+        )
+    }
+}
+
+// The slices of `envelope`, a landed build's, merged as nothing in a wave
+// before `wave`, in wave then id order.
+fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
+    let mut empty: Vec<Empty> = envelope["slices"]
+        .as_array()
+        .map(|slices| {
+            slices
+                .iter()
+                .filter(|slice| slice["commit"].is_null())
+                .filter_map(|slice| {
+                    let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
+                    (landed < wave).then(|| {
+                        let covered = strings(&slice["covered"]);
+                        let mut requirements = covered.clone();
+                        requirements.extend(strings(&slice["uncovered"]));
+                        Empty {
+                            id: slice["id"].as_str().unwrap_or("").to_owned(),
+                            name: slice["name"].as_str().unwrap_or("").to_owned(),
+                            wave: landed,
+                            requirements,
+                            covered,
+                        }
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    empty.sort_by(|a, b| (a.wave, &a.id).cmp(&(b.wave, &b.id)));
+    empty
 }
 
 // The failure envelope: its code and message.
@@ -6312,6 +6400,38 @@ mod tests {
         assert_eq!(this_run.len(), 1);
         assert_eq!(this_run[0].id, "SLICE-004");
         assert_eq!(build.resumption(), ", 1 resumed, 1 built");
+    }
+
+    // A resume seals the earlier waves' empty slices but the first, so the
+    // slices sealed are the empty ones before the wave in wave order less
+    // one, none at the second wave, and the message is the engine's own.
+    #[test]
+    fn resumed_empty_waves_sealed() {
+        let envelope = serde_json::json!({
+            "slices": [
+                {"id": "SLICE-001", "name": "start", "wave": 1, "covered": [],
+                 "uncovered": ["REQ-001", "REQ-002"], "written": [], "commit": null},
+                {"id": "SLICE-003", "name": "health", "wave": 2, "covered": ["REQ-003"],
+                 "uncovered": [], "written": ["crates/health/src/health.rs"], "commit": "3333"},
+                {"id": "SLICE-002", "name": "start-prefetch", "wave": 3, "covered": [],
+                 "uncovered": ["REQ-004"], "written": [], "commit": null},
+                {"id": "SLICE-005", "name": "orders-reading", "wave": 3, "covered": [],
+                 "uncovered": ["REQ-005"], "written": [], "commit": null},
+                {"id": "SLICE-004", "name": "customers", "wave": 4, "covered": [],
+                 "uncovered": ["REQ-006"], "written": [], "commit": null},
+            ]
+        });
+        let ids = |wave: usize| -> Vec<String> {
+            empty_before(&envelope, wave).into_iter().map(|slice| slice.id).collect()
+        };
+        assert_eq!(ids(4), ["SLICE-001", "SLICE-002", "SLICE-005"]);
+        assert_eq!(ids(2), ["SLICE-001"], "the second wave's resume leaves its one seed verify");
+        let sealed = empty_before(&envelope, 4).swap_remove(1);
+        assert_eq!(
+            sealed.message("rev", "1111"),
+            "SLICE-002 start-prefetch\n\nSlice: SLICE-002\nRevision: rev\nRequirements: \
+             REQ-004\nCovered: \nAdapter: target\nBase: 1111\nWave: 3"
+        );
     }
 
     #[test]

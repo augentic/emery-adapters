@@ -144,6 +144,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.unlinted_stems()?);
         findings.extend(self.unused_dependencies()?);
         findings.extend(self.unmerged_stems());
+        findings.extend(self.undeclared_parts());
         findings.extend(self.unnamed_topics());
         findings.extend(self.unreached_publishers()?);
         findings.extend(self.empty_misses());

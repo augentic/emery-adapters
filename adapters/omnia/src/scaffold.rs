@@ -65,6 +65,9 @@ struct Stem {
     package: String,
     part: String,
     doc: Vec<String>,
+    // Whether the slice's words select the probe idiom, whose tests arrange
+    // the store's rows, so the manifest names the crate the rows are.
+    probing: bool,
     manifest: File,
     entry: File,
     module: File,
@@ -422,6 +425,7 @@ impl Stem {
             name: name.to_owned(),
             dir: dir.to_owned(),
             package: package(name),
+            probing: false,
             manifest: File::at(format!("{root}/Cargo.toml")),
             entry: File::at(format!("{root}/src/lib.rs")),
             module: File::at(format!("{root}/src/{part}.rs")),
@@ -446,6 +450,7 @@ impl Stem {
         &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
         topics: &mut Topics, probing: bool,
     ) {
+        self.probing = probing;
         let mut namespaces = Namespaces::default();
         let reads: Vec<types::Read> =
             owned.iter().map(|design_type| types::read(&design_type.signature)).collect();
@@ -591,11 +596,11 @@ impl Stem {
         Ok(())
     }
 
-    // Decides each of the stem's lines against its list, the held entry
-    // read once with the stem's files.
+    // Decides each of the stem's lines against its list, the held entry and
+    // manifest read once with the stem's files.
     fn place_lines(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
-        if self.entry.held {
-            lists.hold(&self.entry.path, &self.entry.text);
+        for file in [&self.entry, &self.manifest].into_iter().filter(|file| file.held) {
+            lists.hold(&file.path, &file.text);
         }
         let mut lines = self.lines();
         for line in &mut lines {
@@ -683,8 +688,9 @@ impl Stem {
     }
 
     // The stem's lines in the root lists, the constant of each topic the
-    // slice declares in the table, and, where the tree holds its entry, the
-    // part's lines in the entry's.
+    // slice declares in the table, where the tree holds its manifest and
+    // the slice probes, the probe's crate at the end of the manifest, and,
+    // where the tree holds its entry, the part's lines in the entry's.
     fn lines(&self) -> Vec<Line> {
         let ident = self.package.replace('-', "_");
         let mut lines = vec![
@@ -709,6 +715,13 @@ impl Stem {
             lines.push(Line::new(
                 TOPICS,
                 format!("\n{}", render::topic_constant(&consumer.constant, &consumer.topic)),
+                Place::FileEnd,
+            ));
+        }
+        if self.manifest.held && self.probing {
+            lines.push(Line::new(
+                &self.manifest.path,
+                render::dependency_line(layout::PROBE_DEPENDENCY),
                 Place::FileEnd,
             ));
         }

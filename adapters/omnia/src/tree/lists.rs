@@ -1,5 +1,6 @@
 //! Checks that stem routers, topic constants, and stem dependencies are each
-//! used by the workspace, that a stem which publishes is reached, and that
+//! used by the workspace, that a stem which publishes is reached, that a
+//! stem's entry declares its modules and holds nothing of its own, and that
 //! the root manifest names no crate the tree lacks.
 
 use emery_sdk::Error;
@@ -59,6 +60,7 @@ impl Tree<'_> {
             for (number, name) in Toml::read(&manifest).dependencies() {
                 let ident = name.replace('-', "_");
                 if layout::STEM_DEPENDENCIES.contains(&name)
+                    || name == layout::PROBE_DEPENDENCY
                     || code.iter().any(|module| module.mentions.names(&ident))
                 {
                     continue;
@@ -133,6 +135,54 @@ impl Tree<'_> {
     // the tree lacks names nothing.
     fn list_names(&self, path: &str, tail: &[&str]) -> bool {
         self.module(path).is_some_and(|list| list.mentions.ends(tail))
+    }
+
+    // A module the entry does not declare is compiled by nothing, and an
+    // item in an entry that composes parts, beyond its lists, is a part
+    // folded into it; a verify is where both are left, the one turn under
+    // no scaffold, when the shell moves a file and a `delete` takes one.
+    pub(super) fn undeclared_parts(&self) -> Option<String> {
+        let mut lines = Vec::new();
+        for entry in &self.modules {
+            let Some(stem) = entry.entry_of() else { continue };
+            let Some(file) = entry.file() else { continue };
+            let declared = syntax::mods(file);
+            let prefix = format!("crates/{stem}/src/");
+            for module in &self.modules {
+                let Some(part) = module.part_under(&prefix) else { continue };
+                if !declared.iter().any(|name| name == part) {
+                    lines.push(format!(
+                        "{}: declared by no `pub mod {part};` line of `{}`",
+                        module.path, entry.path
+                    ));
+                }
+            }
+            if entry.exposes("router").is_none() && entry.exposes("topics").is_none() {
+                continue;
+            }
+            for (number, head) in entry.own_items() {
+                lines.push(format!(
+                    "{}:{number}: `{head}` stands in the entry, which composes its parts and holds \
+                     nothing of its own",
+                    entry.path
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a stem's entry declares its parts and holds nothing of its own: every \
+             `crates/<stem>/src/<part>.rs` is listed by a `pub mod <part>;` line of \
+             `crates/<stem>/src/lib.rs`, since a module nothing declares is compiled by nothing \
+             and serves nothing, and a handler, a type, or a constant in the entry is a part's, \
+             folded in where its file was; add each missing line among the entry's `pub mod` \
+             lines through `edit_files`, and put each item back in its part, \
+             `crates/<stem>/src/<part>.rs`, declared by its `pub mod` line and named in the \
+             entry's arrays, through `write_files` and `edit_files`:\n{}",
+            lines.join("\n")
+        ))
     }
 
     pub(super) fn unnamed_topics(&self) -> Option<String> {
@@ -235,5 +285,29 @@ impl Module {
 
     fn exposes(&self, name: &str) -> Option<usize> {
         syntax::pub_fn(self.file()?, name)
+    }
+
+    // The part this module is where it stands directly under `prefix`, the
+    // stem's `src/`, as `<part>.rs`; the entry and a file deeper down are
+    // none.
+    fn part_under<'m>(&'m self, prefix: &str) -> Option<&'m str> {
+        let part = self.path.strip_prefix(prefix)?.strip_suffix(".rs")?;
+        (!part.is_empty() && !part.contains('/') && part != "lib").then_some(part)
+    }
+
+    // Every item of an entry beyond its lists: a `mod` declaration, a `use`,
+    // and the two folds `router` and `topics` are the layout's, and anything
+    // else a part's.
+    fn own_items(&self) -> Vec<(usize, String)> {
+        let Some(file) = self.file() else { return Vec::new() };
+        file.items
+            .iter()
+            .filter(|item| match item {
+                syn::Item::Mod(item) => item.content.is_some(),
+                syn::Item::Fn(item) => item.sig.ident != "router" && item.sig.ident != "topics",
+                _ => true,
+            })
+            .filter_map(syntax::item_head)
+            .collect()
     }
 }

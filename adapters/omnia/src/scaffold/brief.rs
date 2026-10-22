@@ -148,11 +148,13 @@ impl Stem {
         let _ = writeln!(text, "Stem `{}`, part `{}`:\n", self.name, self.part);
         let _ = writeln!(
             text,
-            "- `{}`: {}. One `<crate>.workspace = true` line at the end of `[dependencies]` for \
-             each crate your code uses beyond the six it holds; a crate the root manifest does \
-             not pin carries its version instead.",
+            "- `{}`: {}{}. One `<crate>.workspace = true` line at the end of `[dependencies]` \
+             for each crate your code uses beyond the {} it holds; a crate the root manifest \
+             does not pin carries its version instead.",
             self.manifest.path,
-            self.manifest.origin()
+            self.manifest.origin(),
+            self.brief_probe_dependency(),
+            if self.probing { "seven" } else { "six" }
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
         if !self.handlers.is_empty() {
@@ -201,6 +203,24 @@ impl Stem {
             }
         }
         self.brief_lines(text);
+    }
+
+    // The clause after the manifest's origin naming the probe's crate laid
+    // among its dependencies, or nothing for a slice that probes nothing.
+    fn brief_probe_dependency(&self) -> String {
+        if !self.probing {
+            return String::new();
+        }
+        let line = render::dependency_line(layout::PROBE_DEPENDENCY);
+        let how = match self.lines.iter().find(|held| held.path == self.manifest.path) {
+            None => "among",
+            Some(laid) if laid.placement == Placement::Held => "already held among",
+            Some(_) => "added at the end of",
+        };
+        format!(
+            ", `{line}` {how} its `[dependencies]` for the `Row` the probe's tests arrange the \
+             store's answer with"
+        )
     }
 
     // The stem's lines in the root lists and the topic table, each spelled,

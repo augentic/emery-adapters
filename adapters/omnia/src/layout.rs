@@ -31,6 +31,11 @@ pub const TOPICS_ARRAY_ANCHOR: &str = "// one entry per part with topics, each a
 // reaches them.
 pub const STEM_DEPENDENCIES: [&str; 6] =
     ["axum", "common", "omnia-sdk", "serde", "serde_json", "tracing"];
+// The crate a probing stem's manifest names beside them for the `Row` its
+// tests arrange the store's answer with, laid by the scaffold where the
+// probe idiom is selected and held to no use, since a probe over the state
+// store alone never spells it.
+pub const PROBE_DEPENDENCY: &str = "omnia-wasi-sql";
 
 // The topic table as a tree holds it: every `pub const` of the table, its
 // topic where the value is a string literal.

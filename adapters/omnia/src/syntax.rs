@@ -210,6 +210,52 @@ const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
+// The modules `file` declares from files beside it, `pub mod reading;`, by
+// name; one with a body inline declares no file.
+pub fn mods(file: &syn::File) -> Vec<String> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Mod(item) = item else { return None };
+            item.content.is_none().then(|| item.ident.to_string())
+        })
+        .collect()
+}
+
+// The declaration an item opens with, `fn read`, `struct Order`, `mod
+// tests`, and the line it stands on, for the items a finding names; a `use`
+// or an `extern crate` is none.
+pub fn item_head(item: &Item) -> Option<(usize, String)> {
+    let (span, head) = match item {
+        Item::Fn(item) => (item.sig.fn_token.span, format!("fn {}", item.sig.ident)),
+        Item::Struct(item) => (item.struct_token.span, format!("struct {}", item.ident)),
+        Item::Enum(item) => (item.enum_token.span, format!("enum {}", item.ident)),
+        Item::Union(item) => (item.union_token.span, format!("union {}", item.ident)),
+        Item::Const(item) => (item.const_token.span, format!("const {}", item.ident)),
+        Item::Static(item) => (item.static_token.span, format!("static {}", item.ident)),
+        Item::Type(item) => (item.type_token.span, format!("type {}", item.ident)),
+        Item::Trait(item) => (item.trait_token.span, format!("trait {}", item.ident)),
+        Item::TraitAlias(item) => (item.trait_token.span, format!("trait {}", item.ident)),
+        Item::Mod(item) => (item.mod_token.span, format!("mod {}", item.ident)),
+        Item::Impl(item) => {
+            let name = match &*item.self_ty {
+                syn::Type::Path(path) => {
+                    path.path.segments.last().map(|segment| segment.ident.to_string())
+                }
+                _ => None,
+            };
+            let head = name.map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
+            (item.impl_token.span, head)
+        }
+        Item::Macro(item) => {
+            let segment = item.mac.path.segments.last()?;
+            (segment.ident.span(), format!("{}!", segment.ident))
+        }
+        _ => return None,
+    };
+    Some((line(span), head))
+}
+
 // The line an expression starts on, for the shapes a finding is spelled at.
 pub fn head_line(expr: &Expr) -> Option<usize> {
     match expr {

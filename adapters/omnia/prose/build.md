@@ -323,6 +323,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.
 - The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks.
 - A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
+- A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself. Declare the module, or move the item into its part.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells `FORMAT`.
 

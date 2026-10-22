@@ -13,7 +13,8 @@ use super::names::{escape, flat, snake};
 use super::types::{Body, DefaultFn, Member};
 use super::{Act, Consumer, Function, Handler, Stated, Stem, Test, Type, trigger};
 use crate::layout::{
-    ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES, TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
+    PROBE_DEPENDENCY, ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES,
+    TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
 };
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
@@ -22,7 +23,8 @@ const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserializ
 const GENERICS: &str = "<P: Capabilities>";
 
 // The stem's manifest, as the layout reference spells it, its
-// `[dependencies]` the layout's fixed lines.
+// `[dependencies]` the layout's fixed lines and, where the slice probes, the
+// probe's crate after them.
 const MANIFEST: &str = r#"[package]
 name = "<package>"
 description = "The `<stem>` stem"
@@ -62,12 +64,21 @@ const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
     serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
 
 pub fn manifest(stem: &Stem) -> String {
-    let dependencies: Vec<String> =
-        STEM_DEPENDENCIES.iter().map(|name| format!("{name}.workspace = true")).collect();
+    let mut dependencies: Vec<String> =
+        STEM_DEPENDENCIES.iter().map(|name| dependency_line(name)).collect();
+    if stem.probing {
+        dependencies.push(dependency_line(PROBE_DEPENDENCY));
+    }
     MANIFEST
         .replace("<package>", &stem.package)
         .replace("<stem>", &stem.name)
         .replace("<dependencies>", &dependencies.join("\n"))
+}
+
+// The line a stem's `[dependencies]` names a crate the root manifest pins
+// by.
+pub fn dependency_line(name: &str) -> String {
+    format!("{name}.workspace = true")
 }
 
 // The topic table's constant for `topic`, under its doc line, as the lines
