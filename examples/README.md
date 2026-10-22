@@ -55,6 +55,12 @@ cargo run --manifest-path ../emery/Cargo.toml -- show spec --config examples/eme
 
 `apply` creates `.emery/vcs/repos/omnia`, seals the three documents under `spec/` there as the commit `Revision <revision>`, labels it `emery/<revision>`, and clears the staged candidate. A later `apply` seals over that commit, so the repository carries each revision in turn. `specify --apply` stages and seals in one run.
 
+`<revision>` is the id `apply` prints — `sealed revision <revision> as emery/<revision> at <commit>` — and the repository lists the label any time:
+
+```bash
+git -C .emery/vcs/repos/omnia branch --list 'emery/*'
+```
+
 ## Build
 
 After `apply`, copy the adapter and build the current plan:
@@ -62,7 +68,7 @@ After `apply`, copy the adapter and build the current plan:
 ```bash
 cargo run --manifest-path ../emery/Cargo.toml -- build -v --config examples/emery.toml
 
-# switch to HEAD to view the build in `.emery/vcs/repos/omnia`
+# switch to the label to view the build; `emery/<revision>` as listed above
 git -C .emery/vcs/repos/omnia checkout emery/<revision>
 ```
 
