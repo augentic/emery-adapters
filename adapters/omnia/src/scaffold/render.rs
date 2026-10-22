@@ -23,8 +23,8 @@ const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserializ
 const GENERICS: &str = "<P: Capabilities>";
 
 // The stem's manifest, as the layout reference spells it, its
-// `[dependencies]` the layout's fixed lines and, where the slice probes, the
-// probe's crate after them.
+// `[dependencies]` the layout's fixed lines and, where the slice probes or
+// reaches a SQL store, the SQL crate after them.
 const MANIFEST: &str = r#"[package]
 name = "<package>"
 description = "The `<stem>` stem"
@@ -66,7 +66,7 @@ const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
 pub fn manifest(stem: &Stem) -> String {
     let mut dependencies: Vec<String> =
         STEM_DEPENDENCIES.iter().map(|name| dependency_line(name)).collect();
-    if stem.probing {
+    if stem.sql {
         dependencies.push(dependency_line(PROBE_DEPENDENCY));
     }
     MANIFEST
@@ -293,10 +293,19 @@ fn deliver(ident: &str) -> Fn {
 }
 
 // A scaffolded test from its `#[ignore]` line to its closing brace: the one
-// block the turn replaces, so the brief quotes it as the `find`.
+// block the turn replaces, so the brief quotes it under the marker's key.
 pub fn test_block(stem: &Stem, test: &Test) -> String {
     let mut source = Source::default();
     source.push(scenario(stem, test).attr(ignored(test)));
+    source.render().trim_end().to_owned()
+}
+
+// A scaffolded function from its signature to its closing brace, the
+// comment and doc lines above it standing: the one block the turn
+// replaces, since the behaviour decides the signature too.
+pub fn function_block(function: &Function) -> String {
+    let mut source = Source::default();
+    source.push(signature(function));
     source.render().trim_end().to_owned()
 }
 
@@ -679,15 +688,17 @@ fn consumer(consumer: &Consumer, source: &mut Source) {
 
 // A function under its requirement, its body the marker.
 fn function(function: &Function) -> Fn {
+    signature(function).comments(stated(std::slice::from_ref(&function.stated))).docs([
+        format!("The behaviour `{}` states.", function.stated.subject),
+        String::new(),
+        "# Errors".to_owned(),
+        String::new(),
+        "As the requirement states.".to_owned(),
+    ])
+}
+
+fn signature(function: &Function) -> Fn {
     Fn::new(&function.name)
-        .comments(stated(std::slice::from_ref(&function.stated)))
-        .docs([
-            format!("The behaviour `{}` states.", function.stated.subject),
-            String::new(),
-            "# Errors".to_owned(),
-            String::new(),
-            "As the requirement states.".to_owned(),
-        ])
         .vis(Vis::Pub)
         .returns("omnia_sdk::Result<()>")
         .body(marker_line(&function.marker).lines())

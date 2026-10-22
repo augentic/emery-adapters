@@ -153,8 +153,8 @@ impl Stem {
              does not pin carries its version instead.",
             self.manifest.path,
             self.manifest.origin(),
-            self.brief_probe_dependency(),
-            if self.probing { "seven" } else { "six" }
+            self.brief_sql_dependency(),
+            if self.sql { "seven" } else { "six" }
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
         if !self.handlers.is_empty() {
@@ -205,10 +205,11 @@ impl Stem {
         self.brief_lines(text);
     }
 
-    // The clause after the manifest's origin naming the probe's crate laid
-    // among its dependencies, or nothing for a slice that probes nothing.
-    fn brief_probe_dependency(&self) -> String {
-        if !self.probing {
+    // The clause after the manifest's origin naming the SQL crate laid among
+    // its dependencies and what for, or nothing for a slice that neither
+    // probes nor reaches a SQL store.
+    fn brief_sql_dependency(&self) -> String {
+        if !self.sql {
             return String::new();
         }
         let line = render::dependency_line(layout::PROBE_DEPENDENCY);
@@ -217,10 +218,12 @@ impl Stem {
             Some(laid) if laid.placement == Placement::Held => "already held among",
             Some(_) => "added at the end of",
         };
-        format!(
-            ", `{line}` {how} its `[dependencies]` for the `Row` the probe's tests arrange the \
-             store's answer with"
-        )
+        let what = if self.probing {
+            "the `Row` the probe's tests arrange the store's answer with"
+        } else {
+            "the SQL store the slice reaches"
+        };
+        format!(", `{line}` {how} its `[dependencies]` for {what}")
     }
 
     // The stem's lines in the root lists and the topic table, each spelled,
@@ -347,8 +350,9 @@ impl Stem {
             );
         }
         text.push_str(
-            "Markers, in fill order, each one `edit_files` edit whose `find` is the block quoted \
-             under it:\n\n",
+            "Markers, in fill order, each one `edit_files` edit whose `find` is the key quoted \
+             beside it, alone, and whose `replace` is the whole text that takes the quoted \
+             block's place, its lines indented as the block's are:\n\n",
         );
         let mut count = 0;
         for design_type in self.types.iter().filter(|design_type| design_type.body.is_marker()) {
@@ -356,8 +360,9 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. `pub {} {{}}` in `{}`: the design type `{}`, whose signature the scaffold \
-                 could not lay. Replace it with the {} the signature in its doc spells, every \
-                 field documented; drop `Eq` from its derives where a field is a float.\n",
+                 could not lay, its key as quoted. Replace it with the {} the signature in its \
+                 doc spells, every field documented; drop `Eq` from its derives where a field is \
+                 a float.\n",
                 design_type.declaration(),
                 self.module.path,
                 design_type.key,
@@ -368,11 +373,12 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The handler `{}` of `{}` in `{}`: fill `{}` and `{}` with the wire's \
-                 fields, then replace this block with the body. {}\n\n{}",
+                "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill `{}` and `{}` with the \
+                 wire's fields, then replace this block with the body. {}\n\n{}",
                 handler.name,
                 handler.route,
                 self.module.path,
+                handler.marker,
                 handler.input,
                 handler.output,
                 handler.status_hint(),
@@ -383,12 +389,13 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The consumer `{}` of the topic `{}` in `{}`, registered in the part's \
-                 `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, then \
-                 replace this block with the body.\n\n{}",
+                "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
+                 part's `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, \
+                 then replace this block with the body.\n\n{}",
                 consumer.name,
                 consumer.topic,
                 self.module.path,
+                consumer.marker,
                 consumer.constant,
                 consumer.input,
                 render::fenced("rust", &render::stub(&consumer.marker))
@@ -398,12 +405,13 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The function `{}` in `{}`, since the requirement states no route and no \
-                 message: give it the signature the behaviour needs and replace this block with \
-                 the body.\n\n{}",
+                "{count}. The function `{}` in `{}`, key `{}`, since the requirement states no \
+                 route and no message: replace this block with the function whole, the \
+                 signature the behaviour needs over its body.\n\n{}",
                 function.name,
                 self.module.path,
-                render::fenced("rust", &render::marker_line(&function.marker))
+                function.marker,
+                render::fenced("rust", &render::function_block(function))
             );
         }
         if let Some(tests) = &self.tests {
@@ -411,11 +419,12 @@ impl Stem {
                 count += 1;
                 let _ = writeln!(
                     text,
-                    "{count}. The test `{}` in `{}`: replace this block with the filled test, its \
-                     `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
-                     laid, and the assertions the scenario states.\n\n{}",
+                    "{count}. The test `{}` in `{}`, key `{}`: replace this block with the filled \
+                     test, its `#[ignore = ..]` line gone: the arrangement over `provider()`, \
+                     the act as laid, and the assertions the scenario states.\n\n{}",
                     test.name,
                     tests.path,
+                    test.marker,
                     render::fenced("rust", &render::test_block(self, test))
                 );
             }

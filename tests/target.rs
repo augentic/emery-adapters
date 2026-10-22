@@ -965,18 +965,20 @@ fn assert_omnia_scaffold_brief(brief: &str) {
          scaffolded as their signatures spell, each field and variant documented and the wire's \
          names kept through `serde(rename)`; they are finished, so change a field only where a \
          scenario's wire shape or the check requires it.\n\nMarkers, in fill order, each one \
-         `edit_files` edit whose `find` is \
-         the block quoted under it:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
-         `crates/orders/src/reading.rs`: fill `ReadInput` and `ReadOutput` with the wire's \
-         fields, then replace this block with the body. Its `Ok` is answered `200` as JSON; for \
-         another status, declare a route function over `handle_with(MethodFilter::GET, read, \
-         decode, |output: ReadOutput| (StatusCode::NO_CONTENT, Json(output)).into_response())` \
-         as the handlers reference shows and name it in `routes()` in place of \
+         `edit_files` edit whose `find` is the key quoted beside it, alone, and whose `replace` \
+         is the whole text that takes the quoted block's place, its lines indented as the \
+         block's are:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
+         `crates/orders/src/reading.rs`, key `REQ-001 orders.read: the handler`: \
+         fill `ReadInput` and `ReadOutput` with the wire's fields, then replace this block with \
+         the body. Its `Ok` is answered `200` as JSON; for another status, declare a route \
+         function over `handle_with(MethodFilter::GET, read, decode, |output: ReadOutput| \
+         (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers reference \
+         shows and name it in `routes()` in place of \
          `get(read)`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
-         `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`: replace this \
-         block with the filled test, its `#[ignore = ..]` line gone: the arrangement over \
-         `provider()`, the act as laid, and the assertions the scenario \
-         states.\n\n```rust\n{OMNIA_TEST_MARKER}```\n"
+         `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`, key `REQ-001 An \
+         order is returned by its id: arrange, act, assert`: replace this block with the filled \
+         test, its `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
+         laid, and the assertions the scenario states.\n\n```rust\n{OMNIA_TEST_MARKER}```\n"
     );
     for carried in [
         "Stem `orders`, part `reading`:\n\n- `crates/orders/Cargo.toml`: scaffolded.",
@@ -1097,6 +1099,84 @@ async fn omnia_write_scaffolded_refused() {
         text(&project, "crates/orders/src/lib.rs"),
         OMNIA_ENTRY.replace("        reading::routes(),\n", ""),
         "the entry stands"
+    );
+}
+
+// A marker is filled by an `edit_files` edit whose `find` is the key the
+// brief quotes beside it, alone: the handler's stub, the test's ignored
+// block, and a design type's empty marker each go, the edit's `replace`
+// standing in the block's place, so the turn copies none of the block's
+// lines; a key of one file names nothing in another.
+#[tokio::test]
+async fn omnia_scaffold_keyed() {
+    let project = omnia_tree().await;
+    let mut slice = omnia_slice();
+    slice.types.push(DesignType {
+        key: "orders.OrderRef".to_owned(),
+        signature: "export type OrderRef = { id: string } | { code: string };".to_owned(),
+    });
+    let laid = "pub struct OrderRef {\n    /// The order id.\n    pub id: Option<String>,\n}";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = Scripted::answering([report]).calling(
+        0,
+        [
+            edit_files(&[(
+                "crates/orders/tests/reading.rs",
+                "REQ-001 orders.read: the handler",
+                OMNIA_HANDLER_FILLED.trim_end(),
+            )]),
+            edit_files(&[
+                ("crates/orders/src/reading.rs", "orders.OrderRef", laid),
+                (
+                    "crates/orders/src/reading.rs",
+                    "REQ-001 orders.read: the handler",
+                    OMNIA_HANDLER_FILLED.trim_end(),
+                ),
+                (
+                    "crates/orders/tests/reading.rs",
+                    "REQ-001 An order is returned by its id: arrange, act, assert",
+                    OMNIA_TEST_FILLED.trim_end(),
+                ),
+            ]),
+        ],
+    );
+
+    let report = OMNIA.build_slice(&project, &model, &slice).await.expect("the keyed edits land");
+    model.assert_exhausted();
+
+    let edits: Vec<_> = model
+        .exchanges()
+        .into_iter()
+        .filter(|exchange| exchange.tool == "edit_files")
+        .map(|exchange| exchange.outcome)
+        .collect();
+    assert_eq!(edits.len(), 2, "both calls reached the tool");
+    let refused = edits[0].clone().expect_err("a key names nothing in another file");
+    assert!(
+        refused.contains(
+            "`crates/orders/tests/reading.rs`: `find` matches nothing in the file; no line holds \
+             its first line; the file has"
+        ),
+        "the handler's key is plain text in the test file: {refused}"
+    );
+    assert!(edits[1].is_ok(), "the keyed edits land: {:?}", edits[1]);
+    assert_eq!(report.covered, ["REQ-001"]);
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        module.contains(&format!("{OMNIA_HANDLER_FILLED}}}\n")),
+        "the handler's body stands where its stub was: {module}"
+    );
+    assert!(
+        module.contains(&format!("Deserialize)]\n{laid}\n")),
+        "the design type stands where its marker was: {module}"
+    );
+    for gone in [OMNIA_HANDLER_MARKER, "pub struct OrderRef {}", "todo!("] {
+        assert!(!module.contains(gone), "`{gone}` is gone: {module}");
+    }
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        OMNIA_TESTS.replace(OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        "the test stands filled, its `#[ignore]` line gone"
     );
 }
 
@@ -1456,7 +1536,9 @@ async fn omnia_scaffold_probe_held_manifest() {
 // role, a design paragraph citing one of its ids, inside a `through` range,
 // or citing none does too, while a paragraph citing other slices' ids alone
 // selects nothing, and the inbound surface's `HTTP`, `REST`, and `API` and
-// the store's `DATABASE_URL` and `order fetch` select no upstream.
+// the store's `DATABASE_URL` and `order fetch` select no upstream; a SQL
+// store among the roles names the SQL crate in the manifest as a probe
+// does, the brief saying what for.
 #[tokio::test]
 async fn omnia_scaffold_roles_scoped() {
     let project = omnia_tree().await;
@@ -1478,11 +1560,20 @@ async fn omnia_scaffold_roles_scoped() {
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        format!("{OMNIA_MANIFEST}{OMNIA_PROBE_DEPENDENCY}"),
+        "the SQL crate is named after the six fixed lines for the store the design names"
+    );
     let brief = &model.seen()[0].messages[0];
     let (_, scaffolded) = brief
         .split_once("What the adapter scaffolded for this slice before this turn:\n\n")
         .expect("the brief carries the scaffold section after the design");
     for carried in [
+        "- `crates/orders/Cargo.toml`: scaffolded, `omnia-wasi-sql.workspace = true` among its \
+         `[dependencies]` for the SQL store the slice reaches. One `<crate>.workspace = true` \
+         line at the end of `[dependencies]` for each crate your code uses beyond the seven it \
+         holds;",
         "pub trait Identity: Send + Sync {",
         "pub trait StateStore: Send + Sync {",
         "pub trait TableStore: Send + Sync {",
@@ -1571,9 +1662,13 @@ async fn omnia_scaffold_idioms() {
         assert!(
             before.ends_with(
                 "`restore_files` puts one back as it was scaffolded, the turn's edits to it \
-                 discarded: recovery after a refusal, not a step.\n\n"
+                 discarded: recovery after a refusal, not a step. A marker the brief quotes a \
+                 key for is filled by one `edit_files` edit whose `find` is that key alone and \
+                 whose `replace` is the text that takes the block's place, so its lines are \
+                 never copied; a `find` copied from the brief matches where the formatter has \
+                 broken its lines or moved its indentation.\n\n"
             ),
-            "the passages follow the scaffold section and its guard sentence: {before}"
+            "the passages follow the scaffold section and its guard sentences: {before}"
         );
         assert!(
             passages.starts_with("From `references/"),
@@ -1700,10 +1795,12 @@ async fn omnia_scaffold_no_route() {
     for carried in [
         "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` in its lists.",
         "- No scenario states a test, so no test file was scaffolded.",
-        "1. The function `get_id_return_order` in `crates/orders/src/reading.rs`, since the \
-         requirement states no route and no message: give it the signature the behaviour needs \
-         and replace this block with the body.\n\n```rust\n    todo!(\"REQ-001 \
-         orders.get-id.return-order: the behaviour\")\n```\n",
+        "1. The function `get_id_return_order` in `crates/orders/src/reading.rs`, key `REQ-001 \
+         orders.get-id.return-order: the behaviour`, since the requirement states no route and \
+         no message: replace this block with the function whole, the signature the behaviour \
+         needs over its body.\n\n```rust\npub fn get_id_return_order() -> \
+         omnia_sdk::Result<()> {\n    todo!(\"REQ-001 orders.get-id.return-order: the \
+         behaviour\")\n}\n```\n",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
@@ -1747,8 +1844,9 @@ async fn omnia_scaffold_conflict() {
     let brief = &model.seen()[0].messages[0];
     assert!(
         brief.contains(
-            "1. The function `get_id_return_order` in `crates/orders/src/reading.rs`, since the \
-             requirement states no route and no message:"
+            "1. The function `get_id_return_order` in `crates/orders/src/reading.rs`, key `REQ-001 \
+             orders.get-id.return-order: the behaviour`, since the requirement states no route \
+             and no message:"
         ),
         "the brief lists the marker: {brief}"
     );
@@ -1828,8 +1926,8 @@ async fn omnia_scaffold_enum() {
          variant documented and the wire's names kept through `serde(rename)`; they are \
          finished, so change a field only where a scenario's wire shape or the check requires it.",
         "1. `pub struct OrderRef {}` in `crates/orders/src/reading.rs`: the design type \
-         `orders.OrderRef`, whose signature the scaffold could not lay. Replace it with the \
-         struct the signature in its doc spells",
+         `orders.OrderRef`, whose signature the scaffold could not lay, its key as quoted. \
+         Replace it with the struct the signature in its doc spells",
     ] {
         assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
     }
@@ -2045,13 +2143,13 @@ async fn omnia_scaffold_type_fallbacks() {
         "The design types `Order` (`orders.Order`) and `Order2` (`Order (src/orders.ts#L3)`) in \
          `crates/orders/src/reading.rs` are scaffolded as their signatures spell",
         "1. `pub struct ListQuery {}` in `crates/orders/src/reading.rs`: the design type \
-         `orders.ListQuery`, whose signature the scaffold could not lay. Replace it with the \
-         struct the signature in its doc spells, every field documented; drop `Eq` from its \
-         derives where a field is a float.",
+         `orders.ListQuery`, whose signature the scaffold could not lay, its key as quoted. \
+         Replace it with the struct the signature in its doc spells, every field documented; \
+         drop `Eq` from its derives where a field is a float.",
         "2. `pub struct OrderRef {}` in `crates/orders/src/reading.rs`: the design type \
-         `orders.OrderRef`, whose signature the scaffold could not lay.",
+         `orders.OrderRef`, whose signature the scaffold could not lay, its key as quoted.",
         "3. `pub struct Transitions {}` in `crates/orders/src/reading.rs`: the design type \
-         `orders.TRANSITIONS`, whose signature the scaffold could not lay.",
+         `orders.TRANSITIONS`, whose signature the scaffold could not lay, its key as quoted.",
     ] {
         assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
     }
@@ -2118,7 +2216,7 @@ async fn omnia_scaffold_rust_type() {
     assert_parses(&project, &["crates/orders/src/reading.rs"]);
     let brief = &model.seen()[0].messages[0];
     let cited = "`pub enum Event {}` in `crates/orders/src/reading.rs`: the design type `orders.Event`, \
-                 whose signature the scaffold could not lay.";
+                 whose signature the scaffold could not lay, its key as quoted.";
     assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
 }
 
@@ -2466,7 +2564,8 @@ async fn omnia_scaffold_topic() {
          `orders.cancel-requested` added at the end of the table: `pub const \
          ORDERS_CANCEL_REQUESTED: &str = \"orders.cancel-requested\";`.",
         "1. The consumer `on_cancel` of the topic `orders.cancel-requested` in \
-         `crates/orders/src/cancelling.rs`, registered in the part's `topics(..)` under \
+         `crates/orders/src/cancelling.rs`, key `REQ-001 orders.cancel, REQ-002 \
+         orders.cancel.refuse-paid: the consumer`, registered in the part's `topics(..)` under \
          `topic::ORDERS_CANCEL_REQUESTED`: fill `OnCancelInput` with the delivery's fields, then \
          replace this block with the body.\n\n```rust\n    let _ = (&input, &context);\n    \
          todo!(\"REQ-001 orders.cancel, REQ-002 orders.cancel.refuse-paid: the consumer\")\n```\n",
@@ -2945,11 +3044,11 @@ async fn omnia_manifest_refused() {
 
     let correction = correction(&model);
     for line in [
-        "the root `Cargo.toml` changed outside its two stem lists",
-        "- omnia-sdk = \"0.36.0\"",
-        "+ omnia-sdk = \"0.37.0\"",
+        "the root `Cargo.toml` changed outside its two stem lists".to_owned(),
+        format!("- {}", OMNIA_PIN.trim_end()),
+        format!("+ {}", OMNIA_PIN_EDITED.trim_end()),
     ] {
-        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
     }
     assert!(
         !correction.contains(OMNIA_STEM_LINE.trim_end()),

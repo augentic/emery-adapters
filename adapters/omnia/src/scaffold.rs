@@ -11,7 +11,7 @@ mod types;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use emery_sdk::target::{DesignType, Guarded, Requirement, Scenario, Slice};
+use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Scenario, Slice};
 use emery_sdk::{
     Error, NoFollow, Route, Standing, bad_request, push_unique, server_error, standing, unique,
     write_whole,
@@ -65,9 +65,13 @@ struct Stem {
     package: String,
     part: String,
     doc: Vec<String>,
-    // Whether the slice's words select the probe idiom, whose tests arrange
-    // the store's rows, so the manifest names the crate the rows are.
+    // Whether the slice's words select the probe idiom, so a `GET` handler's
+    // route function is pre-rendered for the probe's status.
     probing: bool,
+    // Whether the manifest names the SQL crate: the slice probes, whose
+    // tests arrange the store's rows, or reaches a SQL store, whose
+    // `TableStore` the part queries through.
+    sql: bool,
     manifest: File,
     entry: File,
     module: File,
@@ -273,12 +277,16 @@ impl Scaffold {
 
         let design_keys = types::design_keys(&slice.design);
         let idioms = reference::idioms(slice);
+        let roles = reference::roles(slice);
         let probing = idioms.contains(&Idiom::Probe);
+        let sql = probing || roles.contains(&Role::Table);
         let mut lists = Lists::default();
         let mut stems = Vec::new();
         for plan in plans {
             let mut stem = plan.stem;
-            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics, probing);
+            stem.probing = probing;
+            stem.sql = sql;
+            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
             stem.read(root)?;
             stem.place_lines(root, &mut lists)?;
             stems.push(stem);
@@ -289,7 +297,7 @@ impl Scaffold {
             relaid,
             existing,
             lists,
-            roles: reference::roles(slice),
+            roles,
             idioms,
         })
     }
@@ -303,9 +311,12 @@ impl Scaffold {
     // in, each with what a whole write of it must keep, sorted by path: a
     // module its requirement ids and the items the scaffold named, a test
     // file its ids and its tests, and a manifest, an entry, or a list every
-    // line it holds, so a list is added to and never cut.
+    // line it holds, so a list is added to and never cut; and, for a module
+    // or a test file the scaffold wrote, each marker it laid under the key
+    // the brief quotes, so the turn fills a marker by naming it.
     pub fn guarded(&self) -> Vec<Guarded> {
         let mut keeps: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+        let mut markers: BTreeMap<&str, Vec<Marker>> = BTreeMap::new();
         for stem in &self.plan.stems {
             for kind in Kind::ALL {
                 let Some(file) = stem.file(kind) else { continue };
@@ -315,6 +326,12 @@ impl Scaffold {
                     Kind::Manifest | Kind::Entry => lines_of(&stem.text(kind).unwrap_or_default()),
                 };
                 keeps.entry(&file.path).or_default().extend(tokens);
+                let keyed = match kind {
+                    Kind::Module => stem.module_markers(),
+                    Kind::Tests => stem.test_markers(),
+                    Kind::Manifest | Kind::Entry => Vec::new(),
+                };
+                markers.entry(&file.path).or_default().extend(keyed);
             }
             for line in stem.lines.iter().filter(|line| line.placement != Placement::Unanchored) {
                 let tokens =
@@ -322,7 +339,13 @@ impl Scaffold {
                 keeps.entry(&line.path).or_default().extend(tokens);
             }
         }
-        keeps.into_iter().map(|(path, tokens)| Guarded::new(path, unique(tokens))).collect()
+        keeps
+            .into_iter()
+            .map(|(path, tokens)| {
+                Guarded::new(path, unique(tokens))
+                    .with_markers(markers.remove(path).unwrap_or_default())
+            })
+            .collect()
     }
 
     // The design keys of the types laid into the modules the scaffold wrote,
@@ -426,6 +449,7 @@ impl Stem {
             dir: dir.to_owned(),
             package: package(name),
             probing: false,
+            sql: false,
             manifest: File::at(format!("{root}/Cargo.toml")),
             entry: File::at(format!("{root}/src/lib.rs")),
             module: File::at(format!("{root}/src/{part}.rs")),
@@ -448,9 +472,9 @@ impl Stem {
     // its reserved name.
     fn plan(
         &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
-        topics: &mut Topics, probing: bool,
+        topics: &mut Topics,
     ) {
-        self.probing = probing;
+        let probing = self.probing;
         let mut namespaces = Namespaces::default();
         let reads: Vec<types::Read> =
             owned.iter().map(|design_type| types::read(&design_type.signature)).collect();
@@ -687,10 +711,57 @@ impl Stem {
             .collect()
     }
 
+    // The part's markers under the keys the brief quotes, each standing for
+    // the block the scaffold laid as the brief quotes it: a design type's
+    // key for its empty marker, a handler's or a consumer's marker for its
+    // body, a function's for its signature and body; a held part is an
+    // earlier slice's, so none.
+    fn module_markers(&self) -> Vec<Marker> {
+        if self.module.held {
+            return Vec::new();
+        }
+        let mut markers: Vec<Marker> = self
+            .types
+            .iter()
+            .filter(|design_type| design_type.body.is_marker())
+            .map(|design_type| {
+                Marker::new(&design_type.key, format!("pub {} {{}}", design_type.declaration()))
+            })
+            .collect();
+        for marker in self
+            .handlers
+            .iter()
+            .map(|handler| &handler.marker)
+            .chain(self.consumers.iter().map(|consumer| &consumer.marker))
+        {
+            markers.push(Marker::new(marker, render::stub(marker).trim_end()));
+        }
+        for function in &self.functions {
+            markers.push(Marker::new(&function.marker, render::function_block(function)));
+        }
+        markers
+    }
+
+    // The tests' markers: each scenario's test block under its `#[ignore]`
+    // text and under its marker text, so either names the block.
+    fn test_markers(&self) -> Vec<Marker> {
+        if self.tests.as_ref().is_none_or(|file| file.held) {
+            return Vec::new();
+        }
+        self.scenarios
+            .iter()
+            .flat_map(|test| {
+                let block = render::test_block(self, test);
+                [Marker::new(&test.ignore, block.clone()), Marker::new(&test.marker, block)]
+            })
+            .collect()
+    }
+
     // The stem's lines in the root lists, the constant of each topic the
     // slice declares in the table, where the tree holds its manifest and
-    // the slice probes, the probe's crate at the end of the manifest, and,
-    // where the tree holds its entry, the part's lines in the entry's.
+    // the slice probes or reaches a SQL store, the SQL crate at the end of
+    // the manifest, and, where the tree holds its entry, the part's lines
+    // in the entry's.
     fn lines(&self) -> Vec<Line> {
         let ident = self.package.replace('-', "_");
         let mut lines = vec![
@@ -718,7 +789,7 @@ impl Stem {
                 Place::FileEnd,
             ));
         }
-        if self.manifest.held && self.probing {
+        if self.manifest.held && self.sql {
             lines.push(Line::new(
                 &self.manifest.path,
                 render::dependency_line(layout::PROBE_DEPENDENCY),
