@@ -32,7 +32,7 @@ A subject's `anchor` is where the document introduces it, in the claim `path` gr
 
 ## Stems
 
-The stem is the first segment of every `requirement` and `criterion` id the subject's extraction answers, and the engine slices the build plan by it, so two runs over one tree must name the same stems, and two documents about one subject the same one. Derive each by this convention, lowercase kebab-case, and by nothing else:
+The stem is the first segment of every `requirement`, `criterion`, and `retire` id the subject's extraction answers, and the engine slices the build plan by it, so two runs over one tree must name the same stems, and two documents about one subject the same one. Derive each by this convention, lowercase kebab-case, and by nothing else:
 
 - the stem is the **domain noun** for the subject as the documents spell it — the word they use for the thing when they are not heading a section: `orders`, `membership`, `returns`, `password-reset`, `invoices`; plural where the documents say the plural, singular where they say the singular;
 - a heading is a phrase about the noun, and the noun is what is kept: *Resetting a forgotten password* → `password-reset`; *Returning a tool* and *Late returns policy* and *Returns* → `returns`; *Joining Toolshed*, *Membership*, and *Membership eligibility policy* → `membership`; *Signing in* → `sign-in`;
