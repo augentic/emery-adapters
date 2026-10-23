@@ -20,7 +20,7 @@ const TYPED: Spelling = Spelling {
 // The route the requirement carries, where the SDK has a route function
 // for its method; a `HEAD` or `OPTIONS` route is none, so the requirement
 // scaffolds a function.
-pub(super) fn route(requirement: &Requirement) -> Option<&Route> {
+pub fn route(requirement: &Requirement) -> Option<&Route> {
     match &requirement.trigger {
         Some(Trigger::Http(route))
             if METHODS.iter().any(|(name, _)| *name == route.method)
@@ -34,7 +34,7 @@ pub(super) fn route(requirement: &Requirement) -> Option<&Route> {
 
 // The message the requirement consumes, where its trigger is a topic token;
 // a name outside the charset scaffolds a function.
-pub(super) fn message(requirement: &Requirement) -> Option<&str> {
+pub fn message(requirement: &Requirement) -> Option<&str> {
     match &requirement.trigger {
         Some(Trigger::Message(name)) if is_topic(name) => Some(name),
         _ => None,
@@ -49,12 +49,12 @@ fn is_topic(name: &str) -> bool {
 }
 
 // The SDK's route function for `method`, `get` for one it has none for.
-pub(super) fn method_fn(method: &str) -> &'static str {
+pub fn method_fn(method: &str) -> &'static str {
     METHODS.iter().find(|(name, _)| *name == method).map_or("get", |(_, function)| function)
 }
 
 // The stem the route's first resource segment names, `health` for `GET
 // /api/health/live`; none for a route of parameters and noise alone.
-pub(super) fn resource(route: &Route) -> Option<String> {
+pub fn resource(route: &Route) -> Option<String> {
     TYPED.stem(&route.path)
 }

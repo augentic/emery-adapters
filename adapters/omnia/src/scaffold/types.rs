@@ -20,69 +20,69 @@ const MAX_BOOLS: usize = 3;
 // A design type's key as the design spells it: `Order`, `orders.Order`,
 // or `Order (src/orders.ts#L3)` where the design keyed two declarations of
 // one name by their anchors.
-pub(super) struct DesignKey<'a> {
+pub struct DesignKey<'a> {
     // The stem the key leads with, where it is dotted.
-    pub(super) stem: Option<&'a str>,
+    pub stem: Option<&'a str>,
     // The identifier the key declares.
-    pub(super) name: &'a str,
+    pub name: &'a str,
 }
 
 // What a signature declares, as far as the reader can lay it.
-pub(super) struct Parsed {
+pub struct Parsed {
     // The identifier the signature declares, where it spells one.
-    pub(super) name: Option<String>,
-    pub(super) shape: Shape,
+    pub name: Option<String>,
+    pub shape: Shape,
 }
 
-pub(super) enum Shape {
+pub enum Shape {
     Struct(Struct),
     Enum(Enum),
     // A signature the reader cannot lay whole; the marker stands for it.
     Opaque { is_enum: bool },
 }
 
-pub(super) struct Struct {
-    pub(super) generics: Vec<String>,
+pub struct Struct {
+    pub generics: Vec<String>,
     // The types the declaration extends, each flattened into it.
-    pub(super) bases: Vec<String>,
-    pub(super) fields: Vec<Field>,
+    pub bases: Vec<String>,
+    pub fields: Vec<Field>,
 }
 
-pub(super) struct Field {
+pub struct Field {
     // The declared field name, or the wire name where the source names one
     // alone.
-    pub(super) name: String,
+    pub name: String,
     // The name the wire carries.
-    pub(super) wire: String,
-    pub(super) ty: Type,
+    pub wire: String,
+    pub ty: Type,
     // Whether the wire may omit the field.
-    pub(super) optional: bool,
-    pub(super) default: Option<Literal>,
+    pub optional: bool,
+    pub default: Option<Literal>,
     // The comment the source wrote above the field.
-    pub(super) doc: Option<String>,
+    pub doc: Option<String>,
 }
 
-pub(super) struct Enum {
-    pub(super) variants: Vec<Variant>,
+pub struct Enum {
+    pub variants: Vec<Variant>,
     // Whether the source enumerates by number, so no variant has a wire
     // literal.
-    pub(super) numeric: bool,
+    pub numeric: bool,
 }
 
-pub(super) struct Variant {
+pub struct Variant {
     // The source's member name, or the literal where a union spells no
     // member.
-    pub(super) member: String,
+    pub member: String,
     // The literal the wire carries.
-    pub(super) wire: Option<String>,
+    pub wire: Option<String>,
     // Whether the wire literal is a number, so the variant's name is also
     // accepted as an alias.
-    pub(super) alias: bool,
-    pub(super) doc: Option<String>,
+    pub alias: bool,
+    pub doc: Option<String>,
 }
 
 // A field's default as the source spells it.
-pub(super) enum Literal {
+pub enum Literal {
     Int(String),
     Float(String),
     Bool(bool),
@@ -96,7 +96,7 @@ pub(super) enum Literal {
 }
 
 // A type expression, the sum of both languages' spellings.
-pub(super) enum Type {
+pub enum Type {
     Text,
     Bool,
     Int,
@@ -113,7 +113,7 @@ pub(super) enum Type {
 }
 
 // What the scaffold lays for one design type.
-pub(super) enum Body {
+pub enum Body {
     Struct {
         generics: String,
         attrs: Vec<String>,
@@ -135,28 +135,28 @@ pub(super) enum Body {
 // A laid field: its docs, its attributes, its name, its type, and the
 // design or source type it carries as a value where the slice does not
 // own it.
-pub(super) struct LaidField {
-    pub(super) docs: Vec<String>,
-    pub(super) attrs: Vec<String>,
-    pub(super) name: String,
-    pub(super) ty: String,
-    pub(super) carried: Option<String>,
+pub struct LaidField {
+    pub docs: Vec<String>,
+    pub attrs: Vec<String>,
+    pub name: String,
+    pub ty: String,
+    pub carried: Option<String>,
 }
 
 // A laid variant: its docs, its attributes, and its name.
-pub(super) struct LaidVariant {
-    pub(super) docs: Vec<String>,
-    pub(super) attrs: Vec<String>,
-    pub(super) name: String,
+pub struct LaidVariant {
+    pub docs: Vec<String>,
+    pub attrs: Vec<String>,
+    pub name: String,
 }
 
 // The fn a `#[serde(default = "..")]` names, beside the struct.
-pub(super) struct DefaultFn {
-    pub(super) name: String,
-    pub(super) ret: String,
-    pub(super) value: String,
+pub struct DefaultFn {
+    pub name: String,
+    pub ret: String,
+    pub value: String,
     // Whether the value is a constant expression, so the fn is `const`.
-    pub(super) constant: bool,
+    pub constant: bool,
 }
 
 // What laying a type's fields needed: a float among them, a map, the owned
@@ -211,7 +211,7 @@ enum Spelled {
 }
 
 impl<'a> DesignKey<'a> {
-    pub(super) fn parse(key: &'a str) -> Self {
+    pub fn parse(key: &'a str) -> Self {
         let dotted = key.split(" (").next().unwrap_or(key).trim();
         match dotted.rsplit_once('.') {
             Some((head, name)) => Self {
@@ -226,7 +226,7 @@ impl<'a> DesignKey<'a> {
     }
 }
 
-pub(super) fn read(signature: &str) -> Parsed {
+pub fn read(signature: &str) -> Parsed {
     typescript::read(signature)
         .or_else(|| python::read(signature))
         .or_else(|| rust::read(signature))
@@ -237,7 +237,7 @@ pub(super) fn read(signature: &str) -> Parsed {
 }
 
 // The key of every type the design declares, data and mechanism alike.
-pub(super) fn design_keys(design: &str) -> Vec<String> {
+pub fn design_keys(design: &str) -> Vec<String> {
     design
         .lines()
         .filter_map(|line| line.trim().strip_prefix("Type: "))
@@ -248,7 +248,7 @@ pub(super) fn design_keys(design: &str) -> Vec<String> {
 // The bodies of the slice's types, each named as `names` has it, the
 // fields referencing one another by those names and `Eq` dropped wherever
 // a float reaches.
-pub(super) fn lay(
+pub fn lay(
     parsed: &[Parsed], names: &[String], design: &[String], values: &mut Names,
 ) -> Vec<Body> {
     let owned: Vec<(String, String)> = parsed
@@ -667,7 +667,7 @@ impl Type {
 }
 
 impl Body {
-    pub(super) const fn is_enum(&self) -> bool {
+    pub const fn is_enum(&self) -> bool {
         match self {
             Self::Enum { .. } => true,
             Self::Marker { is_enum } => *is_enum,
@@ -675,17 +675,17 @@ impl Body {
         }
     }
 
-    pub(super) const fn is_marker(&self) -> bool {
+    pub const fn is_marker(&self) -> bool {
         matches!(self, Self::Marker { .. })
     }
 
-    pub(super) const fn uses_map(&self) -> bool {
+    pub const fn uses_map(&self) -> bool {
         matches!(self, Self::Struct { map: true, .. })
     }
 
     // The fields carried as values for a type the slice does not own, each
     // with the name it stands for.
-    pub(super) fn carried(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub fn carried(&self) -> impl Iterator<Item = (&str, &str)> {
         let fields: &[LaidField] = match self {
             Self::Struct { fields, .. } => fields,
             Self::Enum { .. } | Self::Marker { .. } => &[],

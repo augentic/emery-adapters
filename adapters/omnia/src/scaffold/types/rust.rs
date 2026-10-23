@@ -10,7 +10,7 @@ use super::{Enum, Field, Parsed, Shape, Struct, Type, Variant, sentence};
 
 // A declaration `syn` refuses, or one that is no struct or enum, is none
 // of the reader's: the key names the type and the marker stands for it.
-pub(super) fn read(signature: &str) -> Option<Parsed> {
+pub fn read(signature: &str) -> Option<Parsed> {
     let (name, shape) = match syn::parse_str::<Item>(signature).ok()? {
         Item::Struct(item) => {
             let shape = match &item.fields {

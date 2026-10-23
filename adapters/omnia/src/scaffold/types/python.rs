@@ -57,7 +57,7 @@ const ARRAYS: &[&str] = &[
 
 const MAPS: &[&str] = &["dict", "Dict", "Mapping", "MutableMapping", "DefaultDict", "OrderedDict"];
 
-pub(super) fn read(signature: &str) -> Option<Parsed> {
+pub fn read(signature: &str) -> Option<Parsed> {
     let lines: Vec<&str> = signature.lines().collect();
     let head_at = lines.iter().position(|line| line.trim_start().starts_with("class "))?;
     if lines[..head_at].iter().any(|line| {
