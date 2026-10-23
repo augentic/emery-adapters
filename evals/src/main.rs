@@ -982,10 +982,9 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     Ok(project)
 }
 
-// The `[target] name` every staged project builds under, so the repository
-// the engine creates sits at `TARGET_REPO` whichever target the run names.
+// The `Adapter:` trailer a sealed empty slice carries; the engine's resume
+// reads the trailer for its presence alone.
 const TARGET_NAME: &str = "target";
-const TARGET_REPO: &str = ".emery/vcs/repos/target";
 
 // The repository the engine creates for run `n` of a case, under `[target]
 // name = "run-N"`. One repository per run: `apply` seals a revision over the
@@ -2202,8 +2201,9 @@ fn resumed(
     let chain = log(&repository, &format!("refs/heads/{label}"));
     if chain.is_empty() {
         return Err(io::Error::other(format!(
-            "`{RUN_1}` of `{}` left no `{label}` in `{TARGET_REPO}` to resume from",
-            case.name
+            "`{RUN_1}` of `{}` left no `{label}` in `{}` to resume from",
+            case.name,
+            repository.display()
         )));
     }
     let before = wave - 1;
@@ -2424,7 +2424,7 @@ fn restaged(
                 if with_repository {
                     copy_tree_whole(
                         &entry.path().join("vcs/repos/run-1"),
-                        &target.join(".emery/vcs/repos/run-1"),
+                        &target.join("vcs/repos/run-1"),
                     )?;
                 }
             } else {

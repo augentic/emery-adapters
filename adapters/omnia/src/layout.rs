@@ -1,4 +1,5 @@
-//! The layout a slice lands in, as data: the lists and their anchors, the stem rules, and the reads of a tree the scaffold and the checks share.
+//! The layout a slice lands in, as data: the lists and their anchors, the stem
+//! rules, and the reads of a tree the scaffold and the checks share.
 
 mod manifest;
 
