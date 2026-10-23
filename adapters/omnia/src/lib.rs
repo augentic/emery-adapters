@@ -76,12 +76,8 @@ impl TargetAdapter for Adapter {
                     scaffolded = scaffold.written().len(),
                     "scaffolded the slice's skeleton"
                 );
-                let brief = scaffold.brief(PROSE);
-                let paths = scaffold.paths();
-                let ctx = ctx.with_scaffold(target::Scaffold {
-                    brief: &brief,
-                    paths: &paths,
-                });
+                let prepared = scaffold.prepare(PROSE);
+                let ctx = ctx.with_scaffold(prepared.as_target());
                 target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })

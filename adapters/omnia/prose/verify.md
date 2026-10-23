@@ -51,7 +51,8 @@ Mark the time first: `touch "$TMPDIR/before"`. Then run each check in `$WORKSPAC
    Where it does not succeed, skip this check and name no failure for it.
    A file it names is reformatted as it reports, through `edit_files`, or `write_files` whole, a list file included.
    The formatter may wrap a list statement over lines. It never changes what the list holds.
-5. **The checks wrote nothing else.** `find . -type f -not -path './target/*' -newer "$TMPDIR/before"` names `Cargo.lock` and what you repaired, at most.
+5. **The checks wrote nothing else.** `find . -type f -not -path '*/target/*' -newer "$TMPDIR/before"` names `Cargo.lock` and what you repaired, at most.
+   The pattern holds under any root, so the same command over `"$WORKSPACE"` excludes `target/` too.
    Any other path is something a check or a test wrote into the tree. Remove it through `delete`.
    No repository is reachable from `$WORKSPACE`, so `git` cannot answer this.
 
@@ -60,6 +61,8 @@ A tree that does not compile cannot run its tests or build the guest.
 A lint failure alone leaves the tests, the guest build, and the formatter worth running. The fifth runs whatever came before.
 A check that passed is run again only where a repair touched what it reads. The checks are slow, and the turn has one budget.
 Run them as few times as the repairs demand. Answer once the last run is clean or its failure is yours to report.
+Where every check passes at its first run and the fifth names `Cargo.lock` at most, there is nothing to repair: answer the passing verdict in your next reply, with no further command.
+A name a reference's example uses, `ORDER_PLACED`, `place_order`, is the example's, not the tree's: the tree is not searched for it, and its absence is no failure.
 
 ## The rules held
 
@@ -83,6 +86,12 @@ The rules are:
   A stem the lists do not name compiles clean and serves nothing, which no check sees.
   The repair adds the stem's line at the end of its list through `edit_files` and rewrites no other.
   The static text around a list stands as the seed spells it, and every line of a list is one entry, once.
+- **Every part is declared, and the entry holds nothing of its own.** Every `crates/<stem>/src/<part>.rs` is listed by a `pub mod <part>;` line of the stem's `src/lib.rs`.
+  A module nothing declares is compiled by nothing and serves nothing, which the checks pass over.
+  An entry that exposes `router()` or `topics(..)` holds its `pub mod` lines, its `use` lines, and the two folds, and no handler, type, constant, or inline module.
+  One standing there is a part folded into the entry where its file was, as a `mv` through the shell leaves the tree.
+  The repair adds the missing line among the entry's `pub mod` lines through `edit_files`.
+  A folded item goes back into its part, `crates/<stem>/src/<part>.rs`, declared by its line and named in the entry's arrays, through `write_files` and `edit_files`; no file is moved through the shell.
 - **Every topic is named.** Every constant of `crates/common/src/topic.rs` is named by a module, as `topic::<NAME>` through `config::topic` or `config::topic_for`.
   One nothing names is a topic nothing publishes or consumes.
   The repair names it from the part whose requirement publishes or consumes the topic, or removes the constant with its doc comment through `edit_files`.

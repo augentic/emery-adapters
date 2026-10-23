@@ -5,6 +5,7 @@ mod manifest;
 use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
+use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
 
 use emery_sdk::{Error, bad_request, server_error};
@@ -31,6 +32,12 @@ pub const TOPICS_ARRAY_ANCHOR: &str = "// one entry per part with topics, each a
 // reaches them.
 pub const STEM_DEPENDENCIES: [&str; 6] =
     ["axum", "common", "omnia-sdk", "serde", "serde_json", "tracing"];
+// The crate a stem's manifest names beside them where the slice probes,
+// for the `Row` its tests arrange the store's answer with, or reaches a
+// SQL store, for the `TableStore` it queries through; laid by the scaffold
+// and held to no use, since a probe over the state store alone never
+// spells it.
+pub const PROBE_DEPENDENCY: &str = "omnia-wasi-sql";
 
 // The topic table as a tree holds it: every `pub const` of the table, its
 // topic where the value is a string literal.
@@ -99,6 +106,12 @@ fn is_start_crate(dir: &Path) -> bool {
     dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
 }
 
+// Whether a crate directory under `crates/` is a stem's: `common` is the
+// shared crate and a `start` crate the process rule's.
+pub fn is_stem_crate(dir: &str) -> bool {
+    dir != "common" && !is_start_stem(dir)
+}
+
 pub fn read(file: &Path) -> Result<String, Error> {
     fs::read_to_string(file).map_err(|err| server_error!("reading `{}`: {err}", file.display()))
 }
@@ -151,12 +164,6 @@ pub fn crates(root: &Path) -> Result<Vec<String>, Error> {
     Ok(names)
 }
 
-// The crate directories under `crates/` the checks read a stem's sources
-// from: every one but a `start` crate, which is the process rule's.
-pub fn stem_dirs(root: &Path) -> Result<Vec<PathBuf>, Error> {
-    Ok(entries(&root.join("crates"))?.into_iter().filter(|dir| !is_start_crate(dir)).collect())
-}
-
 // Every file under a `start` crate, root-relative and sorted.
 pub fn start_files(root: &Path) -> Result<Vec<String>, Error> {
     let mut found = Vec::new();
@@ -177,64 +184,78 @@ pub fn start_files(root: &Path) -> Result<Vec<String>, Error> {
 // under the root's `target/`, which the checks fill.
 pub fn listing(root: &Path) -> Result<BTreeSet<String>, Error> {
     let mut found = BTreeSet::new();
-    let mut pending = vec![root.to_path_buf()];
+    let skip = |dir: &Path, name: &str| {
+        name == ".git" || name == ".emery" || (dir == root && name == "target")
+    };
+    walk(root, skip, |path, _| {
+        let relative: Vec<String> = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        found.insert(relative.join("/"));
+        ControlFlow::Continue(())
+    })?;
+    Ok(found)
+}
+
+fn has_files(dir: &Path) -> Result<bool, Error> {
+    let mut found = false;
+    walk(
+        dir,
+        |_, _| false,
+        |_, meta| {
+            found = meta.is_file();
+            if found { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
+        },
+    )?;
+    Ok(found)
+}
+
+// Every regular file under `dir`, sorted; a link is none.
+pub fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut found = Vec::new();
+    walk(
+        dir,
+        |_, _| false,
+        |path, meta| {
+            if meta.is_file() {
+                found.push(path);
+            }
+            ControlFlow::Continue(())
+        },
+    )?;
+    found.sort();
+    Ok(found)
+}
+
+// Walks `dir` depth first, each directory's entries in name order and no
+// link followed: an entry `skip` names, by the directory it stands in and
+// its name, is passed over with whatever lies beneath it, a directory is
+// entered, and every other entry is handed to `each` with what stands at it
+// until `each` breaks.
+fn walk(
+    dir: &Path, skip: impl Fn(&Path, &str) -> bool,
+    mut each: impl FnMut(PathBuf, &fs::Metadata) -> ControlFlow<()>,
+) -> Result<(), Error> {
+    let mut pending = vec![dir.to_path_buf()];
     while let Some(dir) = pending.pop() {
         for path in entries(&dir)? {
             let name = path.file_name().and_then(|name| name.to_str()).unwrap_or_default();
-            if name == ".git" || name == ".emery" || (dir == root && name == "target") {
+            if skip(&dir, name) {
                 continue;
             }
             let meta = fs::symlink_metadata(&path)
                 .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
             if meta.is_dir() {
                 pending.push(path);
-            } else {
-                let relative: Vec<String> = path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .components()
-                    .map(|part| part.as_os_str().to_string_lossy().into_owned())
-                    .collect();
-                found.insert(relative.join("/"));
+            } else if each(path, &meta).is_break() {
+                return Ok(());
             }
         }
     }
-    Ok(found)
-}
-
-fn has_files(dir: &Path) -> Result<bool, Error> {
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_file() {
-                return Ok(true);
-            } else if meta.is_dir() {
-                pending.push(path);
-            }
-        }
-    }
-    Ok(false)
-}
-
-// Every regular file under `dir`, sorted; a link is none.
-pub fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let mut found = Vec::new();
-    let mut pending = vec![dir.to_path_buf()];
-    while let Some(dir) = pending.pop() {
-        for path in entries(&dir)? {
-            let meta = fs::symlink_metadata(&path)
-                .map_err(|err| server_error!("reading `{}`: {err}", path.display()))?;
-            if meta.is_dir() {
-                pending.push(path);
-            } else if meta.is_file() {
-                found.push(path);
-            }
-        }
-    }
-    found.sort();
-    Ok(found)
+    Ok(())
 }
 
 pub fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {

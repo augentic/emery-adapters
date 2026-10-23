@@ -9,11 +9,11 @@ Then run the one check command, repair what it prints, and answer with one JSON 
 - `$WORKSPACE` — the project tree, lent writable. It sits on the commit the brief names.
 - **The slice's plan entry** — its id, name, requirements, the design types it owns, and the slices it depends on.
 - **The specification, cut to the slice** — the requirements to implement, each with its acceptance scenarios.
-- **The design, whole** — the types and sections every slice shares.
+- **The design, cut to this slice** — the sections every slice shares, with the `Type:` blocks cut to yours: a type the adapter laid for you is one line pointing at the scaffold section, since its signature stands in your module's doc; a type another slice owns stands whole where your slice's text names it, and is left out otherwise, listed by key at the end; a `(mechanism)` type always stands whole.
 - **What the adapter scaffolded for this slice before this turn** — per stem of the slice:
   - the files it wrote or found held, with their text;
   - the lines it added to the lists;
-  - every marker to fill, in order, each quoted as the block one `edit_files` edit replaces;
+  - every marker to fill, in order, each with the key one `edit_files` edit names it by and the block that edit replaces;
   - the one check command, with your stem filled in;
   - the passages of the references the shapes it laid use.
 
@@ -25,16 +25,17 @@ Work in this order. Do not skip ahead.
 
 1. Read the brief whole. It carries the text of every file the adapter wrote for you. Do not read those files again.
 2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it.
-3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit. Copy its `find` from the brief's block exactly.
+3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit: its `find` the key the brief quotes beside the marker, alone, and its `replace` the whole text that takes the quoted block's place, indented as the block is.
 4. Add the list lines the brief says are yours to add, through `edit_files`.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
-Write through the two tools alone.
+Write through this call's tools alone.
 
 - `edit_files` changes within a file. Each edit's `find` must match one place in the file. Several edits may go in one call.
-- `write_files` writes a file whole. Use it only for a file of your own that the brief does not name. Its `delete` removes a file.
-- A refused `find` names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more. Do not guess.
+- `write_files` writes a file whole. A scaffolded file sent whole must still hold every marker and name the skeleton holds; one that drops any is refused naming them. Its `delete` removes a file of your own.
+- `restore_files` puts a scaffolded file back as it was scaffolded, discarding every edit made to it this turn: recovery after a refused `write_files` call alone, never after `edit_files` or a failed check.
+- A `find` that is no key matches one place whole, where the formatter has moved its indentation or broken its lines too. A refused one names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more. Do not guess.
 - The shell runs the check command and nothing else. A file the shell writes, through a redirect, a heredoc, `cp`, or a script, is not yours and is a finding.
 - Nothing outside `$WORKSPACE` is reachable. Do not read the registry sources under `.cargo`. Do not run `rg`, `find`, or `ls` over them.
 - The signatures you need are in [the omnia API](references/omnia-api.md). The brief quotes the ones your shapes use.
@@ -63,14 +64,15 @@ The adapter laid your slice's place in it before this turn, from the requirement
 - Your lines in every list: the stem's four at the root and the part's in the entry.
 
 Each place your code goes is a marker: `todo!("REQ-.. <subject>: ..")` in a body, or `{}` on a type.
-The brief quotes every marker as the one block to replace, with the file it stands in.
+The brief quotes every marker with its key, the one block to replace, and the file it stands in.
+The key is the `todo!`'s text, or the design type's key: an edit whose `find` is the key alone replaces the block.
 
 A marker line reading `[conflict]` names a requirement the sources disagree over.
 The specification's notes under its id say what each states. Fill it from the scenarios, as any other.
 
 ## The markers
 
-Fill each kind as the shape below shows. Every `find` is the block the brief quotes, copied exactly.
+Fill each kind as the shape below shows. Every `find` is the marker's key as the brief quotes it, alone; every `replace` is the whole text that takes the block's place.
 
 ### A design type
 
@@ -93,8 +95,8 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
   "edits": [
     {
       "path": "crates/orders/src/reading.rs",
-      "find": "pub struct OrderRef {}",
-      "replace": "pub struct OrderRef {\n    /// The order's id, where the reference carries one.\n    pub id: Option<String>,\n    /// The order's code, where the reference carries one.\n    pub code: Option<String>,\n}"
+      "find": "orders.OrderRef",
+      "replace": "pub struct OrderRef {\n    /// The order id.\n    pub id: Option<String>,\n    /// The order code.\n    pub code: Option<String>,\n}"
     }
   ]
 }
@@ -122,8 +124,8 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
   "edits": [
     {
       "path": "crates/orders/src/reading.rs",
-      "find": "    let _ = (&input, &context);\n    todo!(\"REQ-030 orders.get-id.return-order: the handler\")",
-      "replace": "    let provider = context.provider();\n    let bytes = StateStore::get(provider, &key(&input.id))\n        .await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    let order: Order = serde_json::from_slice(&bytes)\n        .map_err(|error| server_error!(\"order `{}`: {error}\", input.id))?;\n    Ok(ReadOrderOutput { order })"
+      "find": "REQ-030 orders.get-id.return-order: the handler",
+      "replace": "    let raw = StateStore::get(context.provider(), &input.id).await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    Ok(serde_json::from_slice(&raw)?)"
     }
   ]
 }
@@ -145,8 +147,8 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
   "edits": [
     {
       "path": "crates/orders/src/fulfilment.rs",
-      "find": "    let _ = (&input, &context);\n    todo!(\"REQ-032 orders.on-placed.count-lines: the consumer\")",
-      "replace": "    let provider = context.provider();\n    let lines = i64::try_from(input.lines).map_err(|_| bad_request!(\"lines out of range\"))?;\n    StateStore::increment(provider, LINES_PLACED, lines).await?;\n    Ok(())"
+      "find": "REQ-032 orders.on-placed.count-lines: the consumer",
+      "replace": "    let delta = i64::from(input.lines);\n    StateStore::increment(context.provider(), LINES_PLACED, delta).await?;\n    Ok(())"
     }
   ]
 }
@@ -157,6 +159,7 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
 A requirement carrying neither a route nor a message is a `pub fn` with a marker: a stage of a pipeline, a rule every route obeys, a behaviour another part calls.
 
 - Give it the signature the behaviour needs. Change its parameters and its return type as the behaviour demands.
+  The block the brief quotes is the function from its signature to its closing brace; its comment and doc lines above stand.
 - Return `omnia_sdk::Result<T>`. Build an error with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!`.
 - Never a custom error enum. Never an `Option<T>` that swallows the reason.
 - Add no route to give it a surface.
@@ -166,8 +169,8 @@ A requirement carrying neither a route nor a message is a `pub fn` with a marker
   "edits": [
     {
       "path": "crates/orders/src/reading.rs",
-      "find": "pub fn within_limit() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-033 orders.within-limit: the behaviour\")\n}",
-      "replace": "pub fn within_limit(order: &Order, limit: usize) -> omnia_sdk::Result<()> {\n    if order.lines.len() > limit {\n        return Err(bad_request!(\"order `{}`: {} lines, limit {limit}\", order.id, order.lines.len()));\n    }\n    Ok(())\n}"
+      "find": "REQ-033 orders.within-limit: the behaviour",
+      "replace": "pub fn within_limit(n: usize, max: usize) -> omnia_sdk::Result<()> {\n    if n > max {\n        return Err(bad_request!(\"{n} > {max}\"));\n    }\n    Ok(())\n}"
     }
   ]
 }
@@ -206,8 +209,8 @@ Replace the block the brief quotes with the filled test, as [testing](references
   "edits": [
     {
       "path": "crates/orders/tests/reading.rs",
-      "find": "#[ignore = \"REQ-030 an_order_is_read_by_its_id: unfilled\"]\n#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let id = \"<id>\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider(), request).await;\n    let _ = (&status, &body);\n    todo!(\"REQ-030 an_order_is_read_by_its_id: arrange, act, assert\")\n}",
-      "replace": "#[tokio::test]\nasync fn an_order_is_read_by_its_id() {\n    let provider = provider();\n    provider.storage.insert_state(\"orders/42\", br#\"{\"id\":\"42\",\"orderLines\":[]}\"#);\n    let id = \"42\";\n    let request = Request::get(format!(\"/orders/{id}\")).body(Body::empty()).expect(\"request\");\n    let (status, body) = send(provider.clone(), request).await;\n    assert_eq!(status, StatusCode::OK, \"{}\", String::from_utf8_lossy(&body));\n    let read: ReadOrderOutput = serde_json::from_slice(&body).expect(\"an order\");\n    assert_eq!(read.order.id, \"42\");\n}"
+      "find": "REQ-033 over_limit: arrange, act, assert",
+      "replace": "async fn over_limit() {\n    let err = within_limit(11, 10).expect_err(\"over limit\");\n    assert_eq!(err.code(), \"bad_request\");\n}"
     }
   ]
 }
@@ -255,7 +258,7 @@ The merge keeps every form it is given, and the verify then has two.
 - No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock` is the exemplar's guest template, scaffolded when the repository was initialised.
   Read one where you need its text. Write or report none.
 - No change to the root `Cargo.toml` outside its two stem lists. A pin, a lint, or a feature changed there is a finding with the lines named.
-- No scaffolded file written whole. Edit it.
+- No scaffolded file written whole without what its skeleton holds. Edit it, or send it whole with every marker and name kept.
 - No file left behind by a check or a test, beside your files and `Cargo.lock`. Remove such a stray through `delete`.
 
 ## The `start` stem
@@ -322,6 +325,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.
 - The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks.
 - A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
+- A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself. Declare the module, or move the item into its part.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells `FORMAT`.
 

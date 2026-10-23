@@ -16,6 +16,7 @@ use common::config;
 use omnia_sdk::api::Client;
 use omnia_test::guest::{MapConfig, Provider};
 use orders::placing::Placed;
+use serde_json::Value;
 use tower::ServiceExt as _;
 
 // The doubles every scenario starts from: set a setting or a response on them in the arrangement.
@@ -23,13 +24,20 @@ fn provider() -> Provider {
     Provider::default().config(MapConfig::default().with([(config::ENV, "test")]))
 }
 
-// One request through the stem's router, answered as its status and body.
-async fn send(provider: Provider, request: Request<Body>) -> (StatusCode, Vec<u8>) {
+// One request through the stem's router, answered as its status and its body as JSON:
+// `Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.
+async fn send(provider: Provider, request: Request<Body>) -> (StatusCode, Value) {
     let router = orders::router().with_state(Client::new("test", provider));
     let response = router.oneshot(request).await.expect("response");
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await.expect("body");
-    (status, body.to_vec())
+    let body = if body.is_empty() {
+        Value::Null
+    } else {
+        serde_json::from_slice(&body)
+            .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))
+    };
+    (status, body)
 }
 
 // REQ-030 orders.place: An order within the limit is placed
@@ -45,8 +53,8 @@ async fn an_order_within_the_limit_is_placed() {
         .body(Body::from(r#"{"lines": ["tea", "cake"]}"#))
         .expect("request");
     let (status, body) = send(provider.clone(), request).await;
-    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
-    let placed: Placed = serde_json::from_slice(&body).expect("a placement");
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let placed: Placed = serde_json::from_value(body).expect("a placement");
     assert_eq!(placed.lines, 2);
     let sent = provider.publish.sent();
     assert_eq!(sent.len(), 1, "the placement is published once");
@@ -73,7 +81,7 @@ async fn an_order_past_the_limit_is_refused() {
 
 - One `#[tokio::test]` per scenario, named by the scenario in snake_case: `an_order_with_no_items_is_refused`. The adapter scaffolds each before the turn, under `#[ignore = "<id> <scenario>: unfilled"]`, with the scenario's `GIVEN`, `WHEN`, and `THEN` in a comment above it and its act laid from the requirement's route or message — the request built and sent through `send`, a path parameter bound above it by a `let <param> = "<param>";` line, a body `"{}"`; a delivery through `deliver` with the payload `b"{}"`; a module with no route or topic over `provider()` alone — and a `todo!("<id> <scenario>: arrange, act, assert")` under it. Fill the test as one edit over the block the brief quotes: the `#[ignore = ..]` line gone, the parameter, body, or payload the scenario states in place of the placeholders, the `let _ = ..;` line that held the act's results replaced by the assertions. A scenario the specification gives you is a test; invent none, and delete none.
 - The `WHEN` is the request — its method, path, headers, and body — and the state the doubles start in; the `THEN` is the response's status and body, and what the doubles hold after. A handler's `Ok` is `200` with the output as JSON; its `Err` is the class's status, `400` for `bad_request`, `404` for `not_found`, `500` for `server_error`, `502` for `bad_gateway`, with the body `{"error": "<code>", "message": ".."}`, so a test asserts the status and, where the scenario states the reason, the body's `message`. When a scenario's `THEN` is `[unknown]`, derive the assertion from the outcome stated in the requirement's statement itself (for example, `StatusCode::BAD_REQUEST` when the requirement states an input is rejected or skipped on validation failure, or asserting the returned value or published messages), and include the requirement in `covered`.
-- The prelude is the adapter's, rendered with the functions the part's tests use and nothing more: `provider()`, the doubles every scenario starts from, with `ENV` set; `send(provider, request)`, one request through the stem's `router()` answered as `(StatusCode, Vec<u8>)`; `deliver(provider, topic, payload)`, one delivery through the stem's `topics(..)` under the test environment, the topic qualified for you. Each takes the provider by value, so a test that reads the doubles after the act hands it `provider.clone()`. A setting the part reads is set in the arrangement by building the config whole, `provider().config(MapConfig::default().with([(config::ENV, "test"), ("ORDERS_LIMIT", "2")]))`, since `.config(..)` sets the double rather than adding to it and `ENV` goes with it; a response an upstream answers is `.http(..)` on the same provider. A `GET` is `Request::get("/orders/42").body(Body::empty())`, a query `Request::get("/orders?status=open")`, as the laid act spells it.
+- The prelude is the adapter's, rendered with the functions the part's tests use and nothing more: `provider()`, the doubles every scenario starts from, with `ENV` set; `send(provider, request)`, one request through the stem's `router()` answered as `(StatusCode, serde_json::Value)`, the body read as JSON so an assertion is over a field, `body["status"]`, or a typed read, `serde_json::from_value(body)`, and never over the bytes of a literal; `deliver(provider, topic, payload)`, one delivery through the stem's `topics(..)` under the test environment, the topic qualified for you. Each takes the provider by value, so a test that reads the doubles after the act hands it `provider.clone()`. A setting the part reads is set in the arrangement by building the config whole, `provider().config(MapConfig::default().with([(config::ENV, "test"), ("ORDERS_LIMIT", "2")]))`, since `.config(..)` sets the double rather than adding to it and `ENV` goes with it; a response an upstream answers is `.http(..)` on the same provider. A `GET` is `Request::get("/orders/42").body(Body::empty())`, a query `Request::get("/orders?status=open")`, as the laid act spells it.
 - The file declares nothing `pub`: the workspace lints want a doc on every public item, a test file included, and a helper is a private `fn`.
 - The tests reach the stem as another crate would, through `<stem>::router()`, `<stem>::topics(..)`, and `<stem>::<part>::<Type>` for the `pub` types a response or a payload decodes into; what the handler stored is read back from the doubles under the key the module spells, `provider.storage.state("orders/42")`, or through a `pub fn key` the module shares with its readers.
 - A topic's handler is driven through the stem's `topics(..)` over a `messaging::Router` of the doubles, which the prelude's `deliver` builds: the delivery's `topic` the constant qualified under the test's environment and its `payload` the wire's bytes:
@@ -139,8 +147,8 @@ let provider = provider()
 let request = Request::get("/rates/NZD").body(Body::empty()).expect("request");
 let (status, body) = send(provider.clone(), request).await;
 
-assert_eq!(status, StatusCode::OK);
-let seen: Rate = serde_json::from_slice(&body).expect("a rate");
+assert_eq!(status, StatusCode::OK, "{body}");
+let seen: Rate = serde_json::from_value(body).expect("a rate");
 assert_eq!(seen.currency, "NZD");
 assert_eq!(provider.http.requests().len(), 1);
 assert_eq!(provider.publish.sent()[0].0, "test-rates-seen.v1");

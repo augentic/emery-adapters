@@ -6,11 +6,11 @@ use syn::{
     PathArguments, Token, TypePath,
 };
 
-use super::{Enum, Field, Read, Shape, Struct, Type, Variant, sentence};
+use super::{Enum, Field, Parsed, Shape, Struct, Type, Variant, sentence};
 
 // A declaration `syn` refuses, or one that is no struct or enum, is none
 // of the reader's: the key names the type and the marker stands for it.
-pub(super) fn read(signature: &str) -> Option<Read> {
+pub(super) fn read(signature: &str) -> Option<Parsed> {
     let (name, shape) = match syn::parse_str::<Item>(signature).ok()? {
         Item::Struct(item) => {
             let shape = match &item.fields {
@@ -37,7 +37,7 @@ pub(super) fn read(signature: &str) -> Option<Read> {
         }
         _ => return None,
     };
-    Some(Read {
+    Some(Parsed {
         name: Some(name.to_string()),
         shape,
     })

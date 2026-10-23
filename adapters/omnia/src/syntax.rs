@@ -4,12 +4,8 @@ use std::collections::BTreeMap;
 use std::mem;
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
-use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
-use syn::{
-    Attribute, Expr, ExprCall, ExprLit, ExprMethodCall, Item, ItemUse, Lit, LitStr, Macro,
-    MetaList, Pat, PatGuard, PatIdent, Path, Token, UseTree, Visibility,
-};
+use syn::{Expr, ExprLit, Item, ItemUse, Lit, LitStr, Macro, MetaList, Path, UseTree, Visibility};
 
 // Where `syn` refused a file, and why.
 pub struct Unparsed {
@@ -34,7 +30,8 @@ impl Mentions {
         mentions
     }
 
-    pub fn names(&self, name: &str) -> bool {
+    // Whether `name` stands anywhere as an identifier.
+    pub fn contains(&self, name: &str) -> bool {
         self.idents.contains_key(name)
     }
 
@@ -44,12 +41,12 @@ impl Mentions {
     }
 
     // Whether a path leads with `head` and goes on, `<head>::<item>`.
-    pub fn leads(&self, head: &str) -> bool {
+    pub fn path_leads(&self, head: &str) -> bool {
         self.paths.iter().any(|path| path.first().is_some_and(|first| first == head))
     }
 
     // Whether a path ends with `tail`, `<stem>::router`.
-    pub fn ends(&self, tail: &[&str]) -> bool {
+    pub fn path_ends(&self, tail: &[&str]) -> bool {
         self.paths.iter().any(|path| {
             path.len() >= tail.len()
                 && path.iter().rev().zip(tail.iter().rev()).all(|(segment, name)| segment == name)
@@ -210,6 +207,52 @@ const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
+// The modules `file` declares from files beside it, `pub mod reading;`, by
+// name; one with a body inline declares no file.
+pub fn mods(file: &syn::File) -> Vec<String> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Mod(item) = item else { return None };
+            item.content.is_none().then(|| item.ident.to_string())
+        })
+        .collect()
+}
+
+// The declaration an item opens with, `fn read`, `struct Order`, `mod
+// tests`, and the line it stands on, for the items a finding names; a `use`
+// or an `extern crate` is none.
+pub fn item_head(item: &Item) -> Option<(usize, String)> {
+    let (span, head) = match item {
+        Item::Fn(item) => (item.sig.fn_token.span, format!("fn {}", item.sig.ident)),
+        Item::Struct(item) => (item.struct_token.span, format!("struct {}", item.ident)),
+        Item::Enum(item) => (item.enum_token.span, format!("enum {}", item.ident)),
+        Item::Union(item) => (item.union_token.span, format!("union {}", item.ident)),
+        Item::Const(item) => (item.const_token.span, format!("const {}", item.ident)),
+        Item::Static(item) => (item.static_token.span, format!("static {}", item.ident)),
+        Item::Type(item) => (item.type_token.span, format!("type {}", item.ident)),
+        Item::Trait(item) => (item.trait_token.span, format!("trait {}", item.ident)),
+        Item::TraitAlias(item) => (item.trait_token.span, format!("trait {}", item.ident)),
+        Item::Mod(item) => (item.mod_token.span, format!("mod {}", item.ident)),
+        Item::Impl(item) => {
+            let name = match &*item.self_ty {
+                syn::Type::Path(path) => {
+                    path.path.segments.last().map(|segment| segment.ident.to_string())
+                }
+                _ => None,
+            };
+            let head = name.map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
+            (item.impl_token.span, head)
+        }
+        Item::Macro(item) => {
+            let segment = item.mac.path.segments.last()?;
+            (segment.ident.span(), format!("{}!", segment.ident))
+        }
+        _ => return None,
+    };
+    Some((line(span), head))
+}
+
 // The line an expression starts on, for the shapes a finding is spelled at.
 pub fn head_line(expr: &Expr) -> Option<usize> {
     match expr {
@@ -237,93 +280,6 @@ pub fn path_ends(path: &Path, tail: &[&str]) -> bool {
             .rev()
             .zip(tail.iter().rev())
             .all(|(segment, name)| segment.ident == name)
-}
-
-// Whether `pat` leads with the tuple struct `name`: `Ok(..)`, `Some(..) | None`.
-pub fn pat_leads(pat: &Pat, name: &str) -> bool {
-    match pat {
-        Pat::TupleStruct(tuple) => path_ends(&tuple.path, &[name]),
-        Pat::Or(or) => or.cases.first().is_some_and(|case| pat_leads(case, name)),
-        Pat::Paren(paren) => pat_leads(&paren.pat, name),
-        Pat::Guard(guard) => pat_leads(&guard.pat, name),
-        _ => false,
-    }
-}
-
-// Whether `pat` names `name` anywhere within it: `None`, `Ok(None)`, `Some(..) | None`.
-pub fn pat_names(pat: &Pat, name: &str) -> bool {
-    struct Names<'n> {
-        name: &'n str,
-        found: bool,
-    }
-
-    impl<'ast> Visit<'ast> for Names<'_> {
-        fn visit_pat_ident(&mut self, node: &'ast PatIdent) {
-            self.found |= node.ident == self.name;
-            visit::visit_pat_ident(self, node);
-        }
-
-        fn visit_path(&mut self, node: &'ast Path) {
-            self.found |= path_ends(node, &[self.name]);
-            visit::visit_path(self, node);
-        }
-
-        fn visit_pat_guard(&mut self, node: &'ast PatGuard) {
-            self.visit_pat(&node.pat);
-        }
-    }
-
-    let mut names = Names { name, found: false };
-    names.visit_pat(pat);
-    names.found
-}
-
-// Whether `call` is `Ok(())`.
-pub fn is_unit_ok(call: &ExprCall) -> bool {
-    let Expr::Path(func) = &*call.func else { return false };
-    path_ends(&func.path, &["Ok"])
-        && call.args.len() == 1
-        && matches!(call.args.first(), Some(Expr::Tuple(tuple)) if tuple.elems.is_empty())
-}
-
-// Whether `expr` calls the method `name` with no arguments anywhere within it.
-pub fn calls(expr: &Expr, name: &str) -> bool {
-    struct Calls<'n> {
-        name: &'n str,
-        found: bool,
-    }
-
-    impl<'ast> Visit<'ast> for Calls<'_> {
-        fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
-            self.found |= node.method == self.name && node.args.is_empty();
-            visit::visit_expr_method_call(self, node);
-        }
-    }
-
-    let mut calls = Calls { name, found: false };
-    calls.visit_expr(expr);
-    calls.found
-}
-
-// The line a pattern starts on, for the shapes a catch opens with.
-pub fn pat_line(pat: &Pat) -> Option<usize> {
-    match pat {
-        Pat::TupleStruct(tuple) => {
-            tuple.path.segments.first().map(|segment| line(segment.ident.span()))
-        }
-        Pat::Or(or) => or.cases.first().and_then(pat_line),
-        Pat::Paren(paren) => Some(line(paren.paren_token.span.open())),
-        Pat::Guard(guard) => pat_line(&guard.pat),
-        _ => None,
-    }
-}
-
-// Whether a `#[derive(..)]` among `attrs` names `name`.
-pub fn derives(attrs: &[Attribute], name: &str) -> bool {
-    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
-        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
-            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
-    })
 }
 
 // The marker a `todo!("REQ-..")` carries: the line of the call and its text.

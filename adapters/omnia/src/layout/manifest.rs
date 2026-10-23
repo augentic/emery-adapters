@@ -100,11 +100,15 @@ impl<'a> Toml<'a> {
     }
 }
 
-// `line` up to a `#` outside its quotes.
+// `line` up to a `#` outside its quotes; a `\"` in a basic string closes
+// none, while a literal string escapes nothing.
 fn uncommented(line: &str) -> &str {
     let mut quote: Option<char> = None;
+    let mut escaped = false;
     for (at, ch) in line.char_indices() {
         match quote {
+            Some(_) if escaped => escaped = false,
+            Some('"') if ch == '\\' => escaped = true,
             Some(open) if ch == open => quote = None,
             None if matches!(ch, '"' | '\'') => quote = Some(ch),
             None if ch == '#' => return &line[..at],

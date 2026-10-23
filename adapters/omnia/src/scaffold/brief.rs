@@ -1,16 +1,19 @@
-//! Renders the brief a build turn reads of the scaffold: each stem's files
-//! and lines, the design types laid, the markers to fill, the check, and
-//! the reference passages the slice's shapes need.
+//! Prepares what a build turn reads of the scaffold: the brief — each stem's
+//! files and lines, the design types laid, the markers to fill, the check —
+//! and, apart from it, the reference passages the slice's shapes need, with
+//! the guarded files and the laid design types beside them.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
+use emery_sdk::target::{self, Guarded};
 use emery_sdk::{Doc, INLINE_BYTES};
 
 use super::lists::{Line, Placement};
 use super::names::escape;
 use super::reference::{self, Laid, Needs};
-use super::{Handler, Kind, Scaffold, Stem, render, trigger};
+use super::stem::{Handler, Kind, Stem};
+use super::{Scaffold, render, trigger};
 use crate::layout::{self, TOPICS, crate_dir};
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
@@ -18,18 +21,54 @@ const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --
 const HELD: &str =
     "The tree already held it, so nothing was written over it; read it for what stands.";
 
-// How much of the brief the inlined texts may take: the files first, the
-// references after them, a text past the budget named by its path alone.
+// How much of the turn the inlined texts may take: the brief's files first,
+// the passages after them, a text past the budget named by its path alone.
 struct Budget {
     left: u64,
 }
 
+// What the turn reads of the scaffold, owned so the SDK's `Scaffold` borrows
+// it: the brief and the passages under one budget, the guarded files, and
+// the design types laid.
+pub struct Prepared {
+    brief: String,
+    passages: String,
+    files: Vec<Guarded>,
+    types: Vec<String>,
+}
+
+impl Prepared {
+    pub fn as_target(&self) -> target::Scaffold<'_> {
+        target::Scaffold {
+            brief: &self.brief,
+            passages: &self.passages,
+            files: &self.files,
+            types: &self.types,
+        }
+    }
+}
+
 impl Scaffold {
-    pub fn brief(&self, docs: &[Doc]) -> String {
+    // The brief and, apart from it, the passages the slice's shapes select
+    // from the references, so the SDK renders the brief as the slice's own
+    // text and the passages after it as no text of the slice; the guarded
+    // files and the laid design types beside them.
+    pub fn prepare(&self, docs: &[Doc]) -> Prepared {
         let mut budget = Budget { left: INLINE_BYTES };
+        let brief = self.brief(&mut budget);
+        let passages = self.passages(docs, &mut budget);
+        Prepared {
+            brief,
+            passages,
+            files: self.guarded(),
+            types: self.types(),
+        }
+    }
+
+    fn brief(&self, budget: &mut Budget) -> String {
         let mut text = String::new();
         for stem in &self.plan.stems {
-            stem.brief_files(&mut budget, &mut text);
+            stem.brief_files(budget, &mut text);
             stem.brief_markers(&mut text);
         }
         if !self.plan.start.is_empty() {
@@ -60,7 +99,6 @@ impl Scaffold {
              the steps before it passed and the check is done.\n",
             self.check()
         );
-        self.brief_references(docs, &mut budget, &mut text);
         text.trim_end().to_owned()
     }
 
@@ -77,7 +115,10 @@ impl Scaffold {
         )
     }
 
-    fn brief_references(&self, docs: &[Doc], budget: &mut Budget, text: &mut String) {
+    // The passages the laid shapes, the roles, and the idioms select, each
+    // quoted whole under its source and heading while the budget holds;
+    // empty where none is selected or none fits.
+    fn passages(&self, docs: &[Doc], budget: &mut Budget) -> String {
         let mut laid = BTreeSet::new();
         for stem in &self.plan.stems {
             if !stem.handlers.is_empty() {
@@ -99,6 +140,7 @@ impl Scaffold {
         let needs = Needs {
             laid,
             roles: self.plan.roles.clone(),
+            idioms: self.plan.idioms.clone(),
         };
         let mut quoted = String::new();
         for passage in reference::passages(docs, &needs) {
@@ -115,13 +157,13 @@ impl Scaffold {
             quoted.push_str(&entry);
         }
         if quoted.is_empty() {
-            return;
+            return String::new();
         }
-        text.push_str(
+        format!(
             "What the references spell for these shapes, quoted; `read_doc` answers the rest of \
-             each document:\n\n",
-        );
-        text.push_str(&quoted);
+             each document:\n\n{}",
+            quoted.trim_end()
+        )
     }
 }
 
@@ -130,11 +172,13 @@ impl Stem {
         let _ = writeln!(text, "Stem `{}`, part `{}`:\n", self.name, self.part);
         let _ = writeln!(
             text,
-            "- `{}`: {}. One `<crate>.workspace = true` line at the end of `[dependencies]` for \
-             each crate your code uses beyond the six it holds; a crate the root manifest does \
-             not pin carries its version instead.",
+            "- `{}`: {}{}. One `<crate>.workspace = true` line at the end of `[dependencies]` \
+             for each crate your code uses beyond the {} it holds; a crate the root manifest \
+             does not pin carries its version instead.",
             self.manifest.path,
-            self.manifest.origin()
+            self.manifest.origin(),
+            self.brief_sql_dependency(),
+            if self.sql { "seven" } else { "six" }
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
         if !self.handlers.is_empty() {
@@ -183,6 +227,27 @@ impl Stem {
             }
         }
         self.brief_lines(text);
+    }
+
+    // The clause after the manifest's origin naming the SQL crate laid among
+    // its dependencies and what for, or nothing for a slice that neither
+    // probes nor reaches a SQL store.
+    fn brief_sql_dependency(&self) -> String {
+        if !self.sql {
+            return String::new();
+        }
+        let line = render::dependency_line(layout::PROBE_DEPENDENCY);
+        let how = match self.lines.iter().find(|held| held.path == self.manifest.path) {
+            None => "among",
+            Some(laid) if laid.placement == Placement::Held => "already held among",
+            Some(_) => "added at the end of",
+        };
+        let what = if self.probing {
+            "the `Row` the probe's tests arrange the store's answer with"
+        } else {
+            "the SQL store the slice reaches"
+        };
+        format!(", `{line}` {how} its `[dependencies]` for {what}")
     }
 
     // The stem's lines in the root lists and the topic table, each spelled,
@@ -309,8 +374,9 @@ impl Stem {
             );
         }
         text.push_str(
-            "Markers, in fill order, each one `edit_files` edit whose `find` is the block quoted \
-             under it:\n\n",
+            "Markers, in fill order, each one `edit_files` edit whose `find` is the key quoted \
+             beside it, alone, and whose `replace` is the whole text that takes the quoted \
+             block's place, its lines indented as the block's are:\n\n",
         );
         let mut count = 0;
         for design_type in self.types.iter().filter(|design_type| design_type.body.is_marker()) {
@@ -318,8 +384,9 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. `pub {} {{}}` in `{}`: the design type `{}`, whose signature the scaffold \
-                 could not lay. Replace it with the {} the signature in its doc spells, every \
-                 field documented; drop `Eq` from its derives where a field is a float.\n",
+                 could not lay, its key as quoted. Replace it with the {} the signature in its \
+                 doc spells, every field documented; drop `Eq` from its derives where a field is \
+                 a float.\n",
                 design_type.declaration(),
                 self.module.path,
                 design_type.key,
@@ -330,11 +397,12 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The handler `{}` of `{}` in `{}`: fill `{}` and `{}` with the wire's \
-                 fields, then replace this block with the body. {}\n\n{}",
+                "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill `{}` and `{}` with the \
+                 wire's fields, then replace this block with the body. {}\n\n{}",
                 handler.name,
                 handler.route,
                 self.module.path,
+                handler.marker,
                 handler.input,
                 handler.output,
                 handler.status_hint(),
@@ -345,12 +413,13 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The consumer `{}` of the topic `{}` in `{}`, registered in the part's \
-                 `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, then \
-                 replace this block with the body.\n\n{}",
+                "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
+                 part's `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, \
+                 then replace this block with the body.\n\n{}",
                 consumer.name,
                 consumer.topic,
                 self.module.path,
+                consumer.marker,
                 consumer.constant,
                 consumer.input,
                 render::fenced("rust", &render::stub(&consumer.marker))
@@ -360,12 +429,13 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The function `{}` in `{}`, since the requirement states no route and no \
-                 message: give it the signature the behaviour needs and replace this block with \
-                 the body.\n\n{}",
+                "{count}. The function `{}` in `{}`, key `{}`, since the requirement states no \
+                 route and no message: replace this block with the function whole, the \
+                 signature the behaviour needs over its body.\n\n{}",
                 function.name,
                 self.module.path,
-                render::fenced("rust", &render::marker_line(&function.marker))
+                function.marker,
+                render::fenced("rust", &function.block())
             );
         }
         if let Some(tests) = &self.tests {
@@ -373,12 +443,13 @@ impl Stem {
                 count += 1;
                 let _ = writeln!(
                     text,
-                    "{count}. The test `{}` in `{}`: replace this block with the filled test, its \
-                     `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
-                     laid, and the assertions the scenario states.\n\n{}",
+                    "{count}. The test `{}` in `{}`, key `{}`: replace this block with the filled \
+                     test, its `#[ignore = ..]` line gone: the arrangement over `provider()`, \
+                     the act as laid, and the assertions the scenario states.\n\n{}",
                     test.name,
                     tests.path,
-                    render::fenced("rust", &render::test_block(self, test))
+                    test.marker,
+                    render::fenced("rust", &test.block(self))
                 );
             }
         }
@@ -408,10 +479,11 @@ impl Handler {
             },
             |route_fn| {
                 format!(
-                    "Its `Ok` is answered as JSON under the status `{route_fn}` names, \
-                     `StatusCode::OK`; for another status on an `Ok`, a `201` or a `503`, \
-                     change it there, and answer an error status, a `404`, as the error the \
-                     errors passage maps to it."
+                    "Its `Ok` is answered as JSON under the status the encoder in `{route_fn}` \
+                     names, `StatusCode::OK`, which is this slice's to decide there: a `201` \
+                     for a creation, or one read off the output, `503` where a probe found its \
+                     store down; an error status, a `404`, is the error the errors passage \
+                     maps to it."
                 )
             },
         )
