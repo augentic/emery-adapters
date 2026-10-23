@@ -2793,6 +2793,57 @@ async fn omnia_scenario_ignored() {
     );
 }
 
+// A turn that fills a covered scenario's test and drops its `#[tokio::test]`
+// line with the `#[ignore]` — a function the harness never runs — is refused
+// with the test named, puts the attribute back, and is accepted.
+#[tokio::test]
+async fn omnia_scenario_unattributed() {
+    let project = omnia_tree().await;
+    let attributed_marker = format!("#[tokio::test]\n{OMNIA_TEST_MARKER}");
+    let attributed_filled = format!("#[tokio::test]\n{OMNIA_TEST_FILLED}");
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/tests/reading.rs", &attributed_marker, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[(
+                "crates/orders/tests/reading.rs",
+                OMNIA_TEST_FILLED,
+                &attributed_filled,
+            )])],
+        );
+
+    let report = OMNIA
+        .build_slice(&project, &model, &omnia_slice())
+        .await
+        .expect("the attributed tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    let unattributed = "crates/orders/tests/reading.rs:36: REQ-001 is covered and the test \
+                        `an_order_is_returned_by_its_id` of its scenario `An order is returned \
+                        by its id` carries no `#[tokio::test]`";
+    assert!(
+        correction.contains("a covered requirement's scenarios are tests that run and pass")
+            && correction.contains(unattributed),
+        "the correction carries `{unattributed}`: {correction}"
+    );
+    assert!(!correction.contains("is ignored"), "the filled test is not ignored: {correction}");
+    assert!(!correction.contains("holds its marker"), "the filled test holds none: {correction}");
+    assert_eq!(report.covered, ["REQ-001"]);
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        OMNIA_TESTS.replace(OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        "the test runs under its attribute"
+    );
+}
+
 // A file the turn writes outside the slice's crates — a note at the root, a
 // module under the seed's `common` — is a stray refused with its path, while
 // a second module under the slice's own stem, declared in its entry, and the
