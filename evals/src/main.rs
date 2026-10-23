@@ -445,7 +445,6 @@ struct Settings {
 
     // the card whose committed plans this invocation builds again, and how
     again: Option<Again>,
-
 }
 
 impl Settings {
@@ -983,14 +982,10 @@ fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf> {
     Ok(project)
 }
 
-
 // The `[target] name` every staged project builds under, so the repository
 // the engine creates sits at `TARGET_REPO` whichever target the run names.
 const TARGET_NAME: &str = "target";
 const TARGET_REPO: &str = ".emery/vcs/repos/target";
-// The same repository beneath `.emery`, for a copy of that directory alone.
-const TARGET_REPO_IN_EMERY: &str = "vcs/repos/target";
-
 
 // The repository the engine creates for run `n` of a case, under `[target]
 // name = "run-N"`. One repository per run: `apply` seals a revision over the
@@ -1000,7 +995,6 @@ const TARGET_REPO_IN_EMERY: &str = "vcs/repos/target";
 fn repository(project: &Path, n: usize) -> PathBuf {
     project.join(format!(".emery/vcs/repos/run-{n}"))
 }
-
 
 // Points the project's `emery.toml` at run `n`'s repository and stages
 // `target`'s component in the store. Both targets scaffold a whole tree, so
@@ -2389,6 +2383,8 @@ fn restaged(
     eval_dir: &Path, card: &str, card_name: &str, case: &Case, settings: &Settings,
     with_repository: bool,
 ) -> io::Result<Restaged> {
+    const N: usize = 1;
+
     let source = eval_dir.join(card).join(&case.name);
     let project = eval_dir.join(card_name).join(&case.name);
     if !source.is_dir() {
@@ -2439,13 +2435,10 @@ fn restaged(
         }
     }
 
-    const N: usize = 1;
     let sealed = repository(&source, N);
     let target =
         settings.target.ok_or_else(|| io::Error::other("a build again builds through a target"))?;
-    if with_repository {
-        retarget(&project, settings, target, N)?;
-    } else {
+    if !with_repository {
         if !sealed.is_dir() {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -2457,8 +2450,8 @@ fn restaged(
             ));
         }
         clone_root(&sealed, &repository(&project, N), &revision)?;
-        retarget(&project, settings, target, N)?;
     }
+    retarget(&project, settings, target, N)?;
 
     // the run as the earlier specify left it
     let rung =
