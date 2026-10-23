@@ -1363,12 +1363,19 @@ async fn omnia_scaffold_status() {
         "// The `GET /orders/{id}` route: the handler's `Ok` answered as JSON under the status \
          named here.\npub(crate) fn read_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
          handle_with(\n        MethodFilter::GET,\n        read,\n        |raw: RawRequest<'_>| -> \
-         Result<ReadInput, DecodeError> {\n            decode_json(raw.path_params, raw.body)\n        \
+         Result<ReadInput, DecodeError> {\n            decode_query(raw.path_params, raw.query)\n        \
          },\n        |output: ReadOutput| (StatusCode::OK, Json(output)).into_response(),\n    )\n}\n",
+        "fn decode_query<I: DeserializeOwned>(\n    params: &[(String, String)], query: \
+         Option<&str>,\n) -> Result<I, DecodeError> {\n",
+        "fn unescape(token: &str) -> Result<String, DecodeError> {\n",
     ] {
         assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");
     }
     assert!(!reading.contains("get(read)"), "the method fn gives way to the route fn: {reading}");
+    assert!(
+        !reading.contains("decode_json"),
+        "a `GET` reads the query as the SDK's `get` does, never the body: {reading}"
+    );
     assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]);
 
     let brief = &model.seen()[0].messages[0];

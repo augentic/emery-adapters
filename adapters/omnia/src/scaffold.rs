@@ -115,7 +115,9 @@ struct Handler {
     marker: String,
     // The route function over `handle_with` scaffolded beside a `POST`
     // handler, beside one whose scenarios state a status other than `200`,
-    // and beside a probe's `GET`, so another status is one token's edit.
+    // and beside a probe's `GET`, so another status is one token's edit; its
+    // decoder reads what the SDK's route fn for the method reads, the body
+    // for `POST`, the query for `GET` and `DELETE`.
     route_fn: Option<String>,
 }
 
@@ -201,6 +203,8 @@ impl Default for Namespaces {
                 "delete",
                 "handle_with",
                 "decode_json",
+                "decode_query",
+                "unescape",
             ]),
             types: Names::taken(&[
                 "Capabilities",

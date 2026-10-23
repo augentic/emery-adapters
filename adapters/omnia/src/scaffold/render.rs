@@ -47,10 +47,12 @@ tower.workspace = true
 <dependencies>
 "#;
 
-// The body of the decoder a pre-rendered route function reads the input
-// with: what the SDK's `post` does, spelled in the part so the encoder
-// beside it is the one place a status changes.
-const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
+// The bodies of the decoders a pre-rendered route function reads the input
+// with: what the SDK's `post` and `get` do, spelled in the part so the
+// encoder beside them is the one place a status changes. The SDK's form
+// decoder is private, so a query is read as string fields over
+// `serde_json`, which coerces nothing, and a query field is a `String`.
+const DECODE_JSON_BODY: &str = r#"    let mut value = if body.is_empty() {
         serde_json::Value::Object(serde_json::Map::new())
     } else {
         serde_json::from_slice(body).map_err(|error| DecodeError::new(error.to_string()))?
@@ -62,6 +64,33 @@ const DECODE_BODY: &str = r#"    let mut value = if body.is_empty() {
         object.insert(key.clone(), serde_json::Value::String(param.clone()));
     }
     serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
+const DECODE_QUERY_BODY: &str = r#"    let mut object = serde_json::Map::new();
+    for (key, param) in params {
+        object.insert(key.clone(), serde_json::Value::String(param.clone()));
+    }
+    for pair in query.unwrap_or_default().split('&').filter(|pair| !pair.is_empty()) {
+        let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+        object.insert(unescape(key)?, serde_json::Value::String(unescape(value)?));
+    }
+    serde_json::from_value(serde_json::Value::Object(object))
+        .map_err(|error| DecodeError::new(error.to_string()))"#;
+const UNESCAPE_BODY: &str = r#"    let malformed = || DecodeError::new(format!("malformed query string: `{token}`"));
+    let hex = |c: Option<char>| -> Option<u8> { u8::try_from(c?.to_digit(16)?).ok() };
+    let mut bytes = Vec::with_capacity(token.len());
+    let mut chars = token.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '+' => bytes.push(b' '),
+            '%' => {
+                let (Some(high), Some(low)) = (hex(chars.next()), hex(chars.next())) else {
+                    return Err(malformed());
+                };
+                bytes.push(high * 16 + low);
+            }
+            other => bytes.extend_from_slice(other.encode_utf8(&mut [0; 4]).as_bytes()),
+        }
+    }
+    String::from_utf8(bytes).map_err(|error| DecodeError::new(error.to_string()))"#;
 
 pub fn manifest(stem: &Stem) -> String {
     let mut dependencies: Vec<String> =
@@ -168,8 +197,15 @@ pub fn module(stem: &Stem) -> String {
     for function in &stem.functions {
         source.push(self::function(function));
     }
-    if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
+    let encoded = stem.handlers.iter().filter(|handler| handler.route_fn.is_some());
+    let (json, query): (Vec<_>, Vec<_>) =
+        encoded.partition(|handler| carries_body(&handler.route.method));
+    if !json.is_empty() {
         source.push(decode_json());
+    }
+    if !query.is_empty() {
+        source.push(decode_query());
+        source.push(unescape());
     }
     source.render()
 }
@@ -626,12 +662,17 @@ fn handler(handler: &Handler, source: &mut Source) {
             .vis(Vis::Pub),
     );
     if let Some(route_fn) = &handler.route_fn {
+        let decode = if carries_body(&handler.route.method) {
+            "decode_json(raw.path_params, raw.body)"
+        } else {
+            "decode_query(raw.path_params, raw.query)"
+        };
         let mut body = vec![
             "    handle_with(".to_owned(),
             format!("        MethodFilter::{},", handler.route.method),
             format!("        {},", handler.name),
             format!("        |raw: RawRequest<'_>| -> Result<{}, DecodeError> {{", handler.input),
-            "            decode_json(raw.path_params, raw.body)".to_owned(),
+            format!("            {decode}"),
             "        },".to_owned(),
         ];
         body.extend(closure(
@@ -713,7 +754,28 @@ fn decode_json() -> Fn {
         .generics("<I: DeserializeOwned>")
         .params(["params: &[(String, String)]", "body: &[u8]"])
         .returns("Result<I, DecodeError>")
-        .body(DECODE_BODY.lines())
+        .body(DECODE_JSON_BODY.lines())
+}
+
+fn decode_query() -> Fn {
+    Fn::new("decode_query")
+        .comments([
+            "The path parameters and the query string together as string fields, as the",
+            "SDK's `get` decodes an input: a field the query fills is a `String`, or",
+            "deserialises from one.",
+        ])
+        .generics("<I: DeserializeOwned>")
+        .params(["params: &[(String, String)]", "query: Option<&str>"])
+        .returns("Result<I, DecodeError>")
+        .body(DECODE_QUERY_BODY.lines())
+}
+
+fn unescape() -> Fn {
+    Fn::new("unescape")
+        .comments(["One form-encoded token: `+` a space, `%XX` the byte it spells."])
+        .params(["token: &str"])
+        .returns("Result<String, DecodeError>")
+        .body(UNESCAPE_BODY.lines())
 }
 
 // `// <id> <subject>: <statement>`, one per requirement an item stands for.
