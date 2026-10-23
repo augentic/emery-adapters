@@ -1366,7 +1366,13 @@ async fn omnia_scaffold_status() {
          Result<ReadInput, DecodeError> {\n            decode_query(raw.path_params, raw.query)\n        \
          },\n        |output: ReadOutput| (StatusCode::OK, Json(output)).into_response(),\n    )\n}\n",
         "fn decode_query<I: DeserializeOwned>(\n    params: &[(String, String)], query: \
-         Option<&str>,\n) -> Result<I, DecodeError> {\n",
+         Option<&str>,\n) -> Result<I, DecodeError> {\n    let mut object = \
+         serde_json::Map::new();\n    for pair in \
+         query.unwrap_or_default().split('&').filter(|pair| !pair.is_empty()) {\n        let \
+         (key, value) = pair.split_once('=').unwrap_or((pair, \"\"));\n        \
+         object.insert(unescape(key)?, serde_json::Value::String(unescape(value)?));\n    }\n    \
+         for (key, param) in params {\n        object.insert(key.clone(), \
+         serde_json::Value::String(param.clone()));\n    }\n",
         "fn unescape(token: &str) -> Result<String, DecodeError> {\n",
     ] {
         assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");

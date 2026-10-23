@@ -66,12 +66,12 @@ for (key, param) in params {
 }
 serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
 const DECODE_QUERY_BODY: &str = r#"let mut object = serde_json::Map::new();
-for (key, param) in params {
-    object.insert(key.clone(), serde_json::Value::String(param.clone()));
-}
 for pair in query.unwrap_or_default().split('&').filter(|pair| !pair.is_empty()) {
     let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
     object.insert(unescape(key)?, serde_json::Value::String(unescape(value)?));
+}
+for (key, param) in params {
+    object.insert(key.clone(), serde_json::Value::String(param.clone()));
 }
 serde_json::from_value(serde_json::Value::Object(object))
     .map_err(|error| DecodeError::new(error.to_string()))"#;
