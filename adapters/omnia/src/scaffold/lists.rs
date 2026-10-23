@@ -108,9 +108,9 @@ impl Lists {
         Ok(self.texts.get(path).and_then(Option::as_deref))
     }
 
-    // What the tree holds at `path` as a stem read it, so the list is read
+    // Keeps the text a stem already read at `path`, so the list is read
     // once.
-    pub(super) fn hold(&mut self, path: &str, text: &str) {
+    pub(super) fn cache(&mut self, path: &str, text: &str) {
         self.texts.entry(path.to_owned()).or_insert_with(|| Some(text.to_owned()));
     }
 
@@ -123,7 +123,9 @@ impl Lists {
         true
     }
 
-    pub(super) fn held(&self, path: &str) -> Option<&str> {
+    // The text of the list at `path` as read and added to so far; none for
+    // a list never read or one the tree lacks.
+    pub(super) fn get(&self, path: &str) -> Option<&str> {
         self.texts.get(path).and_then(Option::as_deref)
     }
 }

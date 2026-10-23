@@ -1,16 +1,19 @@
-//! Renders what a build turn reads of the scaffold: the brief — each stem's
+//! Prepares what a build turn reads of the scaffold: the brief — each stem's
 //! files and lines, the design types laid, the markers to fill, the check —
-//! and, apart from it, the reference passages the slice's shapes need.
+//! and, apart from it, the reference passages the slice's shapes need, with
+//! the guarded files and the laid design types beside them.
 
 use std::collections::BTreeSet;
 use std::fmt::Write as _;
 
+use emery_sdk::target::{self, Guarded};
 use emery_sdk::{Doc, INLINE_BYTES};
 
 use super::lists::{Line, Placement};
 use super::names::escape;
 use super::reference::{self, Laid, Needs};
-use super::{Handler, Kind, Scaffold, Stem, render, trigger};
+use super::stem::{Handler, Kind, Stem};
+use super::{Scaffold, render, trigger};
 use crate::layout::{self, TOPICS, crate_dir};
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
@@ -24,21 +27,42 @@ struct Budget {
     left: u64,
 }
 
-// The brief and the passages, the one budget shared between them.
-pub struct Texts {
-    pub brief: String,
-    pub passages: String,
+// What the turn reads of the scaffold, owned so the SDK's `Scaffold` borrows
+// it: the brief and the passages under one budget, the guarded files, and
+// the design types laid.
+pub struct Prepared {
+    brief: String,
+    passages: String,
+    files: Vec<Guarded>,
+    types: Vec<String>,
+}
+
+impl Prepared {
+    pub fn as_target(&self) -> target::Scaffold<'_> {
+        target::Scaffold {
+            brief: &self.brief,
+            passages: &self.passages,
+            files: &self.files,
+            types: &self.types,
+        }
+    }
 }
 
 impl Scaffold {
     // The brief and, apart from it, the passages the slice's shapes select
     // from the references, so the SDK renders the brief as the slice's own
-    // text and the passages after it as no text of the slice.
-    pub fn texts(&self, docs: &[Doc]) -> Texts {
+    // text and the passages after it as no text of the slice; the guarded
+    // files and the laid design types beside them.
+    pub fn prepare(&self, docs: &[Doc]) -> Prepared {
         let mut budget = Budget { left: INLINE_BYTES };
         let brief = self.brief(&mut budget);
         let passages = self.passages(docs, &mut budget);
-        Texts { brief, passages }
+        Prepared {
+            brief,
+            passages,
+            files: self.guarded(),
+            types: self.types(),
+        }
     }
 
     fn brief(&self, budget: &mut Budget) -> String {
@@ -411,7 +435,7 @@ impl Stem {
                 function.name,
                 self.module.path,
                 function.marker,
-                render::fenced("rust", &render::function_block(function))
+                render::fenced("rust", &function.block())
             );
         }
         if let Some(tests) = &self.tests {
@@ -425,7 +449,7 @@ impl Stem {
                     test.name,
                     tests.path,
                     test.marker,
-                    render::fenced("rust", &render::test_block(self, test))
+                    render::fenced("rust", &test.block(self))
                 );
             }
         }

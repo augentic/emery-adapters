@@ -4,6 +4,7 @@ mod lists;
 mod misses;
 mod process;
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -84,9 +85,12 @@ impl<'ast> Visit<'ast> for Markers {
 }
 
 // The Rust files of a tree, read once: the stems' sources, the stems' tests,
-// and the root lists the tree holds.
+// and the root lists the tree holds, with the crates under `crates/` and
+// the manifest of each that holds one.
 pub struct Tree<'a> {
     root: &'a Path,
+    crates: Vec<String>,
+    manifests: BTreeMap<String, String>,
     modules: Vec<Module>,
     tests: Vec<Module>,
     lists: Vec<Module>,
@@ -94,13 +98,25 @@ pub struct Tree<'a> {
 
 impl<'a> Tree<'a> {
     pub fn read(root: &'a Path) -> Result<Self, Error> {
+        let crates = layout::crates(root)?;
+        let mut manifests = BTreeMap::new();
         let mut modules = Vec::new();
         let mut tests = Vec::new();
-        for stem in layout::stem_dirs(root)? {
-            for file in layout::sources(&stem.join("src"))? {
+        for dir in &crates {
+            let crate_dir = root.join("crates").join(dir);
+            let manifest = crate_dir.join("Cargo.toml");
+            if manifest.is_file() {
+                manifests.insert(dir.clone(), layout::read(&manifest)?);
+            }
+            // a `start` crate is the process rule's, its files read by no
+            // other
+            if layout::is_start_stem(dir) {
+                continue;
+            }
+            for file in layout::sources(&crate_dir.join("src"))? {
                 modules.push(Module::read(root, &file)?);
             }
-            for file in layout::sources(&stem.join("tests"))? {
+            for file in layout::sources(&crate_dir.join("tests"))? {
                 tests.push(Module::read(root, &file)?);
             }
         }
@@ -113,6 +129,8 @@ impl<'a> Tree<'a> {
         }
         Ok(Self {
             root,
+            crates,
+            manifests,
             modules,
             tests,
             lists,
@@ -121,7 +139,7 @@ impl<'a> Tree<'a> {
 
     pub fn check_build(&self, scaffold: &Scaffold, report: &Report) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
-        findings.extend(self.split_stems(scaffold)?);
+        findings.extend(self.split_stems(scaffold));
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
@@ -141,12 +159,12 @@ impl<'a> Tree<'a> {
         findings.extend(self.manifest_drift()?);
         findings.extend(self.dangling_entries()?);
         findings.extend(self.simulated_process()?);
-        findings.extend(self.unlinted_stems()?);
-        findings.extend(self.unused_dependencies()?);
+        findings.extend(self.unlinted_stems());
+        findings.extend(self.unused_dependencies());
         findings.extend(self.unmerged_stems());
         findings.extend(self.undeclared_parts());
         findings.extend(self.unnamed_topics());
-        findings.extend(self.unreached_publishers()?);
+        findings.extend(self.unreached_publishers());
         findings.extend(self.empty_misses());
         findings.extend(self.response_wrappers());
         findings.extend(self.swallowed_rejections());
@@ -156,28 +174,39 @@ impl<'a> Tree<'a> {
 
     // The crates the turn wrote that are no stem of the slice's and none the
     // tree held; `crates/start/` is the process rule's.
-    fn foreign_crates(&self, scaffold: &Scaffold) -> Result<Vec<String>, Error> {
+    fn foreign_crates(&self, scaffold: &Scaffold) -> Vec<&str> {
         let stems: Vec<&str> = scaffold.stems().collect();
-        Ok(layout::crates(self.root)?
-            .into_iter()
+        self.stem_crates()
             .filter(|dir| {
-                !(dir == "common"
-                    || layout::is_start_stem(dir)
-                    || scaffold.existing().contains(dir)
-                    || stems.iter().any(|stem| layout::crate_dir(stem) == dir))
+                !(scaffold.existing().contains(*dir)
+                    || stems.iter().any(|stem| layout::crate_dir(stem) == *dir))
             })
-            .collect())
+            .collect()
+    }
+
+    // The crates under `crates/` that are a stem's: neither `common` nor a
+    // `start` crate.
+    fn stem_crates(&self) -> impl Iterator<Item = &str> {
+        self.crates.iter().map(String::as_str).filter(|dir| layout::is_stem_crate(dir))
+    }
+
+    // Each stem crate's manifest, by directory, where the tree holds one.
+    fn stem_manifests(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.manifests
+            .iter()
+            .map(|(dir, text)| (dir.as_str(), text.as_str()))
+            .filter(|(dir, _)| layout::is_stem_crate(dir))
     }
 
     // A crate the turn wrote is one of the slice's stems' or none of the
     // tree's.
-    fn split_stems(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
+    fn split_stems(&self, scaffold: &Scaffold) -> Option<String> {
         let stems: Vec<&str> = scaffold.stems().collect();
         let mut lines = Vec::new();
-        for dir in self.foreign_crates(scaffold)? {
-            let split = stems.iter().find(|stem| {
-                stem.strip_prefix(dir.as_str()).is_some_and(|rest| rest.starts_with('-'))
-            });
+        for dir in self.foreign_crates(scaffold) {
+            let split = stems
+                .iter()
+                .find(|stem| stem.strip_prefix(dir).is_some_and(|rest| rest.starts_with('-')));
             lines.push(split.map_or_else(
                 || {
                     format!(
@@ -198,16 +227,16 @@ impl<'a> Tree<'a> {
             ));
         }
         if lines.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(format!(
+        Some(format!(
             "a slice writes modules under the crates of its own stems alone, and a stem is one \
              word and is never split at its hyphen into a crate and a part: write each module \
              under `crates/<stem>/src/<part>.rs` for the stem its requirements lead with, remove \
              every file under the other directory through `delete`, and drop its lines from the \
              root `Cargo.toml` through `edit_files`:\n{}",
             lines.join("\n")
-        )))
+        ))
     }
 
     // A file the turn added outside the slice's crates, beyond the files the
@@ -216,10 +245,10 @@ impl<'a> Tree<'a> {
     fn strays(&self, scaffold: &Scaffold) -> Result<Option<String>, Error> {
         let mut own: Vec<String> =
             scaffold.stems().map(|stem| format!("crates/{}/", layout::crate_dir(stem))).collect();
-        own.extend(self.foreign_crates(scaffold)?.into_iter().map(|dir| format!("crates/{dir}/")));
+        own.extend(self.foreign_crates(scaffold).into_iter().map(|dir| format!("crates/{dir}/")));
         own.extend(
-            layout::crates(self.root)?
-                .into_iter()
+            self.crates
+                .iter()
                 .filter(|dir| layout::is_start_stem(dir))
                 .map(|dir| format!("crates/{dir}/")),
         );
@@ -291,7 +320,7 @@ impl<'a> Tree<'a> {
     fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
         let mut lines = Vec::new();
         for expected in scaffold
-            .expected()
+            .expected_tests()
             .filter(|expected| covered.iter().any(|covered| covered == expected.id))
         {
             let test = match self.module(expected.path) {
@@ -336,27 +365,21 @@ impl<'a> Tree<'a> {
 
     // The workspace's lints are the host boundary, and they reach a crate
     // through its `[lints]` table alone.
-    fn unlinted_stems(&self) -> Result<Option<String>, Error> {
-        let mut lines = Vec::new();
-        for dir in layout::crates(self.root)? {
-            if dir == "common" || layout::is_start_stem(&dir) {
-                continue;
-            }
-            let path = format!("crates/{dir}/Cargo.toml");
-            let file = self.root.join(&path);
-            if file.is_file() && !Toml::read(&layout::read(&file)?).inherits_workspace_lints() {
-                lines.push(path);
-            }
-        }
+    fn unlinted_stems(&self) -> Option<String> {
+        let lines: Vec<String> = self
+            .stem_manifests()
+            .filter(|(_, manifest)| !Toml::read(manifest).inherits_workspace_lints())
+            .map(|(dir, _)| format!("crates/{dir}/Cargo.toml"))
+            .collect();
         if lines.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(format!(
+        Some(format!(
             "a stem's manifest carries `[lints]` with `workspace = true`, since the workspace's \
              lints are the host boundary and reach a crate through that table alone; add the \
              table through `edit_files`:\n{}",
             lines.join("\n")
-        )))
+        ))
     }
 
     fn static_drift(&self) -> Result<Vec<String>, Error> {

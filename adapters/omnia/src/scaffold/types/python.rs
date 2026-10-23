@@ -1,8 +1,8 @@
 //! Reads a Python class: a model, a dataclass, a typed dict, or an enumeration.
 
 use super::{
-    Enum, Field, Literal, Read, Shape, Struct, Type, Variant, between, is_ident, literal, number,
-    sentence, split_top,
+    Enum, Field, Literal, Parsed, Shape, Struct, Type, Variant, between, is_ident, literal, number,
+    sentence, split_once_top, split_top,
 };
 
 // Bases that declare a class's kind rather than fields the wire carries.
@@ -57,7 +57,7 @@ const ARRAYS: &[&str] = &[
 
 const MAPS: &[&str] = &["dict", "Dict", "Mapping", "MutableMapping", "DefaultDict", "OrderedDict"];
 
-pub(super) fn read(signature: &str) -> Option<Read> {
+pub(super) fn read(signature: &str) -> Option<Parsed> {
     let lines: Vec<&str> = signature.lines().collect();
     let head_at = lines.iter().position(|line| line.trim_start().starts_with("class "))?;
     if lines[..head_at].iter().any(|line| {
@@ -87,7 +87,7 @@ pub(super) fn read(signature: &str) -> Option<Read> {
     // an enumeration where a base says so
     if let Some(base) = bases.iter().find(|base| base.ends_with("Enum") || base.ends_with("Flag")) {
         let numeric = NUMERIC_ENUMS.contains(&base.rsplit('.').next().unwrap_or(base));
-        return Some(Read {
+        return Some(Parsed {
             name,
             shape: enumeration(body, numeric),
         });
@@ -114,7 +114,7 @@ pub(super) fn read(signature: &str) -> Option<Read> {
         }
         flattened.push(base_name.to_owned());
     }
-    Some(Read {
+    Some(Parsed {
         name,
         shape: Shape::Struct(Struct {
             generics,
@@ -188,9 +188,9 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
         return None;
     }
     let rest = rest.split('#').next().unwrap_or(rest);
-    let (annotation, default) = match split_top(rest, '=').collect::<Vec<_>>().as_slice() {
-        [annotation, value, ..] => (annotation.trim(), Some(value.trim())),
-        _ => (rest.trim(), None),
+    let (annotation, default) = match split_once_top(rest, '=') {
+        Some((annotation, value)) => (annotation.trim(), Some(value.trim())),
+        None => (rest.trim(), None),
     };
     if annotation.is_empty() || annotation.starts_with("ClassVar") {
         return None;
@@ -206,20 +206,22 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
     let mut literal_default = None;
     if let Some(value) = default {
         match defaulted(value) {
-            Default::None | Default::Other => optional = true,
-            Default::Literal(found) => {
+            FieldDefault::None | FieldDefault::Other => optional = true,
+            FieldDefault::Literal(found) => {
                 optional = true;
                 literal_default = Some(found);
             }
-            Default::Declared { alias, default } => {
+            FieldDefault::Declared { alias, default } => {
                 if let Some(alias) = alias {
                     wire = alias;
                 }
                 if let Some(found) = default {
                     optional = true;
                     literal_default = match *found {
-                        Default::Literal(found) => Some(found),
-                        Default::None | Default::Declared { .. } | Default::Other => None,
+                        FieldDefault::Literal(found) => Some(found),
+                        FieldDefault::None
+                        | FieldDefault::Declared { .. }
+                        | FieldDefault::Other => None,
                     };
                 }
             }
@@ -236,7 +238,7 @@ fn field(text: &str, doc: Option<String>) -> Option<Field> {
 }
 
 // What a field's `= ..` spells.
-enum Default {
+enum FieldDefault {
     None,
     Literal(Literal),
     // A `Field(..)` or `field(..)` call: its alias and its default.
@@ -244,13 +246,13 @@ enum Default {
     Other,
 }
 
-fn defaulted(value: &str) -> Default {
+fn defaulted(value: &str) -> FieldDefault {
     let value = value.trim();
     if value == "None" {
-        return Default::None;
+        return FieldDefault::None;
     }
     if let Some(found) = literal_of(value) {
-        return Default::Literal(found);
+        return FieldDefault::Literal(found);
     }
     let callee = value.split('(').next().unwrap_or(value).trim();
     if matches!(callee.rsplit('.').next().unwrap_or(callee), "Field" | "field")
@@ -268,16 +270,18 @@ fn defaulted(value: &str) -> Default {
                         alias = literal(value).map(str::to_owned);
                     }
                     "default" => default = Some(Box::new(defaulted(value))),
-                    "default_factory" => default = Some(Box::new(Default::Literal(Literal::Empty))),
+                    "default_factory" => {
+                        default = Some(Box::new(FieldDefault::Literal(Literal::Empty)));
+                    }
                     _ => {}
                 },
                 None if at == 0 && arg != "..." => default = Some(Box::new(defaulted(arg))),
                 None => {}
             }
         }
-        return Default::Declared { alias, default };
+        return FieldDefault::Declared { alias, default };
     }
-    Default::Other
+    FieldDefault::Other
 }
 
 fn literal_of(value: &str) -> Option<Literal> {

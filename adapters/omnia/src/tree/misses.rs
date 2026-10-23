@@ -1,14 +1,16 @@
 //! Checks for empty cache misses on constant `StateStore` keys, single-field
 //! `data` response wrappers, refusals answered `Ok(())`, and format settings.
 
+use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
-    Arm, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst, ImplItemFn,
-    Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, Stmt, TraitItemFn,
+    Arm, Attribute, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst,
+    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, PatGuard, PatIdent, Path,
+    Stmt, Token, TraitItemFn,
 };
 
 use super::{Module, Tree};
-use crate::syntax::{self, calls, derives, is_unit_ok, pat_leads, pat_names, path_ends};
+use crate::syntax::{self, path_ends};
 
 // The calls that answer an empty collection, each with its spelling.
 const NOTHING: &[(&[&str], &str)] = &[
@@ -230,7 +232,7 @@ impl<'ast> Visit<'ast> for Swallowed<'_> {
         }
         let catch = Catch {
             opened: "`Err(..) =>` arm",
-            line: syntax::pat_line(&node.pat)
+            line: pat_line(&node.pat)
                 .unwrap_or_else(|| syntax::line(node.fat_arrow_token.spans[0])),
         };
         self.caught(catch, |this| this.visit_expr(&node.body));
@@ -315,7 +317,6 @@ impl Functions<'_> {
         let mut misses = Misses {
             module: self.module,
             read: None,
-            closed: false,
             lines: Vec::new(),
         };
         misses.visit_block(block);
@@ -345,11 +346,12 @@ impl<'ast> Visit<'ast> for Functions<'_> {
 // From a read of the store under a constant key to the end of the function,
 // skipping what a hit runs — a `Some(..)` or `Ok(Some(..))` arm, an
 // `if let Some(..)` branch — and ending at a `let Some(..) = .. else`, past
-// which the hit alone runs, what answers a miss empty is a finding.
+// which the hit alone runs until the next read, what answers a miss empty
+// is a finding.
 struct Misses<'m> {
     module: &'m Module,
+    // The line of the read whose miss the statements since answer.
     read: Option<usize>,
-    closed: bool,
     lines: Vec<String>,
 }
 
@@ -375,9 +377,6 @@ impl<'ast> Visit<'ast> for Misses<'_> {
     fn visit_item(&mut self, _: &'ast Item) {}
 
     fn visit_stmt(&mut self, node: &'ast Stmt) {
-        if self.closed {
-            return;
-        }
         if self.read.is_some()
             && let Stmt::Expr(expr, _) = node
             && let Some(spelling) = empty_answer(expr)
@@ -386,12 +385,6 @@ impl<'ast> Visit<'ast> for Misses<'_> {
             return;
         }
         visit::visit_stmt(self, node);
-    }
-
-    fn visit_expr(&mut self, node: &'ast Expr) {
-        if !self.closed {
-            visit::visit_expr(self, node);
-        }
     }
 
     fn visit_expr_call(&mut self, node: &'ast ExprCall) {
@@ -458,10 +451,97 @@ impl<'ast> Visit<'ast> for Misses<'_> {
         self.visit_expr(&init.expr);
         let Some((_, diverge)) = &init.diverge else { return };
         self.visit_expr(diverge);
-        if self.read.is_some() && pat_leads(&node.pat, "Some") {
-            self.closed = true;
+        if pat_leads(&node.pat, "Some") {
+            self.read = None;
         }
     }
+}
+
+// Whether `pat` leads with the tuple struct `name`: `Ok(..)`, `Some(..) | None`.
+fn pat_leads(pat: &Pat, name: &str) -> bool {
+    match pat {
+        Pat::TupleStruct(tuple) => path_ends(&tuple.path, &[name]),
+        Pat::Or(or) => or.cases.first().is_some_and(|case| pat_leads(case, name)),
+        Pat::Paren(paren) => pat_leads(&paren.pat, name),
+        Pat::Guard(guard) => pat_leads(&guard.pat, name),
+        _ => false,
+    }
+}
+
+// Whether `pat` names `name` anywhere within it: `None`, `Ok(None)`, `Some(..) | None`.
+fn pat_names(pat: &Pat, name: &str) -> bool {
+    struct Names<'n> {
+        name: &'n str,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for Names<'_> {
+        fn visit_pat_ident(&mut self, node: &'ast PatIdent) {
+            self.found |= node.ident == self.name;
+            visit::visit_pat_ident(self, node);
+        }
+
+        fn visit_path(&mut self, node: &'ast Path) {
+            self.found |= path_ends(node, &[self.name]);
+            visit::visit_path(self, node);
+        }
+
+        fn visit_pat_guard(&mut self, node: &'ast PatGuard) {
+            self.visit_pat(&node.pat);
+        }
+    }
+
+    let mut names = Names { name, found: false };
+    names.visit_pat(pat);
+    names.found
+}
+
+// The line a pattern starts on, for the shapes a catch opens with.
+fn pat_line(pat: &Pat) -> Option<usize> {
+    match pat {
+        Pat::TupleStruct(tuple) => {
+            tuple.path.segments.first().map(|segment| syntax::line(segment.ident.span()))
+        }
+        Pat::Or(or) => or.cases.first().and_then(pat_line),
+        Pat::Paren(paren) => Some(syntax::line(paren.paren_token.span.open())),
+        Pat::Guard(guard) => pat_line(&guard.pat),
+        _ => None,
+    }
+}
+
+// Whether `call` is `Ok(())`.
+fn is_unit_ok(call: &ExprCall) -> bool {
+    let Expr::Path(func) = &*call.func else { return false };
+    path_ends(&func.path, &["Ok"])
+        && call.args.len() == 1
+        && matches!(call.args.first(), Some(Expr::Tuple(tuple)) if tuple.elems.is_empty())
+}
+
+// Whether `expr` calls the method `name` with no arguments anywhere within it.
+fn calls(expr: &Expr, name: &str) -> bool {
+    struct Calls<'n> {
+        name: &'n str,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for Calls<'_> {
+        fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+            self.found |= node.method == self.name && node.args.is_empty();
+            visit::visit_expr_method_call(self, node);
+        }
+    }
+
+    let mut calls = Calls { name, found: false };
+    calls.visit_expr(expr);
+    calls.found
+}
+
+// Whether a `#[derive(..)]` among `attrs` names `name`.
+fn derives(attrs: &[Attribute], name: &str) -> bool {
+    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
+        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
+            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
+    })
 }
 
 // A `StateStore::get(.., KEY)` under a constant key, and the line it reads at.

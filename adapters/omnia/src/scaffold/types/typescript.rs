@@ -1,8 +1,8 @@
 //! Reads a TypeScript declaration: an interface, a type alias, a class, or an enum.
 
 use super::{
-    Enum, Field, Literal, Read, Shape, Struct, Type, Variant, between, is_ident, literal, number,
-    param_name, sentence, split_top,
+    Enum, Field, Literal, Parsed, Shape, Struct, Type, Variant, between, is_ident, literal, number,
+    param_name, sentence, split_once_top, split_top,
 };
 
 // A declaration led by one of these is TypeScript's.
@@ -22,7 +22,7 @@ const UNWRAPPED: &[&str] = &["Promise", "Readonly", "Required", "NonNullable", "
 const OPAQUE: &[&str] =
     &["Partial", "Pick", "Omit", "Exclude", "Extract", "Parameters", "ReturnType", "InstanceType"];
 
-pub(super) fn read(signature: &str) -> Option<Read> {
+pub(super) fn read(signature: &str) -> Option<Parsed> {
     let text = signature.trim();
     let mut head = text;
     let mut prefixed = false;
@@ -48,7 +48,7 @@ pub(super) fn read(signature: &str) -> Option<Read> {
     }
     for keyword in ["const ", "let ", "var ", "function ", "async function "] {
         if let Some(rest) = head.strip_prefix(keyword) {
-            return Some(Read {
+            return Some(Parsed {
                 name: ident_head(rest),
                 shape: Shape::Opaque { is_enum: false },
             });
@@ -65,7 +65,7 @@ fn braced(rest: &str) -> bool {
     !head.trim_end().ends_with(':')
 }
 
-fn interface(rest: &str) -> Read {
+fn interface(rest: &str) -> Parsed {
     let name = ident_head(rest);
     let head = rest.split('{').next().unwrap_or(rest);
     let generics = generics(head);
@@ -76,25 +76,23 @@ fn interface(rest: &str) -> Read {
         })
         .unwrap_or_default();
     let Some((body, _)) = between(rest, '{', '}') else {
-        return Read {
+        return Parsed {
             name,
             shape: Shape::Opaque { is_enum: false },
         };
     };
-    Read {
+    Parsed {
         name,
         shape: object(body, generics, bases),
     }
 }
 
-fn alias(rest: &str) -> Read {
+fn alias(rest: &str) -> Parsed {
     let name = ident_head(rest);
-    let mut parts = split_top(rest, '=');
-    let head = parts.next().unwrap_or(rest);
-    let value = parts.collect::<Vec<_>>().join("=");
+    let (head, value) = split_once_top(rest, '=').unwrap_or((rest, ""));
     let value = value.trim().trim_end_matches(';').trim();
     if value.is_empty() {
-        return Read {
+        return Parsed {
             name,
             shape: Shape::Opaque { is_enum: false },
         };
@@ -104,7 +102,7 @@ fn alias(rest: &str) -> Read {
         && let Some((body, after)) = between(value, '{', '}')
         && after.trim().is_empty()
     {
-        return Read {
+        return Parsed {
             name,
             shape: object(body, generics, Vec::new()),
         };
@@ -122,7 +120,7 @@ fn alias(rest: &str) -> Read {
                 doc: None,
             })
             .collect();
-        return Read {
+        return Parsed {
             name,
             shape: Shape::Enum(Enum {
                 variants,
@@ -130,13 +128,13 @@ fn alias(rest: &str) -> Read {
             }),
         };
     }
-    Read {
+    Parsed {
         name,
         shape: Shape::Opaque { is_enum: false },
     }
 }
 
-fn class(rest: &str) -> Read {
+fn class(rest: &str) -> Parsed {
     let name = ident_head(rest);
     let head = rest.split('{').next().unwrap_or(rest);
     let generics = generics(head);
@@ -148,21 +146,21 @@ fn class(rest: &str) -> Read {
         })
         .unwrap_or_default();
     let Some((body, _)) = between(rest, '{', '}') else {
-        return Read {
+        return Parsed {
             name,
             shape: Shape::Opaque { is_enum: false },
         };
     };
-    Read {
+    Parsed {
         name,
         shape: object(body, generics, bases),
     }
 }
 
-fn enumeration(rest: &str) -> Read {
+fn enumeration(rest: &str) -> Parsed {
     let name = ident_head(rest);
     let Some((body, _)) = between(rest, '{', '}') else {
-        return Read {
+        return Parsed {
             name,
             shape: Shape::Opaque { is_enum: true },
         };
@@ -195,7 +193,7 @@ fn enumeration(rest: &str) -> Read {
             doc: clause.doc,
         });
     }
-    Read {
+    Parsed {
         name,
         shape: Shape::Enum(Enum { variants, numeric }),
     }
@@ -238,8 +236,8 @@ fn field(
 ) -> Option<Field> {
     let (name, rest) =
         if let Some(quote) = text.chars().next().filter(|ch| matches!(ch, '"' | '\'')) {
-            let end = text[1..].find(quote)? + 1;
-            (text[1..end].to_owned(), text[end + 1..].trim_start())
+            let (name, rest) = text[1..].split_once(quote)?;
+            (name.to_owned(), rest.trim_start())
         } else {
             let end = text
                 .find(|ch: char| !(ch.is_ascii_alphanumeric() || matches!(ch, '_' | '$')))
@@ -257,9 +255,9 @@ fn field(
     }
     let (ty, default) = if let Some(typed) = rest.strip_prefix(':') {
         let typed = typed.trim();
-        match split_top(typed, '=').collect::<Vec<_>>().as_slice() {
-            [ty, value, ..] => (ty.trim().to_owned(), Some(value.trim())),
-            _ => (typed.to_owned(), None),
+        match split_once_top(typed, '=') {
+            Some((ty, value)) => (ty.trim().to_owned(), Some(value.trim())),
+            None => (typed.to_owned(), None),
         }
     } else {
         let value = rest.strip_prefix('=')?.trim();

@@ -44,42 +44,34 @@ impl Tree<'_> {
         )))
     }
 
-    pub(super) fn unused_dependencies(&self) -> Result<Option<String>, Error> {
+    pub(super) fn unused_dependencies(&self) -> Option<String> {
         let mut lines = Vec::new();
-        for stem in layout::crates(self.root)? {
-            if stem == "common" || layout::is_start_stem(&stem) {
-                continue;
-            }
-            let path = format!("crates/{stem}/Cargo.toml");
-            let file = self.root.join(&path);
-            if !file.is_file() {
-                continue;
-            }
-            let manifest = layout::read(&file)?;
-            let code: Vec<&Module> = self.stem_files(&stem).collect();
-            for (number, name) in Toml::read(&manifest).dependencies() {
+        for (stem, manifest) in self.stem_manifests() {
+            let code: Vec<&Module> = self.stem_files(stem).collect();
+            for (number, name) in Toml::read(manifest).dependencies() {
                 let ident = name.replace('-', "_");
                 if layout::STEM_DEPENDENCIES.contains(&name)
                     || name == layout::PROBE_DEPENDENCY
-                    || code.iter().any(|module| module.mentions.names(&ident))
+                    || code.iter().any(|module| module.mentions.contains(&ident))
                 {
                     continue;
                 }
                 lines.push(format!(
-                    "{path}:{number}: dependency `{name}` is used by no file of `crates/{stem}/`"
+                    "crates/{stem}/Cargo.toml:{number}: dependency `{name}` is used by no file of \
+                     `crates/{stem}/`"
                 ));
             }
         }
         if lines.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(format!(
+        Some(format!(
             "a stem's manifest names the crates its files use and nothing more, since a \
              dependency no module or test spells is compiled for nothing and hides the use the \
              slice meant to write: use the crate where the slice meant to, or remove its line \
              through `edit_files`:\n{}",
             lines.join("\n")
-        )))
+        ))
     }
 
     // The stem's sources and tests, where a dependency's use is read.
@@ -94,7 +86,7 @@ impl Tree<'_> {
     pub(super) fn unmerged_stems(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
-            let Some(stem) = module.entry_of() else { continue };
+            let Some(stem) = module.entry_stem() else { continue };
             let ident = layout::package(stem).replace('-', "_");
             if let Some(number) = module.exposes("router")
                 && !self.list_names(layout::ROUTES, &[&ident, "router"])
@@ -134,7 +126,7 @@ impl Tree<'_> {
     // Whether the root list at `path` names a path ending `tail`; a list
     // the tree lacks names nothing.
     fn list_names(&self, path: &str, tail: &[&str]) -> bool {
-        self.module(path).is_some_and(|list| list.mentions.ends(tail))
+        self.module(path).is_some_and(|list| list.mentions.path_ends(tail))
     }
 
     // A module the entry does not declare is compiled by nothing, and an
@@ -144,7 +136,7 @@ impl Tree<'_> {
     pub(super) fn undeclared_parts(&self) -> Option<String> {
         let mut lines = Vec::new();
         for entry in &self.modules {
-            let Some(stem) = entry.entry_of() else { continue };
+            let Some(stem) = entry.entry_stem() else { continue };
             let Some(file) = entry.file() else { continue };
             let declared = syntax::mods(file);
             let prefix = format!("crates/{stem}/src/");
@@ -191,7 +183,7 @@ impl Tree<'_> {
             let named = self
                 .modules
                 .iter()
-                .any(|module| !module.is_common() && module.mentions.names(&constant.name));
+                .any(|module| !module.is_common() && module.mentions.contains(&constant.name));
             if !named {
                 lines.push(format!(
                     "{}:{}: topic `{}` is named by no module",
@@ -217,21 +209,18 @@ impl Tree<'_> {
     // A stem is run through its `routes()` and `topics(..)` or through
     // another stem's call, so a publishing part in a stem neither reaches is
     // never run; the root lists name every stem and tell nothing.
-    pub(super) fn unreached_publishers(&self) -> Result<Option<String>, Error> {
+    pub(super) fn unreached_publishers(&self) -> Option<String> {
         let mut lines = Vec::new();
-        for stem in layout::crates(self.root)? {
-            if stem == "common" || layout::is_start_stem(&stem) {
-                continue;
-            }
+        for stem in self.stem_crates() {
             let prefix = format!("crates/{stem}/");
             let (own, others): (Vec<&Module>, Vec<&Module>) =
                 self.modules.iter().partition(|module| module.path.starts_with(&prefix));
-            let registers = own
+            let registers =
+                own.iter().any(|module| module.entry_stem() == Some(stem) && module.registers());
+            let ident = layout::package(stem).replace('-', "_");
+            let reached = others
                 .iter()
-                .any(|module| module.entry_of() == Some(stem.as_str()) && module.registers());
-            let ident = layout::package(&stem).replace('-', "_");
-            let reached =
-                others.iter().any(|module| !module.is_common() && module.mentions.leads(&ident));
+                .any(|module| !module.is_common() && module.mentions.path_leads(&ident));
             if registers || reached {
                 continue;
             }
@@ -245,9 +234,9 @@ impl Tree<'_> {
             }
         }
         if lines.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(format!(
+        Some(format!(
             "the host runs a stem through its `routes()` and `topics(..)` alone, so a part that \
              publishes in a stem no route or topic reaches, and no other stem calls, is never \
              run: the trigger is the inbound stream the design's `## APIs and integrations` \
@@ -259,13 +248,13 @@ impl Tree<'_> {
              functions, and `<part>::topics,` at the end of the entry's array:\n{}",
             layout::TOPICS,
             lines.join("\n")
-        )))
+        ))
     }
 }
 
 impl Module {
     // The stem whose `src/lib.rs` this module is, `crates/<stem>/src/lib.rs`.
-    fn entry_of(&self) -> Option<&str> {
+    fn entry_stem(&self) -> Option<&str> {
         let stem = self.path.strip_prefix("crates/")?.strip_suffix("/src/lib.rs")?;
         (!stem.is_empty() && !stem.contains('/') && !self.is_common()).then_some(stem)
     }

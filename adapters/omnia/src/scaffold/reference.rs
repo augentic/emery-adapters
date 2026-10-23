@@ -176,17 +176,32 @@ pub(super) enum Idiom {
     CacheAside,
 }
 
-// Each idiom with the heading of its section and the words that select it.
-const IDIOMS: &[(Idiom, &str, &[&str])] = &[
-    (
-        Idiom::Probe,
-        "A probe",
-        &["deadline", "deadlines", "probe", "probed", "probes", "readiness", "timeout", "timeouts"],
-    ),
-    (
-        Idiom::CacheAside,
-        "A cache-aside read",
-        &[
+// An idiom with the heading of its section and the words that select it.
+struct IdiomSpec {
+    idiom: Idiom,
+    heading: &'static str,
+    words: &'static [&'static str],
+}
+
+const IDIOMS: &[IdiomSpec] = &[
+    IdiomSpec {
+        idiom: Idiom::Probe,
+        heading: "A probe",
+        words: &[
+            "deadline",
+            "deadlines",
+            "probe",
+            "probed",
+            "probes",
+            "readiness",
+            "timeout",
+            "timeouts",
+        ],
+    },
+    IdiomSpec {
+        idiom: Idiom::CacheAside,
+        heading: "A cache-aside read",
+        words: &[
             "cache",
             "cached",
             "caches",
@@ -198,7 +213,7 @@ const IDIOMS: &[(Idiom, &str, &[&str])] = &[
             "invalidation",
             "ttl",
         ],
-    ),
+    },
 ];
 
 // The translation table's row for each role, by the words its first cell
@@ -222,26 +237,49 @@ const TRANSLATION_ROWS: &[(Role, &str)] = &[
 ];
 
 // A role with the capability trait, the double, and the testing table's row
-// it reaches, by the lead of each block.
-type Capability = (Role, &'static str, &'static str, &'static str);
+// it reaches, by the lead of each block and the row's first cell.
+struct Capability {
+    role: Role,
+    trait_lead: &'static str,
+    double_lead: &'static str,
+    table_cell: &'static str,
+}
+
+impl Capability {
+    const fn new(
+        role: Role, trait_lead: &'static str, double_lead: &'static str, table_cell: &'static str,
+    ) -> Self {
+        Self {
+            role,
+            trait_lead,
+            double_lead,
+            table_cell,
+        }
+    }
+}
 
 const CAPABILITIES: &[Capability] = &[
-    (Role::Publish, "pub trait Publish", "impl Sink", "`Publish`"),
-    (Role::Upstream, "pub trait HttpRequest", "impl MatchedHttp", "`HttpRequest`"),
-    (Role::Identity, "pub trait Identity", "impl FixedIdentity", "`Identity`"),
-    (Role::State, "pub trait StateStore", "impl Memory", "`StateStore`"),
-    (Role::Schedule, "pub trait StateStore", "impl Memory", "`StateStore`"),
-    (Role::Blob, "pub trait BlobStore", "impl Memory", "`StateStore`"),
-    (Role::Document, "pub trait DocumentStore", "impl MemoryDocs", "`DocumentStore`"),
-    (Role::Table, "pub trait TableStore", "impl ScriptedTables", "`TableStore`"),
-    (Role::Broadcast, "pub trait Broadcast", "impl Sink", "`Broadcast`"),
+    Capability::new(Role::Publish, "pub trait Publish", "impl Sink", "`Publish`"),
+    Capability::new(Role::Upstream, "pub trait HttpRequest", "impl MatchedHttp", "`HttpRequest`"),
+    Capability::new(Role::Identity, "pub trait Identity", "impl FixedIdentity", "`Identity`"),
+    Capability::new(Role::State, "pub trait StateStore", "impl Memory", "`StateStore`"),
+    Capability::new(Role::Schedule, "pub trait StateStore", "impl Memory", "`StateStore`"),
+    Capability::new(Role::Blob, "pub trait BlobStore", "impl Memory", "`StateStore`"),
+    Capability::new(
+        Role::Document,
+        "pub trait DocumentStore",
+        "impl MemoryDocs",
+        "`DocumentStore`",
+    ),
+    Capability::new(Role::Table, "pub trait TableStore", "impl ScriptedTables", "`TableStore`"),
+    Capability::new(Role::Broadcast, "pub trait Broadcast", "impl Sink", "`Broadcast`"),
 ];
 
 // What the scaffold laid and the slice reaches, which decide the passages.
 pub(super) struct Needs {
-    pub laid: BTreeSet<Laid>,
-    pub roles: BTreeSet<Role>,
-    pub idioms: BTreeSet<Idiom>,
+    pub(super) laid: BTreeSet<Laid>,
+    pub(super) roles: BTreeSet<Role>,
+    pub(super) idioms: BTreeSet<Idiom>,
 }
 
 // A kind of item the scaffold laid for the slice.
@@ -258,10 +296,10 @@ pub(super) enum Laid {
 // One passage of a reference: Markdown quoted verbatim, or code the brief
 // fences.
 pub(super) struct Passage {
-    pub source: &'static str,
-    pub heading: String,
-    pub text: String,
-    pub code: bool,
+    pub(super) source: &'static str,
+    pub(super) heading: String,
+    pub(super) text: String,
+    pub(super) code: bool,
 }
 
 // The roles the slice reaches, by the words of its own text and of the
@@ -292,8 +330,8 @@ pub(super) fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
     let spelled = own_words(slice);
     IDIOMS
         .iter()
-        .filter(|(_, _, words)| words.iter().any(|word| spelled.contains(*word)))
-        .map(|(idiom, ..)| *idiom)
+        .filter(|spec| spec.words.iter().any(|word| spelled.contains(*word)))
+        .map(|spec| spec.idiom)
         .collect()
 }
 
@@ -409,15 +447,16 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     if let Some((heading, capabilities)) = section(api, "The capabilities")
         && let Some(fence) = fence(capabilities, 0)
     {
-        let leads = iter::once("pub trait Config").chain(reached(&roles, |(_, lead, ..)| lead));
+        let leads = iter::once("pub trait Config")
+            .chain(reached(&roles, |capability| capability.trait_lead));
         passages.push(code(API, &heading, &paragraphs(fence, leads)));
     }
 
     // the idioms the slice's text calls for, each its section whole
     if let Some(handlers) = body(docs, HANDLERS) {
-        for (idiom, lead, _) in IDIOMS {
-            if needs.idioms.contains(idiom)
-                && let Some((heading, idiom)) = section(handlers, lead)
+        for spec in IDIOMS {
+            if needs.idioms.contains(&spec.idiom)
+                && let Some((heading, idiom)) = section(handlers, spec.heading)
             {
                 passages.push(markdown(HANDLERS, &heading, idiom));
             }
@@ -431,14 +470,15 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
         {
             let leads = ["pub struct Provider", "impl MapConfig"]
                 .into_iter()
-                .chain(reached(&roles, |(_, _, lead, _)| lead));
+                .chain(reached(&roles, |capability| capability.double_lead));
             passages.push(code(API, &heading, &paragraphs(fence, leads)));
         }
         if let Some(testing) = body(docs, TESTING)
             && let Some((heading, doubles)) = section(testing, "The doubles")
         {
-            let cells: Vec<&str> =
-                iter::once("`Config`").chain(reached(&roles, |(.., cell)| cell)).collect();
+            let cells: Vec<&str> = iter::once("`Config`")
+                .chain(reached(&roles, |capability| capability.table_cell))
+                .collect();
             let rows = table(doubles, |first| cells.iter().any(|cell| first.contains(cell)));
             if !rows.is_empty() {
                 passages.push(markdown(TESTING, &heading, &rows));
@@ -476,7 +516,7 @@ pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
 fn reached(
     roles: &BTreeSet<Role>, lead: fn(&Capability) -> &'static str,
 ) -> impl Iterator<Item = &'static str> {
-    CAPABILITIES.iter().filter(move |(role, ..)| roles.contains(role)).map(lead)
+    CAPABILITIES.iter().filter(move |capability| roles.contains(&capability.role)).map(lead)
 }
 
 // The paragraphs of `text` each lead opens, once each, in the leads' order.

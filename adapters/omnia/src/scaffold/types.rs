@@ -22,16 +22,16 @@ const MAX_BOOLS: usize = 3;
 // one name by their anchors.
 pub(super) struct DesignKey<'a> {
     // The stem the key leads with, where it is dotted.
-    pub stem: Option<&'a str>,
+    pub(super) stem: Option<&'a str>,
     // The identifier the key declares.
-    pub name: &'a str,
+    pub(super) name: &'a str,
 }
 
 // What a signature declares, as far as the reader can lay it.
-pub(super) struct Read {
+pub(super) struct Parsed {
     // The identifier the signature declares, where it spells one.
-    pub name: Option<String>,
-    pub shape: Shape,
+    pub(super) name: Option<String>,
+    pub(super) shape: Shape,
 }
 
 pub(super) enum Shape {
@@ -42,43 +42,43 @@ pub(super) enum Shape {
 }
 
 pub(super) struct Struct {
-    pub generics: Vec<String>,
+    pub(super) generics: Vec<String>,
     // The types the declaration extends, each flattened into it.
-    pub bases: Vec<String>,
-    pub fields: Vec<Field>,
+    pub(super) bases: Vec<String>,
+    pub(super) fields: Vec<Field>,
 }
 
 pub(super) struct Field {
     // The declared field name, or the wire name where the source names one
     // alone.
-    pub name: String,
+    pub(super) name: String,
     // The name the wire carries.
-    pub wire: String,
-    pub ty: Type,
+    pub(super) wire: String,
+    pub(super) ty: Type,
     // Whether the wire may omit the field.
-    pub optional: bool,
-    pub default: Option<Literal>,
+    pub(super) optional: bool,
+    pub(super) default: Option<Literal>,
     // The comment the source wrote above the field.
-    pub doc: Option<String>,
+    pub(super) doc: Option<String>,
 }
 
 pub(super) struct Enum {
-    pub variants: Vec<Variant>,
+    pub(super) variants: Vec<Variant>,
     // Whether the source enumerates by number, so no variant has a wire
     // literal.
-    pub numeric: bool,
+    pub(super) numeric: bool,
 }
 
 pub(super) struct Variant {
     // The source's member name, or the literal where a union spells no
     // member.
-    pub member: String,
+    pub(super) member: String,
     // The literal the wire carries.
-    pub wire: Option<String>,
+    pub(super) wire: Option<String>,
     // Whether the wire literal is a number, so the variant's name is also
     // accepted as an alias.
-    pub alias: bool,
-    pub doc: Option<String>,
+    pub(super) alias: bool,
+    pub(super) doc: Option<String>,
 }
 
 // A field's default as the source spells it.
@@ -117,14 +117,14 @@ pub(super) enum Body {
     Struct {
         generics: String,
         attrs: Vec<String>,
-        fields: Vec<Member>,
+        fields: Vec<LaidField>,
         defaults: Vec<DefaultFn>,
         eq: bool,
         // Whether a field is laid over a map, so the module imports one.
         map: bool,
     },
     Enum {
-        variants: Vec<Member>,
+        variants: Vec<LaidVariant>,
         numeric: bool,
     },
     Marker {
@@ -132,24 +132,31 @@ pub(super) enum Body {
     },
 }
 
-// A laid field or variant: its docs, its attributes, its name, its type
-// (none for a variant), and the design or source type it carries as a
-// value where the slice does not own it.
-pub(super) struct Member {
-    pub docs: Vec<String>,
-    pub attrs: Vec<String>,
-    pub name: String,
-    pub ty: String,
-    pub carried: Option<String>,
+// A laid field: its docs, its attributes, its name, its type, and the
+// design or source type it carries as a value where the slice does not
+// own it.
+pub(super) struct LaidField {
+    pub(super) docs: Vec<String>,
+    pub(super) attrs: Vec<String>,
+    pub(super) name: String,
+    pub(super) ty: String,
+    pub(super) carried: Option<String>,
+}
+
+// A laid variant: its docs, its attributes, and its name.
+pub(super) struct LaidVariant {
+    pub(super) docs: Vec<String>,
+    pub(super) attrs: Vec<String>,
+    pub(super) name: String,
 }
 
 // The fn a `#[serde(default = "..")]` names, beside the struct.
 pub(super) struct DefaultFn {
-    pub name: String,
-    pub ret: String,
-    pub value: String,
+    pub(super) name: String,
+    pub(super) ret: String,
+    pub(super) value: String,
     // Whether the value is a constant expression, so the fn is `const`.
-    pub constant: bool,
+    pub(super) constant: bool,
 }
 
 // What laying a type's fields needed: a float among them, a map, the owned
@@ -180,7 +187,7 @@ enum Ref<'a> {
 struct Refs<'a> {
     // Each owned type's declared name and its Rust name.
     owned: &'a [(String, String)],
-    reads: &'a [Read],
+    parsed: &'a [Parsed],
     params: &'a [String],
     design: &'a [String],
     // The type whose fields are being laid, so a shared declared name resolves
@@ -219,11 +226,11 @@ impl<'a> DesignKey<'a> {
     }
 }
 
-pub(super) fn read(signature: &str) -> Read {
+pub(super) fn read(signature: &str) -> Parsed {
     typescript::read(signature)
         .or_else(|| python::read(signature))
         .or_else(|| rust::read(signature))
-        .unwrap_or(Read {
+        .unwrap_or(Parsed {
             name: None,
             shape: Shape::Opaque { is_enum: false },
         })
@@ -242,24 +249,24 @@ pub(super) fn design_keys(design: &str) -> Vec<String> {
 // fields referencing one another by those names and `Eq` dropped wherever
 // a float reaches.
 pub(super) fn lay(
-    reads: &[Read], names: &[String], design: &[String], values: &mut Names,
+    parsed: &[Parsed], names: &[String], design: &[String], values: &mut Names,
 ) -> Vec<Body> {
-    let owned: Vec<(String, String)> = reads
+    let owned: Vec<(String, String)> = parsed
         .iter()
         .zip(names)
-        .map(|(read, name)| (read.name.clone().unwrap_or_else(|| name.clone()), name.clone()))
+        .map(|(parsed, name)| (parsed.name.clone().unwrap_or_else(|| name.clone()), name.clone()))
         .collect();
     let mut bodies = Vec::new();
     let mut floats = Vec::new();
     let mut references = Vec::new();
-    for (at, (read, name)) in reads.iter().zip(names).enumerate() {
-        let (body, laying) = match &read.shape {
+    for (at, (item, name)) in parsed.iter().zip(names).enumerate() {
+        let (body, laying) = match &item.shape {
             Shape::Opaque { is_enum } => (Body::Marker { is_enum: *is_enum }, Laying::default()),
             Shape::Enum(declared) => (declared.lay(), Laying::default()),
             Shape::Struct(declared) => {
                 let refs = Refs {
                     owned: &owned,
-                    reads,
+                    parsed,
                     params: &declared.generics,
                     design,
                     at,
@@ -326,12 +333,10 @@ impl Enum {
                     })
                     .into_iter()
                     .collect();
-                Member {
+                LaidVariant {
                     docs: vec![doc],
                     attrs,
                     name,
-                    ty: String::new(),
-                    carried: None,
                 }
             })
             .collect();
@@ -366,9 +371,9 @@ impl Struct {
             let mut field_laying = Laying::default();
             let ty = Type::Named(base.clone(), Vec::new()).rust(&name, refs, &mut field_laying);
             let mut docs = vec![format!("The fields of `{}`, flattened.", escape(base))];
-            let carried = field_laying.carried(&mut docs);
+            let carried = field_laying.append_carried_docs(&mut docs);
             laying.take(field_laying);
-            fields.push(Member {
+            fields.push(LaidField {
                 docs,
                 attrs: vec!["#[serde(flatten)]".to_owned()],
                 name,
@@ -415,9 +420,9 @@ impl Struct {
                     .clone()
                     .unwrap_or_else(|| format!("The `{}` field.", escape(&field.wire))),
             ];
-            let carried = field_laying.carried(&mut docs);
+            let carried = field_laying.append_carried_docs(&mut docs);
             laying.take(field_laying);
-            fields.push(Member {
+            fields.push(LaidField {
                 docs,
                 attrs,
                 name,
@@ -517,9 +522,9 @@ impl Laying {
         self.carried.extend(other.carried);
     }
 
-    // The doc line of each name a field carries as a value, and the first
-    // of them for the brief.
-    fn carried(&self, docs: &mut Vec<String>) -> Option<String> {
+    // Appends to `docs` one line per name a field carries as a value, and
+    // answers the first of them for the brief.
+    fn append_carried_docs(&self, docs: &mut Vec<String>) -> Option<String> {
         for carried in &self.carried {
             docs.push(match carried {
                 Carried::Design(key) => format!(
@@ -560,7 +565,7 @@ impl Refs<'_> {
     }
 
     fn variant(&self, at: usize, member: &str) -> Option<String> {
-        let Shape::Enum(declared) = &self.reads.get(at)?.shape else { return None };
+        let Shape::Enum(declared) = &self.parsed.get(at)?.shape else { return None };
         declared.variant(member)
     }
 }
@@ -681,7 +686,7 @@ impl Body {
     // The fields carried as values for a type the slice does not own, each
     // with the name it stands for.
     pub(super) fn carried(&self) -> impl Iterator<Item = (&str, &str)> {
-        let fields: &[Member] = match self {
+        let fields: &[LaidField] = match self {
             Self::Struct { fields, .. } => fields,
             Self::Enum { .. } | Self::Marker { .. } => &[],
         };
@@ -738,16 +743,35 @@ fn backticked(word: &str) -> String {
 }
 
 // `text` split at each `sep` outside brackets, parentheses, braces, angle
-// brackets, and string literals; the `>` of a `=>` closes nothing.
+// brackets, and string literals.
 fn split_top(text: &str, sep: char) -> impl Iterator<Item = &str> {
     let mut parts = Vec::new();
+    let mut start = 0;
+    for at in top_level(text, sep) {
+        parts.push(&text[start..at]);
+        start = at + sep.len_utf8();
+    }
+    parts.push(&text[start..]);
+    parts.into_iter()
+}
+
+// `text` split at the first `sep` outside brackets, parentheses, braces,
+// angle brackets, and string literals; none where no such `sep` stands.
+fn split_once_top(text: &str, sep: char) -> Option<(&str, &str)> {
+    let at = top_level(text, sep).next()?;
+    Some((&text[..at], &text[at + sep.len_utf8()..]))
+}
+
+// The byte offset of each `sep` in `text` outside brackets, parentheses,
+// braces, angle brackets, and string literals; the `=>` of an arrow is no
+// `=` and its `>` closes nothing.
+fn top_level(text: &str, sep: char) -> impl Iterator<Item = usize> + '_ {
     let mut depth = 0i32;
     let mut quote: Option<char> = None;
-    let mut start = 0;
     let mut escaped = false;
     let mut previous = ' ';
-    for (at, ch) in text.char_indices() {
-        if let Some(open) = quote {
+    text.char_indices().filter_map(move |(at, ch)| {
+        let found = if let Some(open) = quote {
             if escaped {
                 escaped = false;
             } else if ch == '\\' {
@@ -755,23 +779,21 @@ fn split_top(text: &str, sep: char) -> impl Iterator<Item = &str> {
             } else if ch == open {
                 quote = None;
             }
+            false
         } else {
+            let arrow = ch == '=' && text[at + 1..].starts_with('>');
             match ch {
                 '"' | '\'' | '`' => quote = Some(ch),
                 '(' | '[' | '{' | '<' => depth += 1,
                 ')' | ']' | '}' => depth -= 1,
                 '>' if previous != '=' => depth -= 1,
-                _ if ch == sep && depth <= 0 => {
-                    parts.push(&text[start..at]);
-                    start = at + ch.len_utf8();
-                }
                 _ => {}
             }
-        }
+            ch == sep && depth <= 0 && !arrow
+        };
         previous = ch;
-    }
-    parts.push(&text[start..]);
-    parts.into_iter()
+        found.then_some(at)
+    })
 }
 
 // The text between the first `open` of `text` and its matching `close`,

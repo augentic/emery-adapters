@@ -2034,6 +2034,62 @@ async fn omnia_scaffold_types() {
     );
 }
 
+// A default is read whole past the first `=`: a string default spelling
+// `=` is the `serde(default)` fn's answer, a comparison is no literal and
+// leaves the field optional with no default fn, and a field typed by an
+// arrow function — whose `=>` is no `=` — is a method's kin and laid as no
+// field, in a TypeScript class as in a Python model whose default compares.
+#[tokio::test]
+async fn omnia_scaffold_type_defaults() {
+    let project = omnia_tree().await;
+    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.types = [
+        (
+            "orders.Query",
+            "export class Query {\n  separator: string = \"=\";\n  strict: boolean = \
+             process.env.STRICT === \"1\";\n  onDone: () => void;\n  compare: (a: string, b: \
+             string) => number = (a, b) => a.localeCompare(b);\n  total: number = 20;\n}",
+        ),
+        (
+            "orders.Window",
+            "class Window(BaseModel):\n    label: str = \"a=b\"\n    open: bool = MODE == \
+             \"open\"\n    size: int = 10",
+        ),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
+    for declared in [
+        "pub struct Query {\n    /// The `separator` field.\n    #[serde(default = \
+         \"default_separator\")]\n    pub separator: String,\n    /// The `strict` field.\n    pub \
+         strict: Option<bool>,\n    /// The `total` field.\n    #[serde(default = \
+         \"default_total\")]\n    pub total: i64,\n}\n\nfn default_separator() -> String {\n    \
+         \"=\".to_owned()\n}\n\nconst fn default_total() -> i64 {\n    20\n}\n",
+        "pub struct Window {\n    /// The `label` field.\n    #[serde(default = \
+         \"default_label\")]\n    pub label: String,\n    /// The `open` field.\n    pub open: \
+         Option<bool>,\n    /// The `size` field.\n    #[serde(default = \"default_size\")]\n    \
+         pub size: i64,\n}\n\nfn default_label() -> String {\n    \"a=b\".to_owned()\n}\n\nconst \
+         fn default_size() -> i64 {\n    10\n}\n",
+    ] {
+        let declaration = format!("{derives}{declared}");
+        assert!(part.contains(&declaration), "the part lays `{declared}`: {part}");
+    }
+    for dropped in ["pub on_done", "pub compare"] {
+        assert!(!part.contains(dropped), "a function-typed field is no field: {part}");
+    }
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+}
+
 // A Python model is laid the same way: an annotation its Rust type, a
 // `None` default an `Option`, a literal default a `serde(default)` over a
 // `const fn` answering it beside the struct, a pydantic alias the wire's
@@ -3540,6 +3596,71 @@ async fn omnia_build_crate_private_miss_refused() {
         correction.matches("crates/zones/src/cache.rs:").count(),
         1,
         "the fetch helper's own empty answer is no finding: {correction}"
+    );
+    assert!(
+        accepted.written.iter().any(|path| path == "crates/zones/src/cache.rs"),
+        "the module is reported: {:?}",
+        accepted.written
+    );
+}
+
+// A function reading the store twice under constant keys — the first read
+// a `let Some(..) = .. else` whose `else` refuses, past which the hit alone
+// runs, the second a `match` whose `None` arm answers `Vec::new()` — is
+// held to the second read as to the first: the arm is named at its line
+// after the second read's, and the refusing `else` is no finding. The
+// slice's own turn writes the fetch into the second read, and the accepted
+// report names the module.
+#[tokio::test]
+async fn omnia_build_second_read_miss_refused() {
+    let project = omnia_tree().await;
+    let empty = "    let cached = StateStore::get(provider, ZONES_KEY).await?;\n    let zones = \
+                 match cached {\n        Some(bytes) => serde_json::from_slice(&bytes)?,\n        \
+                 None => Vec::new(),\n    };\n    Ok(zones)\n";
+    let fetched = "    if let Some(bytes) = StateStore::get(provider, ZONES_KEY).await? {\n        \
+                   return Ok(serde_json::from_slice(&bytes)?);\n    }\n    let bytes = \
+                   fetch_zones(provider).await?;\n    StateStore::set(provider, ZONES_KEY, &bytes, \
+                   Some(3600)).await?;\n    Ok(serde_json::from_slice(&bytes)?)\n";
+    let module = |zones: &str| {
+        format!(
+            "//! Zones priced by the cached rates.\n\nuse omnia_sdk::{{HttpRequest, \
+             StateStore}};\n\n/// The store key the rate table sits under.\npub const RATES_KEY: \
+             &str = \"rates/table\";\n/// The store key the zone table sits under.\npub const \
+             ZONES_KEY: &str = \"zones/table\";\n\n/// The zones priced, once the rates are \
+             cached.\n///\n/// # Errors\n///\n/// `not_found` until the rates are cached.\npub \
+             async fn priced<P: HttpRequest + StateStore>(provider: &P) -> \
+             omnia_sdk::Result<Vec<String>> {{\n    let Some(rates) = StateStore::get(provider, \
+             RATES_KEY).await? else {{\n        return Err(omnia_sdk::not_found!(\"the rate table \
+             is not cached yet\"));\n    }};\n    let _ = rates;\n{zones}}}\n\nasync fn \
+             fetch_zones<P: HttpRequest>(_provider: &P) -> omnia_sdk::Result<Vec<u8>> {{\n    \
+             Ok(Vec::new())\n}}\n"
+        )
+    };
+    let first_tree = module(empty);
+    let written = [("crates/zones/src/cache.rs", first_tree.as_str())];
+    let report = r#"{"covered": [], "written": ["crates/zones/src/cache.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(0, [write_files(&written), declare_module("zones", "table", "cache")])
+        .calling(1, [edit_files(&[("crates/zones/src/cache.rs", empty, fetched)])]);
+
+    let slice = slice_for("zones-table", &["zones.table"]);
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    assert!(
+        correction.contains(
+            "crates/zones/src/cache.rs:23: a miss answered as no entries (`None => Vec::new()`) \
+             after the read at line 20"
+        ),
+        "the second read's miss is named after the first read's `else`: {correction}"
+    );
+    assert_eq!(
+        correction.matches("crates/zones/src/cache.rs:").count(),
+        1,
+        "the refusing `else` and the fetch helper's own empty answer are no finding: \
+         {correction}"
     );
     assert!(
         accepted.written.iter().any(|path| path == "crates/zones/src/cache.rs"),
