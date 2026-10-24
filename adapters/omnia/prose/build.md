@@ -30,11 +30,10 @@ Work in this order. Do not skip ahead.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
-Write through this call's tools alone.
+Write through this call's two tools alone.
 
 - `edit_files` changes within a file. Each edit's `find` must match one place in the file. Several edits may go in one call.
 - `write_files` writes a file whole. A scaffolded file sent whole must still hold every marker and name the skeleton holds; one that drops any is refused naming them. Its `delete` removes a file of your own.
-- `restore_files` puts a scaffolded file back as it was scaffolded, discarding every edit made to it this turn: recovery after a refused `write_files` call alone, never after `edit_files` or a failed check.
 - A `find` that is no key matches one place whole, where the formatter has moved its indentation or broken its lines too. A refused one names the line of the file nearest its first line. Copy that line's text into a new `find` and try once more. Do not guess.
 - The shell runs the check command and nothing else. A file the shell writes, through a redirect, a heredoc, `cp`, or a script, is not yours and is a finding.
 - Nothing outside `$WORKSPACE` is reachable. Do not read the registry sources under `.cargo`. Do not run `rg`, `find`, or `ls` over them.

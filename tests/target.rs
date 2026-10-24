@@ -1674,8 +1674,7 @@ async fn omnia_scaffold_idioms() {
             .expect("the passages are introduced once");
         assert!(
             before.ends_with(
-                "`restore_files` puts one back as it was scaffolded, the turn's edits to it \
-                 discarded: recovery after a refusal, not a step. A marker the brief quotes a \
+                "A marker the brief quotes a \
                  key for is filled by one `edit_files` edit whose `find` is that key alone and \
                  whose `replace` is the text that takes the block's place, so its lines are \
                  never copied; a `find` copied from the brief matches where the formatter has \
