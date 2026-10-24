@@ -94,7 +94,7 @@ while let Some(c) = chars.next() {
 String::from_utf8(bytes).map_err(|error| DecodeError::new(error.to_string()))"#;
 
 impl Stem {
-    pub(super) fn render(&self, kind: Kind) -> String {
+    pub fn render(&self, kind: Kind) -> String {
         match kind {
             Kind::Manifest => self.render_manifest(),
             Kind::Entry => self.render_entry(),
@@ -455,7 +455,7 @@ impl Function {
     // The function from its signature to its closing brace, the comment and
     // doc lines above it standing: the one block the turn replaces, since
     // the behaviour decides the signature too.
-    pub(super) fn block(&self) -> String {
+    pub fn block(&self) -> String {
         let mut source = Source::default();
         source.push(self.signature());
         source.render().trim_end().to_owned()
@@ -557,7 +557,7 @@ impl Test {
     // The test from its `#[ignore]` line to its closing brace: the one
     // block the turn replaces, so the brief quotes it under the marker's
     // key.
-    pub(super) fn block(&self, stem: &Stem) -> String {
+    pub fn block(&self, stem: &Stem) -> String {
         let mut source = Source::default();
         source.push(self.render(stem).attr(self.ignored()));
         source.render().trim_end().to_owned()
@@ -656,13 +656,13 @@ impl Test {
 
 // The line a stem's `[dependencies]` names a crate the root manifest pins
 // by.
-pub(super) fn dependency_line(name: &str) -> String {
+pub fn dependency_line(name: &str) -> String {
     format!("{name}.workspace = true")
 }
 
 // The topic table's constant for `topic`, under its doc line, as the lines
 // added at the end of the table.
-pub(super) fn topic_constant(constant: &str, topic: &str) -> String {
+pub fn topic_constant(constant: &str, topic: &str) -> String {
     let topic = escape(topic);
     let mut source = Source::default();
     source.push(Consts::new([Const::new(constant, "&str", format!("\"{topic}\""))
@@ -744,7 +744,7 @@ fn deliver(ident: &str) -> Fn {
 // The body of a handler or a consumer as the file holds it: the borrow
 // that keeps the lints quiet and the marker, the one block the turn
 // replaces.
-pub(super) fn stub(marker: &str) -> String {
+pub fn stub(marker: &str) -> String {
     block(stub_lines(marker)).collect::<Vec<_>>().join("\n")
 }
 
@@ -760,7 +760,7 @@ fn marker_lines(marker: &str) -> Vec<String> {
 }
 
 // `text` in a fence longer than any run of backticks it holds.
-pub(super) fn fenced(lang: &str, text: &str) -> String {
+pub fn fenced(lang: &str, text: &str) -> String {
     let fence = Fence::around(text);
     format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
 }

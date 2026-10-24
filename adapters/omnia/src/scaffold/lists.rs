@@ -10,22 +10,22 @@ use super::names::{Names, screaming};
 use crate::layout::{self, PATH_LIST_ANCHOR, ROUTES_ARRAY_ANCHOR, TOPICS_ARRAY_ANCHOR};
 
 // A line a stem adds to a list, and where the list stands with it.
-pub(super) struct Line {
-    pub(super) path: String,
-    pub(super) text: String,
-    pub(super) place: Place,
-    pub(super) placement: Placement,
+pub struct Line {
+    pub path: String,
+    pub text: String,
+    pub place: Place,
+    pub placement: Placement,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Placement {
+pub enum Placement {
     Held,
     Add,
     Unanchored,
 }
 
 // Where a list takes a line.
-pub(super) enum Place {
+pub enum Place {
     // The root manifest's path list: after `common`'s line and the stems'
     // after it.
     PathList,
@@ -48,19 +48,19 @@ pub(super) enum Place {
 // The text of each list a line is placed in, read once; a list the tree
 // lacks is `None`.
 #[derive(Default)]
-pub(super) struct Lists {
+pub struct Lists {
     texts: BTreeMap<String, Option<String>>,
 }
 
 // The topic table as the tree holds it, and the names the slice's topics
 // take beside its constants.
-pub(super) struct Topics {
+pub struct Topics {
     declared: Vec<(String, String)>,
     names: Names,
 }
 
 impl Line {
-    pub(super) fn new(path: &str, text: String, place: Place) -> Self {
+    pub fn new(path: &str, text: String, place: Place) -> Self {
         Self {
             path: path.to_owned(),
             text,
@@ -71,7 +71,7 @@ impl Line {
 
     // Where the list stands with the line: holding it, taking it at its
     // anchor, or lacking the anchor or the list.
-    pub(super) fn place(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
+    pub fn place(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
         self.placement = match lists.text(root, &self.path)? {
             Some(text) if text.lines().any(|held| held.trim() == self.key()) => Placement::Held,
             Some(text) if insert(text, &self.text, &self.place).is_some() => Placement::Add,
@@ -89,7 +89,7 @@ impl Line {
 
 impl Lists {
     // The text of the list at `path`, read on the first ask.
-    pub(super) fn text(&mut self, root: &Path, path: &str) -> Result<Option<&str>, Error> {
+    pub fn text(&mut self, root: &Path, path: &str) -> Result<Option<&str>, Error> {
         if !self.texts.contains_key(path) {
             let text = match standing(root, path) {
                 Ok(Standing::File) => Some(layout::read(&root.join(path))?),
@@ -110,13 +110,13 @@ impl Lists {
 
     // Keeps the text a stem already read at `path`, so the list is read
     // once.
-    pub(super) fn cache(&mut self, path: &str, text: &str) {
+    pub fn cache(&mut self, path: &str, text: &str) {
         self.texts.entry(path.to_owned()).or_insert_with(|| Some(text.to_owned()));
     }
 
     // Adds `line` to its list where the list stands to take it, answering
     // whether it did.
-    pub(super) fn add(&mut self, line: &Line) -> bool {
+    pub fn add(&mut self, line: &Line) -> bool {
         let Some(Some(text)) = self.texts.get_mut(&line.path) else { return false };
         let Some(next) = insert(text, &line.text, &line.place) else { return false };
         *text = next;
@@ -125,7 +125,7 @@ impl Lists {
 
     // The text of the list at `path` as read and added to so far; none for
     // a list never read or one the tree lacks.
-    pub(super) fn get(&self, path: &str) -> Option<&str> {
+    pub fn get(&self, path: &str) -> Option<&str> {
         self.texts.get(path).and_then(Option::as_deref)
     }
 }
@@ -133,7 +133,7 @@ impl Lists {
 impl Topics {
     // Every constant of the table reserves its name, and each holding a
     // string literal declares a topic.
-    pub(super) fn read(root: &Path) -> Result<Self, Error> {
+    pub fn read(root: &Path) -> Result<Self, Error> {
         let table = layout::TopicTable::read(root)?;
         let taken: Vec<&str> = table.constants.iter().map(|held| held.name.as_str()).collect();
         Ok(Self {
@@ -148,7 +148,7 @@ impl Topics {
 
     // The table's constant for `topic`, and whether the table declares it
     // already; a topic no constant spells is named for it, once.
-    pub(super) fn constant(&mut self, topic: &str) -> (String, bool) {
+    pub fn constant(&mut self, topic: &str) -> (String, bool) {
         if let Some((name, _)) = self.declared.iter().find(|(_, held)| held == topic) {
             return (name.clone(), true);
         }
@@ -160,7 +160,7 @@ impl Topics {
 
 // `text` with `line` where `place` says, or none where the text holds no
 // anchor for it.
-pub(super) fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
+pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
     let mut lines: Vec<&str> = text.lines().collect();
     let at = match place {
         Place::PathList => {

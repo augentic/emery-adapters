@@ -12,34 +12,34 @@ use super::trigger;
 use super::types::{self, DesignKey};
 use crate::layout::{self, TOPICS, crate_dir, package};
 
-pub(super) struct Stem {
-    pub(super) name: String,
-    pub(super) dir: String,
-    pub(super) package: String,
-    pub(super) part: String,
-    pub(super) doc: Vec<String>,
+pub struct Stem {
+    pub name: String,
+    pub dir: String,
+    pub package: String,
+    pub part: String,
+    pub doc: Vec<String>,
     // Whether the slice's words select the probe idiom, so a `GET` handler's
     // route function is pre-rendered for the probe's status.
-    pub(super) probing: bool,
+    pub probing: bool,
     // Whether the manifest names the SQL crate: the slice probes, whose
     // tests arrange the store's rows, or reaches a SQL store, whose
     // `TableStore` the part queries through.
-    pub(super) sql: bool,
-    pub(super) manifest: File,
-    pub(super) entry: File,
-    pub(super) module: File,
-    pub(super) tests: Option<File>,
-    pub(super) paths: Vec<(String, String)>,
-    pub(super) handlers: Vec<Handler>,
-    pub(super) consumers: Vec<Consumer>,
-    pub(super) functions: Vec<Function>,
-    pub(super) types: Vec<Type>,
-    pub(super) scenarios: Vec<Test>,
-    pub(super) lines: Vec<Line>,
+    pub sql: bool,
+    pub manifest: File,
+    pub entry: File,
+    pub module: File,
+    pub tests: Option<File>,
+    pub paths: Vec<(String, String)>,
+    pub handlers: Vec<Handler>,
+    pub consumers: Vec<Consumer>,
+    pub functions: Vec<Function>,
+    pub types: Vec<Type>,
+    pub scenarios: Vec<Test>,
+    pub lines: Vec<Line>,
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum Kind {
+pub enum Kind {
     Manifest,
     Entry,
     Module,
@@ -47,81 +47,81 @@ pub(super) enum Kind {
 }
 
 impl Kind {
-    pub(super) const ALL: [Self; 4] = [Self::Manifest, Self::Entry, Self::Module, Self::Tests];
+    pub const ALL: [Self; 4] = [Self::Manifest, Self::Entry, Self::Module, Self::Tests];
 }
 
-pub(super) struct File {
-    pub(super) path: String,
-    pub(super) held: bool,
+pub struct File {
+    pub path: String,
+    pub held: bool,
     // What the tree holds at the path, where it holds a file.
     text: String,
 }
 
-pub(super) struct Handler {
-    pub(super) name: String,
-    pub(super) input: String,
-    pub(super) output: String,
-    pub(super) constant: String,
-    pub(super) route: Route,
-    pub(super) params: Vec<Param>,
-    pub(super) stated: Vec<Stated>,
-    pub(super) marker: String,
+pub struct Handler {
+    pub name: String,
+    pub input: String,
+    pub output: String,
+    pub constant: String,
+    pub route: Route,
+    pub params: Vec<Param>,
+    pub stated: Vec<Stated>,
+    pub marker: String,
     // The route function over `handle_with` scaffolded beside a `POST`
     // handler, beside one whose scenarios state a status other than `200`,
     // and beside a probe's `GET`, so another status is one token's edit; its
     // decoder reads what the SDK's route fn for the method reads, the body
     // for `POST`, the query for `GET` and `DELETE`.
-    pub(super) route_fn: Option<String>,
+    pub route_fn: Option<String>,
 }
 
-pub(super) struct Consumer {
-    pub(super) name: String,
-    pub(super) input: String,
-    pub(super) constant: String,
-    pub(super) topic: String,
-    pub(super) declared: bool,
-    pub(super) stated: Vec<Stated>,
-    pub(super) marker: String,
+pub struct Consumer {
+    pub name: String,
+    pub input: String,
+    pub constant: String,
+    pub topic: String,
+    pub declared: bool,
+    pub stated: Vec<Stated>,
+    pub marker: String,
 }
 
-pub(super) struct Param {
-    pub(super) wire: String,
-    pub(super) field: String,
+pub struct Param {
+    pub wire: String,
+    pub field: String,
 }
 
-pub(super) struct Stated {
-    pub(super) id: String,
-    pub(super) subject: String,
-    pub(super) statement: String,
+pub struct Stated {
+    pub id: String,
+    pub subject: String,
+    pub statement: String,
 }
 
-pub(super) struct Function {
-    pub(super) name: String,
-    pub(super) stated: Stated,
-    pub(super) marker: String,
+pub struct Function {
+    pub name: String,
+    pub stated: Stated,
+    pub marker: String,
 }
 
-pub(super) struct Type {
-    pub(super) name: String,
-    pub(super) key: String,
-    pub(super) signature: String,
-    pub(super) body: types::Body,
+pub struct Type {
+    pub name: String,
+    pub key: String,
+    pub signature: String,
+    pub body: types::Body,
 }
 
-pub(super) struct Test {
-    pub(super) name: String,
-    pub(super) id: String,
-    pub(super) subject: String,
-    pub(super) scenario: Scenario,
-    pub(super) ignore: String,
-    pub(super) marker: String,
-    pub(super) act: Act,
+pub struct Test {
+    pub name: String,
+    pub id: String,
+    pub subject: String,
+    pub scenario: Scenario,
+    pub ignore: String,
+    pub marker: String,
+    pub act: Act,
 }
 
 // What a scenario's test acts through: the route or the topic its
 // requirement carries, or the provider alone for a function.
 #[derive(Clone)]
-pub(super) enum Act {
+pub enum Act {
     Route(Route),
     Topic(String),
     Call,
@@ -174,7 +174,7 @@ impl Default for Namespaces {
 }
 
 impl Stem {
-    pub(super) fn new(name: &str, slice: &Slice, probing: bool, sql: bool) -> Self {
+    pub fn new(name: &str, slice: &Slice, probing: bool, sql: bool) -> Self {
         let part = part_of(&slice.name, name);
         let doc = match slice.brief.first() {
             Some(paragraph) if !paragraph.trim().is_empty() => {
@@ -210,7 +210,7 @@ impl Stem {
     // keeps its name over a handler's wrapper, and lays each type once
     // every one is named, so a field naming another the slice owns reads
     // its reserved name.
-    pub(super) fn plan(
+    pub fn plan(
         &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
         topics: &mut Topics,
     ) {
@@ -349,7 +349,7 @@ impl Stem {
         });
     }
 
-    pub(super) fn read(&mut self, root: &Path) -> Result<(), Error> {
+    pub fn read(&mut self, root: &Path) -> Result<(), Error> {
         let files = [&mut self.manifest, &mut self.entry, &mut self.module];
         for file in files.into_iter().chain(self.tests.as_mut()) {
             file.read(root)?;
@@ -359,7 +359,7 @@ impl Stem {
 
     // Decides each of the stem's lines against its list, the held entry and
     // manifest read once with the stem's files.
-    pub(super) fn place_lines(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
+    pub fn place_lines(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
         for file in [&self.entry, &self.manifest].into_iter().filter(|file| file.held) {
             lists.cache(&file.path, &file.text);
         }
@@ -371,7 +371,7 @@ impl Stem {
         Ok(())
     }
 
-    pub(super) const fn file(&self, kind: Kind) -> Option<&File> {
+    pub const fn file(&self, kind: Kind) -> Option<&File> {
         match kind {
             Kind::Manifest => Some(&self.manifest),
             Kind::Entry => Some(&self.entry),
@@ -382,7 +382,7 @@ impl Stem {
 
     // The file's text as the tree holds it after the scaffold: what was
     // written, or what was held.
-    pub(super) fn text(&self, kind: Kind) -> Option<String> {
+    pub fn text(&self, kind: Kind) -> Option<String> {
         let file = self.file(kind)?;
         Some(if file.held { file.text.clone() } else { self.render(kind) })
     }
@@ -391,7 +391,7 @@ impl Stem {
     // ids and the items the scaffold named, a test file its ids and its
     // tests, and a manifest or an entry every line it holds, so a list is
     // added to and never cut.
-    pub(super) fn keeps(&self, kind: Kind) -> Vec<String> {
+    pub fn keeps(&self, kind: Kind) -> Vec<String> {
         match kind {
             Kind::Module => self.module_tokens(),
             Kind::Tests => self.test_tokens(),
@@ -402,7 +402,7 @@ impl Stem {
     // The markers the file holds under the keys the brief quotes, each
     // standing for the block the scaffold laid; a manifest or an entry
     // holds none.
-    pub(super) fn markers(&self, kind: Kind) -> Vec<Marker> {
+    pub fn markers(&self, kind: Kind) -> Vec<Marker> {
         match kind {
             Kind::Module => self.module_markers(),
             Kind::Tests => self.test_markers(),
@@ -601,14 +601,14 @@ impl File {
     }
 
     // Where the file came from, as the brief names it.
-    pub(super) const fn origin(&self) -> &'static str {
+    pub const fn origin(&self) -> &'static str {
         if self.held { "held" } else { "scaffolded" }
     }
 }
 
 impl Type {
     // `struct Order` or `enum Status`, as the marker declares it.
-    pub(super) fn declaration(&self) -> String {
+    pub fn declaration(&self) -> String {
         let keyword = if self.body.is_enum() { "enum" } else { "struct" };
         format!("{keyword} {}", self.name)
     }
@@ -637,7 +637,7 @@ impl Stated {
 
 // Every non-blank line of `text`, trimmed, as the tokens a whole write of a
 // list or a fixed file must keep.
-pub(super) fn lines_of(text: &str) -> Vec<String> {
+pub fn lines_of(text: &str) -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToOwned::to_owned).collect()
 }
 

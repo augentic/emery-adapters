@@ -13,7 +13,7 @@ use crate::syntax;
 impl Tree<'_> {
     // The template keeps a path entry by its shape alone, so one left behind
     // after its crate went is no drift and compiles nothing.
-    pub(super) fn dangling_entries(&self) -> Result<Option<String>, Error> {
+    pub fn dangling_entries(&self) -> Result<Option<String>, Error> {
         let file = self.root.join(Manifest::PATH);
         if !file.is_file() {
             return Ok(None);
@@ -44,7 +44,7 @@ impl Tree<'_> {
         )))
     }
 
-    pub(super) fn unused_dependencies(&self) -> Option<String> {
+    pub fn unused_dependencies(&self) -> Option<String> {
         let mut lines = Vec::new();
         for (stem, manifest) in self.stem_manifests() {
             let code: Vec<&Module> = self.stem_files(stem).collect();
@@ -83,7 +83,7 @@ impl Tree<'_> {
             .filter(move |module| module.path.starts_with(&prefix))
     }
 
-    pub(super) fn unmerged_stems(&self) -> Option<String> {
+    pub fn unmerged_stems(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
             let Some(stem) = module.entry_stem() else { continue };
@@ -133,7 +133,7 @@ impl Tree<'_> {
     // item in an entry that composes parts, beyond its lists, is a part
     // folded into it; a verify is where both are left, the one turn under
     // no scaffold, when the shell moves a file and a `delete` takes one.
-    pub(super) fn undeclared_parts(&self) -> Option<String> {
+    pub fn undeclared_parts(&self) -> Option<String> {
         let mut lines = Vec::new();
         for entry in &self.modules {
             let Some(stem) = entry.entry_stem() else { continue };
@@ -177,7 +177,7 @@ impl Tree<'_> {
         ))
     }
 
-    pub(super) fn unnamed_topics(&self) -> Option<String> {
+    pub fn unnamed_topics(&self) -> Option<String> {
         let mut lines = Vec::new();
         for constant in &self.topics().constants {
             let named = self
@@ -209,7 +209,7 @@ impl Tree<'_> {
     // A stem is run through its `routes()` and `topics(..)` or through
     // another stem's call, so a publishing part in a stem neither reaches is
     // never run; the root lists name every stem and tell nothing.
-    pub(super) fn unreached_publishers(&self) -> Option<String> {
+    pub fn unreached_publishers(&self) -> Option<String> {
         let mut lines = Vec::new();
         for stem in self.stem_crates() {
             let prefix = format!("crates/{stem}/");

@@ -337,6 +337,13 @@ impl<'a> Tree<'a> {
                 ));
                 continue;
             };
+            if !found.attributed {
+                lines.push(format!(
+                    "{}:{}: {} is covered and the test `{}` of its scenario `{}` carries no \
+                     `#[tokio::test]`",
+                    expected.path, found.line, expected.id, expected.test, expected.scenario
+                ));
+            }
             if found.ignored {
                 lines.push(format!(
                     "{}:{}: {} is covered and the test `{}` of its scenario `{}` is ignored",
@@ -357,7 +364,8 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement's scenarios are tests that run and pass: each scenario of a \
              covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
-             part's test file, filled, with its `#[ignore = ..]` line removed; fill each through \
+             part's test file, filled, its `#[tokio::test]` line kept and its `#[ignore = ..]` \
+             line removed, since a function without the attribute is no test; fill each through \
              `edit_files`, or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
@@ -462,12 +470,16 @@ impl<'a> Tree<'a> {
 
 struct Found {
     line: usize,
+    // a `test` attribute stands among the function's, `#[tokio::test]` or
+    // `#[test]`, so the harness runs it
+    attributed: bool,
     ignored: bool,
     marker: Option<usize>,
 }
 
-// The test `name` declares in a test file: its line, whether an `#[ignore]`
-// stands among its attributes, and the line of a marker left in its body.
+// The test `name` declares in a test file: its line, whether a `test` and
+// an `#[ignore]` attribute stand among its attributes, and the line of a
+// marker left in its body.
 fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     struct Test<'n, 'ast> {
         name: &'n str,
@@ -494,6 +506,10 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     markers.visit_block(&item.block);
     Some(Found {
         line: syntax::line(item.sig.fn_token.span),
+        attributed: item
+            .attrs
+            .iter()
+            .any(|attr| attr.path().segments.last().is_some_and(|segment| segment.ident == "test")),
         ignored: item.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
         marker: markers.found.first().map(|(line, _)| *line),
     })

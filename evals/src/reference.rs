@@ -5,7 +5,7 @@ use std::fmt::{self, Display, Formatter, Write as _};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
-use crate::{HostCheck, files_under, host_check};
+use crate::fidelity::{HostCheck, files_under, host_check};
 
 // The reference guest a case names, located under the repository root.
 pub struct Reference {

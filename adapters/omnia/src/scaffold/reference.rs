@@ -14,7 +14,7 @@ const TRANSLATION: &str = "references/translation.md";
 // What the slice's text and the design's `## APIs and integrations` name
 // the program reaching, read by the words of their text.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum Role {
+pub enum Role {
     Consume,
     Publish,
     Upstream,
@@ -171,7 +171,7 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
 // the words of its requirements and brief alone, since the design's words
 // name what every slice shares.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum Idiom {
+pub enum Idiom {
     Probe,
     CacheAside,
 }
@@ -276,15 +276,15 @@ const CAPABILITIES: &[Capability] = &[
 ];
 
 // What the scaffold laid and the slice reaches, which decide the passages.
-pub(super) struct Needs {
-    pub(super) laid: BTreeSet<Laid>,
-    pub(super) roles: BTreeSet<Role>,
-    pub(super) idioms: BTreeSet<Idiom>,
+pub struct Needs {
+    pub laid: BTreeSet<Laid>,
+    pub roles: BTreeSet<Role>,
+    pub idioms: BTreeSet<Idiom>,
 }
 
 // A kind of item the scaffold laid for the slice.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) enum Laid {
+pub enum Laid {
     Routes,
     // A route function over `handle_with`, which spells the encoder.
     Encoded,
@@ -295,18 +295,18 @@ pub(super) enum Laid {
 
 // One passage of a reference: Markdown quoted verbatim, or code the brief
 // fences.
-pub(super) struct Passage {
-    pub(super) source: &'static str,
-    pub(super) heading: String,
-    pub(super) text: String,
-    pub(super) code: bool,
+pub struct Passage {
+    pub source: &'static str,
+    pub heading: String,
+    pub text: String,
+    pub code: bool,
 }
 
 // The roles the slice reaches, by the words of its own text and of the
 // design's APIs paragraphs that speak to it: a paragraph citing one of the
 // slice's requirement ids, or citing none, names what the slice reaches; one
 // citing other slices' ids alone names what they reach.
-pub(super) fn roles(slice: &Slice) -> BTreeSet<Role> {
+pub fn roles(slice: &Slice) -> BTreeSet<Role> {
     let ids: Vec<&str> =
         slice.requirements.iter().map(|requirement| requirement.id.as_str()).collect();
     let mut spelled = own_words(slice);
@@ -326,7 +326,7 @@ pub(super) fn roles(slice: &Slice) -> BTreeSet<Role> {
 }
 
 // The idioms the slice's own text calls for.
-pub(super) fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
+pub fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
     let spelled = own_words(slice);
     IDIOMS
         .iter()
@@ -404,7 +404,7 @@ fn digits(text: &str) -> (&str, &str) {
     text.split_at(text.len() - rest.len())
 }
 
-pub(super) fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
+pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     let mut passages = Vec::new();
     let has = |laid: Laid| needs.laid.contains(&laid);
     let mut roles = needs.roles.clone();

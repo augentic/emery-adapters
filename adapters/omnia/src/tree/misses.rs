@@ -32,7 +32,7 @@ const DEFAULTED_WITH: &[(&[&str], &str)] = &[
 ];
 
 impl Tree<'_> {
-    pub(super) fn empty_misses(&self) -> Option<String> {
+    pub fn empty_misses(&self) -> Option<String> {
         let mut lines: Vec<String> = self.modules.iter().flat_map(Module::empty_misses).collect();
         if lines.is_empty() {
             return None;
@@ -49,7 +49,7 @@ impl Tree<'_> {
         ))
     }
 
-    pub(super) fn response_wrappers(&self) -> Option<String> {
+    pub fn response_wrappers(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
             if module.is_common() {
@@ -76,7 +76,7 @@ impl Tree<'_> {
         ))
     }
 
-    pub(super) fn swallowed_rejections(&self) -> Option<String> {
+    pub fn swallowed_rejections(&self) -> Option<String> {
         let mut lines: Vec<String> =
             self.modules.iter().flat_map(Module::swallowed_rejections).collect();
         if lines.is_empty() {
@@ -93,7 +93,7 @@ impl Tree<'_> {
         ))
     }
 
-    pub(super) fn format_settings(&self) -> Option<String> {
+    pub fn format_settings(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {
             for (number, name) in module.format_settings() {

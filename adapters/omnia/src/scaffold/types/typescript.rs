@@ -22,7 +22,7 @@ const UNWRAPPED: &[&str] = &["Promise", "Readonly", "Required", "NonNullable", "
 const OPAQUE: &[&str] =
     &["Partial", "Pick", "Omit", "Exclude", "Extract", "Parameters", "ReturnType", "InstanceType"];
 
-pub(super) fn read(signature: &str) -> Option<Parsed> {
+pub fn read(signature: &str) -> Option<Parsed> {
     let text = signature.trim();
     let mut head = text;
     let mut prefixed = false;
@@ -367,7 +367,7 @@ fn default_of(value: &str) -> Option<Literal> {
 }
 
 // A type expression as the reader lays it.
-pub(super) fn parse(text: &str) -> Type {
+pub fn parse(text: &str) -> Type {
     let text = text.trim();
     if text.starts_with('(')
         && let Some((inner, after)) = between(text, '(', ')')
