@@ -1,0 +1,7 @@
+[[source]]
+adapter = "emery:typescript@0.12.0"
+path = "../../evals/cases/orders/fixture/"
+scope = "whole"
+
+[target]
+adapter = "emery:omnia@0.12.0"

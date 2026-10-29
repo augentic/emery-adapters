@@ -1,8 +1,8 @@
 # Source Adapter Examples
 
-Live `specify` and `build` runs through [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor).
+Live `specify`, `amend`, and `build` runs through [omnia-cursor](https://github.com/augentic/omnia-backends/tree/main/crates/cursor).
 
-`specify` loads the named source adapters, extracts claims, and stages one candidate revision in `.emery/storage`. `show <artifact> --staged` prints it. `apply` seals the staged candidate under `spec/` in the target's repository as the current revision, at one commit labelled `emery/<revision>`, and `specify --apply` does both in one run. `show <artifact>` prints the current revision, and `build` builds its plan through one target adapter.
+`specify` loads the named source adapters, extracts claims, and stages one candidate revision in `.emery/storage`. `show <artifact> --staged` prints it. `apply` seals the staged candidate under `spec/` in the target's repository as the current revision, at one commit labelled `emery/<revision>`, and `specify --apply` does both in one run. `amend` extracts its change sources against the current revision and stages an amendment for `show amendment` and `apply`, which seals it as the next revision over its base (`amend --apply` in one run). `show <artifact>` prints the current revision, and `build` builds its plan through one target adapter.
 
 Run from the repository root. `emery` mounts that directory as the project, and every path an `emery.toml` names must sit inside it.
 
@@ -40,7 +40,7 @@ cargo run --manifest-path ../emery/Cargo.toml -- show design --staged
 cargo run --manifest-path ../emery/Cargo.toml -- show plan --staged
 ```
 
-Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.12.0.wasm`). Replacing the file is how a rebuild takes effect. A config with no `[target]` table stages a candidate for `show --staged`; sealing it, and showing the current revision, need one.
+Swap the config for [intent](intent/emery.toml), [python](python/emery.toml), [documentation](documentation/emery.toml), [amend](amend/emery.toml), or the combined [emery.toml](emery.toml). Copy each source adapter that config names the same way (`emery_<name>@0.12.0.wasm`). Replacing the file is how a rebuild takes effect. A config with no `[target]` table stages a candidate for `show --staged`; sealing it, and showing the current revision, need one.
 
 ## Apply
 
@@ -77,6 +77,35 @@ The adapter builds into `.emery/vcs/repos/omnia` over the `Revision` commit and 
 A `[target] repository` URL builds into a clone of that repository from its default branch instead, and `repository = "."` into this checkout's own repository from its sealed head. The init scaffolds only the files of the layout the tree lacks, so a held project's files stand; a repository that is not an omnia guest is better left for the created one.
 
 Build and verify run `cargo` with access to crates.io, `~/.rustup`, and `~/.cargo/bin`. If a turn exceeds `CURSOR_TIMEOUT_SECS`, use smaller slices or raise the limit for that run.
+
+## Amend
+
+[amend/emery.toml](amend/emery.toml) names `emery:typescript` over `evals/cases/orders/fixture/` (`OrderService` with `place`, `read`, and `cancel` under `order-service`) with `scope = "whole"`, and `emery:omnia` as its `[target]`. Seal the baseline revision from the whole fixture tree (`--fresh` if `.emery/vcs/repos/omnia` already holds an amended lineage from an earlier run), remove `cancel` from `orders.ts`, and run `amend`:
+
+```bash
+# seal the baseline revision from the whole fixture tree
+cargo run --manifest-path ../emery/Cargo.toml -- specify -v --apply --config examples/amend/emery.toml
+
+# remove `cancel` (lines 67–75) from `OrderService` so the tree states `place` and `read` alone
+python3 -c '
+from pathlib import Path
+p = Path("evals/cases/orders/fixture/orders.ts")
+lines = p.read_text().splitlines(keepends=True)
+p.write_text("".join(lines[:66] + lines[75:]))
+'
+
+# stage the amendment; `scope = "whole"` retires what the tree no longer states under `order-service`
+cargo run --manifest-path ../emery/Cargo.toml -- amend -v --config examples/amend/emery.toml
+
+# review the staged amendment and seal it as the next revision
+cargo run --manifest-path ../emery/Cargo.toml -- show amendment
+cargo run --manifest-path ../emery/Cargo.toml -- apply --config examples/amend/emery.toml
+
+# restore the fixture
+git checkout -- evals/cases/orders/fixture/orders.ts
+```
+
+Under `scope = "whole"`, a behaviour source (`typescript`, `python`) states the stems its `requirement` claims cover whole: `amend` matches the remaining `place` and `read` claims against the standing requirements under `order-service` and retires the untouched `cancel` requirements by the source's silence, printing `retired (N by scope)` on the counts line and `slices: order-service (brief kept)` on the plan line. `show amendment` renders `## Retired` with ``Note: retired by scope: `typescript` was read whole and states nothing under `order-service`.`` beneath each retired requirement and `## Plan` with `### Slice: order-service [changed]` followed by `Note: the brief is the base's; no slicing turn redrafted it.`. `apply` seals the amendment as the next revision over its base (`amends <parent>`, with `Parent:`, `Base:`, `Added:`, `Changed:`, `Retired:`, and `Slices:` trailers on `emery/<revision>`). A prose source (`intent`, `documentation`) read with `scope = "whole"` retires nothing by silence and withdraws a behaviour through a `retire` claim alone.
 
 ## Logging
 
