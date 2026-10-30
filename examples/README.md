@@ -69,7 +69,7 @@ cargo run --manifest-path ../emery/Cargo.toml -- show plan --staged
 
 You can pass any example configuration to `--config`:
 
-- [`examples/emery.toml`](emery.toml) — combines TypeScript (`evals/cases/train/fixture`) and documentation (`examples/documentation/docs`) sources with the `emery:omnia` target.
+- [`examples/emery.toml`](emery.toml) — extracts from a TypeScript service (`evals/cases/train/fixture`) with the `emery:omnia` target. A documentation source over `examples/documentation/docs` is included commented out; uncomment it to run a combined multi-source extraction.
 - [`examples/documentation/emery.toml`](documentation/emery.toml) — extracts from Markdown documentation alone.
 - [`examples/intent/emery.toml`](intent/emery.toml) — extracts from an inline operator brief (`description`).
 - [`examples/typescript/emery.toml`](typescript/emery.toml) — extracts from a TypeScript service.

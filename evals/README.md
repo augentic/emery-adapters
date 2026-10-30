@@ -115,7 +115,7 @@ Recommended quick smoke-test subsets:
 
 ### Survey facts without a model turn (`--facts`)
 
-Passing `--facts [case|adapter..]` stages the selected cases and invokes `emery specify` with `CURSOR_API_KEY` removed (or `GENAI_ENDPOINT` pointed at an closed local port under `emery-dev`). The adapter parses the codebase, logs the deterministic survey facts it would send to the model (bootstrap, route registrations, decorators, exports, and manifests, or Markdown outlines for `documentation`), and exits immediately before spending any model turn.
+Passing `--facts [case|adapter..]` stages the selected cases and invokes `emery specify` with `CURSOR_API_KEY` removed (or `GENAI_ENDPOINT` pointed at a closed local port under `emery-dev`). The adapter parses the codebase, logs the deterministic survey facts it would send to the model (bootstrap, route registrations, decorators, exports, and manifests, or Markdown outlines for `documentation`), and exits immediately before spending any model turn.
 
 The extracted facts are printed to stdout and saved to `target/eval/facts/<case>/facts.md` (and to `run-N.facts.md` during full evaluation runs). Use `--facts` to author new `expected.toml` files or verify parser and keep-list changes in seconds.
 
@@ -391,7 +391,7 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 | Case | What it probes | Expected reconciliation |
 | --- | --- | --- |
 | [`orders-triad`](cases/orders-triad/expected.toml) | Documentation (`docs`), TypeScript (`code`), and inline intent (`brief`) with differing stem names. | 5 shared behaviors, 2 doc-only behaviors. |
-| [`orders-brief`](cases/orders-brief/expected.toml) | Documentation alongside an higher-ranked intent brief that overrides one rule. | `divergence` (intent outranks documentation). |
+| [`orders-brief`](cases/orders-brief/expected.toml) | Documentation alongside a higher-ranked intent brief that overrides one rule. | `divergence` (intent outranks documentation). |
 | [`orders-divergence`](cases/orders-divergence/expected.toml) | Documentation and TypeScript code disagreeing on two rules. | `divergence` on both rules. |
 | [`orders-conflict`](cases/orders-conflict/expected.toml) | Two `documentation` sources (`docs` and `faq`) contradicting each other at equal rank. | `conflict`. |
 | [`orders-ranked`](cases/orders-ranked/expected.toml) | Same sources as `orders-conflict`, with `faq` lowered to `rank = 4`. | `divergence` (`docs` outranks `faq`). |
