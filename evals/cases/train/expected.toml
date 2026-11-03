@@ -128,10 +128,6 @@ anchor = "src/config.ts#L6"
 gloss = "STATIONS defaults to 0,19,40"
 
 [[criterion]]
-anchor = "src/config.ts#L15"
-gloss = "Confluent config is used unless IS_LOCAL is `true`"
-
-[[criterion]]
 anchor = "src/config.ts#L11"
 gloss = "Train message dates are DD/MM/YYYY"
 
