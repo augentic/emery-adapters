@@ -5,37 +5,10 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 use emery_sdk::survey::Inventory;
-use emery_sdk::{Error, INLINE_BYTES, Seam, SourceContent, SourceInput, serde_json, tracing};
+use emery_sdk::{Error, INLINE_BYTES, Seam, serde_json, tracing};
 
 use super::model::Subject;
 use super::structure::Outline;
-
-pub enum Preparation<'i> {
-    Value,
-    Workspace(Prepared<'i>),
-}
-
-impl<'i> Preparation<'i> {
-    pub fn read(input: &'i SourceInput) -> Result<Self, Error> {
-        let SourceContent::Workspace(root) = &input.content else {
-            return Ok(Self::Value);
-        };
-        let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
-        let documents = files
-            .into_iter()
-            .filter_map(|path| {
-                let text = std::fs::read_to_string(Path::new(root).join(&path)).ok()?;
-                let outline = Outline::read(&text);
-                Some(Document { path, text, outline })
-            })
-            .collect();
-        Ok(Self::Workspace(Prepared {
-            source: &input.name,
-            root,
-            documents,
-        }))
-    }
-}
 
 pub struct Prepared<'i> {
     pub source: &'i str,
@@ -49,9 +22,22 @@ pub struct Document {
     pub outline: Outline,
 }
 
-impl Prepared<'_> {
-    pub const fn source(&self) -> &str {
-        self.source
+impl<'i> Prepared<'i> {
+    pub fn read(source: &'i str, root: &'i str) -> Result<Self, Error> {
+        let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
+        let documents = files
+            .into_iter()
+            .filter_map(|path| {
+                let text = std::fs::read_to_string(Path::new(root).join(&path)).ok()?;
+                let outline = Outline::read(&text);
+                Some(Document { path, text, outline })
+            })
+            .collect();
+        Ok(Self {
+            source,
+            root,
+            documents,
+        })
     }
 
     pub fn document(&self, path: &str) -> Option<&Document> {
@@ -59,7 +45,7 @@ impl Prepared<'_> {
     }
 
     pub fn seams(&self, inventory: &Inventory) -> Result<Vec<Seam>, Error> {
-        let source = self.source();
+        let source = self.source;
         let subjects = self.subjects(inventory);
         tracing::info!(
             %source,
@@ -144,7 +130,7 @@ impl Cut<'_> {
     }
 
     fn text(&self, subjects: &[&Subject], files: &[String], stem: Option<&str>) -> String {
-        let source = self.prepared.source();
+        let source = self.prepared.source;
         let counted = format!(
             "{} {} in {} {}",
             subjects.len(),

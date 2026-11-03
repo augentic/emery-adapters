@@ -23,7 +23,7 @@ impl Prepared<'_> {
     pub async fn inventory<P: Model>(
         &self, ctx: &Context<'_, P>, docs: &'static [emery_sdk::Doc],
     ) -> Result<Inventory, Error> {
-        let source = self.source();
+        let source = self.source;
         let modules: Vec<String> = self.documents.iter().map(|doc| doc.path.clone()).collect();
         let text = self.facts();
 
@@ -162,14 +162,9 @@ impl Prepared<'_> {
                 subject.lead.clone_from(&subject.stem);
                 continue;
             }
-            let doc = self.document(&subject.entry);
-            let heading = doc
-                .and_then(|doc| {
-                    doc.outline
-                        .heading_at(subject.anchor)
-                        .or_else(|| doc.outline.heading_in(subject.span))
-                })
-                .map(|heading| heading.text.as_str());
+            let heading = self
+                .document(&subject.entry)
+                .and_then(|doc| doc.outline.heading(subject.anchor, subject.span));
             let file = subject.entry.rsplit('/').next().and_then(|name| name.split('.').next());
             let candidates = [
                 heading.and_then(emery_sdk::kebab),
@@ -202,5 +197,5 @@ fn clipped(text: &str) -> String {
 }
 
 fn start_line(lines: Option<(u64, u64)>) -> u32 {
-    lines.map_or(1, |(start, _)| u32::try_from(start).unwrap_or(u32::MAX).max(1))
+    lines.map_or(1, |span| Lines::from(span).start.max(1))
 }
