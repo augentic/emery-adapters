@@ -34,23 +34,8 @@ stem = "health"
 
 [[requirement]]
 stem = "start"
-anchor = "src/server.ts#L16-L20"
-gloss = "Health is served at /health without a token; /orders/* and /customers/* are behind the bearer check, each sub-application mounted under its resource"
-
-[[requirement]]
-stem = "start"
 anchor = "src/lib/auth.ts#L8-L10"
 gloss = "A request without `Authorization: Bearer <token>` naming one of API_TOKENS is 401 `unauthorized`"
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L22"
-gloss = "The server listens on PORT"
-
-[[requirement]]
-stem = "start"
-anchor = "src/server.ts#L25-L30"
-gloss = "SIGTERM and SIGINT close the server and exit 0"
 
 # --- orders ---
 
@@ -153,3 +138,17 @@ gloss = "PlaceOrderSchema: a customerId, at least one line with a positive integ
 [[criterion]]
 anchor = "src/routes/customers.ts#L6-L10"
 gloss = "CustomerSchema: an email, a name of 1–120 characters, a tier of TIERS defaulting to standard"
+
+# --- absent: how the process mounts, listens, and shuts down ---
+
+[[absent]]
+anchor = "src/server.ts#L16-L20"
+gloss = "Health is served at /health without a token; /orders/* and /customers/* are behind the bearer check, each sub-application mounted under its resource"
+
+[[absent]]
+anchor = "src/server.ts#L22"
+gloss = "The server listens on PORT"
+
+[[absent]]
+anchor = "src/server.ts#L25-L30"
+gloss = "SIGTERM and SIGINT close the server and exit 0"

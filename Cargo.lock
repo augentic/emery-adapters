@@ -368,9 +368,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.10.0"
+version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86e055fa6e3e40ad6187ba25b6855eeb635d5271f8e0f0e1e9a5826b8d75bea0"
+checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1100,7 +1100,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#fd0f172abdda54e46f01a9816a42d74110053bc5"
+source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1152,7 +1152,7 @@ dependencies = [
 [[package]]
 name = "emery-lexicon"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#fd0f172abdda54e46f01a9816a42d74110053bc5"
+source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 
 [[package]]
 name = "emery-node"
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#fd0f172abdda54e46f01a9816a42d74110053bc5"
+source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 
 [[package]]
 name = "emery-python"
@@ -1189,7 +1189,7 @@ dependencies = [
 [[package]]
 name = "emery-sdk"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#fd0f172abdda54e46f01a9816a42d74110053bc5"
+source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 dependencies = [
  "anyhow",
  "emery-adapter",
