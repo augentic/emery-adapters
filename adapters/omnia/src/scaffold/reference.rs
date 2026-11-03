@@ -605,19 +605,24 @@ fn line_start(text: &str, lead: &str) -> Option<usize> {
 
 // The content of the `n`th fenced block of the section.
 fn fence(section: &str, n: usize) -> Option<&str> {
-    let mut blocks = Vec::new();
+    let mut count = 0;
     let mut open: Option<usize> = None;
     let mut at = 0;
     for line in section.split_inclusive('\n') {
         if line.starts_with("```") {
             match open.take() {
-                Some(start) => blocks.push(&section[start..at]),
+                Some(start) => {
+                    if count == n {
+                        return Some(&section[start..at]);
+                    }
+                    count += 1;
+                }
                 None => open = Some(at + line.len()),
             }
         }
         at += line.len();
     }
-    blocks.get(n).copied()
+    None
 }
 
 // The lines from the first that starts with `lead` to the next blank line,

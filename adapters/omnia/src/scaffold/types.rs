@@ -745,14 +745,21 @@ fn backticked(word: &str) -> String {
 // `text` split at each `sep` outside brackets, parentheses, braces, angle
 // brackets, and string literals.
 fn split_top(text: &str, sep: char) -> impl Iterator<Item = &str> {
-    let mut parts = Vec::new();
     let mut start = 0;
-    for at in top_level(text, sep) {
-        parts.push(&text[start..at]);
-        start = at + sep.len_utf8();
-    }
-    parts.push(&text[start..]);
-    parts.into_iter()
+    let mut done = false;
+    let mut positions = top_level(text, sep);
+    std::iter::from_fn(move || {
+        if let Some(at) = positions.next() {
+            let part = &text[start..at];
+            start = at + sep.len_utf8();
+            Some(part)
+        } else if !done {
+            done = true;
+            Some(&text[start..])
+        } else {
+            None
+        }
+    })
 }
 
 // `text` split at the first `sep` outside brackets, parentheses, braces,

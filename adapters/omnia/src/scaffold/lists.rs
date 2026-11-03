@@ -111,7 +111,9 @@ impl Lists {
     // Keeps the text a stem already read at `path`, so the list is read
     // once.
     pub fn cache(&mut self, path: &str, text: &str) {
-        self.texts.entry(path.to_owned()).or_insert_with(|| Some(text.to_owned()));
+        if !self.texts.contains_key(path) {
+            self.texts.insert(path.to_owned(), Some(text.to_owned()));
+        }
     }
 
     // Adds `line` to its list where the list stands to take it, answering
