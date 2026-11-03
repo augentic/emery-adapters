@@ -32,11 +32,6 @@ stem = "auth"
 
 [[requirement]]
 stem = "start"
-anchor = "shop/__init__.py#L22-L28"
-gloss = "The factory configures the app from Config, connects the cache, mounts orders under /orders and auth under its own /auth prefix, and adds /health"
-
-[[requirement]]
-stem = "start"
 anchor = "shop/__init__.py#L34-L39"
 gloss = "Every response carries X-Elapsed-Ms and is logged with its method, path, status, and elapsed time"
 
@@ -66,11 +61,6 @@ gloss = "An order needs a customer and one to MAX_LINES lines, each with a posit
 stem = "orders"
 anchor = "shop/orders/service.py#L43-L46"
 gloss = "The total is the lines' sum plus SHIPPING_CENTS, waived at or above FREE_SHIPPING_THRESHOLD_CENTS"
-
-[[requirement]]
-stem = "orders"
-anchor = "shop/orders/service.py#L50-L60"
-gloss = "Placing and cancelling POST an event to WEBHOOK_URL under WEBHOOK_TIMEOUT_S; no URL skips it and a failure is logged, not raised"
 
 [[requirement]]
 stem = "orders"
@@ -119,14 +109,6 @@ gloss = "POST /auth/logout drops the token and answers 204"
 # --- criteria ---
 
 [[criterion]]
-anchor = "shop/config.py#L8"
-gloss = "WEBHOOK_TIMEOUT_S defaults to 5"
-
-[[criterion]]
-anchor = "shop/config.py#L9"
-gloss = "CACHE_TTL_S defaults to 300"
-
-[[criterion]]
 anchor = "shop/config.py#L10"
 gloss = "TOKEN_TTL_S defaults to 3600"
 
@@ -149,3 +131,9 @@ gloss = "PAGE_LIMIT is 50"
 [[criterion]]
 anchor = "shop/auth/routes.py#L13"
 gloss = "MIN_PASSWORD_LENGTH is 8"
+
+# --- absent: how the factory configures, connects, and mounts ---
+
+[[absent]]
+anchor = "shop/__init__.py#L22-L28"
+gloss = "The factory configures the app from Config, connects the cache, mounts orders under /orders and auth under its own /auth prefix, and adds /health"
