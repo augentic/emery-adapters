@@ -17,7 +17,7 @@ use ruff_python_parser::parse_unchecked_source;
 use ruff_text_size::{Ranged, TextRange, TextSize};
 
 use super::{Module, TestDef};
-use crate::survey::DIALECT;
+use crate::survey::{DATA_EXTENSIONS, DIALECT};
 
 const INIT_TEXT: usize = 160;
 const TIMERS: &[&str] = &[
@@ -87,7 +87,6 @@ const TYPING_HEADS: &[&str] = &[
 ];
 const LOADERS: &[&str] = &["import_module", "__import__", "load_entry_point"];
 const WALKERS: &[&str] = &["iter_modules", "walk_packages", "entry_points", "autodiscover_modules"];
-const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 
 pub fn read(path: &str, text: &str) -> Module {
     let parsed = parse_unchecked_source(text, PySourceType::Python);
@@ -195,6 +194,18 @@ impl<'s> Walker<'s> {
             .map(|class| class.name.as_str())
     }
 
+    fn push_member(&mut self, class: &str, member: Member) {
+        if let Some(decl) = self.module.classes.iter_mut().rev().find(|c| c.name == class) {
+            decl.members.push(member);
+        }
+    }
+
+    fn table_text(&self, value: Option<&Expr>, range: TextRange) -> Option<String> {
+        value
+            .filter(|value| table(value) && !empty(value))
+            .map(|_| self.text_of(range).trim_end().to_owned())
+    }
+
     fn function_name(&self) -> Option<String> {
         self.frames.iter().rev().find_map(|frame| frame.name.clone())
     }
@@ -290,16 +301,17 @@ impl<'s> Walker<'s> {
             } else {
                 MemberKind::Method
             };
-            if let Some(decl) = self.module.classes.iter_mut().rev().find(|c| &c.name == class) {
-                decl.members.push(Member {
+            self.push_member(
+                class,
+                Member {
                     name: name.clone(),
                     kind,
                     private: hidden(&name),
                     lines,
                     signature,
                     table: None,
-                });
-            }
+                },
+            );
         } else {
             self.bind(name.clone(), self.scope(), BindingKind::Function, range);
             if self.at_module() {
@@ -384,16 +396,17 @@ impl<'s> Walker<'s> {
         let header = self.slice(header_start.to_u32(), header_end.to_u32()).trim_end().to_owned();
 
         if let Some(outer) = self.in_class_body().map(str::to_owned) {
-            if let Some(decl) = self.module.classes.iter_mut().rev().find(|c| c.name == outer) {
-                decl.members.push(Member {
+            self.push_member(
+                &outer,
+                Member {
                     name: name.clone(),
                     kind: MemberKind::Nested,
                     private: hidden(&name),
                     lines,
                     signature: header.trim_end_matches(':').to_owned(),
                     table: None,
-                });
-            }
+                },
+            );
         } else {
             self.bind(
                 name.clone(),
@@ -682,24 +695,21 @@ impl<'s> Walker<'s> {
         match target {
             Expr::Name(name) => {
                 let name = name.id.as_str().to_owned();
+                let table = self.table_text(value, range);
                 if let Some(class) = self.in_class_body().map(str::to_owned) {
                     let signature = self.excerpt(range);
                     let lines = self.lines(range);
-                    let table = value
-                        .filter(|value| table(value) && !empty(value))
-                        .map(|_| self.text_of(range).trim_end().to_owned());
-                    if let Some(decl) =
-                        self.module.classes.iter_mut().rev().find(|c| c.name == class)
-                    {
-                        decl.members.push(Member {
+                    self.push_member(
+                        &class,
+                        Member {
                             name: name.clone(),
                             kind: MemberKind::Field,
                             private: hidden(&name),
                             lines,
                             signature,
                             table,
-                        });
-                    }
+                        },
+                    );
                     self.bind(
                         name,
                         Scope::Class(class),
@@ -727,9 +737,6 @@ impl<'s> Walker<'s> {
                     .is_some_and(|value| matches!(core(value), Core::Call(_)))
                     .then_some(self.module.calls.len());
                 let string = value.and_then(string_value);
-                let table = value
-                    .filter(|value| table(value) && !empty(value))
-                    .map(|_| self.text_of(range).trim_end().to_owned());
                 self.bind(
                     name,
                     self.scope(),
@@ -997,7 +1004,7 @@ impl<'s> Visitor<'s> for Walker<'s> {
 }
 
 fn hidden(name: &str) -> bool {
-    name.starts_with('_') && !(name.starts_with("__") && name.ends_with("__"))
+    name.starts_with('_') && !super::dunder(name)
 }
 
 fn listed(value: &Expr) -> Vec<String> {
@@ -1021,9 +1028,9 @@ fn decorator_name(expr: &Expr) -> Option<String> {
 }
 
 fn typing_module(module: &str) -> bool {
-    TYPING_MODULES
-        .iter()
-        .any(|typing| module == *typing || module.starts_with(&format!("{typing}.")))
+    TYPING_MODULES.iter().any(|typing| {
+        module.strip_prefix(typing).is_some_and(|rest| rest.is_empty() || rest.starts_with('.'))
+    })
 }
 
 fn is_main_guard(test: &Expr) -> bool {
@@ -1246,8 +1253,11 @@ fn is_compile(func: &Expr) -> bool {
 }
 
 fn is_environ(expr: &Expr) -> bool {
-    matches!(head_path(expr).as_deref(), Some([head]) if head == "environ")
-        || matches!(head_path(expr).as_deref(), Some([os, environ]) if os == "os" && environ == "environ")
+    match head_path(expr).as_deref() {
+        Some([environ]) => environ == "environ",
+        Some([os, environ]) => os == "os" && environ == "environ",
+        _ => false,
+    }
 }
 
 fn env_key(call: &ExprCall, callee: &Callee) -> Option<String> {
@@ -1402,19 +1412,8 @@ fn module_literal(value: &str) -> Option<&str> {
     let path = value
         .split_once(':')
         .map_or(value, |(path, object)| if is_identifier(object) { path } else { value });
-    let mut segments = path.split('.');
-    let first = segments.next()?;
-    let mut count = 1;
-    if !is_identifier(first) {
-        return None;
-    }
-    for segment in segments {
-        if !is_identifier(segment) {
-            return None;
-        }
-        count += 1;
-    }
-    (count >= 2 && !path.contains(':')).then_some(path)
+    (path.contains('.') && !path.contains(':') && path.split('.').all(is_identifier))
+        .then_some(path)
 }
 
 fn is_identifier(text: &str) -> bool {

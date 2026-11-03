@@ -25,9 +25,13 @@ pub fn declares_data(class: &ClassDecl) -> bool {
                 | MemberKind::Getter
                 | MemberKind::Setter
                 | MemberKind::Nested => true,
-                MemberKind::Method => member.name.starts_with("__") && member.name.ends_with("__"),
+                MemberKind::Method => dunder(&member.name),
                 MemberKind::Constructor => false,
             }))
+}
+
+pub fn dunder(name: &str) -> bool {
+    name.starts_with("__") && name.ends_with("__")
 }
 
 #[derive(Debug, Default)]
@@ -132,27 +136,7 @@ impl Module {
     }
 
     pub fn statements(&self) -> Vec<Statement> {
-        self.tests
-            .iter()
-            .map(|test| {
-                let title = test.doc.clone().unwrap_or_else(|| {
-                    test.name.trim_start_matches("test").trim_start_matches('_').replace('_', " ")
-                });
-                let title = if test.parametrized {
-                    format!("{title} (over several values)")
-                } else {
-                    title
-                };
-                let text = match &test.class {
-                    Some(class) => format!("{} › {title}", class.trim_start_matches("Test")),
-                    None => title,
-                };
-                Statement {
-                    text,
-                    line: test.lines.start,
-                }
-            })
-            .collect()
+        self.tests.iter().map(TestDef::statement).collect()
     }
 }
 
@@ -163,4 +147,22 @@ struct TestDef {
     doc: Option<String>,
     parametrized: bool,
     lines: Lines,
+}
+
+impl TestDef {
+    fn statement(&self) -> Statement {
+        let title = self.doc.clone().unwrap_or_else(|| {
+            self.name.trim_start_matches("test").trim_start_matches('_').replace('_', " ")
+        });
+        let title =
+            if self.parametrized { format!("{title} (over several values)") } else { title };
+        let text = match &self.class {
+            Some(class) => format!("{} › {title}", class.trim_start_matches("Test")),
+            None => title,
+        };
+        Statement {
+            text,
+            line: self.lines.start,
+        }
+    }
 }
