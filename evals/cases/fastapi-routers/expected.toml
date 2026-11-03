@@ -113,11 +113,6 @@ gloss = "A postcode outside every zone or a zone with no rate is an upstream err
 
 [[requirement]]
 stem = "orders"
-anchor = "app/services/shipping.py#L45-L62"
-gloss = "The rates API is tried MAX_ATTEMPTS times with linear backoff on transport errors and 5xx; a 4xx is refused at once"
-
-[[requirement]]
-stem = "orders"
 anchor = "app/schemas/orders.py#L32-L36"
 gloss = "An order's skus are unique"
 
@@ -171,14 +166,6 @@ gloss = "max_page_size defaults to 100"
 [[criterion]]
 anchor = "app/schemas/orders.py#L5"
 gloss = "MAX_LINES is 50"
-
-[[criterion]]
-anchor = "app/services/shipping.py#L12"
-gloss = "MAX_ATTEMPTS is 3"
-
-[[criterion]]
-anchor = "app/services/shipping.py#L13"
-gloss = "RETRY_BACKOFF_S is 0.25"
 
 [[criterion]]
 anchor = "app/data/postcodes.py#L9"

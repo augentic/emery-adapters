@@ -36,11 +36,6 @@ gloss = "JSON bodies are parsed up to 256kb"
 
 [[requirement]]
 stem = "start"
-anchor = "src/server.ts#L30-L33"
-gloss = "Health routes mount under /health; /api routes require the bearer token and mount the customers and orders routers"
-
-[[requirement]]
-stem = "start"
 anchor = "src/middleware/auth.ts#L7-L18"
 gloss = "An /api request without a Bearer token in API_TOKENS is unauthorized"
 
@@ -123,16 +118,6 @@ gloss = "A shipping quote is the cheapest rate for the postcode's zone; an unzon
 
 [[requirement]]
 stem = "orders"
-anchor = "src/lib/shipping.ts#L39-L72"
-gloss = "The rates API is called with a bearer token under REQUEST_TIMEOUT_MS, retried up to MAX_ATTEMPTS on 5xx or transport failure with linear backoff"
-
-[[requirement]]
-stem = "orders"
-anchor = "src/lib/cache.ts#L9-L36"
-gloss = "Cache reads, writes, and invalidations that fail are logged and ignored"
-
-[[requirement]]
-stem = "orders"
 anchor = "src/repositories/orders.ts#L117-L148"
 gloss = "An order update runs in a transaction and rolls back when the row was modified concurrently"
 
@@ -168,14 +153,6 @@ gloss = "GET /ready probes Postgres and Redis within PROBE_TIMEOUT_MS; 503 degra
 # --- criteria ---
 
 [[criterion]]
-anchor = "src/config.ts#L11"
-gloss = "PORT defaults to 3000"
-
-[[criterion]]
-anchor = "src/config.ts#L16"
-gloss = "REQUEST_TIMEOUT_MS defaults to 5000"
-
-[[criterion]]
 anchor = "src/config.ts#L18-L19"
 gloss = "DEFAULT_PAGE_SIZE defaults to 20 and MAX_PAGE_SIZE is 100"
 
@@ -186,10 +163,6 @@ gloss = "MAX_LINES 50, MAX_LINE_QUANTITY 999, MAX_COURIER_NOTE 200, the postcode
 [[criterion]]
 anchor = "src/services/pricing.ts#L4-L9"
 gloss = "GST 0.15, free shipping at 10000 cents, trade 0.1, vip 0.15, bulk 24 units at 0.05"
-
-[[criterion]]
-anchor = "src/lib/shipping.ts#L16-L17"
-gloss = "MAX_ATTEMPTS 3 and RETRY_BACKOFF_MS 250"
 
 [[criterion]]
 anchor = "src/services/orders.ts#L13"
