@@ -17,7 +17,7 @@ Run all commands from the `emery-adapters` repository root (which `emery` mounts
 
 ## Prerequisites and setup
 
-Requires a sibling `../emery` checkout, [`cursor-sdk-bridge`](https://github.com/cursor/sdk-bridge) on `PATH`, and `CURSOR_API_KEY` in `.env` or the environment (see [Your first specification and build](../../emery/docs/tutorials/quickstart.md#prerequisites)).
+Requires a sibling `../emery` checkout, [`cursor-sdk-bridge`](https://github.com/cursor/sdk-bridge) on `PATH`, and `CURSOR_API_KEY` in `.env` or the environment (see [Your first specification and build](https://github.com/augentic/emery/blob/main/docs/tutorials/quickstart.md#prerequisites)).
 
 Build the workspace's `wasm32-wasip2` components and copy them into `~/.emery/adapters`:
 
@@ -78,4 +78,4 @@ git checkout -- evals/cases/orders/fixture/orders.ts
 ## Further reading
 
 - **Graded live evaluation harness:** [`evals/README.md`](../evals/README.md)
-- **Emery documentation:** [`../emery/docs/index.md`](../../emery/docs/index.md) ([Tutorials](../../emery/docs/tutorials/quickstart.md), [Retiring requirements by scope](../../emery/docs/how-to/retire-requirements.md), [Authoring and debugging adapters](../../emery/docs/how-to/author-an-adapter.md), [Deployment profiles](../../emery/docs/reference/deployment-profiles.md))
+- **Emery documentation:** [`docs/index.md`](https://github.com/augentic/emery/blob/main/docs/index.md) ([Tutorials](https://github.com/augentic/emery/blob/main/docs/tutorials/quickstart.md), [Retiring requirements by scope](https://github.com/augentic/emery/blob/main/docs/how-to/retire-requirements.md), [Authoring and debugging adapters](https://github.com/augentic/emery/blob/main/docs/how-to/author-an-adapter.md), [Deployment profiles](https://github.com/augentic/emery/blob/main/docs/reference/deployment-profiles.md))
