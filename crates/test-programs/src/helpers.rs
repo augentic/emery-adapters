@@ -1,14 +1,11 @@
 use emery_sdk::target::capability::Target;
-use emery_sdk::target::{DesignType, Requirement, Scenario, Slice};
-use emery_sdk::{
-    Backing, Claim, ClaimKind, Evidence, Route, Source, SourceInput, SourceMetadata, Trigger,
-};
-use serde_json::json;
+use emery_sdk::{Backing, Claim, ClaimKind, Evidence, Source};
+use serde_json::{Value, json};
 
-/// The source name every probe input carries.
-pub const KEY: &str = "source";
+/// The mount point of the lent workspace inside a driver guest.
+pub const WORKSPACE: &str = ".";
 
-/// The caller every driver dispatches through: a `Source` and a `Target` with no state.
+/// The caller every driver dispatches through: a [`Source`] and a [`Target`] with no state.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Caller;
 
@@ -16,70 +13,10 @@ impl Source for Caller {}
 
 impl Target for Caller {}
 
-/// Returns the slice every target driver builds: one requirement under the
-/// `orders` stem, served at a typed route its statement does not spell.
-#[must_use]
-pub fn slice() -> Slice {
-    Slice {
-        id: "SLICE-001".to_owned(),
-        name: "orders".to_owned(),
-        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-        requirements: vec![Requirement {
-            id: "REQ-001".to_owned(),
-            subject: "orders.create".to_owned(),
-            statement: vec!["Creates an order from at least one item.".to_owned()],
-            scenarios: vec![Scenario {
-                name: "An order is created".to_owned(),
-                given: vec!["an item".to_owned()],
-                when: "an order is placed with it".to_owned(),
-                then: "the order is answered".to_owned(),
-                and: Vec::new(),
-            }],
-            trigger: Some(Trigger::Http(Route {
-                method: "POST".to_owned(),
-                path: "/orders".to_owned(),
-            })),
-        }],
-        types: vec![DesignType {
-            key: "orders.Order".to_owned(),
-            signature: "interface Order { id: string; items: string[] }".to_owned(),
-        }],
-        brief: vec!["Create an order from its items.".to_owned()],
-        spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nPOST /orders \
-               creates an order from at least one item.\n"
-            .to_owned(),
-        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: orders.Order\n\
-               Depends on: none\n"
-            .to_owned(),
-    }
-}
-
 /// Returns the program's arguments past its own name.
 #[must_use]
 pub fn arguments() -> Vec<String> {
     wasip3::cli::environment::get_arguments().into_iter().skip(1).collect()
-}
-
-/// Returns the input that lends the mounted workspace.
-#[must_use]
-pub fn workspace() -> SourceInput {
-    SourceInput::workspace(KEY, ".")
-}
-
-/// Returns the input that carries `text` inline.
-#[must_use]
-pub fn value(text: &str) -> SourceInput {
-    SourceInput::value(KEY, text)
-}
-
-/// Asserts the metadata's `emery_version`, where it carries one, is exact semver.
-///
-/// # Panics
-///
-/// Panics when `emery_version` is present and not an exact semver.
-pub fn check_metadata(metadata: &SourceMetadata) {
-    check_version(metadata.emery_version.as_deref());
 }
 
 /// Asserts an `emery-version` pin, where there is one, is exact semver.
@@ -96,132 +33,61 @@ pub fn check_version(version: Option<&str>) {
     }
 }
 
-/// Asserts the evidence carries claims and passes the claim gate.
-///
-/// # Panics
-///
-/// Panics when the evidence carries no claims or the claim gate reports findings.
-pub fn check_evidence(evidence: &Evidence) {
-    assert!(!evidence.claims.is_empty(), "evidence carries no claims");
-
-    let findings = evidence.findings();
-    assert!(findings.is_empty(), "claim gate findings:\n{}", findings.join("\n"));
-}
-
-/// Asserts `actual` carries `expected`'s claims, field by field and in order.
-///
-/// # Panics
-///
-/// Panics when claim count or any claim field differs from `expected`.
-pub fn check_same(expected: &Evidence, actual: &Evidence) {
-    assert_eq!(actual.claims.len(), expected.claims.len(), "claim count");
-    for (index, (want, got)) in expected.claims.iter().zip(&actual.claims).enumerate() {
-        assert_eq!(got.kind, want.kind, "claim {index}: kind");
-        assert_eq!(got.id, want.id, "claim {index}: id");
-        assert_eq!(got.path, want.path, "claim {index}: path");
-        assert_eq!(got.synopsis, want.synopsis, "claim {index}: synopsis");
-        assert_eq!(got.backing, want.backing, "claim {index}: backing");
-        assert_eq!(got.extras, want.extras, "claim {index}: extras");
-    }
-}
-
 /// Returns valid evidence that exercises every contract field and variant.
 #[must_use]
 pub fn maximal() -> Evidence {
     Evidence {
         claims: vec![
-            claim(ClaimKind::Intent, Some("intent"), None, json!({ "statement": "Ship orders." })),
-            Claim {
-                synopsis: Some("Orders are created over HTTP".to_owned()),
-                backing: Some(Backing::Path("docs/orders.md".to_owned())),
-                ..claim(
-                    ClaimKind::Requirement,
-                    Some("orders.create"),
-                    Some("docs/orders.md#L3"),
-                    json!({ "statement": "POST /orders creates an order.", "confidence": 0.9 }),
-                )
-            },
-            Claim {
-                backing: Some(Backing::Payload("201 Created".to_owned())),
-                ..claim(
-                    ClaimKind::Criterion,
-                    Some("orders.create.status"),
-                    Some("docs/orders.md#L3-L5"),
-                    json!({ "criterion": "A created order answers 201." }),
-                )
-            },
-            claim(
-                ClaimKind::Decision,
-                None,
-                Some("docs/adr/0001.md"),
-                json!({ "decision": "Use the existing store.", "superseded-by": null }),
-            ),
-            claim(
-                ClaimKind::Section,
-                None,
-                Some("docs/orders.md#L1"),
-                json!({ "heading": "Orders", "level": 1 }),
-            ),
-            claim(
-                ClaimKind::Diagram,
-                None,
-                Some("docs/orders.md#L20-L40"),
-                json!({ "format": "mermaid" }),
-            ),
-            claim(
-                ClaimKind::Contract,
-                None,
-                Some("openapi.yaml"),
-                json!({ "operation": "createOrder" }),
-            ),
-            claim(
-                ClaimKind::Example,
-                Some("orders.create.example"),
-                Some("captures/orders.json"),
-                json!({ "replay-digest": { "sha256": "9f86d081884c7d65" } }),
-            ),
-            claim(
-                ClaimKind::Excerpt,
-                None,
-                Some("src/orders.ts#L12-L34"),
-                json!({ "excerpt": "insertOrder(order)" }),
-            ),
-            claim(
-                ClaimKind::Type,
-                None,
-                Some("src/orders.ts#L1-L4"),
-                json!({ "signature": "interface Order { id: string }" }),
-            ),
-            claim(
-                ClaimKind::Call,
-                None,
-                Some("src/orders.ts#L31"),
-                json!({ "callee": "src/repository.ts:insertOrder" }),
-            ),
-            claim(
-                ClaimKind::Region,
-                None,
-                Some("src/orders.ts#L10-L50"),
-                json!({ "tags": ["handler", "http"] }),
-            ),
-            claim(ClaimKind::Container, None, Some("src/orders"), json!({})),
-            claim(ClaimKind::Leaf, None, Some("src/orders.ts"), json!({ "exported": true })),
+            Claim::new(ClaimKind::Intent)
+                .with_id("intent")
+                .with_extra(Claim::STATEMENT, "Ship orders."),
+            Claim::new(ClaimKind::Requirement)
+                .with_id("orders.create")
+                .at("docs/orders.md#L3")
+                .with_synopsis("Orders are created over HTTP")
+                .with_backing(Backing::Path("docs/orders.md".to_owned()))
+                .with_extra(Claim::STATEMENT, "POST /orders creates an order.")
+                .with_extra("confidence", 0.9),
+            Claim::new(ClaimKind::Criterion)
+                .with_id("orders.create.status")
+                .at("docs/orders.md#L3-L5")
+                .with_backing(Backing::Payload("201 Created".to_owned()))
+                .with_extra(Claim::CRITERION, "A created order answers 201."),
+            Claim::new(ClaimKind::Retire)
+                .with_id("orders.cancel")
+                .at("docs/orders.md#L6")
+                .with_extra(Claim::STATEMENT, "Order cancellation is withdrawn."),
+            Claim::new(ClaimKind::Decision)
+                .at("docs/adr/0001.md")
+                .with_extra(Claim::DECISION, "Use the existing store.")
+                .with_extra("superseded-by", Value::Null),
+            Claim::new(ClaimKind::Section)
+                .at("docs/orders.md#L1")
+                .with_extra("heading", "Orders")
+                .with_extra("level", 1),
+            Claim::new(ClaimKind::Diagram)
+                .at("docs/orders.md#L20-L40")
+                .with_extra("format", "mermaid"),
+            Claim::new(ClaimKind::Contract)
+                .at("openapi.yaml")
+                .with_extra(Claim::ROUTE, "POST /orders")
+                .with_extra("operation", "createOrder"),
+            Claim::new(ClaimKind::Example)
+                .with_id("orders.create.example")
+                .at("captures/orders.json")
+                .with_extra(Claim::REPLAY_DIGEST, json!({ "sha256": "9f86d081884c7d65" })),
+            Claim::new(ClaimKind::Excerpt)
+                .at("src/orders.ts#L12-L34")
+                .with_extra("excerpt", "insertOrder(order)"),
+            Claim::type_decl("Order", "interface Order { id: string }").at("src/orders.ts#L1-L4"),
+            Claim::new(ClaimKind::Call)
+                .at("src/orders.ts#L31")
+                .with_extra(Claim::CALLEE, "src/repository.ts:insertOrder"),
+            Claim::new(ClaimKind::Region)
+                .at("src/orders.ts#L10-L50")
+                .with_extra("tags", json!(["handler", "http"])),
+            Claim::new(ClaimKind::Container).at("src/orders"),
+            Claim::new(ClaimKind::Leaf).at("src/orders.ts").with_extra("exported", true),
         ],
-    }
-}
-
-fn claim(
-    kind: ClaimKind, id: Option<&str>, path: Option<&str>, extras: serde_json::Value,
-) -> Claim {
-    let serde_json::Value::Object(extras) = extras else {
-        panic!("extras are a JSON object");
-    };
-    Claim {
-        kind,
-        id: id.map(str::to_owned),
-        path: path.map(str::to_owned),
-        synopsis: None,
-        backing: None,
-        extras,
     }
 }

@@ -8,8 +8,6 @@ use emery_sdk::{Context, Error, Evidence, Metadata, SourceAdapter, SourceKind, b
 
 struct Adapter;
 
-emery_sdk::export_source!(Adapter);
-
 impl SourceAdapter for Adapter {
     fn metadata() -> Metadata {
         Metadata {
@@ -21,3 +19,5 @@ impl SourceAdapter for Adapter {
         ready(Err(bad_request!("the probe refuses source `{}`", ctx.input.name)))
     }
 }
+
+emery_sdk::export_source!(Adapter);

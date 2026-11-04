@@ -9,8 +9,6 @@ use test_programs::maximal;
 
 struct Adapter;
 
-emery_sdk::export_source!(Adapter);
-
 impl SourceAdapter for Adapter {
     fn metadata() -> Metadata {
         Metadata {
@@ -22,3 +20,5 @@ impl SourceAdapter for Adapter {
         ready(Ok(maximal()))
     }
 }
+
+emery_sdk::export_source!(Adapter);
