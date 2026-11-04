@@ -42,13 +42,13 @@ const LADDER: &str = "600/120,1200/240,2400/480";
 // first.
 const BUILD_RUNG: &str = "1200/240";
 
-// The run's log filter unless the caller sets one: every adapter the case
-// runs under at trace beside the SDK's, and, for either backend, its
-// completion and tool-call lines and the tool-call arguments whole, which
-// it logs under a target of their own. The crate is `emery-<kind>`, so the
-// tracing target is `emery_<kind>`.
+// The run's log filter unless the caller sets one: the engine at debug,
+// every adapter the case runs under at trace beside the SDK's, and, for
+// either backend, its completion and tool-call lines and the tool-call
+// arguments whole, which it logs under a target of their own. The crate is
+// `emery-<kind>`, so the tracing target is `emery_<kind>`.
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
-    let mut filter = "emery_sdk=trace".to_owned();
+    let mut filter = "emery_engine=debug,emery_sdk=trace".to_owned();
     for adapter in adapters {
         let _ = write!(filter, ",emery_{adapter}=trace");
     }
@@ -992,6 +992,7 @@ mod tests {
     fn rust_log_reads_both_backends() {
         let filter = rust_log(["typescript"]);
         let directives: Vec<&str> = filter.split(',').collect();
+        assert!(directives.contains(&"emery_engine=debug"));
         assert!(directives.contains(&"omnia_cursor=info"));
         assert!(directives.contains(&"omnia_cursor::tools=trace"));
         assert!(directives.contains(&"omnia_genai=debug"));
