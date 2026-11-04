@@ -1,102 +1,169 @@
 # Contributing to emery-adapters
 
-Human-facing contributor guide (toolchain, layout, prompts, pin, publishing). The adapter shape, the contract rules, and test ownership live in [`AGENTS.md`](AGENTS.md); an existing `adapters/<kind>` crate is the template for a new one.
+This guide covers contributor setup, repository layout, prompt authoring rules, engine version pinning, and release publishing for `emery-adapters`. For coding conventions, architectural invariants, and test ownership rules, see [`AGENTS.md`](AGENTS.md).
+
+## Contents
+
+- [Getting started](#getting-started)
+  - [Troubleshooting first runs](#troubleshooting-first-runs)
+- [Layout](#layout)
+  - [Source adapters](#source-adapters)
+  - [Target adapters](#target-adapters)
+  - [Test harness, examples, and evals](#test-harness-examples-and-evals)
+- [Prompt authoring](#prompt-authoring)
+  - [Extraction and survey prompts](#extraction-and-survey-prompts)
+  - [Build and verify prompts](#build-and-verify-prompts)
+  - [Reference documents and worked examples](#reference-documents-and-worked-examples)
+- [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)
+- [Local development loops](#local-development-loops)
+- [Publishing](#publishing)
+- [Developer's Certificate of Origin](#developers-certificate-of-origin)
+- [Pull request procedure](#pull-request-procedure)
+- [Conduct](#conduct)
+- [See also](#see-also)
+
+---
 
 ## Getting started
 
-1. Clone this repository. Until an engine release carries the extract-only SDK, the engine crates (`emery-sdk`, and `emery-prose` beneath it) resolve through the `[patch.crates-io]` git patches in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)); once that release exists the pin moves to its tag (`tag = "vX.Y.Z"`, RFC-77 D13). A sibling `../emery` checkout is needed only for co-development (uncomment the path patches) and the live eval (it drives that repo's built `emery` binary).
-2. `rustup` picks up the pinned **stable** toolchain from `rust-toolchain.toml` (including the `wasm32-wasip2` target); a nightly toolchain is additionally needed for the `fmt` arm (`cargo +nightly fmt`). Install [mise](https://mise.jdx.dev) yourself: the root `Makefile` forwards every target to [`mise.toml`](mise.toml), which includes the shared Augentic Rust tasks, and never installs mise. The cargo subcommands those tasks need (`cargo-nextest`, `cargo-hack`, `cargo-deny`, `cargo-vet`, …) are installed on first use. Publishing also uses `wkg`.
-3. Run `make ci` from the repo root before opening a PR; `make check` is the local advisory set (audit, `fmt` rewriting in place, lint, outdated, udeps).
+Unless you are fixing a small, well-defined bug, please open a GitHub issue to discuss larger changes before starting work. Every commit must include a [Developer's Certificate of Origin](#developers-certificate-of-origin) sign-off (`git commit -s`).
 
-For the adapter SDK's type-level contract (`extract`, the `workspace` helpers, the contract types, the answer schemas), generate the docs locally: `cargo doc -p emery-sdk --open`; the `export` module — the world an adapter's guest implements — documents under `--target wasm32-wasip2`.
+1. **Clone the repository:** Clone `augentic/emery-adapters`. The engine dependencies (`emery-sdk` and `emery-prose`) resolve via `[patch.crates-io]` in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)). You only need a sibling `../emery` checkout when co-developing against uncommitted engine changes or when running live examples and evaluations.
+2. **Install toolchains and `mise`:** `rustup` automatically selects the pinned stable toolchain and `wasm32-wasip2` target from `rust-toolchain.toml`. Also install a nightly rustfmt toolchain (`rustup toolchain install nightly --component rustfmt`) and [mise](https://mise.jdx.dev). The root `Makefile` delegates all tasks to [`mise.toml`](mise.toml), which installs Cargo tools (`cargo-nextest`, `cargo-hack`, `cargo-deny`, `cargo-vet`) on first use. Publishing also requires `wkg`.
+3. **Run the CI suite:** Run `make ci` from the repository root before opening a pull request. Use `make check` for local advisories (`audit`, `fmt` in-place, `lint`, `outdated`, and `deps`).
 
-Unless you are fixing a known bug, discuss larger changes in a GitHub issue first. Every commit accepts the [Developer's Certificate of Origin](#developers-certificate-of-origin).
+To browse the adapter SDK API locally, build the Rust documentation:
+
+```bash
+cargo doc -p emery-sdk --open
+cargo doc -p emery-sdk --target wasm32-wasip2 --open   # includes wasm32 guest export macros and bindings
+```
 
 ### Troubleshooting first runs
 
-- **`make fmt` fails** — the fmt arm shells out to `cargo +nightly fmt`; install any nightly toolchain (`rustup toolchain install nightly --component rustfmt`).
-- **The first `make test` is slow** — `crates/test-programs/build.rs` nested-builds every adapter component and every guest program for `wasm32-wasip2` under `OUT_DIR` before the native suites compile; later builds are incremental.
-- **Patch-resolution errors after editing the root `Cargo.toml`** — the committed `[patch.crates-io]` git patches fetch `augentic/emery`; the commented path patches only resolve when `../emery` exists. Do not commit active path patches: CI has no sibling checkout.
+- **`make fmt` fails:** The formatting task runs `cargo +nightly fmt`. Install nightly rustfmt with `rustup toolchain install nightly --component rustfmt`.
+- **The first `make test` is slow:** `crates/test-programs/build.rs` compiles every adapter component and guest test program for `wasm32-wasip2` into `OUT_DIR` before running the native test suites. Subsequent runs are incremental.
+- **Patch resolution errors after editing `Cargo.toml`:** The committed `[patch.crates-io]` entries fetch `augentic/emery` from Git, while the commented `path = "../emery/..."` lines require a sibling `../emery` checkout. Never commit active `path` patches, because CI runs without a sibling checkout.
+
+---
 
 ## Layout
 
-Every source adapter shares the same guest anatomy:
+All adapters share a consistent crate structure and publish under the workspace's shared `[workspace.package]` version as `emery:<kind>@<version>`.
 
-```text
-adapters/
-  <kind>/               # documentation, intent, typescript, python — crate `emery-<kind>`
-    prose/            # agent-facing markdown (listed in src/lib.rs, embedded into the component)
-      extract.md      # the one extraction pass, and the one extraction prompt
-      survey.md       # the one survey prompt, where the model names the surfaces (typescript, python)
-      references/     # lazy reference corpus; the shared runtime references are the SDK's, linked as <doc>.md
-    Cargo.toml        # crate `emery-<kind>`, package `emery:<kind>@<version>`
-    src/              # lib.rs (`mod survey`, `Adapter` and its trait impl, PROSE, then the wasm32-only export macro) + survey.rs, the adapter's survey, and whatever the survey reads its source with as its children under survey/ (typescript and python alike: parse.rs and parse/walk.rs, resolve.rs, surface.rs — the SDK's `Recogniser`, which the SDK's `survey::seams` surveys and cuts through)
-  <kind>/               # node, omnia — crate `emery-<kind>`; build.md, verify.md; omnia scaffolds the exemplar's template through the `omnia-template` git dependency
-crates/test-programs/ # omnia's test-programs pattern: guest programs + the nested wasm32 build of every component
-  programs/<group>/   # one scenario per file: source/extract.rs drives the component boundary, probe/ are fixture adapters
-  src/                # lib.rs: the generated artifact table (native) / helpers.rs (wasm32)
-  build.rs            # one omnia_test::build::Components build → gen.rs (every adapter + every program)
-tests/                # root suites: source.rs and target.rs (what each adapter decides, natively over its `Adapter`), component.rs (every built component once, under the runtime), probe.rs (the error arms, the lowering, the SDK's side of the boundary), prose.rs (every adapter's corpus)
-  support/            # mod.rs — the one runner component.rs and probe.rs share (the deployment under the omnia runtime)
-examples/             # live walks: one emery.toml per adapter (plus one over all four) the shipped `emery` binary runs, and the fixtures they lend
-Cargo.toml            # the tests `emery-adapters` root package over adapters/* + crates/*
-```
+### Source adapters
 
-Identity lives in the guest crate's `Cargo.toml` `version` (the shared `[workspace.package]` SemVer) and the package reference it publishes under (`emery:<name>@<semver>`). The compatibility floor is compiled into the `metadata` operation's record.
+Located under `adapters/{documentation,intent,typescript,python}` (crate name `emery-<kind>`):
+
+- `src/lib.rs`: Declares `mod survey`, `pub struct Adapter` implementing `emery_sdk::SourceAdapter` (`metadata` and `extract`), `pub static PROSE` embedding all files under `prose/`, and `emery_sdk::export_source!(Adapter)` (gated on `cfg(target_arch = "wasm32")`).
+- `src/survey.rs` and `src/survey/*`: Inspects the input and splits it into extraction `Seam`s. Code adapters (`typescript` and `python`) parse files into `emery_sdk::survey::code::Tree` using a pure-Rust parser (`oxc` or `ruff_python_parser`), implement the SDK's `Recogniser` trait in `survey/surface.rs`, and call `emery_sdk::survey::seams`. The `documentation` adapter parses Markdown outlines and calls `emery_sdk::survey::surfaces`.
+- `prose/`: Embedded Markdown prompts (`extract.md`, optional `survey.md`, and `references/`).
+
+### Target adapters
+
+Located under `adapters/{node,omnia}` (crate name `emery-<kind>`):
+
+- `src/lib.rs`: Declares merge rules (`RULES`), worker sandbox grants (`Grant`), `pub struct Adapter` implementing `emery_sdk::target::TargetAdapter` (`metadata` and `run` over `Task::Init`, `Task::Build`, and `Task::Verify`), `pub static PROSE`, and `emery_sdk::export_target!(Adapter)` on `wasm32`.
+- Scaffolding and syntax checks (`omnia`): `adapters/omnia` scaffolds the workspace template from [`omnia-template`](https://github.com/augentic/omnia-exemplar) during `Task::Init`, generates per-slice Rust skeletons (`src/scaffold.rs`) before `Task::Build`, and validates the resulting syntax tree with `syn` (`src/tree.rs`) on every build and verify turn.
+- `prose/`: Embedded Markdown prompts (`build.md`, `verify.md`, and `references/`).
+
+### Test harness, examples, and evals
+
+- `crates/test-programs/`: Builds all Wasm components and fixture probes (`programs/probe/*`, `programs/source/extract.rs`, `programs/builder/build.rs`) for component boundary tests.
+- `tests/`: Root integration test suites:
+  - `source.rs` and `target.rs` test each adapter's native Rust implementation over scripted model doubles.
+  - `component.rs` runs every compiled `.wasm` component once inside the Omnia runtime.
+  - `probe.rs` tests WIT boundary lifting, lowering, and SDK gates.
+  - `prose.rs` validates every adapter's `PROSE` table, links, line caps, and JSON worked examples.
+- `examples/`: Live `emery.toml` configurations and fixtures for manual end-to-end testing ([examples/README.md](examples/README.md)).
+- `evals/`: Graded live evaluation harness and benchmark cases ([evals/README.md](evals/README.md)).
+
+---
 
 ## Prompt authoring
 
-Adapter prompts are markdown documents compiled into the guest and driven by the engine's `extract` dispatch. They are not skills: no YAML frontmatter, no discovery metadata.
+Adapter prompts are Markdown documents compiled into the Wasm component via `emery_sdk::prose![..]` and validated automatically by `tests/prose.rs`. They do not use YAML frontmatter.
 
-- **`prose/extract.md`** carries the whole extraction pass: the claim-kind table with each kind's required body field (the `emery_sdk::Evidence::findings` gate, run as the check on each seam's turn inside the SDK's `extract` so the backend corrects a miss in place, and fail-closed engine-side, A8), the id-derivation rules reconciliation joins on, and the JSON output contract. Soft cap ~500 non-blank lines, hard cap 800 — above that, move material to `prose/references/`.
-- **`prose/survey.md` is the one survey prompt, and only an adapter whose surfaces are the model's to name carries one.** `typescript` and `python` parse their trees into the SDK's `Tree` through their `Recogniser`, and the SDK's `emery_sdk::survey::seams` renders what the tree says — the manifest, the bootstrap, every registration through a package, every registering decorator (every registering `def` and class, for `python`), the entry modules' exports, the modules whole where they fit — into one `survey-<source>` turn under it, answered as the SDK's `Inventory`: each surface named at the lines that register or declare it with the stem its ids lead with, and the modules no surface reaches. The SDK holds the answer to the tree and derives the rest from the accepted anchors through the recogniser — the registration whole, the stem the code spells there, the discriminating id, a class's methods, the closure — and renders that into each seam's turn as text the extraction prompt describes under its Inputs. Both prompts tell the model how to read what code hands it, never how to find it; the same cap applies, and the root `tests/prose.rs` parses `survey.md`'s `## Worked example` fence as an `Inventory` whose anchors parse and whose stems are kebab-case.
-- **References are cited via relative markdown links, never inlined** — the model reads a reference through `read_doc`, which answers from the adapter's `PROSE` and then from the SDK's runtime references (`emery_sdk::RUNTIME`: `claims.md` for the claim `id` grammar, `path` anchors, the skip roots, and the fail-closed gate; `reconciliation.md` for the `specify` pipeline), so every relative link must name a document listed in `PROSE` or one of those two (`claims.md` from a prompt at the `prose/` root), and every listed document must be reached from a prompt by such a link (the root `tests/prose.rs` holds the list to the `prose/` tree and refuses a link to a directory, an unlisted file, or a path outside the tree, a listed document no prompt reaches, and a listed document at a runtime reference's path). Link a rule the runtime references state rather than restating it; the references ship with the SDK the adapter compiles against, so they move with the contract they describe.
-- **A reference is written for the model, in the adapter's current contract.** It says what to read in the source and which claims to emit, in the prompt's vocabulary — the surface, the entry, the claim kinds and their extras — and nothing addressed to a contributor: no retrospectives, no tooling proposals, no description of what the engine renders downstream. Prose the prompt would contradict is worse than none.
-- **Worked examples live under `prose/references/examples/`**, one document per scenario beside a `README.md` index: the surface as the survey renders it into the turn, the source the extract call reads, and the Evidence the call answers with under a `## Evidence` JSON fence — claims alone, like the prompt's own worked example. The root `tests/prose.rs` parses every such fence as the SDK's `Evidence` and holds it to the claim gate, so an example cannot teach a shape the adapter would refuse.
-- The v1 survey prompts were deleted, never ported (ADR-0008): they asked the model to find the surfaces in a tree it was handed. `typescript`'s and `python`'s `survey.md` are not that prompt — the model names surfaces among the facts the parser rendered, and everything a claim id or a seam rests on is derived by code from the anchors it accepted, with the model put to nothing else before the seams' turns.
+### Extraction and survey prompts
+
+- **`prose/extract.md`:** Defines the single-pass extraction instructions, claim kinds (`requirement`, `criterion`, `decision`, `retire`, `type`, `contract`, `call`, `excerpt`), ID naming conventions, and a `## Worked example` JSON block that must parse as valid `emery_sdk::Evidence`, pass `Evidence::findings`, and contain zero technology names from `emery_sdk::Lexicon` in requirement, criterion, or retire claims.
+- **`prose/survey.md`:** Included only in adapters where the model identifies surfaces from pre-parsed facts (`typescript`, `python`, and `documentation`). Must include a `## Worked example` JSON block that parses as `emery_sdk::survey::Inventory` with valid anchors and `kebab-case` stems.
+- **Line budget:** Keep prompts under 500 non-blank lines where possible; `tests/prose.rs` enforces a hard maximum of 800 non-blank lines per prompt. Move detailed framework or language guidance into `prose/references/`.
+
+### Build and verify prompts
+
+- **`prose/build.md` and `prose/verify.md`:** Required for every target adapter (`node` and `omnia`), each capped at 800 non-blank lines.
+- **Worked examples:** `build.md` must carry a `## Worked example` JSON block that parses as `emery_sdk::target::Report` (with valid root-relative `written` paths), and `verify.md` must carry one that parses as `emery_sdk::target::Verdict` (passing `Verdict::findings`).
+
+### Reference documents and worked examples
+
+- **Link, never inline:** Prompts reference supplementary docs using relative Markdown links (for example, `[layout.md](references/layout.md)` or `[claims.md](claims.md)`). During a turn, the model reads linked files on demand through the `list_docs` and `read_doc` tools.
+- **Strict link checking:** `tests/prose.rs` verifies through `emery_sdk::check` that every file in `prose/` is listed once in `PROSE`, every relative link resolves to a listed document or an SDK runtime reference (`claims.md`, `reconciliation.md`), and every document in `PROSE` is reachable from a prompt.
+- **Model-only audience:** Write reference files strictly as instructions for the model in the adapter's current contract. Never include contributor notes, historical retrospectives, or engine implementation details in `prose/`.
+- **Source worked examples (`prose/references/examples/*.md`):** Every file under `prose/references/examples/` (except `README.md`) must include a `## Evidence` JSON block that parses as `Evidence` and passes the claim gate.
+
+---
 
 ## Engine pin and sibling co-development
 
-Two compatibility choices are independent:
+Compatibility with [`augentic/emery`](https://github.com/augentic/emery) is governed by two pins:
 
-1. **WIT contract version** — the `emery:adapter` WIT package, embedded in the `emery-adapter` contract crate (which the `emery-sdk` SDK re-exports) and published from `augentic/emery`'s `wit/emery.wit`.
-2. **Engine revision** — the workspace resolves `emery-prose` and `emery-sdk` on `augentic/emery`, pinned by **release tag** (`tag = "vX.Y.Z"` in the root `Cargo.toml`; RFC-77 D13) plus the committed `Cargo.lock`; the contract crate `emery-adapter` rides beneath `emery-sdk` at the same revision. Advancing the pin is deliberate: bump the tag on both dependencies, run `cargo update -p emery-prose -p emery-sdk`, and commit both files — never resolve a floating branch.
+1. **WIT contract (`emery:adapter`):** Defined in `augentic/emery`'s `wit/emery.wit` and embedded in `emery-adapter` (re-exported by `emery-sdk`).
+2. **Engine crate revision:** The root `Cargo.toml` pins `emery-sdk` and `emery-prose` to a specific `augentic/emery` revision (along with `Cargo.lock`). To advance the pin, update the revision or tag in `Cargo.toml`, run `cargo update -p emery-prose -p emery-sdk`, and update `supply-chain/` via `make vet-regen`.
 
-For sibling co-development against uncommitted engine changes, uncomment the path patches in the root `Cargo.toml` `[patch.crates-io]` block (they point at `../emery`); they must never be active on the committed tree or at publish time. **Current state**: git patches are active — the extract-only SDK is not yet on a tagged engine release, so the tag pin (and with it the first adapter train publish) waits on that release cut.
+When co-developing against uncommitted changes in a sibling `../emery` checkout, uncomment the `path = "../emery/..."` lines in `[patch.crates-io]` in the root `Cargo.toml`. Always re-comment the `path` overrides before committing.
+
+---
 
 ## Local development loops
 
 ```bash
-make ci                    # exactly the CI jobs: fmt-check + lint + nextest + doctests + docs + cargo-vet + cargo-deny
-make check                 # local advisories: audit + fmt (rewrites) + lint + outdated + udeps
-cargo clippy -p emery-documentation -p emery-intent -p emery-typescript -p emery-python -p emery-node -p emery-omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings   # the guest side alone (`WASM32_PACKAGES` in mise.toml)
-cargo build -p emery-<kind> --target wasm32-wasip2 --release   # one adapter → target/wasm32-wasip2/release/emery_<kind>.wasm (the file the examples copy into the store)
-cargo build --workspace --target wasm32-wasip2 --release   # every adapter
+# Run the full CI gate (fmt-check, host + wasm32 clippy, nextest, doctests, docs, cargo-vet, cargo-deny)
+make ci
+
+# Run local advisory checks (cargo-audit, rustfmt in-place, clippy, outdated, unused deps)
+make check
+
+# Lint the wasm32 guest code alone (matches the first step of make lint-wasm)
+cargo clippy -p emery-documentation -p emery-intent -p emery-typescript -p emery-python -p emery-node -p emery-omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings
+
+# Build a single Wasm adapter component (outputs target/wasm32-wasip2/release/emery_<kind>.wasm)
+cargo build -p emery-<kind> --target wasm32-wasip2 --release
+
+# Build all Wasm adapter components
+cargo build --workspace --target wasm32-wasip2 --release
 ```
 
-The tasks are the shared `mise/rust.toml` of [`augentic/toolkit`](https://github.com/augentic/toolkit), pinned in [`mise.toml`](mise.toml) to the tag every `uses:` under `.github/workflows/` names; bump both in one pull request when the pin moves. The `fmt` arm uses nightly `rustfmt`. `make lint` runs clippy under `-D warnings` natively first (`lint-host`: all targets with all features, then each feature through `cargo hack`), then — since the guest side, the programs under `crates/test-programs/programs/` and the adapters' `survey` and `guest` modules, is `cfg(target_arch = "wasm32")` and native clippy compiles it to nothing — the shared `lint-wasm` pass for `wasm32-wasip2`, the target it ships on, where `clippy.toml`'s guest deny-list applies: every workspace lib, bin and example, never tests or benches (the third command above is its first half). The root package and the `evals` harness are native, so they contribute nothing to that pass and need no exclusion. `make vet` is check-only; regenerate audit inputs with `make vet-regen`. The component suites are the Rust inner loop and prove every built component under the omnia runtime, each adapter's own decisions included; `emery specify --config examples/<name>/emery.toml` walks one adapter live through the shipped `emery` binary and the Cursor backend ([examples/README.md](examples/README.md)); the graded live eval, `cargo run -p evals` over the cases under `evals/cases/`, proves prompt quality end to end and writes the dated scorecard ([evals/README.md](evals/README.md)).
+Why `make lint` runs two passes:
+
+- **`lint-host`:** Runs `cargo clippy --workspace --all-targets --all-features` and `cargo hack --each-feature` on the host target.
+- **`lint-wasm`:** Because the Wasm guest entry points (`export_source!`, `export_target!`, and `crates/test-programs/programs/`) are gated on `#[cfg(target_arch = "wasm32")]`, `lint-wasm` compiles all packages in `WASM32_PACKAGES` (`mise.toml`) for `wasm32-wasip2` and enforces the guest deny-list in [`clippy.toml`](clippy.toml).
+
+---
 
 ## Publishing
 
-The first-party adapter train releases from durable `release-X.Y.Z` branches with the same verbs as the engine repo (RFC-77): dispatch **Create Release** on `main` to cut `release-X.Y.Z` (it also opens the bump-`main` PR), stabilize and backport on the branch, dispatch **Publish Release** on the branch (tag, GitHub Release, GHCR packages), and dispatch **Create Patch** on the same branch for `X.Y.Z → X.Y.Z+1`. The train version is the shared `[workspace.package]` SemVer; `RELEASES.md` carries the line's notes, including a compatibility row (`engine X.Y.x ↔ adapters A.B.x (WIT emery:adapter@…, floor ≥ …)`).
+First-party adapters release from `release-X.Y.Z` branches using the GitHub Actions release workflows:
 
-Before a train publishes, these gates must hold:
+1. **Create Release:** Run on `main` to cut `release-X.Y.Z` and open a version-bump PR back to `main`.
+2. **Publish Release:** Run on `release-X.Y.Z` to verify CI, create the Git tag and GitHub Release, build all Wasm components in release mode, and push each component as an OCI artifact to `ghcr.io/augentic/emery/<name>:<version>`.
+3. **Create Patch:** Run on `release-X.Y.Z` to prepare `X.Y.Z+1` backports.
 
-1. The tree builds against a **published** `emery:adapter` WIT pin.
-2. CI is green against a **released (or RC)** engine revision — the engine dependencies are tag-pinned (`tag = "vX.Y.Z"`), with no active sibling `[patch]` block.
-3. Every adapter's `emery-version` names the minimum host that can run this train.
-4. Releasing a new SemVer: the GHCR version tag must not already exist for a first-time push of that train.
+Pre-publish checklist:
 
-**Publish Release** runs CI, tags and creates the GitHub Release, then release-builds every adapter and pushes each as a Wasm OCI artifact to `ghcr.io/augentic/emery/<name>:<version>` — the tag the `augentic.io` registry resolves the package reference `emery:<name>@<version>` to, so the `emery` binary, which routes the `emery` namespace there, fetches it on the first run that names it — via the same build and `make publish <name>` path used locally. The helper derives `<version>` from the workspace manifest.
+1. `Cargo.toml` builds against a released `augentic/emery` tag with no local `path` patches active.
+2. `RELEASES.md` includes the release notes and engine compatibility row (`engine X.Y.x ↔ adapters A.B.x`).
+3. Every adapter's `emery-version` metadata floor matches the minimum compatible `emery` binary version.
+4. The target `<version>` tag does not already exist on GHCR.
 
-A brand-new package is created **private**: flip it to public in the GHCR package settings (`https://github.com/orgs/augentic/packages/container/emery%2F<name>/settings`) so anonymous consumers can pull, then confirm the round-trip both ways — the OCI tag, and the package reference as the binary fetches it:
+When a brand-new adapter package is published to GHCR for the first time, GitHub creates the package with **private** visibility. An organization admin must switch the package visibility to **public** at `https://github.com/orgs/augentic/packages/container/emery%2F<name>/settings` and verify anonymous pulls:
 
 ```bash
 wkg oci pull ghcr.io/augentic/emery/<name>:<version> --output /tmp/<name>.wasm
-mkdir -p /tmp/store && wkg get emery:<name>@<version> -o /tmp/store/   # writes /tmp/store/emery_<name>@<version>.wasm, the file emery's store reads
+mkdir -p /tmp/store && wkg get emery:<name>@<version> -o /tmp/store/
 ```
 
-Local breakout (retry a single adapter after GHCR login):
+To publish or retry a single adapter manually from a local machine:
 
 ```bash
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
@@ -104,9 +171,11 @@ cargo build --workspace --target wasm32-wasip2 --release
 make publish <name>
 ```
 
+---
+
 ## Developer's Certificate of Origin
 
-All contributions must include acceptance of the [DCO](https://developercertificate.org/):
+All contributions must include acceptance of the [Developer Certificate of Origin (DCO)](https://developercertificate.org/):
 
 ```text
 Developer Certificate of Origin
@@ -147,42 +216,45 @@ By making a contribution to this project, I certify that:
     this project or the open source license(s) involved.
 ```
 
-To accept the DCO, add this line to each commit message with your name and email address (`git commit -s` will do this for you):
+To accept the DCO, sign off each commit (`git commit -s`) with your real name and email address:
 
 ```text
 Signed-off-by: Jane Example <jane@example.com>
 ```
 
-For legal reasons, no anonymous or pseudonymous contributions are accepted; open a GitHub issue if this is a problem for you.
+For legal reasons, anonymous or pseudonymous contributions cannot be accepted. Open a GitHub issue if you have questions.
+
+---
 
 ## Pull request procedure
 
-Pull requests should be targeted at the `main` branch. Before creating a pull request, go through this checklist:
+Target all pull requests at the `main` branch:
 
-1. Create a feature branch off of `main`.
-2. [Rebase](https://git-scm.com/book/en/Git-Branching-Rebasing) your local changes against `main`.
-3. Run `make ci` and confirm that it passes: exactly the CI jobs, in order.
-4. Accept the Developer's Certificate of Origin on all commits (see above).
+1. Create a feature branch from `main`.
+2. [Rebase](https://git-scm.com/book/en/Git-Branching-Rebasing) your branch onto the latest `main`.
+3. Run `make ci` and confirm that all checks pass.
+4. Ensure every commit carries a `Signed-off-by:` DCO line.
 
-All contributions are made via pull request. All patches from all contributors get reviewed. At least one review from a maintainer is required for all patches (even patches from maintainers). When CI fails, authors are expected to update the pull request until it passes.
+Every pull request requires at least one maintainer review and passing CI. Include tests at the public boundary for any behavioral change:
 
-Normally, all pull requests must include tests that cover your change. Occasionally, a change will be very difficult to test for; in those cases, include a note in your commit message explaining why.
+- Native adapter decisions belong in `tests/source.rs` or `tests/target.rs`.
+- Wasm component runtime checks belong in `tests/component.rs` or `tests/probe.rs`.
+- Never assert exact wording from embedded prompts in Rust tests, never widen item visibility (`pub`) solely for tests, and never commit compiled `.wasm` files.
 
-Tests here cover a change at its public boundary: a behaviour the adapter itself decides goes in the root `tests/source.rs` or `tests/target.rs`, asserted natively through its `Adapter`; what only the built component shows is `tests/component.rs`'s, and the component boundary itself `tests/probe.rs`'s. Never pin a prompt phrase, and never widen `pub` surface solely for a test. Do not commit built `.wasm` artifacts.
+---
 
 ## Conduct
 
-Whether you are a regular contributor or a newcomer, we care about making this community a safe place for you and we've got your back.
+We are committed to providing a friendly, safe, and welcoming environment for all contributors:
 
-- We are committed to providing a friendly, safe and welcoming environment for all, regardless of gender, sexual orientation, disability, ethnicity, religion, or similar personal characteristic.
-- Be kind and courteous. There is no need to be mean or rude.
-- We will exclude you from interaction if you insult, demean or harass anyone. In particular, we do not tolerate behavior that excludes people in socially marginalized groups.
-- Private harassment is also unacceptable. If you feel you have been or are being harassed or made uncomfortable by a community member, please contact a member of the core team immediately.
-- Likewise any spamming, trolling, flaming, baiting or other attention-stealing behaviour is not welcome.
+- We welcome participants regardless of gender, sexual orientation, disability, ethnicity, religion, or background.
+- Be kind, respectful, and constructive in discussions and code reviews.
+- Harassment, insults, demeaning behavior, and trolling are not tolerated in public or private project spaces.
+- If you experience or witness unacceptable behavior, please contact a member of the core team immediately.
 
-We welcome discussion about creating a welcoming, safe, and productive environment for the community. If you have any questions, feedback, or concerns please let us know with a GitHub issue. The [Code of Conduct](CODE_OF_CONDUCT.md) applies throughout.
+The [Code of Conduct](CODE_OF_CONDUCT.md) applies across all project spaces.
 
 ## See also
 
-- [AGENTS.md](AGENTS.md) — vocabulary, component contract, test ownership, agent commands
-- [emery CONTRIBUTING](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — the engine repository's guide
+- [`AGENTS.md`](AGENTS.md) — architecture map, invariants, code style, and test conventions
+- [`augentic/emery` CONTRIBUTING.md](https://github.com/augentic/emery/blob/main/CONTRIBUTING.md) — contributor guide for the core engine repository

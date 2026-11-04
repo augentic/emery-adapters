@@ -3,88 +3,128 @@
 [![CI](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml/badge.svg)](https://github.com/augentic/emery-adapters/actions/workflows/ci.yaml)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-First-party Wasm components for [Emery](https://github.com/augentic/emery): the **source** adapters its specification generator reads — `documentation`, `intent`, `typescript`, and `python` — and the **target** adapters `emery build` builds through, `node` and `omnia`.
+This repository houses the first-party WebAssembly (Wasm) source and target adapters for [Emery](https://github.com/augentic/emery). It is intended for contributors authoring, debugging, or evaluating Emery adapters.
 
-**Using Emery in a project?** You do not need this repository. Name a published adapter by package reference (`emery:<name>@<version>`) in the project's `emery.toml`; the `emery` binary fetches it on the first run that names it and reads it from `~/.emery/adapters` after. A build of your own goes there by `cp`, under a reference of its own (`~/.emery/adapters/emery_<name>@<version>-dev.wasm`); follow the [Emery README](https://github.com/augentic/emery#readme).
+## Contents
 
-**Authoring or debugging an adapter?** This repo is your home. Edit prose or Rust, run the crate and component tests, then walk the adapter live with its example or the eval's build arm.
+- [Do you need this repository?](#do-you-need-this-repository)
+- [What an adapter is](#what-an-adapter-is)
+  - [Source adapters](#source-adapters)
+  - [Target adapters](#target-adapters)
+- [Rust test loop](#rust-test-loop)
+- [Live examples](#live-examples)
+- [Graded live eval](#graded-live-eval)
+- [Adapter development loop](#adapter-development-loop)
+- [Troubleshooting](#troubleshooting)
+- [Further reading](#further-reading)
+- [License](#license)
 
-The version operators pin (`emery:documentation@0.12.0`) is this workspace's shared SemVer (`[workspace.package].version`); published components live on GHCR as `ghcr.io/augentic/emery/<name>:<version>`.
+## Do you need this repository?
+
+- **Using Emery in a project?** You do not need to clone or build this repository. Reference any published adapter in your `emery.toml` (for example, `emery:documentation@0.12.0`). The `emery` CLI automatically downloads published releases from GitHub Container Registry (`ghcr.io/augentic/emery/<name>:<version>`) and caches them in `~/.emery/adapters`. See the [Emery documentation](https://emery.augentic.io/) to get started.
+- **Authoring or debugging an adapter?** Use this workspace to edit extraction or build prompts and Rust survey/scaffolding code, run the deterministic test suites, test live runs against `examples/`, and benchmark prompt changes with `evals/`. To test a local build in an external project, copy the compiled `.wasm` artifact to `~/.emery/adapters/emery_<name>@<version>-dev.wasm`.
+
+All adapters in this workspace share a single semantic version defined in `[workspace.package].version` in the root `Cargo.toml`.
 
 ## What an adapter is
 
-A source adapter is one Rust crate that ships as one Wasm component exporting the `source-adapter` world (`extract` + `metadata`). The engine names the sources on each `emery specify` invocation, dispatches one `extract` per source, and reconciles the returned Evidence documents into the typed specification and design that `emery show` projects as `spec.md` / `design.md`. A target adapter exports the `target-adapter` world (`build` + `verify` + `metadata`): `emery build` hands it each slice of the plan with a working copy to build into, verifies each merged wave through it, and merges slices under the rules its metadata declares. Adapters never orchestrate lifecycle.
+Every adapter is a Rust crate under `adapters/<kind>` that compiles to a standalone `wasm32-wasip2` WebAssembly System Interface (WASI) component implementing the `emery:adapter` WebAssembly Interface Types (WIT) contract. Adapters are stateless and never manage revision storage or Git history directly.
 
-| Adapter                 | Kind          | Extracts                                                                                                                                |
-| ----------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapters/documentation` | documentation | written specs, guides, ADRs — requirement / criterion / decision claims                                                                 |
-| `adapters/intent`        | intent        | the operator's brief, verbatim plus its directives as requirement claims                                                                |
-| `adapters/typescript`    | behaviour     | TS/JS estates — requirement claims backed by excerpt / type / call detail                                                               |
-| `adapters/python`        | behaviour     | Python estates — FastAPI, Flask, Django, Click, Celery, and plain libraries — requirement claims backed by excerpt / type / call detail |
+### Source adapters
 
-| Target                      | Builds                                                                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `adapters/node` | strict TypeScript on Node (22.18 or later): one module per slice under `src/<stem>/`, `node:test` tests per scenario, checked with `tsc --noEmit` and `npm test` |
-| `adapters/omnia`      | an [omnia](https://github.com/augentic/omnia) HTTP guest in Rust: one crate per stem under `crates/<stem>/`, a part per slice, each stem's `router()` and `topics(..)` composed from its parts and merged by the root, `#[tokio::test]` tests per scenario driving those routers over the SDK's doubles, checked with `cargo clippy`, `cargo test`, and a `wasm32-wasip2` build |
+A source adapter implements the `source-adapter` world (`metadata` and `extract`). During `emery specify` or `emery amend`, the engine invokes `extract` for each configured source and reconciles the returned `Evidence` claims into a unified specification, design, and build plan.
 
-## Rust-only loop
+| Crate | Source kind | Default rank | What it extracts |
+| --- | --- | --- | --- |
+| `adapters/intent` | `intent` | `1` (highest) | Operator briefs and change directives as `requirement`, `criterion`, `decision`, and `retire` claims. |
+| `adapters/documentation` | `documentation` | `2` | Written specifications, guides, and Architecture Decision Records (ADRs) as `requirement`, `criterion`, `decision`, and `retire` claims. |
+| `adapters/typescript` | `behaviour` | `3` | TypeScript and JavaScript codebases as `requirement` and `criterion` claims, plus `type`, `contract`, `call`, and `excerpt` claims. |
+| `adapters/python` | `behaviour` | `3` | Python codebases (FastAPI, Flask, Django, Click, Celery, and libraries) as `requirement` and `criterion` claims, plus `type`, `contract`, `call`, and `excerpt` claims. |
 
-The suites need no model credentials. Every test is the root package's: the native suites call every adapter's `Adapter` over a scratch tree and a scripted model and assert what it decides, the component suite runs every built component under the omnia runtime once (the components are built by `crates/test-programs` on the first `make test`), the fixture probes prove the boundary, and every adapter's corpus is checked natively:
+### Target adapters
+
+A target adapter implements the `target-adapter` world (`metadata` and `run` over `init`, `build`, and `verify`). During `emery build`, the engine initializes the target layout once, builds each slice in an isolated Git worktree, merges slices using the adapter's merge rules, and verifies each integrated wave.
+
+| Crate | Target output | Layout and verification |
+| --- | --- | --- |
+| `adapters/node` | Strict TypeScript on Node.js (`>= 22.18`) | Initializes root `package.json`, `tsconfig.json`, and `.gitignore`. Builds one workspace package per slice under `src/<stem>/` with `node:test` suites under `test/`. Verifies waves with `npm install`, `npx tsc --noEmit`, and `npm test`. |
+| `adapters/omnia` | [Omnia](https://github.com/augentic/omnia) WASI HTTP & messaging guest in Rust | Initializes the [`omnia-template`](https://github.com/augentic/omnia-exemplar) workspace. Scaffolds one member crate per stem under `crates/<stem>/` with `axum` routes, messaging consumers, and `#[tokio::test]` suites. Verifies waves with `cargo clippy`, `cargo test`, and `cargo build --target wasm32-wasip2`. |
+
+## Rust test loop
+
+The automated test suites run offline and require no model API keys. All integration tests live in the root `emery-adapters` package:
+
+- `tests/source.rs` and `tests/target.rs` test each adapter's native Rust implementation against a scripted model double.
+- `tests/component.rs` runs every compiled `.wasm` component inside the Omnia Wasmtime runtime (`crates/test-programs` compiles the components automatically on the first test run).
+- `tests/probe.rs` tests the WIT boundary and SDK error handling using fixture probe components.
+- `tests/prose.rs` validates every adapter's embedded Markdown prompt corpus, relative links, and JSON worked examples.
 
 ```bash
-make ci                                               # exactly the CI gate: fmt-check, lint (host + wasm32), tests, doctests, docs, vet, deny
-cargo nextest run -p emery-adapters                   # the root suites: every adapter, every component, the probes, the corpora
-cargo nextest run -p emery-adapters --test source     # what the shipped source adapters decide, natively
-cargo nextest run -p emery-adapters --test target     # what the shipped target adapters decide, natively
-cargo nextest run -p emery-adapters --test component  # the shipped components alone, under the runtime
+make ci                                               # full CI gate: fmt-check, lint (host + wasm32), test, test-docs, docs, vet, deny
+cargo nextest run -p emery-adapters                   # all root suites: source, target, component, probe, and prose
+cargo nextest run -p emery-adapters --test source     # native source adapter tests
+cargo nextest run -p emery-adapters --test target     # native target adapter tests
+cargo nextest run -p emery-adapters --test component  # compiled Wasm component tests under the runtime
 ```
 
 ## Live examples
 
-`examples/<name>/` is an `emery.toml` that names the shipped component as the package `emery:<name>@<version>-dev` — `cargo build --workspace --target wasm32-wasip2 --release` builds every one, and a `cp` into `~/.emery/adapters` under that reference stands it beside the published release — and the fixture it reads. `emery specify` extracts through the Cursor model backend and commits the revision; `emery show spec` reviews it — the same journey an operator's project takes. Needs an `emery` binary, `cursor-sdk-bridge`, and `CURSOR_API_KEY`; see [examples/README.md](examples/README.md).
+Each directory under `examples/` contains an `emery.toml` configuration and sample inputs for running compiled adapters live through the `emery` CLI and Cursor backend. Running live examples requires a sibling `../emery` checkout (or installed `emery` binary), `cursor-sdk-bridge` on `PATH`, and `CURSOR_API_KEY`. See [examples/README.md](examples/README.md) for the complete walkthrough.
 
 ```bash
-cargo build --workspace --target wasm32-wasip2 --release   # every component
+# 1. Build all Wasm adapter components in release mode
+cargo build --workspace --target wasm32-wasip2 --release
+
+# 2. Copy the built component into the local adapter cache
 mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.12.0.wasm   # one per adapter the example names
-emery specify --config examples/documentation/emery.toml  # or intent, typescript, python; examples/emery.toml runs all four
-emery show spec
+cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.12.0.wasm
+
+# 3. Extract and stage a specification, then inspect it
+emery specify --config examples/documentation/emery.toml
+emery show spec --staged
 ```
 
 ## Graded live eval
 
-The live rung is a **public-contract client**: `evals/` spawns the sibling shipped `emery` binary over the built `typescript` or `python` component a case names, drives one `specify` per case across the adapter contract, grades the accepted claims and the surveyed surfaces against the case's `expected.toml` through `emery show`, and writes the dated scorecard. `--build` follows each graded `specify` with one `emery build` through the built target `--target` names (`node` unless told otherwise, `omnia` the other) into a bare repository the harness creates, and the card reads what was built, verified, and merged. Operator-invoked, never CI; see [evals/README.md](evals/README.md).
+The `evals/` crate is an operator-run benchmark harness that spawns the `emery` binary against real-world and synthetic fixtures in `evals/cases/`. It runs `emery specify` multiple times per case, grades recall, surface discovery, authority status, and technology leaks against `expected.toml`, and optionally runs `emery apply` and `emery build` (`--build`) to verify generated code. See [evals/README.md](evals/README.md) for details.
 
 ```bash
-cargo run -p evals -- orders express-orders   # the named cases; none names every case whose fixture the checkout holds
-cargo run -p evals -- python                  # every case under one adapter
-cargo run -p evals -- --build express-orders  # specify, then build the plan through node
-cargo run -p evals -- --build --target omnia express-orders  # the same plan built as an omnia guest
+cargo run -p evals -- orders express-orders                  # grade specific cases
+cargo run -p evals -- python                                 # grade all cases for one source adapter
+cargo run -p evals -- --build express-orders                 # specify, apply, and build through emery:node
+cargo run -p evals -- --build --target omnia express-orders  # specify, apply, and build through emery:omnia
 ```
 
-## Repair loop
+## Adapter development loop
 
-1. Edit `adapters/<crate>/prose/**` — `src-*` adapters carry extract (and survey where applicable); `tgt-*` adapters carry build and verify prompts and the layout.
-2. `cargo nextest run -p emery-adapters` to re-run its suites; `cargo build -p <crate> --target wasm32-wasip2 --release` to rebuild the shipped component and `cp` it over the `-dev` file in `~/.emery/adapters`; `emery specify --config examples/<name>/emery.toml` to watch it become a spec.
+1. Edit the adapter's prompts under `adapters/<kind>/prose/` or its Rust survey/scaffold logic under `adapters/<kind>/src/`.
+2. Run `cargo nextest run -p emery-adapters` to verify prompt links, worked examples, and native/component behavior.
+3. Rebuild the Wasm component and copy it to `~/.emery/adapters` to test live:
 
-The native suites are the Rust inner loop and prove every adapter's own decisions, the component suite proves every built component once; the live examples show one adapter's claims becoming a specification; live eval is for prompt quality.
+```bash
+cargo build -p emery-<kind> --target wasm32-wasip2 --release
+cp target/wasm32-wasip2/release/emery_<kind>.wasm ~/.emery/adapters/emery_<kind>@0.12.0.wasm
+emery specify --config examples/<kind>/emery.toml
+```
 
-## Stuck?
+## Troubleshooting
 
-| Symptom                                                 | What to check                                                                                                                               |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `make` says mise is not on `PATH`                       | Install [mise](https://mise.jdx.dev/getting-started.html); the `Makefile` forwards to it and never installs it                              |
-| `make fmt` fails                                        | Install nightly rustfmt: `rustup toolchain install nightly --component rustfmt`                                                             |
-| The first `make test` is slow                           | `crates/test-programs/build.rs` nested-builds every component for `wasm32-wasip2`; later builds are incremental                             |
-| Patch-resolution errors after editing root `Cargo.toml` | The committed `[patch.crates-io]` git patches fetch `augentic/emery`; uncomment the path patches only when co-developing against `../emery` |
+| Symptom | Resolution |
+| --- | --- |
+| `make` reports `mise` is not on `PATH` | Install [mise](https://mise.jdx.dev/getting-started.html). The root `Makefile` delegates tasks to `mise.toml` and does not install `mise` automatically. |
+| `make fmt` fails | Install the nightly Rust formatter: `rustup toolchain install nightly --component rustfmt`. |
+| The first `make test` takes a long time | `crates/test-programs/build.rs` compiles all Wasm components for `wasm32-wasip2` on first run; subsequent runs are incremental. |
+| Cargo patch resolution errors | Committed `[patch.crates-io]` entries fetch `augentic/emery` from Git. Uncomment the local `path = "../emery/..."` lines only when co-developing with a sibling `../emery` checkout. |
 
-Bugs and questions: [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
+Report bugs or questions in [GitHub Issues](https://github.com/augentic/emery-adapters/issues).
 
 ## Further reading
 
-- Contributor setup, engine pin, publishing: [CONTRIBUTING.md](CONTRIBUTING.md)
-- The adapter shape, invariants, and test ownership: [AGENTS.md](AGENTS.md)
+- Contributor setup, prompt rules, engine pinning, and release publishing: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Live walkthrough (`specify`, `apply`, `build`, `amend`): [examples/README.md](examples/README.md)
+- Live evaluation harness and scorecard metrics: [evals/README.md](evals/README.md)
+- Workspace architecture and coding invariants: [AGENTS.md](AGENTS.md)
 
 ## License
 
-MIT OR Apache-2.0.
+Dual-licensed under [MIT](LICENSE-MIT) or [Apache 2.0](LICENSE-APACHE), at your option.
