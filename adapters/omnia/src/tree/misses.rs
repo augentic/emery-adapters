@@ -50,18 +50,19 @@ impl Tree<'_> {
     }
 
     pub fn response_wrappers(&self) -> Option<String> {
-        let mut lines = Vec::new();
-        for module in &self.modules {
-            if module.is_common() {
-                continue;
-            }
-            for (number, name) in module.response_wrappers() {
-                lines.push(format!(
-                    "{}:{number}: response wrapper struct `{name}` wraps a single `data` field",
-                    module.path
-                ));
-            }
-        }
+        let mut lines: Vec<String> = self
+            .modules
+            .iter()
+            .filter(|module| !module.is_common())
+            .flat_map(|module| {
+                module.response_wrappers().into_iter().map(move |(number, name)| {
+                    format!(
+                        "{}:{number}: response wrapper struct `{name}` wraps a single `data` field",
+                        module.path
+                    )
+                })
+            })
+            .collect();
         if lines.is_empty() {
             return None;
         }
@@ -94,12 +95,15 @@ impl Tree<'_> {
     }
 
     pub fn format_settings(&self) -> Option<String> {
-        let mut lines = Vec::new();
-        for module in &self.modules {
-            for (number, name) in module.format_settings() {
-                lines.push(format!("{}:{number}: setting `{name}` names a format", module.path));
-            }
-        }
+        let mut lines: Vec<String> = self
+            .modules
+            .iter()
+            .flat_map(|module| {
+                module.format_settings().into_iter().map(move |(number, name)| {
+                    format!("{}:{number}: setting `{name}` names a format", module.path)
+                })
+            })
+            .collect();
         if lines.is_empty() {
             return None;
         }

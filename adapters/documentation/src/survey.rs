@@ -6,22 +6,21 @@ mod subjects;
 
 use std::collections::BTreeMap;
 
-use emery_sdk::{Context, Error, Model, Seam};
+use emery_sdk::{Context, Error, Model, Seam, SourceContent};
 
-use self::subjects::Preparation;
+use self::subjects::Prepared;
 use crate::PROSE;
 
 pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> {
-    match Preparation::read(ctx.input)? {
-        Preparation::Value => Ok(vec![Seam::whole()]),
-        Preparation::Workspace(prepared) if prepared.documents.is_empty() => {
-            directories(prepared.root)
-        }
-        Preparation::Workspace(prepared) => {
-            let inventory = prepared.inventory(ctx, PROSE).await?;
-            prepared.seams(&inventory)
-        }
+    let SourceContent::Workspace(root) = &ctx.input.content else {
+        return Ok(vec![Seam::whole()]);
+    };
+    let prepared = Prepared::read(&ctx.input.name, root)?;
+    if prepared.documents.is_empty() {
+        return directories(root);
     }
+    let inventory = prepared.inventory(ctx, PROSE).await?;
+    prepared.seams(&inventory)
 }
 
 const MIN_SIZE: usize = 2;

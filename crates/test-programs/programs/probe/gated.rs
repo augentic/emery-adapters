@@ -17,8 +17,6 @@ const PROSE: &[Doc] = &[
 
 struct Adapter;
 
-emery_sdk::export_source!(Adapter);
-
 impl SourceAdapter for Adapter {
     fn metadata() -> Metadata {
         Metadata {
@@ -30,3 +28,5 @@ impl SourceAdapter for Adapter {
         emery_sdk::extract(ctx, PROSE, &[Seam::whole()]).await
     }
 }
+
+emery_sdk::export_source!(Adapter);

@@ -36,8 +36,8 @@ stem = "import-orders"
 
 [[requirement]]
 stem = "start"
-anchor = "manage.py#L8-L16"
-gloss = "The settings module defaults to shop.settings; a missing Django is an ImportError that says so; argv is handed to Django's command line"
+anchor = "shop/settings.py#L48-L52"
+gloss = "The REST API requires an authenticated user by default"
 
 # --- orders ---
 
@@ -148,3 +148,9 @@ gloss = "PAGE_SIZE is 20"
 [[criterion]]
 anchor = "orders/management/commands/import_orders.py#L11"
 gloss = "The required import columns"
+
+# --- absent: how `manage.py` hands argv to Django ---
+
+[[absent]]
+anchor = "manage.py#L8-L16"
+gloss = "The settings module defaults to shop.settings; a missing Django is an ImportError that says so; argv is handed to Django's command line"

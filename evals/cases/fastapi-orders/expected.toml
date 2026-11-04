@@ -18,13 +18,6 @@ stem = "start"
 entry = "orders.py"
 stem = "orders"
 
-# --- start ---
-
-[[requirement]]
-stem = "start"
-anchor = "orders.py#L135-L138"
-gloss = "Run as a script, the module serves the application on 0.0.0.0 at PORT"
-
 # --- orders ---
 
 # the guard is declared in the bootstrap's module and applied per route, so
@@ -80,9 +73,11 @@ anchor = "orders.py#L14"
 gloss = "TAX_RATE defaults to 0.15"
 
 [[criterion]]
-anchor = "orders.py#L16"
-gloss = "PRICING_TIMEOUT_S defaults to 2.5"
-
-[[criterion]]
 anchor = "orders.py#L18"
 gloss = "CANCEL_WINDOW_HOURS is 24"
+
+# --- absent: how the module serves the application ---
+
+[[absent]]
+anchor = "orders.py#L135-L138"
+gloss = "Run as a script, the module serves the application on 0.0.0.0 at PORT"

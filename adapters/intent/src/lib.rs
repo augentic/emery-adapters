@@ -6,7 +6,7 @@
 
 mod survey;
 
-use emery_sdk::{Context, Error, Evidence, Metadata, Model, SourceAdapter, SourceKind};
+use emery_sdk::{Context, Doc, Error, Evidence, Metadata, Model, SourceAdapter, SourceKind};
 
 /// The adapter implementation.
 pub struct Adapter;
@@ -25,7 +25,7 @@ impl SourceAdapter for Adapter {
 }
 
 /// The prompt embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose!["../prose/extract.md"];
+pub static PROSE: &[Doc] = emery_sdk::prose!["../prose/extract.md"];
 
 #[cfg(target_arch = "wasm32")]
 emery_sdk::export_source!(Adapter);

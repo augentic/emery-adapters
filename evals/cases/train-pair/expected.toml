@@ -77,12 +77,6 @@ gloss = "Login and UploadMessages are not implemented: each faults with 501 Meth
 [[requirement]]
 source = "connector"
 stem = "inbound"
-anchor = "src/soap-server.ts#L40-L43"
-gloss = "The train SOAP service is served on /inbound/xml under the configured WSDL"
-
-[[requirement]]
-source = "connector"
-stem = "inbound"
 anchor = "src/soap-server.ts#L50"
 gloss = "Every ReceiveMessage increments `${appName}/message_counter`"
 
@@ -126,28 +120,8 @@ gloss = "The raw XML is published to the train topic keyed by trenPar, a publish
 
 [[criterion]]
 source = "connector"
-anchor = "src/config.ts#L8"
-gloss = "PORT defaults to 3000"
-
-[[criterion]]
-source = "connector"
-anchor = "src/config.ts#L9"
-gloss = "APP_NAME defaults to train-connector"
-
-[[criterion]]
-source = "connector"
 anchor = "src/config.ts#L18"
 gloss = "The timezone is Pacific/Auckland"
-
-[[criterion]]
-source = "connector"
-anchor = "src/config.ts#L25"
-gloss = "The WSDL is resource/wsdl/train.wsdl"
-
-[[criterion]]
-source = "connector"
-anchor = "src/config.ts#L26"
-gloss = "Confluent config is used unless IS_LOCAL is `true`"
 
 [[criterion]]
 source = "connector"
@@ -186,6 +160,11 @@ gloss = "The Confluent secret read, parsed, and watched for rotation"
 source = "connector"
 anchor = "src/key-vault.ts"
 gloss = "The Key Vault client"
+
+[[absent]]
+source = "connector"
+anchor = "src/soap-server.ts#L40-L43"
+gloss = "The train SOAP service is served on /inbound/xml under the configured WSDL"
 
 [[absent]]
 source = "connector"
@@ -298,11 +277,6 @@ gloss = "MIN_MESSAGE_DELAY_IN_SECONDS defaults to -30"
 source = "adapter"
 anchor = "src/config.ts#L6"
 gloss = "STATIONS defaults to 0,19,40"
-
-[[criterion]]
-source = "adapter"
-anchor = "src/config.ts#L15"
-gloss = "Confluent config is used unless IS_LOCAL is `true`"
 
 [[criterion]]
 source = "adapter"

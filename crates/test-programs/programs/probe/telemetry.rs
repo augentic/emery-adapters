@@ -2,13 +2,13 @@
 
 #![cfg(target_arch = "wasm32")]
 
-use emery_sdk::{Context, Error, Evidence, Metadata, Model, SourceAdapter, SourceKind};
+use std::future::{Future, ready};
+
+use emery_sdk::{Context, Error, Evidence, Metadata, SourceAdapter, SourceKind};
 use test_programs::maximal;
 use tracing::Level;
 
 struct Adapter;
-
-emery_sdk::export_source!(Adapter);
 
 impl SourceAdapter for Adapter {
     fn metadata() -> Metadata {
@@ -17,11 +17,13 @@ impl SourceAdapter for Adapter {
         }
     }
 
-    async fn extract<P: Model>(_ctx: &Context<'_, P>) -> Result<Evidence, Error> {
-        traced().await;
-        Ok(maximal())
+    fn extract<P>(_ctx: &Context<'_, P>) -> impl Future<Output = Result<Evidence, Error>> {
+        traced();
+        ready(Ok(maximal()))
     }
 }
 
 #[tracing::instrument(level = Level::ERROR)]
-async fn traced() {}
+fn traced() {}
+
+emery_sdk::export_source!(Adapter);

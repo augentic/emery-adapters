@@ -59,20 +59,20 @@ impl Outline {
         self.blocks.iter().any(|block| block.kind == kind)
     }
 
-    pub fn heading_at(&self, line: u32) -> Option<&Heading> {
-        self.headings.iter().find(|heading| heading.line == line)
-    }
-
-    pub fn heading_in(&self, span: Lines) -> Option<&Heading> {
-        self.headings.iter().find(|heading| span.holds(heading.line))
+    pub fn heading(&self, anchor: u32, span: Lines) -> Option<&str> {
+        self.headings
+            .iter()
+            .find(|heading| heading.line == anchor)
+            .or_else(|| self.headings.iter().find(|heading| span.holds(heading.line)))
+            .map(|heading| heading.text.as_str())
     }
 }
 
 pub fn opening_line(text: &str) -> Option<(u32, &str)> {
-    text.lines()
-        .enumerate()
-        .find(|(_, line)| !line.trim().is_empty())
-        .map(|(index, line)| (line_number(index + 1), line.trim()))
+    text.lines().enumerate().find_map(|(index, line)| {
+        let trimmed = line.trim();
+        (!trimmed.is_empty()).then(|| (line_number(index + 1), trimmed))
+    })
 }
 
 fn line_number(index: usize) -> u32 {
@@ -158,11 +158,10 @@ impl<'a> Reader<'a> {
         close + 1
     }
 
-    fn fence(&mut self, open: usize, mark: &str) -> usize {
+    fn fence(&mut self, open: usize, (mark, mark_char): (&str, char)) -> usize {
         let close = self.lines.iter().enumerate().skip(open + 1).find_map(|(index, line)| {
             let trimmed = line.trim();
-            (trimmed.starts_with(mark) && trimmed.chars().all(|c| c == mark_char(mark)))
-                .then_some(index)
+            (trimmed.starts_with(mark) && trimmed.chars().all(|c| c == mark_char)).then_some(index)
         });
         let end = close.unwrap_or_else(|| self.lines.len().saturating_sub(1));
         self.block(Kind::Fence, line_number(open + 1), line_number(end + 1));
@@ -268,15 +267,11 @@ fn unindented(line: &str) -> Option<&str> {
     (spaces <= 3).then(|| &line[spaces..])
 }
 
-fn fence_mark(line: &str) -> Option<&str> {
+fn fence_mark(line: &str) -> Option<(&str, char)> {
     let rest = unindented(line)?;
     let mark = rest.chars().next().filter(|c| matches!(c, '`' | '~'))?;
     let run = rest.chars().take_while(|&c| c == mark).count();
-    (run >= 3).then(|| &rest[..run])
-}
-
-fn mark_char(mark: &str) -> char {
-    mark.chars().next().unwrap_or('`')
+    (run >= 3).then(|| (&rest[..run], mark))
 }
 
 fn atx_heading(line: &str) -> Option<(u8, &str)> {

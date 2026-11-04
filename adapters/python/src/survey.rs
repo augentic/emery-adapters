@@ -17,6 +17,8 @@ use self::parse::Module;
 use self::surface::Python;
 use crate::PROSE;
 
+pub const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
+
 pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
     let source = &ctx.input.name;
 
@@ -54,7 +56,6 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Survey, Error> {
 const SKIP_FILES: &[&str] = &["conftest.py", "noxfile.py"];
 const SKIP_ROOT_FILES: &[&str] = &["setup.py"];
 const EXTENSIONS: &[&str] = &["py"];
-const DATA_EXTENSIONS: &[&str] = &["json", "yaml", "yml", "toml", "csv", "ini"];
 const TEST_DIRS: &[&str] = &["test", "tests", "testing", "__tests__", "features"];
 const NEVER_DIRS: &[&str] = &[
     "__pycache__",

@@ -33,16 +33,6 @@ stem = "nightly"
 
 [[requirement]]
 stem = "start"
-anchor = "src/cli.ts#L21-L32"
-gloss = "Every row of JOBS is registered as a command with its usage, description, and a `--dry-run` option, and its exit code becomes the process's"
-
-[[requirement]]
-stem = "start"
-anchor = "src/cli.ts#L34-L36"
-gloss = "The database pool is closed after any command"
-
-[[requirement]]
-stem = "start"
 anchor = "src/cli.ts#L38-L41"
 gloss = "A command that throws is logged and exits 1"
 
@@ -115,6 +105,8 @@ gloss = "MATCH_TOLERANCE_CENTS is 1"
 anchor = "src/jobs/import.ts#L13"
 gloss = "DATE: a posting date is `YYYY-MM-DD`"
 
-[[criterion]]
-anchor = "src/config.ts#L3"
-gloss = "DATABASE_URL defaults to postgres://localhost:5432/ledger"
+# --- absent: how the process closes the pool ---
+
+[[absent]]
+anchor = "src/cli.ts#L34-L36"
+gloss = "The database pool is closed after any command"

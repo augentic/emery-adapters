@@ -5,25 +5,18 @@
 //! `workspaces`, and runs `npm install`, `tsc --noEmit`, and `npm test` at
 //! each slice and wave.
 
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write as _};
 use std::path::Path;
 
-use emery_sdk::target::{Grant, InitContext, MergeRule, Metadata, Outcome, TargetAdapter, Task};
-use emery_sdk::{Error, Model, server_error, tracing};
+use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
+use emery_sdk::{Doc, Error, Model, server_error, tracing};
 
-const FILES: &[(&str, &str)] = &[
-    (".gitignore", include_str!("../seed/.gitignore")),
-    ("package.json", include_str!("../seed/package.json")),
-    ("tsconfig.json", include_str!("../seed/tsconfig.json")),
-];
 const RULES: &[MergeRule] = &[
     MergeRule::ours("package-lock.json"),
     MergeRule::union("src/index.ts"),
     MergeRule::union("**/index.ts"),
 ];
-
-// npm fetches from the public registry.
 const NPM: Grant = Grant {
     egress: &["registry.npmjs.org"],
     read: &[],
@@ -58,34 +51,33 @@ impl TargetAdapter for Adapter {
 
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {
-            Task::Init(ctx) => init(&ctx).map(|()| Outcome::Initialised),
+            Task::Init(ctx) => init(ctx.workspace).map(|()| Outcome::Initialised),
             Task::Build(ctx) => {
-                emery_sdk::target::build(&ctx, PROSE, |_| Ok(Vec::new())).await.map(Outcome::Built)
+                target::build(&ctx, PROSE, |_| Ok(Vec::new())).await.map(Outcome::Built)
             }
-            Task::Verify(ctx) => emery_sdk::target::verify(&ctx, PROSE, |_| Ok(Vec::new()))
-                .await
-                .map(Outcome::Verified),
+            Task::Verify(ctx) => {
+                target::verify(&ctx, PROSE, |_| Ok(Vec::new())).await.map(Outcome::Verified)
+            }
         }
     }
 }
 
 /// The prompts and the reference embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] =
+pub static PROSE: &[Doc] =
     emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
 
-// Scaffolds each root file the tree lacks; one the tree holds, a file or a
-// link, stands as it is.
-fn init(ctx: &InitContext<'_>) -> Result<(), Error> {
-    let root = Path::new(ctx.workspace);
+const FILES: &[(&str, &str)] = &[
+    (".gitignore", include_str!("../seed/.gitignore")),
+    ("package.json", include_str!("../seed/package.json")),
+    ("tsconfig.json", include_str!("../seed/tsconfig.json")),
+];
+
+fn init(root: &str) -> Result<(), Error> {
+    let root = Path::new(root);
     let mut scaffolded = 0;
 
     for (path, content) in FILES {
-        let file = root.join(path);
-        if let Some(parent) = file.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|err| server_error!("making the directories of `{path}`: {err}"))?;
-        }
-        match OpenOptions::new().write(true).create_new(true).open(&file) {
+        match OpenOptions::new().write(true).create_new(true).open(root.join(path)) {
             Ok(mut file) => {
                 file.write_all(content.as_bytes())
                     .map_err(|err| server_error!("writing `{path}`: {err}"))?;

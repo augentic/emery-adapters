@@ -180,16 +180,20 @@ impl Python {
             || literal.and_then(route::literal_stem),
             |route| DIALECT.route.stem(route),
         );
-        let stem = derived.as_deref().unwrap_or(stem);
+        let resolved_stem = derived.as_deref().unwrap_or(stem);
         let methods_keyword = call.keyword("methods").map(|arg| arg.head.as_str());
         let discriminator = self
             .named_handler(tree, module, call)
-            .filter(|handler| handler != stem)
+            .filter(|handler| handler != resolved_stem)
             .or_else(|| {
                 route.as_deref().map_or_else(
                     || kebab(method),
                     |route| {
-                        DIALECT.route.discriminator(&verb_of(method, methods_keyword), route, stem)
+                        DIALECT.route.discriminator(
+                            &verb_of(method, methods_keyword),
+                            route,
+                            resolved_stem,
+                        )
                     },
                 )
             });
@@ -208,10 +212,7 @@ impl Python {
         }
         let (methods, class) = match self.class_run_by(tree, module, call) {
             Some((declaring, class)) => {
-                let methods: Vec<(String, Lines)> = view_methods(declaring, &class)
-                    .into_iter()
-                    .map(|(name, lines)| (name.to_owned(), lines))
-                    .collect();
+                let methods = view_methods(declaring, &class);
                 detail.push(format!("class `{class}` handed"));
                 detail.extend(noted(&methods));
                 (methods, Some((declaring, class)))
@@ -407,7 +408,7 @@ impl Recogniser for Python {
                                 continue;
                             };
                             let Some(target) = self.resolver.entry(dotted) else { continue };
-                            let mounted = route::join(own, &strip_pattern(literal));
+                            let mounted = route::join(own, strip_pattern(literal));
                             if mounted != "/" {
                                 next.entry(target).or_insert(mounted);
                             }
@@ -508,7 +509,7 @@ impl Recogniser for Python {
 fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {
     let literal = literal?;
     let verb = VERBS.contains(&method) && literal.starts_with('/');
-    (verb || ROUTERS.contains(&method)).then(|| route::join(mount, &strip_pattern(literal)))
+    (verb || ROUTERS.contains(&method)).then(|| route::join(mount, strip_pattern(literal)))
 }
 
 fn verb_of(method: &str, methods: Option<&str>) -> String {
@@ -603,7 +604,7 @@ fn at_command(tree: &Tree<Python>, module: &Module) -> Option<Derived> {
 fn at_decorated_class(tree: &Tree<Python>, module: &Module, class: &Decorated) -> Derived {
     let name = class.class.as_deref().unwrap_or_default();
     let mount = tree.mount(&module.path);
-    let route = route::join(mount, &strip_pattern(class.literal.as_deref().unwrap_or("")));
+    let route = route::join(mount, strip_pattern(class.literal.as_deref().unwrap_or("")));
     let methods = unique(
         module
             .decorated
@@ -669,14 +670,7 @@ fn at_decorated_def(tree: &Tree<Python>, module: &Module, decorated: &Decorated)
 
 fn at_export(tree: &Tree<Python>, module: &Module, export: &Export) -> Derived {
     let (what, methods, class) = match export.kind {
-        ExportKind::Class => (
-            "class",
-            methods(module, &export.name, |name| !dunder(name))
-                .into_iter()
-                .map(|(name, lines)| (name.to_owned(), lines))
-                .collect(),
-            Some(export.name.as_str()),
-        ),
+        ExportKind::Class => ("class", methods(module, &export.name), Some(export.name.as_str())),
         ExportKind::Function => ("function", Vec::new(), None),
         ExportKind::Value | ExportKind::Type | ExportKind::Unknown => ("value", Vec::new(), None),
     };
@@ -774,7 +768,7 @@ fn decorated_route(mount: &str, module: &Module, decorated: &Decorated) -> Optio
         .and_then(|class| class_prefix(module, class))
         .and_then(|d| d.literal.as_deref())
         .unwrap_or("");
-    Some(route::join(&route::join(mount, prefix), &strip_pattern(literal)))
+    Some(route::join(&route::join(mount, prefix), strip_pattern(literal)))
 }
 
 fn decorated_class_at(module: &Module, lines: Lines) -> Option<&Decorated> {
@@ -814,9 +808,7 @@ fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
         .find(|export| module.declared_at(export).holds(lines.start))
 }
 
-fn methods<'m>(
-    module: &'m Module, name: &str, keep: impl Fn(&str) -> bool,
-) -> Vec<(&'m str, Lines)> {
+fn methods(module: &Module, name: &str) -> Vec<(String, Lines)> {
     module
         .class(name)
         .map(|class| {
@@ -825,27 +817,23 @@ fn methods<'m>(
                 .iter()
                 .filter(|m| {
                     !m.private
-                        && keep(&m.name)
+                        && !parse::dunder(&m.name)
                         && matches!(m.kind, MemberKind::Method | MemberKind::Getter)
                 })
-                .map(|m| (m.name.as_str(), m.lines))
+                .map(|m| (m.name.clone(), m.lines))
                 .collect()
         })
         .unwrap_or_default()
 }
 
-fn dunder(name: &str) -> bool {
-    name.starts_with("__") && name.ends_with("__")
-}
-
-fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
-    let all = methods(module, name, |name| !dunder(name));
-    let verbs: Vec<(&str, Lines)> =
-        all.iter().filter(|(method, _)| VERBS.contains(method)).copied().collect();
+fn view_methods(module: &Module, name: &str) -> Vec<(String, Lines)> {
+    let all = methods(module, name);
+    let verbs: Vec<(String, Lines)> =
+        all.iter().filter(|(method, _)| VERBS.contains(&method.as_str())).cloned().collect();
     if !verbs.is_empty() {
         return verbs;
     }
-    let actions: Vec<(&str, Lines)> = all
+    let actions: Vec<(String, Lines)> = all
         .iter()
         .filter(|(method, _)| {
             module
@@ -853,13 +841,13 @@ fn view_methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
                 .iter()
                 .any(|d| d.name.last().is_some_and(|last| last == "action"))
         })
-        .copied()
+        .cloned()
         .collect();
     if actions.is_empty() { all } else { actions }
 }
 
-fn strip_pattern(route: &str) -> String {
-    route.trim_start_matches('^').trim_end_matches('$').to_owned()
+fn strip_pattern(route: &str) -> &str {
+    route.trim_start_matches('^').trim_end_matches('$')
 }
 
 fn literal_tail(literal: &str) -> Option<String> {

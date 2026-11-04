@@ -175,11 +175,10 @@ impl<'a> Tree<'a> {
     // The crates the turn wrote that are no stem of the slice's and none the
     // tree held; `crates/start/` is the process rule's.
     fn foreign_crates(&self, scaffold: &Scaffold) -> Vec<&str> {
-        let stems: Vec<&str> = scaffold.stems().collect();
         self.stem_crates()
             .filter(|dir| {
                 !(scaffold.existing().contains(*dir)
-                    || stems.iter().any(|stem| layout::crate_dir(stem) == *dir))
+                    || scaffold.stems().any(|stem| layout::crate_dir(stem) == *dir))
             })
             .collect()
     }
@@ -324,10 +323,10 @@ impl<'a> Tree<'a> {
             .filter(|expected| covered.iter().any(|covered| covered == expected.id))
         {
             let test = match self.module(expected.path) {
-                Some(module) => match module.file() {
-                    Some(file) => test_of(file, expected.test),
-                    None => continue,
-                },
+                Some(module) => {
+                    let Some(file) = module.file() else { continue };
+                    test_of(file, expected.test)
+                }
                 None => None,
             };
             let Some(found) = test else {

@@ -486,7 +486,7 @@ fn clauses(body: &str) -> Vec<Clause> {
     let mut text = String::new();
     let mut depth = 0i32;
     let mut quote: Option<char> = None;
-    let mut chars = body.chars().peekable();
+    let mut chars = body.chars();
     let mut previous = ' ';
     // whether the line still holds the clause just ended, so a comment
     // after it on the line is that clause's
@@ -501,7 +501,7 @@ fn clauses(body: &str) -> Vec<Clause> {
             continue;
         }
         match ch {
-            '/' if depth == 0 && text.trim().is_empty() && chars.peek() == Some(&'/') => {
+            '/' if depth == 0 && text.trim().is_empty() && chars.as_str().starts_with('/') => {
                 let line: String = chars.by_ref().take_while(|ch| *ch != '\n').collect();
                 let line = line.trim_start_matches('/').trim().to_owned();
                 match clauses.last_mut() {
@@ -513,7 +513,7 @@ fn clauses(body: &str) -> Vec<Clause> {
                 trailing = false;
                 text.clear();
             }
-            '/' if depth == 0 && text.trim().is_empty() && chars.peek() == Some(&'*') => {
+            '/' if depth == 0 && text.trim().is_empty() && chars.as_str().starts_with('*') => {
                 let mut block = String::new();
                 let mut last = ' ';
                 for ch in chars.by_ref() {
@@ -556,7 +556,7 @@ fn clauses(body: &str) -> Vec<Clause> {
                 let whole = !text.trim().is_empty()
                     && !decorators(&text).2.is_empty()
                     && !text.trim_end().ends_with([':', '|', '&', '=', '<', '(', '?'])
-                    && !continues(chars.clone());
+                    && !continues(chars.as_str());
                 if whole {
                     flush(&mut text, &mut doc, &mut clauses);
                 } else {
@@ -577,9 +577,8 @@ fn clauses(body: &str) -> Vec<Clause> {
 }
 
 // Whether the next line continues a clause: a union or intersection arm.
-fn continues(rest: std::iter::Peekable<std::str::Chars<'_>>) -> bool {
-    let next: String = rest.skip_while(|ch| ch.is_whitespace()).take(1).collect();
-    matches!(next.as_str(), "|" | "&")
+fn continues(rest: &str) -> bool {
+    rest.trim_start().starts_with(['|', '&'])
 }
 
 // Ends the clause `text` holds, answering whether it held one.

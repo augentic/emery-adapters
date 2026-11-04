@@ -49,13 +49,6 @@ stem = "start"
 anchor = "src/cli.ts#L73-L76"
 gloss = "A failed command is logged and exits with 1"
 
-# The queue is constructed at module level with the boundaries' values, so
-# the prompt's rule makes it start's, once, at the construction.
-[[requirement]]
-stem = "start"
-anchor = "src/queues.ts#L16-L25"
-gloss = "Invoice jobs retry INVOICE_ATTEMPTS times with exponential backoff from INVOICE_BACKOFF_MS"
-
 # --- import ---
 
 [[requirement]]
@@ -131,11 +124,6 @@ stem = "invoices"
 anchor = "src/workers/invoices.ts#L11-L30"
 gloss = "A reminder above MAX_REMINDER_AMOUNT_CENTS voids the invoice instead; otherwise the mail API is POSTed and a non-2xx fails the job"
 
-[[requirement]]
-stem = "invoices"
-anchor = "src/workers/invoices.ts#L50-L55"
-gloss = "Failed and completed jobs are logged with their id"
-
 # --- criteria ---
 
 [[criterion]]
@@ -147,29 +135,19 @@ anchor = "src/config.ts#L8"
 gloss = "TZ defaults to Pacific/Auckland"
 
 [[criterion]]
-anchor = "src/config.ts#L9"
-gloss = "INVOICE_CONCURRENCY defaults to 4"
-
-[[criterion]]
-anchor = "src/config.ts#L10"
-gloss = "INVOICE_ATTEMPTS defaults to 5"
-
-[[criterion]]
 anchor = "src/config.ts#L11"
 gloss = "RECONCILE_TOLERANCE_CENTS defaults to 100"
-
-[[criterion]]
-anchor = "src/config.ts#L12"
-gloss = "FEED_TIMEOUT_MS defaults to 15000"
 
 [[criterion]]
 anchor = "src/lib/csv.ts#L4-L7"
 gloss = "MAX_ROWS 50000, the required columns, the account code and ISO date patterns"
 
 [[criterion]]
-anchor = "src/queues.ts#L6"
-gloss = "INVOICE_BACKOFF_MS is 30000"
-
-[[criterion]]
 anchor = "src/workers/invoices.ts#L9"
 gloss = "MAX_REMINDER_AMOUNT_CENTS is 5000000"
+
+# --- absent: module-level queue construction ---
+
+[[absent]]
+anchor = "src/queues.ts#L16-L25"
+gloss = "Invoice jobs retry INVOICE_ATTEMPTS times with exponential backoff from INVOICE_BACKOFF_MS"

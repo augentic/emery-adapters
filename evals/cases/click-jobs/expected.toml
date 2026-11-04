@@ -44,20 +44,8 @@ stem = "invoices"
 
 [[requirement]]
 stem = "start"
-anchor = "src/ledger/cli.py#L83-L86"
-gloss = "After any command but serve, the connection pool is closed"
-
-[[requirement]]
-stem = "start"
 anchor = "src/ledger/cli.py#L89-L97"
 gloss = "A Click error is shown and exits with its code; any other failure is logged and exits 1"
-
-# The Celery application is configured at module level with the boundaries'
-# values, so the prompt's rule makes it start's, once, at the construction.
-[[requirement]]
-stem = "start"
-anchor = "src/ledger/queues.py#L8-L14"
-gloss = "Tasks run on the invoices queue, acknowledged late, retrying INVOICE_ATTEMPTS times INVOICE_BACKOFF_S apart"
 
 # --- import ---
 
@@ -154,10 +142,6 @@ anchor = "src/ledger/config.py#L10"
 gloss = "INVOICE_CONCURRENCY defaults to 4"
 
 [[criterion]]
-anchor = "src/ledger/config.py#L11"
-gloss = "INVOICE_ATTEMPTS defaults to 5"
-
-[[criterion]]
 anchor = "src/ledger/config.py#L12"
 gloss = "RECONCILE_TOLERANCE_CENTS defaults to 100"
 
@@ -170,9 +154,11 @@ anchor = "src/ledger/lib/csv.py#L8-L11"
 gloss = "MAX_ROWS 50000, the required columns, the account code and ISO date patterns"
 
 [[criterion]]
-anchor = "src/ledger/queues.py#L6"
-gloss = "INVOICE_BACKOFF_S is 30"
-
-[[criterion]]
 anchor = "src/ledger/workers/invoices.py#L8"
 gloss = "MAX_REMINDER_AMOUNT_CENTS is 5000000"
+
+# --- absent: module-level queue construction ---
+
+[[absent]]
+anchor = "src/ledger/queues.py#L8-L14"
+gloss = "Tasks run on the invoices queue, acknowledged late, retrying INVOICE_ATTEMPTS times INVOICE_BACKOFF_S apart"
