@@ -21,7 +21,7 @@ fn images(shown: &[(&str, &[u8])]) -> Facts {
     for (k, (file, body)) in shown.iter().enumerate() {
         let id = format!("n{}", k + 1);
         #[expect(clippy::cast_precision_loss, reason = "a few images")]
-        let top = 16.0 + 100.0 * k as f64;
+        let top = 100.0f64.mul_add(k as f64, 16.0);
         nodes[&id] = json!({
             "tag": "img",
             "kind": "box",
@@ -50,7 +50,7 @@ fn inlined_images_pair_with_their_files() {
     let comparison = compare(&original, &render).expect("the ranges overlap");
 
     assert!(comparison.pass, "{:?}", comparison.worst_original_items);
-    assert!(comparison.unpaired_render_items.is_empty());
+    assert_eq!(comparison.unpaired_render_items, []);
 }
 
 #[test]

@@ -15,17 +15,25 @@
 // --stamp DIR: records the sha256 of every file under DIR in meta.json `source`, so a reader can
 // tell the capture is of the current code.
 //
-// The browser is Playwright's Chromium unless CAPTURE_BROWSER_CHANNEL names a channel ("chrome").
-// It always runs as a single process, launched afresh for every load: a sandboxed worker may not
-// register the Mach service that Chromium's child processes rendezvous through, a single-process
-// browser does not survive a second context, and captures in and out of the sandbox must match.
+// The browser is Playwright's Chromium unless CAPTURE_BROWSER_CHANNEL names a channel ("chrome"),
+// and meta.json `browser` records which and its version. It always runs as a single process,
+// launched afresh for every load: a sandboxed worker may not register the Mach service that
+// Chromium's child processes rendezvous through, a single-process browser does not survive a
+// second context, and captures in and out of the sandbox must match.
 // Kept to driving the browser: everything after the raw capture is Rust.
 
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { chromium } from "playwright";
+
+// A sandboxed worker's HOME is not the operator's, so Playwright does not find its own browser
+// cache there; the worker is lent each platform's cache under its own name instead.
+const LENT_CACHE = { darwin: "PLAYWRIGHT_CACHE_MACOS", linux: "PLAYWRIGHT_CACHE_LINUX" }[process.platform];
+if (!process.env.PLAYWRIGHT_BROWSERS_PATH && LENT_CACHE && process.env[LENT_CACHE]) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = process.env[LENT_CACHE];
+}
+const { chromium } = await import("playwright");
 
 const DEFAULTS = {
   min: 320, max: 1920, height: 800, tolerance: 1, seed: 7, maxCaptures: 1500, maxAssets: 300,

@@ -698,6 +698,7 @@ pub fn assemble(dir: &Path) -> Result<FactsFolder, Error> {
         "url": meta["url"],
         "tolerance": meta["tolerance"],
         "seed": meta["seed"],
+        "browser": meta["browser"],
         "captures": meta["captures"],
         "capped": meta["capped"],
         "segments": meta["segments"],

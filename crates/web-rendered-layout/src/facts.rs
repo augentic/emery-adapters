@@ -160,6 +160,13 @@ impl Facts {
         self.index["height"].as_f64().unwrap_or(0.0)
     }
 
+    /// The browser the facts were captured with, as the capture recorded it:
+    /// its `channel` and `version`. `None` for facts that predate the record.
+    #[must_use]
+    pub fn browser(&self) -> Option<&Value> {
+        self.index["search"].get("browser").filter(|browser| !browser.is_null())
+    }
+
     /// The widths the heights were swept at, in order.
     #[must_use]
     pub fn swept_widths(&self) -> Vec<Width> {

@@ -35,12 +35,17 @@ const FNM: Grant = Grant {
     read: &["~/.local/share/fnm"],
     env: &[],
 };
-// Playwright's own headless shell, where `npx playwright install` puts it
-// on macOS; the browser runs inside the lend, so only its files are read.
+// Playwright's browsers, where `npx playwright install` puts them on macOS
+// and on Linux; the browser runs inside the lend, so only its files are
+// read. The worker's HOME is not the operator's, so each cache is named to
+// the capture script, which takes the one of the platform it runs on.
 const PLAYWRIGHT: Grant = Grant {
     egress: &[],
-    read: &["~/Library/Caches/ms-playwright"],
-    env: &[("PLAYWRIGHT_BROWSERS_PATH", "~/Library/Caches/ms-playwright")],
+    read: &["~/Library/Caches/ms-playwright", "~/.cache/ms-playwright"],
+    env: &[
+        ("PLAYWRIGHT_CACHE_MACOS", "~/Library/Caches/ms-playwright"),
+        ("PLAYWRIGHT_CACHE_LINUX", "~/.cache/ms-playwright"),
+    ],
 };
 
 /// The adapter implementation.
