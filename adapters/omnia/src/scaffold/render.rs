@@ -14,38 +14,13 @@ use super::trigger;
 use super::types::{Body, DefaultFn, LaidField, LaidVariant};
 use crate::layout::{
     PROBE_DEPENDENCY, ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES,
-    TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
+    STEM_MANIFEST_HEADER, TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
 };
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
 // The derives of a type a float reaches, which `Eq` cannot hold.
 const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserialize";
 const GENERICS: &str = "<P: Capabilities>";
-
-// The stem's manifest, as the layout reference spells it, its
-// `[dependencies]` the layout's fixed lines and, where the slice probes or
-// reaches a SQL store, the SQL crate after them.
-const MANIFEST: &str = r#"[package]
-name = "<package>"
-description = "The `<stem>` stem"
-publish.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-version.workspace = true
-
-[lints]
-workspace = true
-
-# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test = { workspace = true, features = ["guest"] }
-tokio.workspace = true
-tower.workspace = true
-
-# One line per crate the stem's files use, each added at the end.
-[dependencies]
-<dependencies>
-"#;
 
 // The bodies of the decoders a pre-rendered route function reads the input
 // with, as lines relative to the block: what the SDK's `post` and `get` do,
@@ -109,10 +84,11 @@ impl Stem {
         if self.sql {
             dependencies.push(dependency_line(PROBE_DEPENDENCY));
         }
-        MANIFEST
-            .replace("<package>", &self.package)
-            .replace("<stem>", &self.name)
-            .replace("<dependencies>", &dependencies.join("\n"))
+        format!(
+            "{}\n{}\n",
+            STEM_MANIFEST_HEADER.replace("<package>", &self.package).replace("<stem>", &self.name),
+            dependencies.join("\n")
+        )
     }
 
     // The stem's entry, as the layout reference spells it, with one part's

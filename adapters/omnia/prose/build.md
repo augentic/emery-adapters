@@ -322,7 +322,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A file stands beside your stems' crates and `Cargo.lock` that the tree did not hold before your turn. Remove it through `delete`.
 - A crate is written for a stem your requirements do not lead with, or for a stem split at a hyphen.
 - A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.
-- The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks.
+- The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks. A stem's `Cargo.toml` differs from the scaffolded manifest outside `[dependencies]`.
 - A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
 - A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself. Declare the module, or move the item into its part.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.

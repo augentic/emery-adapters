@@ -13,7 +13,7 @@ use emery_sdk::Error;
 use emery_sdk::target::Report;
 use omnia_template::Manifest;
 use syn::visit::{self, Visit};
-use syn::{ItemFn, Macro};
+use syn::{Expr, ExprLit, ItemFn, Lit, Local, Macro};
 
 use crate::layout::{self, Toml, TopicTable};
 use crate::scaffold::Scaffold;
@@ -159,7 +159,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.manifest_drift()?);
         findings.extend(self.dangling_entries()?);
         findings.extend(self.simulated_process()?);
-        findings.extend(self.unlinted_stems());
+        findings.extend(self.stem_manifest_drift());
         findings.extend(self.unused_dependencies());
         findings.extend(self.unmerged_stems());
         findings.extend(self.undeclared_parts());
@@ -356,6 +356,15 @@ impl<'a> Tree<'a> {
                     expected.path, expected.id, expected.test, expected.scenario
                 ));
             }
+            if !found.ignored {
+                for (line, lit) in &found.placeholders {
+                    lines.push(format!(
+                        "{}:{line}: {} is covered and the test `{}` of its scenario `{}` leaves \
+                         the placeholder `\"{lit}\"` unfilled",
+                        expected.path, expected.id, expected.test, expected.scenario
+                    ));
+                }
+            }
         }
         if lines.is_empty() {
             return None;
@@ -363,29 +372,38 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement's scenarios are tests that run and pass: each scenario of a \
              covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
-             part's test file, filled, its `#[tokio::test]` line kept and its `#[ignore = ..]` \
-             line removed, since a function without the attribute is no test; fill each through \
-             `edit_files`, or leave the requirement out of `covered`:\n{}",
+             part's test file, filled, its `#[tokio::test]` line kept, its `#[ignore = ..]` \
+             line removed, and any `\"<param>\"` path-parameter placeholder replaced with a \
+             concrete value, since a function without the attribute is no test and `<` in a \
+             request path panics with `InvalidUriChar`; fill each through `edit_files`, or leave \
+             the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
     }
 
-    // The workspace's lints are the host boundary, and they reach a crate
-    // through its `[lints]` table alone.
-    fn unlinted_stems(&self) -> Option<String> {
-        let lines: Vec<String> = self
-            .stem_manifests()
-            .filter(|(_, manifest)| !Toml::read(manifest).inherits_workspace_lints())
-            .map(|(dir, _)| format!("crates/{dir}/Cargo.toml"))
-            .collect();
-        if lines.is_empty() {
+    // Every line of a stem's manifest outside `[dependencies]` stands as
+    // the adapter scaffolded it: `[package]`, `[lints]`, and
+    // `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.
+    fn stem_manifest_drift(&self) -> Option<String> {
+        let mut files = Vec::new();
+        for (dir, manifest) in self.stem_manifests() {
+            let expected = layout::stem_manifest_header(dir);
+            let expected_lines: Vec<&str> = expected.lines().collect();
+            let actual_lines = Toml::lines_outside_dependencies(manifest);
+            let lines = diff_lines(&expected_lines, &actual_lines);
+            if !lines.is_empty() {
+                files.push(format!("`crates/{dir}/Cargo.toml`:\n{}", lines.join("\n")));
+            }
+        }
+        if files.is_empty() {
             return None;
         }
         Some(format!(
-            "a stem's manifest carries `[lints]` with `workspace = true`, since the workspace's \
-             lints are the host boundary and reach a crate through that table alone; add the \
-             table through `edit_files`:\n{}",
-            lines.join("\n")
+            "a stem's manifest changes only inside `[dependencies]`: `[package]`, `[lints]` with \
+             `workspace = true`, and `[target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies]` \
+             stand as the adapter scaffolded them, so put the `-` lines back and drop the `+` \
+             lines through `edit_files`:\n{}",
+            files.join("\n")
         ))
     }
 
@@ -474,11 +492,42 @@ struct Found {
     attributed: bool,
     ignored: bool,
     marker: Option<usize>,
+    placeholders: Vec<(usize, String)>,
+}
+
+#[derive(Default)]
+struct Placeholders {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Placeholders {
+    fn visit_local(&mut self, node: &'ast Local) {
+        if let Some(init) = &node.init
+            && let Expr::Lit(ExprLit {
+                lit: Lit::Str(lit), ..
+            }) = &*init.expr
+        {
+            let value = lit.value();
+            if is_placeholder(&value) {
+                self.found.push((syntax::line(lit.span()), value));
+            }
+        }
+        visit::visit_local(self, node);
+    }
+}
+
+fn is_placeholder(value: &str) -> bool {
+    let Some(inner) = value.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else {
+        return false;
+    };
+    !inner.is_empty()
+        && inner.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
 // The test `name` declares in a test file: its line, whether a `test` and
-// an `#[ignore]` attribute stand among its attributes, and the line of a
-// marker left in its body.
+// an `#[ignore]` attribute stand among its attributes, the line of a
+// marker left in its body, and any `let <param> = "<param>";` placeholder
+// bindings.
 fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     struct Test<'n, 'ast> {
         name: &'n str,
@@ -503,6 +552,8 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     let item = test.found?;
     let mut markers = Markers::default();
     markers.visit_block(&item.block);
+    let mut placeholders = Placeholders::default();
+    placeholders.visit_block(&item.block);
     Some(Found {
         line: syntax::line(item.sig.fn_token.span),
         attributed: item
@@ -511,7 +562,40 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
             .any(|attr| attr.path().segments.last().is_some_and(|segment| segment.ident == "test")),
         ignored: item.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
         marker: markers.found.first().map(|(line, _)| *line),
+        placeholders: placeholders.found,
     })
+}
+
+fn diff_lines(expected: &[&str], actual: &[&str]) -> Vec<String> {
+    let (n, m) = (expected.len(), actual.len());
+    let mut common = vec![vec![0_usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            common[i][j] = if expected[i] == actual[j] {
+                common[i + 1][j + 1] + 1
+            } else {
+                common[i + 1][j].max(common[i][j + 1])
+            };
+        }
+    }
+
+    let mut drift = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while i < n && j < m {
+        if expected[i] == actual[j] {
+            i += 1;
+            j += 1;
+        } else if common[i + 1][j] >= common[i][j + 1] {
+            drift.push(format!("- {}", expected[i]));
+            i += 1;
+        } else {
+            drift.push(format!("+ {}", actual[j]));
+            j += 1;
+        }
+    }
+    drift.extend(expected[i..].iter().map(|line| format!("- {line}")));
+    drift.extend(actual[j..].iter().map(|line| format!("+ {line}")));
+    drift
 }
 
 // The requirement ids a marker names: its text up to the colon, one

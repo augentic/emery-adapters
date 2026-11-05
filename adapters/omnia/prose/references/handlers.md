@@ -157,10 +157,10 @@ pub fn key(id: &str) -> String {
 - Every `pub` item carries a `///`: each type, each field, each helper; a fallible `pub fn` carries `# Errors` naming when it fails; a `pub fn` that answers a value and reaches nothing carries `#[must_use]`. The workspace lints deny their absence.
 - The design's types are `pub` structs and enums deriving `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize`, and `Deserialize`, declared once in the module of the slice that owns the type key and used from there by every other module, through the stem's crate. The adapter lays each from the design's signature, fenced in the type's doc: a TypeScript interface, object alias, or class, a Python model, dataclass, or typed dict, or a Rust struct as a `pub struct` of documented fields, a `string` or `str` a `String`, a `number` an `i64` where the field's last word counts (`cents`, `count`, `id`, `index`, `page`, `size`, `total`, `quantity`, `seconds`, `millis`) and an `f64` otherwise, an `int` an `i64`, a `float` an `f64`, a `Date` or `datetime` a `String`, an array a `Vec`, a `Record` or `dict` a `BTreeMap<String, ..>`, an optional field or a `None` default an `Option`, `unknown` or `Any` a `serde_json::Value`, a field's wire name kept through `#[serde(rename = "..")]` over its snake_case spelling, a Python default a `#[serde(default = "default_<field>")]` over a fn beside the struct; an enumeration — a Rust `enum`, a union of string literals, a TypeScript `enum`, a class over `Enum` — as a `pub enum` of PascalCase variants, each `#[serde(rename = "<literal>")]` where the wire carries one; a field typed by a design type the slice owns by that type's name, and by one another slice declares as a `serde_json::Value` under a doc naming the design type, since that slice's module is not in the tree. `Eq` is dropped where a field is a float or holds a type that dropped it, since `assert_eq!` in a test wants `PartialEq` and `f64` has no `Eq`. A signature the adapter cannot lay whole — an alias inferred from a schema, a union of object types, a table — is an empty `pub struct {}` or `pub enum {}` under the fenced signature, the brief's marker, which the slice fills by the same rules. What a module stores is the type serialised with `serde_json`, and what it reads back is the same type deserialised.
 - A type that crosses the wire — a message published, a payload consumed, an upstream's response read — is declared in the wire's shape, as the design's `apis` section spells it: each field at the path and nesting the wire carries, a nested object a struct of its own, a constant the wire carries a field set to it, and a field whose wire name is not a Rust identifier, or not snake_case, carried through `#[serde(rename = "..")]` — `#[serde(rename = "orderId")] pub order_id: String`, `#[serde(rename = "shippingAddress")] pub shipping_address: ShippingAddress` — never renamed to read better in Rust, since the consumer on the other side reads the wire, not the struct. Even when the design's `apis` section spells `response.data` or `data.all[].carrierId` (extracted from Axios in TypeScript), `data` is the HTTP client's property on its response object and **never** a JSON field on the wire, and the adapter refuses any `Deserialize` struct whose body holds a single `data` field: a JSON array endpoint (`/rates`) deserializes `response.body()` directly into `Vec<Rate>`, and a JSON object endpoint (`/shipments/allocations`) deserializes its fields (`pub all: Vec<CarrierAllocation>`) at the root of the struct, never inside `struct ... { data: ... }`. In `quick_xml::de::from_str::<T>` and `from_slice::<T>`, `T` itself is the root XML element (`<Envelope>`), and `T`'s fields are that root element's direct children (`#[serde(rename = "ShipmentNotice")] pub notice: Option<ShipmentNotice>`); never wrap `T` in an outer struct with `#[serde(rename = "Envelope")]`, which makes `quick_xml` expect `<Outer><Envelope>...` and fail on every valid `<Envelope><ShipmentNotice>...` payload. An element the wire repeats under one name — the items of an order, the legs of a shipment — is a plain `Vec<T>` field under `#[serde(default)]` and nothing else: the XML reader collects repeated siblings into a sequence for a plain `Vec` alone and reports the second as a duplicate field under a `deserialize_with`, so a test of the type parses a payload holding two of them. An element the design types `boolean` is a `bool` under `#[serde(default)]`, never an `i32`, since the wire spells `true` and `false`. Every field is one the wire carries, named as the wire names it and placed on the element that carries it, never invented or lifted to the root, as the [translation](translation.md)'s root-element item spells out.
-- A requirement that states a count, a measurement, or a level the operator observes is one `tracing` event where the behaviour happens, read by the host's metrics layer through its field's prefix: `tracing::info!(monotonic_counter.orders.rejected_expired = 1)` for a count, `tracing::info!(histogram.orders.fulfilment_latency_ms = elapsed)` for a measurement, `tracing::info!(gauge.catalog.rates_cached = rates.len())` for a level, the name in snake_case under the stem; no counter type, no `StateStore` key, no exporter.
+- A requirement that states a count, a measurement, or a level the operator observes is one `tracing` event where the behaviour happens, read by the host's metrics layer through its field's prefix: `tracing::info!(monotonic_counter.orders.rejected_expired = 1)` for a count, `tracing::info!(histogram.orders.fulfilment_latency_ms = elapsed)` for a measurement (`elapsed` the difference of two `chrono::Utc::now()` readings, or `Utc::now()` minus a timestamp the input carries, never `std::time::Instant::now()`), `tracing::info!(gauge.catalog.rates_cached = rates.len())` for a level, the name in snake_case under the stem; no counter type, no `StateStore` key, no exporter.
 - The host is reached through `context.provider()` alone, bounded on the handler as `P: StateStore` or whichever capabilities it uses, each a trait of `omnia_sdk`. Where two bounded capabilities share a method name — `Config::get` beside `StateStore::get` — call the trait's method by name: `StateStore::get(context.provider(), &key)`.
 - A setting is read by a constant the part declares, `pub(crate) const RATES_URL: &str = "RATES_URL";`, its value its name and a `//` above it naming what the deployment provides, through `Config::get(context.provider(), RATES_URL)`, never by a literal; two parts that read one setting each declare it under the same name, and no part reads a setting another declares. The identity `Identity::access_token` is asked for is such a setting — `pub(crate) const UPSTREAM_IDENTITY: &str = "UPSTREAM_IDENTITY";`, read through `Config::get` and handed on, `Identity::access_token(provider, Config::get(provider, UPSTREAM_IDENTITY).await?).await?` — never a literal name. What is a setting and what is a constant of the part is the [layout](layout.md)'s rule.
-- A failure is a classified error, never a panic: `bad_request!`, `not_found!`, `server_error!`, and `bad_gateway!` each take a format string and build an `omnia_sdk::Error`, answered as `400`, `404`, `500`, or `502` with the JSON body `{"error": "not_found", "message": ".."}`. A provider call answers `anyhow::Result`, so `?` on it carries the host's failure into the handler's error as a `server_error`, and a handler that ends on such a call closes with `Ok(())` after it rather than returning the call's result.
+- A failure is a classified error, never a panic: `bad_request!`, `not_found!`, `server_error!`, and `bad_gateway!` each take a format string and build an `omnia_sdk::Error`, answered as `400`, `404`, `500`, or `502` with the JSON body `{"error": "<code>", "message": ".."}`. Because `bad_request!` hardcodes `code: "bad_request"`, when a requirement or scenario names a specific `400` reason code (`"outdated"`, `"no_update"`, `"wrong_time"`), construct `omnia_sdk::Error::BadRequest { code: "<reason>".to_owned(), description: format!(..) }` directly so the reason code reaches the wire's `"error"` field. A provider call answers `anyhow::Result`, so `?` on it carries the host's failure into the handler's error as a `server_error`, and a handler that ends on such a call closes with `Ok(())` after it rather than returning the call's result.
 - A status outside those four is an error type of the module's: an enum deriving `thiserror::Error`, with a variant wrapping `omnia_sdk::Error` under `#[from]` so `?` still works, converted into the response by `From<ThatError> for omnia_sdk::HttpError`. The handler answers `Result<O, ThatError>`; `thiserror` is pinned in the root manifest and named in the stem's manifest as every other crate is:
 
 ```rust
@@ -380,6 +380,68 @@ where
 ```
 
 `read_order` is the part's own function over `TableStore::query`, answering `Ok(None)` for no row, and `key` the part's key function. Where the design makes the TTL a setting of the deployment, it is a `pub(crate) const` naming the setting, read through `Config::get` and parsed at the moment of use, as the [layout](layout.md) has every setting. In a test, `Memory` holds what `insert_state` put there, so a hit is arranged by inserting the record's bytes under the key and asserted by `provider.tables.statements()` being empty, and a miss by `on_query` answering the row and `provider.storage.state(&key)` holding the bytes after the call.
+
+## A SQL query
+
+A query over `TableStore` binds parameters as `DataType` values (`$1`, `$2`, ..) and reads each returned `Row`'s `fields` by column name (`Field { name, value }` from `omnia_wasi_sql`, or `common::RowExt` where `common` exports it); never call `.tables()` on `&P` or `.as_i64()` on `Field`:
+
+```rust
+use omnia_sdk::{TableStore, not_found, server_error};
+use omnia_wasi_sql::{DataType, Field, Row};
+
+pub(crate) const DB: &str = "db";
+
+fn col_str<'a>(row: &'a Row, name: &str) -> omnia_sdk::Result<&'a str> {
+    match row.fields.iter().find(|Field { name: col, .. }| col == name).map(|f| &f.value) {
+        Some(DataType::Str(Some(value))) => Ok(value.as_str()),
+        _ => Err(server_error!("missing or non-string column `{name}`")),
+    }
+}
+
+pub(crate) async fn read_customer<P: TableStore>(provider: &P, id: &str) -> omnia_sdk::Result<Customer> {
+    let rows = TableStore::query(
+        provider,
+        DB.to_owned(),
+        "SELECT id, email FROM customers WHERE id = $1".to_owned(),
+        vec![DataType::Str(Some(id.to_owned()))],
+    )
+    .await?;
+    let row = rows.first().ok_or_else(|| not_found!("no customer `{id}`"))?;
+    Ok(Customer { id: col_str(row, "id")?.to_owned(), email: col_str(row, "email")?.to_owned() })
+}
+```
+
+In a test, `ScriptedTables::default().on_query(|sql, _| sql.contains("FROM customers"), vec![Row { index: "0".to_owned(), fields: vec![Field { name: "id".to_owned(), value: DataType::Str(Some("c-1".to_owned())) }, ..] }])` scripts the rows and `provider.tables.statements()` records what ran.
+
+## A compare-and-swap update
+
+An optimistic-concurrency update reads the current bytes with `StateStore::get`, checks the caller's expected version or ETag, and writes the updated bytes through `StateStore::cas(provider, &key, Some(&current), &next)`. Because `omnia_sdk::Error` has no `409` variant, map `Err(CasError::Conflict(_))` (and a version mismatch) to `StatusCode::CONFLICT` through a module error type as shown above:
+
+```rust
+use omnia_sdk::api::Context;
+use omnia_sdk::{CasError, StateStore, not_found, server_error};
+
+pub(crate) async fn amend_order<P: StateStore>(
+    input: AmendOrder, context: Context<P>,
+) -> Result<Order, AmendError> {
+    let provider = context.provider();
+    let key = key(&input.id);
+    let current = StateStore::get(provider, &key).await.map_err(omnia_sdk::Error::from)?
+        .ok_or_else(|| not_found!("no order `{}`", input.id))?;
+    let mut order: Order = serde_json::from_slice(&current).map_err(|err| server_error!("{err}"))?;
+    if order.version != input.expected_version {
+        return Err(AmendError::Conflict(input.id));
+    }
+    order.version += 1;
+    order.items = input.items;
+    let next = serde_json::to_vec(&order).map_err(|err| server_error!("{err}"))?;
+    match StateStore::cas(provider, &key, Some(&current), &next).await {
+        Ok(()) => Ok(order),
+        Err(CasError::Conflict(_)) => Err(AmendError::Conflict(input.id)),
+        Err(CasError::Store(err)) => Err(server_error!("{err}").into()),
+    }
+}
+```
 
 ## Ids and time
 

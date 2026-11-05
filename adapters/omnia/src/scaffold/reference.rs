@@ -174,6 +174,7 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
 pub enum Idiom {
     Probe,
     CacheAside,
+    OptimisticLock,
 }
 
 // An idiom with the heading of its section and the words that select it.
@@ -213,6 +214,11 @@ const IDIOMS: &[IdiomSpec] = &[
             "invalidation",
             "ttl",
         ],
+    },
+    IdiomSpec {
+        idiom: Idiom::OptimisticLock,
+        heading: "A compare-and-swap update",
+        words: &["cas", "etag", "optimistic"],
     },
 ];
 
@@ -486,30 +492,44 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
         }
     }
 
+    // the SQL query shape after doubles, so `Laid::Tests` never loses its
+    // doubles to the inline budget
+    if roles.contains(&Role::Table)
+        && let Some(handlers) = body(docs, HANDLERS)
+        && let Some((heading, sql_query)) = section(handlers, "A SQL query")
+    {
+        passages.push(markdown(HANDLERS, &heading, sql_query));
+    }
+
     // the translation of each role, and of the design types the slice owns
     if let Some(translation) = body(docs, TRANSLATION) {
-        if let Some((heading, table_section)) = section(translation, "The table") {
-            let mut leads: Vec<&str> = TRANSLATION_ROWS
-                .iter()
-                .filter(|(role, _)| roles.contains(role))
-                .map(|(_, lead)| *lead)
-                .collect();
-            if has(Laid::Types) {
-                leads.push("a design type");
-            }
-            let rows =
-                table(table_section, |first| leads.iter().any(|lead| first.starts_with(lead)));
-            if !rows.is_empty() {
-                passages.push(markdown(TRANSLATION, &heading, &rows));
-            }
-        }
-        if roles.contains(&Role::Schedule)
-            && let Some((heading, fragment)) = section(translation, "A reference table")
-        {
-            passages.push(markdown(TRANSLATION, &heading, fragment));
-        }
+        translation_passages(translation, &roles, has(Laid::Types), &mut passages);
     }
     passages
+}
+
+fn translation_passages(
+    translation: &str, roles: &BTreeSet<Role>, laid_types: bool, passages: &mut Vec<Passage>,
+) {
+    if let Some((heading, table_section)) = section(translation, "The table") {
+        let mut leads: Vec<&str> = TRANSLATION_ROWS
+            .iter()
+            .filter(|(role, _)| roles.contains(role))
+            .map(|(_, lead)| *lead)
+            .collect();
+        if laid_types {
+            leads.push("a design type");
+        }
+        let rows = table(table_section, |first| leads.iter().any(|lead| first.starts_with(lead)));
+        if !rows.is_empty() {
+            passages.push(markdown(TRANSLATION, &heading, &rows));
+        }
+    }
+    if roles.contains(&Role::Schedule)
+        && let Some((heading, fragment)) = section(translation, "A reference table")
+    {
+        passages.push(markdown(TRANSLATION, &heading, fragment));
+    }
 }
 
 // One lead of each capability block the roles reach, in the table's order.

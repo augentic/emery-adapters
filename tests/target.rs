@@ -1230,7 +1230,7 @@ async fn omnia_scaffold_held_stem() {
     let first = Scripted::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
-    let manifest_edited = OMNIA_MANIFEST.replace("The `orders` stem", "The `orders` stem, held");
+    let manifest_edited = format!("{OMNIA_MANIFEST}{OMNIA_PROBE_DEPENDENCY}");
     project.write("crates/orders/Cargo.toml", manifest_edited.as_bytes());
     let before = files_under(project.path());
     let root_lists =
@@ -1593,6 +1593,7 @@ async fn omnia_scaffold_roles_scoped() {
         "impl FixedIdentity {",
         "impl Memory {",
         "impl ScriptedTables {",
+        "From `references/handlers.md`, under \"A SQL query\":\n\n",
         "| a secret read from a vault",
         "| a store: a SQL database",
     ] {
@@ -1602,6 +1603,16 @@ async fn omnia_scaffold_roles_scoped() {
              paragraph select `{carried}`: {scaffolded}"
         );
     }
+    let doubles_pos = scaffolded
+        .find("From `references/testing.md`, under \"The doubles\":")
+        .expect("the testing doubles table is quoted");
+    let sql_pos = scaffolded
+        .find("From `references/handlers.md`, under \"A SQL query\":")
+        .expect("the SQL query passage is quoted");
+    assert!(
+        doubles_pos < sql_pos,
+        "the SQL query passage follows `The doubles` so tests keep their doubles under the budget"
+    );
     for absent in [
         "pub trait Publish",
         "pub trait HttpRequest",
@@ -1642,6 +1653,12 @@ async fn omnia_scaffold_idioms() {
             "A cache-aside read",
             "A probe",
         ),
+        (
+            "orders.amend",
+            "Amends the order under optimistic concurrency, refusing a concurrent write.",
+            "A compare-and-swap update",
+            "A probe",
+        ),
     ] {
         let project = omnia_tree().await;
         let mut slice = omnia_slice();
@@ -1662,7 +1679,7 @@ async fn omnia_scaffold_idioms() {
             "`{subject}` carries the `{carried}` idiom whole: {brief}"
         );
         assert!(
-            brief.contains("```rust\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{StateStore, "),
+            brief.contains("```rust\nuse omnia_sdk::api::Context;\n"),
             "the idiom's fence is quoted: {brief}"
         );
         assert!(
@@ -2843,6 +2860,59 @@ async fn omnia_scenario_unattributed() {
     );
 }
 
+// A turn that removes `#[ignore]` and `todo!` from a covered scenario's test
+// while leaving its scaffolded `let id = "<id>";` path-parameter placeholder
+// binding in place is refused with the placeholder named, replaces `"<id>"`
+// with a concrete value, and is accepted.
+#[tokio::test]
+async fn omnia_scenario_placeholder_unfilled() {
+    let project = omnia_tree().await;
+    let with_placeholder = "async fn an_order_is_returned_by_its_id() {\n    let id = \"<id>\";\n    \
+                            let request = Request::get(format!(\"/orders/{id}\"))\n        \
+                            .body(Body::empty())\n        .expect(\"request\");\n    let (status, \
+                            body) = send(provider(), request).await;\n    assert_eq!(status, \
+                            StatusCode::OK);\n    assert_eq!(body[\"id\"], \"42\");\n}\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = Scripted::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, with_placeholder),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[(
+                "crates/orders/tests/reading.rs",
+                with_placeholder,
+                OMNIA_TEST_FILLED,
+            )])],
+        );
+
+    let report = OMNIA
+        .build_slice(&project, &model, &omnia_slice())
+        .await
+        .expect("the concrete-id test is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    let placeholder = "crates/orders/tests/reading.rs:38: REQ-001 is covered and the test \
+                       `an_order_is_returned_by_its_id` of its scenario `An order is returned by \
+                       its id` leaves the placeholder `\"<id>\"` unfilled";
+    assert!(
+        correction.contains("a covered requirement's scenarios are tests that run and pass")
+            && correction.contains(placeholder),
+        "the correction carries `{placeholder}`: {correction}"
+    );
+    assert_eq!(report.covered, ["REQ-001"]);
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        OMNIA_TESTS.replace(OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        "the placeholder is replaced"
+    );
+}
+
 // A file the turn writes outside the slice's crates — a note at the root, a
 // module under the seed's `common` — is a stray refused with its path, while
 // a second module under the slice's own stem, declared in its entry, and the
@@ -3195,10 +3265,7 @@ async fn omnia_verify_process() {
     let project = omnia_tree().await;
     project.write("crates/start/Cargo.toml", "[package]\nname = \"start\"\n");
     project.write("crates/start/src/lib.rs", "//! The `start` stem.\n");
-    project.write(
-        "crates/orders/Cargo.toml",
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n",
-    );
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
     project.write(
         "crates/orders/src/consuming.rs",
         "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\nuse std::env;\n\npub fn consume() {\n    let _ = env::var(\"PORT\");\n    tokio::spawn(async {});\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
@@ -3241,10 +3308,7 @@ async fn omnia_verify_process() {
 #[tokio::test]
 async fn omnia_verify_manifest_dangling() {
     let project = omnia_tree().await;
-    project.write(
-        "crates/orders/Cargo.toml",
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n",
-    );
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n");
     let start_path = "start = { path = \"crates/start\" }\n";
     let start_crate = "start.workspace = true\n";
@@ -3354,9 +3418,13 @@ async fn omnia_stem_without_workspace_lints() {
     model.assert_exhausted();
 
     let correction = correction(&model);
-    for line in
-        ["a stem's manifest carries `[lints]` with `workspace = true`", "crates/orders/Cargo.toml"]
-    {
+    for line in [
+        "a stem's manifest changes only inside `[dependencies]`",
+        "`crates/orders/Cargo.toml`:",
+        "- [lints]",
+        "- workspace = true",
+        "+ lints.workspace = true",
+    ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
     assert_eq!(
@@ -3822,10 +3890,8 @@ async fn omnia_build_tail_miss_refused() {
 #[tokio::test]
 async fn omnia_build_stem_split() {
     let project = omnia_tree().await;
-    project.write(
-        "crates/shipment/Cargo.toml",
-        "[package]\nname = \"shipment\"\n\n[lints]\nworkspace = true\n",
-    );
+    let shipment_manifest = OMNIA_MANIFEST.replace("orders", "shipment");
+    project.write("crates/shipment/Cargo.toml", &shipment_manifest);
     project.write("crates/shipment/src/lib.rs", "//! The `shipment` stem.\n");
     let slice = slice_for(
         "order-items",
@@ -3833,8 +3899,9 @@ async fn omnia_build_stem_split() {
     );
     let module = "//! Order items.\n\n/// How many lines an order holds.\n#[must_use]\npub fn \
                   count(items: &[u32]) -> usize {\n    items.len()\n}\n";
+    let order_manifest = OMNIA_MANIFEST.replace("orders", "order");
     let split = [
-        ("crates/order/Cargo.toml", "[package]\nname = \"order\"\n\n[lints]\nworkspace = true\n"),
+        ("crates/order/Cargo.toml", order_manifest.as_str()),
         ("crates/order/src/lib.rs", "//! The `order` stem.\n\npub mod items;\n"),
         ("crates/order/src/items.rs", module),
     ];
@@ -4127,10 +4194,7 @@ async fn omnia_dependency_unused() {
     let project = omnia_tree().await;
     let unused = "uuid.workspace = true\n";
     let manifest = format!(
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
-         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
-         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
-         chrono.workspace = true\nquick-xml = {{ version = \"0.37\", features = \
+        "{OMNIA_MANIFEST}chrono.workspace = true\nquick-xml = {{ version = \"0.37\", features = \
          [\"serialize\"] }}\nhttp.workspace = true\n{unused}"
     );
     project.write("crates/orders/Cargo.toml", &manifest);
@@ -4185,12 +4249,7 @@ async fn omnia_dependency_unused() {
 async fn omnia_dependency_unused_in_string() {
     let project = omnia_tree().await;
     let unused = "uuid.workspace = true\n";
-    let manifest = format!(
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
-         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
-         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
-         chrono.workspace = true\n{unused}"
-    );
+    let manifest = format!("{OMNIA_MANIFEST}chrono.workspace = true\n{unused}");
     project.write("crates/orders/Cargo.toml", &manifest);
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write(

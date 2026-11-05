@@ -29,6 +29,36 @@ pub const TOPIC_LIST_ANCHOR: &str = "tracing::debug!(";
 pub const ROUTES_ARRAY_ANCHOR: &str = "// one entry per part with routes, each added at the end";
 pub const TOPICS_ARRAY_ANCHOR: &str = "// one entry per part with topics, each added at the end";
 
+// The stem's manifest before `[dependencies]`, as the layout reference
+// spells it: `[package]`, `[lints]`, `[target..dev-dependencies]`, and the
+// `[dependencies]` header itself. Every line outside `[dependencies]`'s
+// entries stands as scaffolded whichever slice's turn edits the manifest.
+pub const STEM_MANIFEST_HEADER: &str = r#"[package]
+name = "<package>"
+description = "The `<stem>` stem"
+publish.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+omnia-test = { workspace = true, features = ["guest"] }
+tokio.workspace = true
+tower.workspace = true
+
+# One line per crate the stem's files use, each added at the end.
+[dependencies]"#;
+
+// The stem's manifest header for `dir`, a crate directory under `crates/`.
+pub fn stem_manifest_header(dir: &str) -> String {
+    let stem = if dir == "common-stem" { "common" } else { dir };
+    STEM_MANIFEST_HEADER.replace("<package>", &package(stem)).replace("<stem>", stem)
+}
+
 // The crates every stem's manifest names, whether or not each module
 // reaches them.
 pub const STEM_DEPENDENCIES: [&str; 6] =

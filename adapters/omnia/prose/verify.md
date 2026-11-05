@@ -110,9 +110,8 @@ The rules are:
 - **No struct wraps an HTTP response in a single `data` field.** Under `crates/*/src`, a `Deserialize` struct whose body holds a single `data` field wraps the response in the source's client property.
   The wire never carries that. The repair removes the wrapper struct through `edit_files`.
   Deserialize `response.body()` directly into `Vec<T>` for a JSON array, or into a struct with the body's fields at its root.
-- **Every stem inherits the lints.** Every `crates/*/Cargo.toml` carries `[lints]` with `workspace = true`.
-  The workspace's lints are the host boundary and reach a crate through that table alone.
-  The repair adds the table through `edit_files` and runs the first check again.
+- **Every stem manifest stands outside `[dependencies]`.** Every `crates/*/Cargo.toml` keeps `[package]`, `[lints]` with `workspace = true`, and `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]` as the adapter scaffolded them, changing only inside `[dependencies]`.
+  The repair puts the `-` lines back and drops the `+` lines through `edit_files`, then runs the first check again.
 - **Every dependency is used.** Every crate a stem's `[dependencies]` names beyond the layout's six fixed lines is spelled by a module or a test of the stem.
   One no file spells is compiled for nothing, and a slice that named it meant to use it.
   The repair removes the line through `edit_files`, or writes the use the slice's requirement states, and runs the first two checks again.
