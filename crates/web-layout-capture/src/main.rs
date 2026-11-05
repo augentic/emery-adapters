@@ -15,6 +15,7 @@
 //! placed element a line.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 #[expect(
@@ -187,17 +188,15 @@ fn wireframes(options: &Options) -> Result<ExitCode, String> {
     for width in REVIEW_WIDTHS {
         write(&out.join(format!("wireframe-{}.svg", width.0)), &draw(&facts, width))?;
     }
-    let lines: String = outline(&facts)
-        .iter()
-        .map(|placement| {
-            let role = match placement.role {
-                Role::Region => "region",
-                Role::Container => "container",
-                Role::Leaf => "leaf",
-            };
-            format!("{role} {}\n", placement.synopsis())
-        })
-        .collect();
+    let mut lines = String::new();
+    for placement in outline(&facts) {
+        let role = match placement.role {
+            Role::Region => "region",
+            Role::Container => "container",
+            Role::Leaf => "leaf",
+        };
+        let _ = writeln!(lines, "{role} {}", placement.synopsis());
+    }
     write(&out.join("outline.txt"), &lines)?;
     Ok(ExitCode::SUCCESS)
 }

@@ -136,6 +136,39 @@ async fn emery_intent() {
     assert!(seen[0].messages[0].contains(BRIEF), "the brief read through the mount is the seam");
 }
 
+// The facts are read through the mount by code alone, and an inline value is
+// refused, with no turn put either time.
+#[tokio::test]
+async fn emery_rendered_layout() {
+    let project = scratch();
+    project.write(
+        "index.json",
+        r#"{"version":2,"range":[320,1440],"height":800,"height_range":[400,1440],"root":"n0","parts":[{"file":"parts/n0.json"}]}"#,
+    );
+    project.write(
+        "parts/n0.json",
+        r#"{"n0":{"tag":"html","kind":"box","parent":null,"children":["n1"]},"n1":{"tag":"main","kind":"box","parent":"n0","children":[],"box":[[320,1440,0,0,1,0,0,0,0,200,1]]}}"#,
+    );
+
+    let model = support::run(
+        test_programs::ADAPTER_EMERY_RENDERED_LAYOUT,
+        &project,
+        &["workspace"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "no turn is put over the facts");
+
+    let model = support::run(
+        test_programs::ADAPTER_EMERY_RENDERED_LAYOUT,
+        &project,
+        &["refused", "bad_request", "a page"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "no turn is put over the value");
+}
+
 // The survey turn opens first under `survey.md`, and the surface the code
 // derives at the anchor the answer named reaches the seam: the parser and
 // the recogniser ran as a guest over the lent tree.

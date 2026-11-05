@@ -122,6 +122,12 @@ fn emery_documentation() {
     surveying(emery_documentation::PROSE);
 }
 
+// The facts are read by code alone, so no prompt is embedded.
+#[test]
+fn emery_rendered_layout() {
+    assert!(emery_rendered_layout::PROSE.is_empty(), "no turn is put, so no prompt is embedded");
+}
+
 #[test]
 fn emery_intent() {
     corpus(emery_intent::PROSE, "intent", &["extract.md"]);

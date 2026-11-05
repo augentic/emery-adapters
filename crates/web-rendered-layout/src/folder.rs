@@ -22,7 +22,7 @@ pub struct FactsFolder {
 }
 
 impl FactsFolder {
-    /// Reads every regular file beneath `dir`.
+    /// Reads every regular file beneath `dir` whose name and directories do not start with `.`.
     ///
     /// # Errors
     ///
@@ -154,6 +154,9 @@ fn walk(dir: &Path, prefix: &str, folder: &mut FactsFolder) -> Result<(), Error>
         let name = name
             .to_str()
             .ok_or_else(|| Error::new(format!("a name in {} is not UTF-8", dir.display())))?;
+        if name.starts_with('.') {
+            continue;
+        }
         let path = format!("{prefix}{name}");
         let kind = entry
             .file_type()

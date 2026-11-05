@@ -2,7 +2,13 @@
 
 fn main() {
     omnia_test::build::Components::in_workspace("../..")
-        .packages(["emery-documentation", "emery-intent", "emery-typescript", "emery-python"])
+        .packages([
+            "emery-documentation",
+            "emery-intent",
+            "emery-typescript",
+            "emery-python",
+            "emery-rendered-layout",
+        ])
         .group("adapter")
         .packages(["emery-node", "emery-omnia"])
         .group("target")

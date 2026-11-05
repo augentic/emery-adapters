@@ -1118,6 +1118,7 @@ dependencies = [
  "emery-node",
  "emery-omnia",
  "emery-python",
+ "emery-rendered-layout",
  "emery-sdk",
  "emery-typescript",
  "omnia",
@@ -1181,6 +1182,14 @@ dependencies = [
  "ruff_python_ast",
  "ruff_python_parser",
  "ruff_text_size",
+]
+
+[[package]]
+name = "emery-rendered-layout"
+version = "0.12.0"
+dependencies = [
+ "emery-sdk",
+ "web-rendered-layout",
 ]
 
 [[package]]
