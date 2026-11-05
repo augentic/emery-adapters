@@ -8,8 +8,8 @@ use std::time::Duration;
 
 use omnia::{ExitStatus, FutureResult, HostCtx, Provides, Telemetry};
 use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel};
-use omnia_wasi_model::{Answer, Error, Limits, Request, ToolHost, WasiModel, WasiModelCtx};
-use omnia_wasi_otel::{WasiOtel, WasiOtelCtx};
+use omnia_wasi_model::{Answer, Error, Limits, ModelClient, Request, ToolHost, WasiModel};
+use omnia_wasi_otel::{OtelClient, WasiOtel};
 use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use tracing::Instrument as _;
@@ -21,7 +21,7 @@ const HOLD: Duration = Duration::from_secs(5);
 /// A host model the runner holds to its script.
 ///
 /// Every scripted turn is consumed, and none is requested past it.
-pub trait Strict: WasiModelCtx + Clone {
+pub trait Strict: ModelClient + Clone {
     /// Returns the script and its consumption record.
     fn script(&self) -> &ScriptedModel;
 }
@@ -76,7 +76,7 @@ impl Strict for Barrier {
     }
 }
 
-impl WasiModelCtx for Barrier {
+impl ModelClient for Barrier {
     fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let this = self.clone();
         Box::pin(async move {
@@ -93,7 +93,7 @@ impl WasiModelCtx for Barrier {
 
     fn limits(&self) -> Limits {
         // HACK: the inherent `limits(self, Limits)` builder shadows the trait method
-        WasiModelCtx::limits(&self.inner)
+        ModelClient::limits(&self.inner)
     }
 }
 
@@ -119,7 +119,7 @@ impl Recording {
     }
 }
 
-impl WasiOtelCtx for Recording {
+impl OtelClient for Recording {
     fn export_traces(&self, request: ExportTraceServiceRequest) -> FutureResult<()> {
         self.traces.lock().expect("traces lock").push(request);
         Box::pin(async { Ok(()) })
@@ -136,13 +136,13 @@ struct Traced<M> {
     otel: Recording,
 }
 
-impl<M: WasiModelCtx + Clone> Provides<WasiModel> for Traced<M> {
+impl<M: ModelClient + Clone> Provides<WasiModel> for Traced<M> {
     fn borrow(&mut self) -> <WasiModel as HostCtx>::Borrow<'_> {
         &mut self.model
     }
 }
 
-impl<M: WasiModelCtx + Clone> Provides<WasiOtel> for Traced<M> {
+impl<M: ModelClient + Clone> Provides<WasiOtel> for Traced<M> {
     fn borrow(&mut self) -> <WasiOtel as HostCtx>::Borrow<'_> {
         &mut self.otel
     }
