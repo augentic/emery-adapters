@@ -7,7 +7,8 @@
 //!
 //! - [`FactsFolder`] is the facts as files, and the one-blob [bundle](FactsFolder::to_bundle)
 //!   a source hands the engine.
-//! - [`assemble`] builds a folder from a raw browser capture.
+//! - [`assemble`] builds a folder from a raw browser capture, and [`stamped`] holds
+//!   a capture to the files it was taken of.
 //! - [`Facts`] reads a folder and answers what was rendered at a [`Viewport`].
 //! - [`compare`] scores a render against an original.
 //! - [`draw`] and [`overlay`] render deterministic SVG images.
@@ -15,6 +16,7 @@
 //! - [`outline`] reads the page as regions, containers, and leaves.
 
 mod assemble;
+mod capture;
 mod compare;
 mod draw;
 mod error;
@@ -26,6 +28,7 @@ mod review;
 mod strip;
 
 pub use assemble::{MAX_PART_BYTES, assemble};
+pub use capture::{CAPTURE_SCRIPT, stamped};
 pub use compare::{
     Comparison, Failure, Heights, KindSummary, PASS_MARK, Point, PointComparison, Summary, compare,
     compare_at,
