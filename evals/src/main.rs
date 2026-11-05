@@ -50,11 +50,17 @@ const BUILD_RUNG: &str = "1200/240";
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_engine=debug,emery_sdk=trace".to_owned();
     for adapter in adapters {
-        let _ = write!(filter, ",emery_{adapter}=trace");
+        let _ = write!(filter, ",{}=trace", crate_ident(adapter));
     }
     filter
         + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_genai=debug,omnia_genai::tools=trace,\
            omnia_core=off"
+}
+
+// The crate `emery-<adapter>` as Rust and cargo's artifacts spell it, the
+// hyphens of a name such as `rendered-layout` as underscores.
+fn crate_ident(adapter: &str) -> String {
+    format!("emery_{}", adapter.replace('-', "_"))
 }
 
 // The backend the binary answers the model through, read from its file
@@ -473,8 +479,7 @@ impl Settings {
             .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
         let mut wasm = BTreeMap::new();
         for component in adapters.iter().copied().chain(target.map(Target::name)) {
-            // the crate is `emery-<kind>`; cargo spells the hyphen as an underscore
-            let artifact = format!("emery_{component}");
+            let artifact = crate_ident(component);
             let name = format!("{}_WASM", artifact.to_uppercase());
             let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
             if !path.is_file() {
@@ -977,12 +982,13 @@ mod tests {
 
     #[test]
     fn rust_log_traces_adapter_crates() {
-        let filter = rust_log(["documentation", "typescript", "node"]);
+        let filter = rust_log(["documentation", "typescript", "node", "rendered-layout"]);
         let targets: Vec<_> =
             filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
         assert!(targets.contains(&"emery_documentation"));
         assert!(targets.contains(&"emery_typescript"));
         assert!(targets.contains(&"emery_node"));
+        assert!(targets.contains(&"emery_rendered_layout"));
         assert!(!targets.contains(&"documentation"));
     }
 
