@@ -1169,12 +1169,10 @@ async fn emery_rendered_layout() {
     let [layout] = evidence.layouts.as_slice() else {
         panic!("one layout: {:?}", evidence.layouts)
     };
-    assert_eq!(layout.media_type, "application/vnd.emery.web-rendered-layout+json");
-    let bundle: serde_json::Value =
-        serde_json::from_slice(&layout.body).expect("the layout body is JSON");
-    let files: Vec<&String> =
-        bundle["files"].as_object().expect("the bundle lists its files").keys().collect();
-    assert_eq!(files, ["index.json", "parts/n0.json"]);
+    assert_eq!(layout.media_type, "application/vnd.emery.web-rendered-layout+gzip");
+    let bundle = web_rendered_layout::FactsFolder::from_bundle(&layout.body)
+        .expect("the layout body is a bundle");
+    assert_eq!(bundle.paths().collect::<Vec<_>>(), ["index.json", "parts/n0.json"]);
     let views: Vec<(&str, &str)> =
         layout.views.iter().map(|view| (view.label.as_str(), view.media_type.as_str())).collect();
     assert_eq!(

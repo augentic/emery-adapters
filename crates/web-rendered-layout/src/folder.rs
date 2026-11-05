@@ -2,14 +2,22 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path};
 
+use std::io::Read as _;
+
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
+use flate2::Compression;
+use flate2::bufread::{GzDecoder, GzEncoder};
 use serde_json::{Map, Value, json};
 
 use crate::Error;
 
-/// The media type of a facts [bundle](FactsFolder::to_bundle).
-pub const BUNDLE_MEDIA_TYPE: &str = "application/vnd.emery.web-rendered-layout+json";
+/// The media type of a facts [bundle](FactsFolder::to_bundle): its JSON document, gzipped.
+///
+/// The bundle crosses between components as a `list<u8>`, which the host
+/// meters per element rather than per byte, so the document is compressed
+/// to carry a page's facts within the host's budget for one call.
+pub const BUNDLE_MEDIA_TYPE: &str = "application/vnd.emery.web-rendered-layout+gzip";
 
 const BUNDLE_FORMAT: &str = "web-rendered-layout/1";
 
@@ -87,12 +95,24 @@ impl FactsFolder {
         self.files.keys().map(String::as_str)
     }
 
-    /// The folder as one deterministic JSON document of media type [`BUNDLE_MEDIA_TYPE`].
+    /// The folder as one deterministic, gzipped JSON document of media type [`BUNDLE_MEDIA_TYPE`].
     ///
     /// A UTF-8 file is held as `text`, any other as `base64`; the same
     /// folder always yields the same bytes.
-    #[must_use]
-    pub fn to_bundle(&self) -> Vec<u8> {
+    ///
+    /// # Errors
+    ///
+    /// When the document cannot be compressed.
+    pub fn to_bundle(&self) -> Result<Vec<u8>, Error> {
+        let document = self.to_document();
+        let mut bundle = Vec::new();
+        GzEncoder::new(document.as_slice(), Compression::default())
+            .read_to_end(&mut bundle)
+            .map_err(|err| Error::new(format!("compressing the layout bundle: {err}")))?;
+        Ok(bundle)
+    }
+
+    fn to_document(&self) -> Vec<u8> {
         let files: Map<String, Value> = self
             .files
             .iter()
@@ -115,7 +135,11 @@ impl FactsFolder {
     ///
     /// When `bundle` is not a bundle of this format, or a path leaves the folder.
     pub fn from_bundle(bundle: &[u8]) -> Result<Self, Error> {
-        let document: Value = serde_json::from_slice(bundle)
+        let mut json = Vec::new();
+        GzDecoder::new(bundle)
+            .read_to_end(&mut json)
+            .map_err(|err| Error::new(format!("the layout bundle is not gzipped: {err}")))?;
+        let document: Value = serde_json::from_slice(&json)
             .map_err(|err| Error::new(format!("the layout bundle is not JSON: {err}")))?;
         if document["format"] != BUNDLE_FORMAT {
             return Err(Error::new(format!(

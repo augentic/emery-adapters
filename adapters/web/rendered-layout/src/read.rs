@@ -4,6 +4,7 @@ use std::path::Path;
 
 use emery_sdk::{
     Claim, ClaimKind, Error, Evidence, Layout, LayoutView, SourceContent, SourceInput, bad_request,
+    server_error,
 };
 use web_rendered_layout::{
     BUNDLE_MEDIA_TYPE, Facts, FactsFolder, REVIEW_WIDTHS, Role, draw, outline,
@@ -43,7 +44,7 @@ pub fn evidence(input: &SourceInput) -> Result<Evidence, Error> {
         .collect();
     let layout = Layout {
         media_type: BUNDLE_MEDIA_TYPE.to_owned(),
-        body: folder.to_bundle(),
+        body: folder.to_bundle().map_err(|err| server_error!("`{}`: {err}", input.name))?,
         views,
     };
     Ok(Evidence {

@@ -2,6 +2,8 @@
 
 mod support;
 
+use std::io::Read as _;
+
 use support::{BLUE, RED, page};
 use web_rendered_layout::{Facts, FactsFolder, without_structure};
 
@@ -9,22 +11,44 @@ use web_rendered_layout::{Facts, FactsFolder, without_structure};
 fn bundle_round_trip() {
     let mut folder = page(&[RED, BLUE]);
     folder.insert("assets/dot.png", vec![0x89, b'P', b'N', b'G', 0xff, 0x00]).expect("a safe path");
-    let bundle = folder.to_bundle();
+    let bundle = folder.to_bundle().expect("a bundle");
     let back = FactsFolder::from_bundle(&bundle).expect("a bundle reads back");
 
-    assert_eq!(bundle, back.to_bundle());
+    assert_eq!(bundle, back.to_bundle().expect("a bundle"));
     assert_eq!(back.get("assets/dot.png"), Some(&[0x89, b'P', b'N', b'G', 0xff, 0x00][..]));
     assert_eq!(back.paths().collect::<Vec<_>>(), ["assets/dot.png", "index.json", "parts/n0.json"]);
-    let text = String::from_utf8(bundle).expect("a bundle is JSON");
+    let text = String::from_utf8(gunzip(&bundle)).expect("a bundle is JSON");
     assert!(text.starts_with(r#"{"files":{"assets/dot.png":{"base64":"iVBOR/8A"}"#), "{text}");
 }
 
 #[test]
 fn bundle_refuses_other_formats() {
-    let refused = FactsFolder::from_bundle(br#"{"format":"other/1","files":{}}"#)
+    let refused = FactsFolder::from_bundle(&gzip(br#"{"format":"other/1","files":{}}"#))
         .expect_err("another format is refused");
 
     assert!(refused.to_string().contains("other/1"), "{refused}");
+}
+
+#[test]
+fn bundle_refuses_plain_json() {
+    let plain = gunzip(&page(&[RED]).to_bundle().expect("a bundle"));
+    let refused = FactsFolder::from_bundle(&plain).expect_err("an ungzipped bundle is refused");
+
+    assert!(refused.to_string().contains("not gzipped"), "{refused}");
+}
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    flate2::bufread::GzEncoder::new(bytes, flate2::Compression::default())
+        .read_to_end(&mut out)
+        .expect("gzips");
+    out
+}
+
+fn gunzip(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    flate2::bufread::GzDecoder::new(bytes).read_to_end(&mut out).expect("gunzips");
+    out
 }
 
 #[test]

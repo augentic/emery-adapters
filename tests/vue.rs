@@ -348,7 +348,7 @@ async fn verify(project: &Scratch, model: &Scripted) -> Result<Verdict, Error> {
 
 // The slice of one requirement carrying `original` as its one layout.
 fn slice(original: &FactsFolder) -> Slice {
-    let body = original.to_bundle();
+    let body = original.to_bundle().expect("the facts bundle");
     Slice {
         id: "SLICE-001".to_owned(),
         name: "farm-page".to_owned(),
