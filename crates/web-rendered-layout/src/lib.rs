@@ -11,6 +11,7 @@
 //! - [`Facts`] reads a folder and answers what was rendered at a [`Viewport`].
 //! - [`compare`] scores a render against an original.
 //! - [`draw`] and [`overlay`] render deterministic SVG images.
+//! - [`review`] is a comparison with its overlays and findings.
 
 mod assemble;
 mod compare;
@@ -19,6 +20,7 @@ mod error;
 mod facts;
 mod folder;
 mod items;
+mod review;
 mod strip;
 
 pub use assemble::{MAX_PART_BYTES, assemble};
@@ -31,4 +33,5 @@ pub use error::Error;
 pub use facts::{Facts, NodeId, Viewport, Width};
 pub use folder::{BUNDLE_MEDIA_TYPE, FactsFolder};
 pub use items::{Item, ItemKind, items};
+pub use review::{Review, review};
 pub use strip::without_structure;

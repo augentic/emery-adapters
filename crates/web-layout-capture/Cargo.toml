@@ -1,0 +1,16 @@
+[package]
+name = "web-layout-capture"
+description = "Experiment / non-production: captures a served web page as rendered-layout facts, scores a render against them, and draws them"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true
+web-rendered-layout.workspace = true
