@@ -11,7 +11,8 @@
 //! `tools/web-layout-capture/capture.mjs` and replaces DIR with the facts
 //! built from what it recorded. `score` writes `score.json` and the review
 //! overlays, and exits 1 when the render does not pass. `draw` writes a
-//! wireframe of the facts at each review width.
+//! wireframe of the facts at each review width and their outline, one
+//! placed element a line.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -23,7 +24,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::process::ExitCode;
 
-use web_rendered_layout::{Facts, FactsFolder, REVIEW_WIDTHS, assemble, draw, review};
+use web_rendered_layout::{
+    Facts, FactsFolder, REVIEW_WIDTHS, Role, assemble, draw, outline, review,
+};
 
 // The capture script and its pinned Playwright, beside this workspace's crates.
 const TOOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/web-layout-capture");
@@ -184,6 +187,18 @@ fn wireframes(options: &Options) -> Result<ExitCode, String> {
     for width in REVIEW_WIDTHS {
         write(&out.join(format!("wireframe-{}.svg", width.0)), &draw(&facts, width))?;
     }
+    let lines: String = outline(&facts)
+        .iter()
+        .map(|placement| {
+            let role = match placement.role {
+                Role::Region => "region",
+                Role::Container => "container",
+                Role::Leaf => "leaf",
+            };
+            format!("{role} {}\n", placement.synopsis())
+        })
+        .collect();
+    write(&out.join("outline.txt"), &lines)?;
     Ok(ExitCode::SUCCESS)
 }
 

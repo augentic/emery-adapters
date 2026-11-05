@@ -12,6 +12,7 @@
 //! - [`compare`] scores a render against an original.
 //! - [`draw`] and [`overlay`] render deterministic SVG images.
 //! - [`review`] is a comparison with its overlays and findings.
+//! - [`outline`] reads the page as regions, containers, and leaves.
 
 mod assemble;
 mod compare;
@@ -20,6 +21,7 @@ mod error;
 mod facts;
 mod folder;
 mod items;
+mod outline;
 mod review;
 mod strip;
 
@@ -33,5 +35,6 @@ pub use error::Error;
 pub use facts::{Facts, NodeId, Viewport, Width};
 pub use folder::{BUNDLE_MEDIA_TYPE, FactsFolder};
 pub use items::{Item, ItemKind, items};
+pub use outline::{Placement, Role, outline};
 pub use review::{Review, review};
 pub use strip::without_structure;

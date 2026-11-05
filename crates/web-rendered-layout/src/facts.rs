@@ -67,6 +67,8 @@ pub type Rect = [f64; 4];
 pub struct Facts {
     index: Value,
     nodes: BTreeMap<String, Value>,
+    // The part file each node is held in.
+    files: BTreeMap<String, String>,
     order: Vec<NodeId>,
 }
 
@@ -96,6 +98,7 @@ impl Facts {
         let parts =
             index["parts"].as_array().ok_or_else(|| Error::new("`index.json` lists no `parts`"))?;
         let mut nodes = BTreeMap::new();
+        let mut files = BTreeMap::new();
         for part in parts {
             let file = part["file"].as_str().ok_or_else(|| {
                 Error::new(format!("a part in `index.json` names no file: {part}"))
@@ -103,6 +106,7 @@ impl Facts {
             let Value::Object(held) = folder.json(file)? else {
                 return Err(Error::new(format!("`{file}` is not a JSON object of nodes")));
             };
+            files.extend(held.keys().map(|id| (id.clone(), file.to_owned())));
             nodes.extend(held);
         }
 
@@ -122,7 +126,12 @@ impl Facts {
                 .extend(children.filter(|child| !child.trim().is_empty()).map(str::to_owned).rev());
             order.push(NodeId(id));
         }
-        Ok(Self { index, nodes, order })
+        Ok(Self {
+            index,
+            nodes,
+            files,
+            order,
+        })
     }
 
     /// The widths the facts cover, low and high.
@@ -170,6 +179,10 @@ impl Facts {
 
     pub(crate) fn node(&self, id: &NodeId) -> &Value {
         &self.nodes[&id.0]
+    }
+
+    pub(crate) fn file_of(&self, id: &NodeId) -> &str {
+        &self.files[&id.0]
     }
 
     pub(crate) fn node_by_key(&self, id: &str) -> Option<&Value> {
