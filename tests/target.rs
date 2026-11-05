@@ -118,7 +118,7 @@ const OMNIA_ENTRY: &str = "//! # orders\n//!\n//! The `orders` stem.\n\npub mod 
                            reading::routes(),\n    ])\n}\n\n/// The stem's topics, registered on \
                            the root messaging router under `env`.\n#[must_use]\npub fn topics<P: \
                            Capabilities>(router: messaging::Router<P>, env: &str) -> \
-                           messaging::Router<P> {\n    common::topics(router, env).parts([\n        \
+                           messaging::Router<P> {\n    common::topics(router, env, [\n        \
                            // one entry per part with topics, each added at the end\n    ])\n}\n";
 // The routed slice's part as the adapter scaffolds it: the module doc from the
 // plan's brief, the imports its handler needs, the path constant and the

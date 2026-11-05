@@ -1366,7 +1366,7 @@ mod tests {
                      common::routers([\n        // one entry per part with routes\n        \
                      reading::routes(),\n    ])\n}\n\n\
                      pub fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
-                     common::topics(router, env).parts([\n        // one entry per part with topics\n        \
+                     common::topics(router, env, [\n        // one entry per part with topics\n        \
                      fulfilment::topics,\n    ])\n}\n",
                 ),
                 ("crates/key-vault/Cargo.toml", "[package]\nname = \"key-vault\"\n"),

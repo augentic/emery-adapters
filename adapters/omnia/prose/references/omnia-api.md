@@ -101,11 +101,12 @@ where
 
 pub type Topics<P> = fn(messaging::Router<P>, &str) -> messaging::Router<P>;
 
-pub const fn topics<P: Send + Sync + 'static>(router: messaging::Router<P>, env: &str) -> Registering<'_, P>
-impl<P: Send + Sync + 'static> Registering<'_, P> {
-    pub fn parts<const N: usize>(self, parts: [Topics<P>; N]) -> messaging::Router<P>
+pub fn topics<P, const N: usize>(
+    router: messaging::Router<P>, env: &str, parts: [Topics<P>; N],
+) -> messaging::Router<P>
+where
+    P: Send + Sync + 'static,
     // each part's `topics` called in order over the router and the environment; none answers the router as it came
-}
 ```
 
 A part's `routes` is `fn() -> axum::Router<Client<P>>` and its `topics` is a `Topics<P>`, so the entry names the first called, `placing::routes(),`, and the second bare, `placing::topics,`.

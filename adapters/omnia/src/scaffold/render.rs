@@ -123,7 +123,7 @@ impl Stem {
                 .generics(GENERICS)
                 .params(["router: messaging::Router<P>", "env: &str"])
                 .returns("messaging::Router<P>")
-                .body(fold("common::topics(router, env).parts([", TOPICS_ANCHOR, topics)),
+                .body(fold("common::topics(router, env, [", TOPICS_ANCHOR, topics)),
         );
         source.render()
     }
