@@ -1100,7 +1100,6 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1152,7 +1151,6 @@ dependencies = [
 [[package]]
 name = "emery-lexicon"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 
 [[package]]
 name = "emery-node"
@@ -1174,7 +1172,6 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 
 [[package]]
 name = "emery-python"
@@ -1189,7 +1186,6 @@ dependencies = [
 [[package]]
 name = "emery-sdk"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#d6522d545e41a4517630850d2d42739ed08abeca"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -5928,6 +5924,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbc9c5aca783b3f1838be89f3f9937c528b90ec5faa6fb62d809726c16a7d8f7"
 dependencies = [
  "wast",
+]
+
+[[package]]
+name = "web-rendered-layout"
+version = "0.12.0"
+dependencies = [
+ "base64 0.22.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

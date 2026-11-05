@@ -1,0 +1,17 @@
+[package]
+name = "web-rendered-layout"
+description = "Experiment / non-production: the rendered-layout facts of a web page, built from a browser capture, compared, and drawn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+serde.workspace = true
+serde_json.workspace = true

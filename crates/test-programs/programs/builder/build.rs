@@ -113,5 +113,6 @@ fn slice() -> Slice {
         plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
             .to_owned(),
+        layouts: Vec::new(),
     }
 }

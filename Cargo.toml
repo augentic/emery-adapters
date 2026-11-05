@@ -34,6 +34,7 @@ workspace = true
 
 [workspace]
 members = ["adapters/*", "crates/*", "evals"]
+exclude = ["adapters/web"]
 resolver = "3"
 
 [workspace.package]
@@ -73,6 +74,7 @@ print_stdout = "warn"
 unused_result_ok = "warn"
 
 [workspace.dependencies]
+base64 = "0.22.1"
 futures = "0.3.34"
 opentelemetry-proto = "0.33.1"
 proc-macro2 = { version = "1.0.107", default-features = false, features = ["span-locations"] }
@@ -96,12 +98,16 @@ emery-prose = "0.39.0"
 emery-sdk = "0.39.0"
 
 test-programs = { path = "crates/test-programs" }
+web-rendered-layout = { path = "crates/web-rendered-layout" }
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
+# experiment / non-production: the web layout adapters need the layout
+# contract on emery's `experiment/web-facts-ui-layout` branch, checked out
+# beside this repository.
+# emery-prose = { git = "https://github.com/augentic/emery" }
+# emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-prose = { path = "../emery/crates/prose" }
+emery-sdk = { path = "../emery/crates/sdk" }
 
 # omnia = { git = "https://github.com/augentic/omnia"  }
 # omnia-sdk = { git = "https://github.com/augentic/omnia" }
