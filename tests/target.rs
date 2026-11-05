@@ -78,8 +78,8 @@ const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
-const OMNIA_PIN: &str = "omnia-sdk = \"0.37.0\"\n";
-const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.39.0\"\n";
 
 // The three root files the node target's initialisation scaffolds, as the crate
 // embeds them.
@@ -3088,7 +3088,11 @@ fn omnia_worker() {
     assert_eq!(
         Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
-            egress: vec!["index.crates.io".to_owned(), "static.crates.io".to_owned()],
+            egress: vec![
+                "index.crates.io".to_owned(),
+                "static.crates.io".to_owned(),
+                "github.com".to_owned(),
+            ],
             read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
             env: vec![("RUSTUP_HOME".to_owned(), "~/.rustup".to_owned())],
         }),

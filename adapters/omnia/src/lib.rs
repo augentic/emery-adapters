@@ -29,7 +29,7 @@ const RULES: &[MergeRule] = &[
     MergeRule::union("crates/*/src/lib.rs"),
 ];
 const CARGO: Grant = Grant {
-    egress: &["index.crates.io", "static.crates.io"],
+    egress: &["index.crates.io", "static.crates.io", "github.com"],
     read: &[],
     env: &[],
 };

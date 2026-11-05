@@ -138,7 +138,7 @@ Every build and verify turn runs inside the kernel sandbox configured by `emery`
 | Target (`--target`) | Host prerequisite | Granted network egress | Granted `~/` read paths and env vars |
 | --- | --- | --- | --- |
 | `node` (default) | Node.js `>= 22.18` and `npm` on `PATH` | `registry.npmjs.org` | Reads `~/.nvm/versions/node`, `~/.volta` (`VOLTA_HOME=~/.volta`), and `~/.local/share/fnm`. |
-| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
+| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io`, `github.com` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
 
 Build the target Wasm component before running `--build`:
 

@@ -2666,7 +2666,7 @@ dependencies = [
 [[package]]
 name = "omnia-template"
 version = "0.1.0"
-source = "git+https://github.com/augentic/omnia-exemplar#7910e380ef9dcf70bd33e8452429258489f42f60"
+source = "git+https://github.com/augentic/omnia-exemplar#ffa600b87531562bb0d28eb07e03159ff937fdcb"
 
 [[package]]
 name = "omnia-test"
