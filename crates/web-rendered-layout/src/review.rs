@@ -1,7 +1,11 @@
 //! A comparison with what a reviewer reads alongside it: overlays at the
 //! review widths and at the worst widths, and findings in plain sentences.
 
-use crate::{Comparison, Error, Facts, PASS_MARK, REVIEW_WIDTHS, Width, compare, overlay};
+use serde_json::{Value, json};
+
+use crate::{
+    Comparison, Error, Facts, ItemKind, PASS_MARK, REVIEW_WIDTHS, Width, compare, overlay,
+};
 
 // The most failing items a set of findings names.
 const NAMED_FAILURES: usize = 10;
@@ -81,6 +85,56 @@ impl Review {
             findings.push(format!("overlay at {width}: {}", overlay_path(*width)));
         }
         findings
+    }
+
+    /// What a failing attempt found, in terms the agent can act on: the
+    /// summary, the original items that differ by their node id in `facts`
+    /// (a text also by its words; no path, so a refactor learns no
+    /// structure), and the render's items that pair with nothing by their
+    /// own label. Shaped as the demo harness's `feedback/attempt-<n>.json`.
+    #[must_use]
+    pub fn feedback(&self, attempt: usize, facts: &str) -> Value {
+        let comparison = &self.comparison;
+        let differs: Vec<Value> = comparison
+            .worst_original_items
+            .iter()
+            .map(|failure| {
+                let mut item = json!({ "id": failure.id, "kind": failure.kind });
+                if failure.kind == ItemKind::Text.name() {
+                    item["text"] = json!(failure.label);
+                }
+                item["why"] = json!(failure.why);
+                item["at"] = json!(format!("{}..{}", failure.first, failure.last));
+                item
+            })
+            .collect();
+        let only_in_render: Vec<Value> = comparison
+            .unpaired_render_items
+            .iter()
+            .map(|failure| {
+                json!({
+                    "kind": failure.kind,
+                    "label": failure.label,
+                    "why": failure.why,
+                    "at": format!("{}..{}", failure.first, failure.last),
+                })
+            })
+            .collect();
+        json!({
+            "attempt": attempt,
+            "about": format!(
+                "your page rendered and compared with {facts} at every width and height. \
+                 differs: items of {facts} that do not match; only_in_render: painted boxes and \
+                 texts of your page that match nothing in {facts}, each adding its area against \
+                 the score even when it looks the same. id: node id in {facts}. why: the first \
+                 difference, original->render; for a painted box without a partner, against the \
+                 box of the other side that overlaps it most. at: first..last viewport (W or \
+                 WxH) where it differs."
+            ),
+            "score": { "pass_mark": comparison.pass_mark, "summary": comparison.summary },
+            "differs": differs,
+            "only_in_render": only_in_render,
+        })
     }
 }
 

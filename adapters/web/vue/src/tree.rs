@@ -10,7 +10,7 @@ use web_rendered_layout::{
     BUNDLE_MEDIA_TYPE, CAPTURE_SCRIPT, Facts, FactsFolder, without_structure,
 };
 
-use crate::check::{self, Turn};
+use crate::check::{self, ATTEMPTS, Attempts, FEEDBACK, Turn};
 use crate::{EXTRACT, REFACTOR, VERIFY};
 
 /// The page's facts as the extraction turn reads them.
@@ -33,6 +33,8 @@ pub const VERIFIED: &str = "layout/verify";
 pub const ASSETS: &str = "public/facts/assets";
 /// The page's code, the directory every capture is stamped over.
 pub const SOURCES: &str = "src";
+/// Where the extraction keeps any tooling it adds; gone before the refactor.
+pub const TOOLS: &str = "tools";
 
 /// The files the seed writes, each held unchanged by every check but `.gitignore`.
 pub const SEED: &[(&str, &str)] = &[
@@ -70,18 +72,33 @@ pub fn init(root: &str) -> Result<(), Error> {
     Ok(())
 }
 
-/// Extracts the page, refactors it, and leaves the original facts for the verification.
+/// Extracts the page, refactors its best extraction, and leaves the original facts for the verification.
 ///
 /// Before the extraction the tree holds the facts, the assets, and no page
-/// code; before the refactor it holds the stripped facts and the extracted
-/// page's screenshots, and neither the facts nor the extracted code. Each
-/// turn's check scores the turn's own capture against the original facts.
+/// code; before the refactor it holds the stripped facts and the best
+/// extraction's screenshots, and neither the facts, the extracted code, nor
+/// the extraction's tooling and attempts. Each turn's check scores the
+/// turn's own capture against the original facts, over at most
+/// [`MAX_ATTEMPTS`](check::MAX_ATTEMPTS) attempts, and the turn ends on
+/// its best.
 pub async fn build<P: Model>(ctx: &BuildContext<'_, P>) -> Result<Report, Error> {
     let root = Path::new(ctx.workspace);
     let original = attached(ctx)?;
     let facts = Facts::read(&original).map_err(|err| bad_request!("the slice's layout: {err}"))?;
 
-    for dir in [ORIGINAL, VERIFIED, FACTS, CAPTURE, SHOTS, REVIEW, "layout/refactor", ASSETS] {
+    for dir in [
+        ORIGINAL,
+        VERIFIED,
+        FACTS,
+        CAPTURE,
+        SHOTS,
+        REVIEW,
+        FEEDBACK,
+        ATTEMPTS,
+        TOOLS,
+        "layout/refactor",
+        ASSETS,
+    ] {
         remove_dir(root, dir)?;
     }
     clear_sources(root)?;
@@ -94,20 +111,44 @@ pub async fn build<P: Model>(ctx: &BuildContext<'_, P>) -> Result<Report, Error>
     }
 
     tracing::info!("extracting the page");
-    target::build(ctx, EXTRACT, |_| check::turn(root, &facts, Turn::Extract)).await?;
+    let mut extraction = Attempts::new(root, &facts, Turn::Extract);
+    let built = target::build(ctx, EXTRACT, |_| extraction.check()).await;
+    let extracted = match built {
+        Ok(report) => report.written,
+        Err(error) if extraction.best().is_some() => {
+            tracing::warn!(%error, "the extraction ended before it answered; refactoring its best attempt");
+            Vec::new()
+        }
+        Err(error) => return Err(error),
+    };
+    if let Some(best) = extraction.restore_best()? {
+        tracing::info!(attempt = best.number, pass = best.pass, "refactoring the best extraction");
+    }
 
     let stripped =
         without_structure(&original).map_err(|err| bad_request!("the slice's layout: {err}"))?;
     write_folder(&stripped, &root.join(REFACTOR_FACTS))?;
-    copy_dir(&root.join(SHOTS), &root.join(REFACTOR_SHOTS))?;
-    for dir in [FACTS, CAPTURE, SHOTS, REVIEW] {
+    copy_tree(&root.join(SHOTS), &root.join(REFACTOR_SHOTS))?;
+    for dir in [FACTS, CAPTURE, SHOTS, REVIEW, FEEDBACK, ATTEMPTS, TOOLS] {
         remove_dir(root, dir)?;
     }
     clear_sources(root)?;
+    for path in extracted.iter().filter(|path| extraction_tooling(path)) {
+        remove_file(root, path)?;
+    }
 
     tracing::info!("refactoring the page");
-    let mut report =
-        target::build(ctx, REFACTOR, |_| check::turn(root, &facts, Turn::Refactor)).await?;
+    let mut refactor = Attempts::new(root, &facts, Turn::Refactor);
+    let mut report = target::build(ctx, REFACTOR, |_| refactor.check()).await?;
+    if refactor.restore_best()?.is_some() {
+        report.written.retain(|path| root.join(path).is_file());
+        for path in source_files(root)? {
+            if !report.written.contains(&path) {
+                report.written.push(path);
+            }
+        }
+    }
+    extraction.write_record()?;
 
     write_folder(&original, &root.join(ORIGINAL))?;
     written.extend(original.paths().map(|path| format!("{ORIGINAL}/{path}")));
@@ -151,8 +192,45 @@ fn attached<P: Model>(ctx: &BuildContext<'_, P>) -> Result<FactsFolder, Error> {
         .map_err(|err| bad_request!("the slice's layout {}: {err}", layout.digest))
 }
 
-// Every file under `src/` but the seeded entry: the page code a turn writes.
-fn clear_sources(root: &Path) -> Result<(), Error> {
+// A file the extraction wrote that is neither the page's code, which is
+// cleared whole, nor the tree's own: the extraction's tooling.
+fn extraction_tooling(path: &str) -> bool {
+    !path.starts_with(&format!("{SOURCES}/"))
+        && !path.starts_with("layout/")
+        && !path.starts_with(&format!("{ASSETS}/"))
+        && !SEED.iter().any(|(seeded, _)| *seeded == path)
+}
+
+// Every file under `src/` but the seeded entry, as a `/`-separated path from the root.
+fn source_files(root: &Path) -> Result<Vec<String>, Error> {
+    let mut files = Vec::new();
+    let mut pending = vec![root.join(SOURCES)];
+    while let Some(dir) = pending.pop() {
+        let entries =
+            fs::read_dir(&dir).map_err(|err| server_error!("reading {}: {err}", dir.display()))?;
+        for entry in entries {
+            let entry = entry.map_err(|err| server_error!("reading {}: {err}", dir.display()))?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if let Ok(below) = path.strip_prefix(root) {
+                let below = below.to_string_lossy().replace('\\', "/");
+                if below != "src/main.js" {
+                    files.push(below);
+                }
+            }
+        }
+    }
+    files.sort();
+    Ok(files)
+}
+
+/// Removes every file under `src/` but the seeded entry: the page code a turn writes.
+///
+/// # Errors
+///
+/// When `src/` cannot be read or a file in it removed.
+pub fn clear_sources(root: &Path) -> Result<(), Error> {
     let sources = root.join(SOURCES);
     let entries = match fs::read_dir(&sources) {
         Ok(entries) => entries,
@@ -172,10 +250,24 @@ fn clear_sources(root: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-fn remove_dir(root: &Path, dir: &str) -> Result<(), Error> {
+/// Removes `dir` under `root` and everything in it, where it stands.
+///
+/// # Errors
+///
+/// When it stands and cannot be removed.
+pub fn remove_dir(root: &Path, dir: &str) -> Result<(), Error> {
     match fs::remove_dir_all(root.join(dir)) {
         Err(err) if err.kind() != ErrorKind::NotFound => {
             Err(server_error!("removing `{dir}`: {err}"))
+        }
+        _ => Ok(()),
+    }
+}
+
+fn remove_file(root: &Path, path: &str) -> Result<(), Error> {
+    match fs::remove_file(root.join(path)) {
+        Err(err) if err.kind() != ErrorKind::NotFound => {
+            Err(server_error!("removing `{path}`: {err}"))
         }
         _ => Ok(()),
     }
@@ -193,14 +285,25 @@ fn write_file(file: &Path, body: &[u8]) -> Result<(), Error> {
     fs::write(file, body).map_err(|err| server_error!("writing {}: {err}", file.display()))
 }
 
-fn copy_dir(from: &Path, to: &Path) -> Result<(), Error> {
-    let entries =
-        fs::read_dir(from).map_err(|err| server_error!("reading {}: {err}", from.display()))?;
+/// Copies every file beneath `from` to the same place beneath `to`; nothing where `from` is missing.
+///
+/// # Errors
+///
+/// When a file cannot be read or written.
+pub fn copy_tree(from: &Path, to: &Path) -> Result<(), Error> {
+    let entries = match fs::read_dir(from) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+        Err(err) => return Err(server_error!("reading {}: {err}", from.display())),
+    };
     for entry in entries {
         let entry = entry.map_err(|err| server_error!("reading {}: {err}", from.display()))?;
-        if entry.path().is_file() {
-            let body = fs::read(entry.path())
-                .map_err(|err| server_error!("reading {}: {err}", entry.path().display()))?;
+        let path = entry.path();
+        if path.is_dir() {
+            copy_tree(&path, &to.join(entry.file_name()))?;
+        } else if path.is_file() {
+            let body = fs::read(&path)
+                .map_err(|err| server_error!("reading {}: {err}", path.display()))?;
             write_file(&to.join(entry.file_name()), &body)?;
         }
     }

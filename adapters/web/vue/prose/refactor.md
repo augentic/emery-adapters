@@ -43,7 +43,7 @@ Nothing outside `$WORKSPACE` is reachable. Decide the markup, the components, an
 3. Install, serve, and capture as [capture](references/capture.md) says, into `layout/capture/` with screenshots in `layout/capture-shots/`, stamped over `src`; run `npm run lint`.
 4. Compare `layout/capture-shots/<width>.png` with `layout/refactor/ref/<width>.png` at the same widths, across the whole range and on both sides of each of your breakpoints. A box you give a background, border, or shadow the reference does not paint counts against the match even where it looks the same.
 
-Answer once the capture of the code as it stands raises no page error, the linters pass, and the page looks like the reference. The check scores the capture against the original page's facts; a score under the pass mark comes back with its findings and the overlays in `layout/review/`.
+Answer once the capture of the code as it stands raises no page error, the linters pass, and the page looks like the reference. The check scores the capture against the original page's facts. It is one attempt; the turn has at most three. An attempt under the pass mark comes back with `layout/feedback/attempt-<n>.json`, what differs, its ids those of `layout/refactor/facts/`, and the overlays in `layout/review/`: fix the causes in `src/` within the rules below, capture again, and answer again. The check writes `layout/feedback/`; never edit it. The turn ends on its best attempt.
 
 ## Fixing differences
 

@@ -126,6 +126,19 @@ impl Comparison {
             .flat_map(|summary| summary.values().map(|kind| kind.min))
             .fold(1.0, f64::min)
     }
+
+    /// The mean of each kind's mean score over the widths and over the heights.
+    #[must_use]
+    #[expect(clippy::cast_precision_loss, reason = "four summaries at most")]
+    pub fn mean(&self) -> f64 {
+        let means: Vec<f64> = self
+            .summary
+            .values()
+            .flatten()
+            .flat_map(|summary| summary.values().map(|kind| kind.mean))
+            .collect();
+        if means.is_empty() { 0.0 } else { means.iter().sum::<f64>() / means.len() as f64 }
+    }
 }
 
 /// What a comparison found at one viewport, item by item.

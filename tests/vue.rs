@@ -130,13 +130,121 @@ async fn vue_refactor_reads_no_structure() {
     }
 }
 
+// The extraction may position its page as it likes, as the demo's does;
+// the refactor may not.
 #[tokio::test]
-async fn vue_positioned_refused() {
+async fn vue_refactor_positioned_refused() {
     let project = scratch();
     init(&project).await;
     let positioned = "<template>\n  <main style=\"position: absolute\" />\n</template>\n";
-    let model = Scripted::answering([REPORT])
+    let model = Scripted::answering([REPORT, REFACTORED])
         .calling(0, [turn_files(&[("src/Page.vue", positioned)], "layout/capture", true)])
+        .calling(
+            1,
+            [turn_files(
+                &[("src/Page.vue", positioned), ("src/components/ProduceSection.vue", SECTION)],
+                "layout/capture",
+                true,
+            )],
+        )
+        .then(|| {
+            Ok(Reply {
+                answer: REFACTORED.to_owned(),
+                usage: None,
+            })
+        });
+
+    build(&project, &model, &slice(&original())).await.expect_err("the refactor is positioned");
+    let first = refusals(&model).into_iter().next().expect("a candidate is refused");
+    assert!(first.contains("`src/Page.vue:2` positions an element out of the flow"), "{first}");
+    assert!(
+        model
+            .exchanges()
+            .iter()
+            .find(|exchange| exchange.tool == "check")
+            .is_some_and(|exchange| exchange.outcome.is_ok()),
+        "the positioned extraction is accepted"
+    );
+}
+
+// A turn whose attempts score under the pass mark is answered with what
+// differs, in the demo's feedback, for at most three attempts; it ends on
+// its best, and the refactor is built from the best extraction.
+#[tokio::test]
+async fn vue_attempts_end_on_the_best() {
+    let project = scratch();
+    init(&project).await;
+    let moved = renamed(&original(), "Fresh eggs", "Fresh honey");
+    let pages = ["<template><main>1</main></template>\n", "<template><main>2</main></template>\n"];
+    let first = [("src/Page.vue", pages[0])];
+    let later = [("src/Page.vue", pages[1])];
+    let first_refactor =
+        [("src/Page.vue", REFACTORED_PAGE), ("src/components/ProduceSection.vue", SECTION)];
+    let later_refactor = [
+        ("src/Page.vue", REFACTORED_PAGE),
+        ("src/components/ProduceSection.vue", SECTION),
+        ("src/components/Later.vue", SECTION),
+    ];
+    let model = Scripted::answering([REPORT, REPORT, REPORT, REFACTORED, REFACTORED, REFACTORED])
+        .calling(0, [turn_files(&first, "layout/capture", true)])
+        .calling(1, [turn_files(&later, "layout/capture", true)])
+        .calling(2, [turn_files(&later, "layout/capture", true)])
+        .calling(3, [turn_files(&first_refactor, "layout/capture", true)])
+        .calling(4, [turn_files(&later_refactor, "layout/capture", true)])
+        .calling(5, [turn_files(&later_refactor, "layout/capture", true)]);
+
+    let report =
+        build(&project, &model, &slice(&moved)).await.expect("each turn ends on its best attempt");
+    model.assert_exhausted();
+
+    let refused = refusals(&model);
+    assert_eq!(refused.len(), 4, "two refusals a turn: {refused:?}");
+    for (refusal, attempt) in refused.iter().zip([1, 2, 1, 2]) {
+        assert!(refusal.contains(&format!("attempt {attempt} of 3:")), "{refusal}");
+        assert!(refusal.contains(&format!("layout/feedback/attempt-{attempt}.json")), "{refusal}");
+    }
+    let feedback: serde_json::Value = serde_json::from_slice(
+        &project.read("layout/feedback/attempt-1.json").expect("the refactor's feedback"),
+    )
+    .expect("JSON");
+    assert_eq!(feedback["attempt"], 1);
+    assert!(
+        feedback["about"].as_str().is_some_and(|about| about.contains("layout/refactor/facts/")),
+        "{feedback}"
+    );
+    assert!(feedback["score"]["pass_mark"].is_number());
+    assert!(feedback["differs"].as_array().is_some_and(|differs| !differs.is_empty()));
+
+    assert_eq!(
+        project.read("src/Page.vue").as_deref(),
+        Some(REFACTORED_PAGE.as_bytes()),
+        "the refactor's best attempt stands"
+    );
+    assert!(project.read("src/components/Later.vue").is_none(), "a later attempt is put away");
+    assert!(!report.written.contains(&"src/components/Later.vue".to_owned()));
+    assert!(report.written.contains(&"src/components/ProduceSection.vue".to_owned()));
+    for turn in ["extract", "refactor"] {
+        let record: serde_json::Value = serde_json::from_slice(
+            &project.read(&format!("layout/attempts/{turn}/attempts.json")).expect("the record"),
+        )
+        .expect("JSON");
+        assert_eq!(record["attempts"].as_array().map(Vec::len), Some(3), "{turn}: {record}");
+        assert_eq!(record["best_attempt"]["attempt"], 1, "{turn}: {record}");
+    }
+}
+
+// A capture is scored only against facts the same browser took.
+#[tokio::test]
+async fn vue_other_browser_refused() {
+    let project = scratch();
+    init(&project).await;
+    let mut chrome = original();
+    let mut index = chrome.json("index.json").expect("the index");
+    index["search"]["browser"] = serde_json::json!({ "channel": "chrome", "version": "1.0" });
+    chrome.insert("index.json", index.to_string().into_bytes()).expect("the index is replaced");
+    let extracted = [("src/Page.vue", EXTRACTED_PAGE)];
+    let model = Scripted::answering([REPORT])
+        .calling(0, [turn_files(&extracted, "layout/capture", true)])
         .then(|| {
             Ok(Reply {
                 answer: REPORT.to_owned(),
@@ -144,9 +252,12 @@ async fn vue_positioned_refused() {
             })
         });
 
-    build(&project, &model, &slice(&original())).await.expect_err("the page is positioned");
+    build(&project, &model, &slice(&chrome)).await.expect_err("no capture is scored");
     let first = refusals(&model).into_iter().next().expect("a candidate is refused");
-    assert!(first.contains("`src/Page.vue:2` positions an element out of the flow"), "{first}");
+    assert!(
+        first.contains("a capture is scored only against facts the same browser took"),
+        "{first}"
+    );
 }
 
 // A tree whose original moved on scores below the pass mark: a passing

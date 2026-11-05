@@ -7,6 +7,7 @@ Experiment / non-production. One page, rebuilt as a Vue 3 app served by Vite.
 - `index.html`, `src/main.js` — the host: `src/main.js` mounts `src/Page.vue` with `createApp(Page).mount('#app')` into `<div id="app">`, the only element of an otherwise empty `<body>`, with no other CSS.
 - `src/Page.vue` — the page's root component, and in the refactor `src/components/*.vue` beside it.
 - `public/facts/assets/` — the page's fonts and images, served at `/facts/assets/<file>`. The adapter writes them before the first turn; never change them.
+- `tools/` — any tooling the extraction adds; the adapter removes it before the refactor.
 - `layout/capture.mjs` — the capture script; [capture](capture.md) says how to run it.
 - `layout/` — everything else the adapter and the captures put there: the facts a turn reads, the captures, the scores and their overlays. The page never reads it: Vite refuses to serve it, and a source file that names `layout/` is refused.
 - `package.json`, `vite.config.js`, `eslint.config.js`, `stylelint.config.js`, `.gitignore` — scaffolded when the repository was initialised.
@@ -32,7 +33,11 @@ Experiment / non-production. One page, rebuilt as a Vue 3 app served by Vite.
     "eslint": "10.14.0",
     "eslint-plugin-vue": "10.12.0",
     "playwright": "1.63.0",
+    "postcss-html": "2.0.0",
     "stylelint": "17.16.0",
+    "stylelint-config-html": "2.0.0",
+    "stylelint-config-recommended": "18.0.0",
+    "stylelint-config-standard": "40.0.0",
     "stylelint-config-standard-vue": "2.0.0",
     "vite": "8.3.5",
     "vue-eslint-parser": "10.4.1"
@@ -48,6 +53,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [vue()],
+  build: { assetsInlineLimit: 0 },
   server: { fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/layout/**"] }, watch: { ignored: ["**/layout/**"] } },
 });
 ```
@@ -107,11 +113,14 @@ layout/refactor/
 layout/capture/
 layout/capture-shots/
 layout/review/
+layout/feedback/
+layout/attempts/
 layout/verify/capture/
 ```
 
 ## Around each turn
 
 - Before the extraction, the adapter clears `src/` but `src/main.js` and writes the page's facts to `layout/facts/`.
-- Before the refactor, it removes `layout/facts/`, the extracted code, and the extraction's captures, and writes the facts without their document structure to `layout/refactor/facts/` and the extracted page's screenshots to `layout/refactor/ref/`.
+- Each build turn's check keeps every scored attempt under `layout/attempts/<turn>/` and writes what a failing one differs in to `layout/feedback/attempt-<n>.json`; after the turn's last attempt it puts the best back in `src/`.
+- Before the refactor, it removes `layout/facts/`, the extracted code, the extraction's tooling, attempts, feedback, and captures, and writes the facts without their document structure to `layout/refactor/facts/` and the best extraction's screenshots to `layout/refactor/ref/`.
 - After the refactor, it writes the original facts to `layout/original/`, which the verification scores against.
