@@ -181,6 +181,99 @@ fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
     body
 }
 
+// Experiment / non-production. The refactor turn puts `refactor.md` under the
+// name `build.md`, so it is a third prompt; each turn's own table holds every
+// document its prompt reaches, and `tree.md` fences the seed as it is spelled.
+#[test]
+fn emery_vue() {
+    held(emery_vue::PROSE, "web/vue", &["build.md", "refactor.md", "verify.md"]);
+    for (turn, table) in [("extract", emery_vue::EXTRACT), ("refactor", emery_vue::REFACTOR)] {
+        let prompt = body(table, "build.md").expect("each build turn's table holds `build.md`");
+        capped(turn, prompt);
+        let report: Report = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+            .unwrap_or_else(|err| panic!("`{turn}`: the worked example is not a Report: {err}"));
+        assert!(!report.written.is_empty(), "`{turn}`: the worked example wrote nothing");
+    }
+    let prompt = body(emery_vue::VERIFY, "verify.md").expect("the verify prompt is listed");
+    capped("verify.md", prompt);
+    let verdict: Verdict = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .expect("`verify.md`: the worked example is a Verdict");
+    assert!(verdict.findings().is_empty(), "`verify.md`: the worked example passes the gate");
+    for (turn, table) in [
+        ("extract", emery_vue::EXTRACT),
+        ("refactor", emery_vue::REFACTOR),
+        ("verify", emery_vue::VERIFY),
+    ] {
+        for doc in table {
+            for target in links(doc.body) {
+                let linked = resolved(doc.path, target);
+                assert!(
+                    body(table, &linked).is_some(),
+                    "the {turn} turn's `{}` links `{target}`, which its table does not hold",
+                    doc.path
+                );
+            }
+        }
+    }
+
+    let tree = body(emery_vue::PROSE, "references/tree.md").expect("the tree is listed");
+    for (file, seeded) in [
+        ("package.json", include_str!("../adapters/web/vue/seed/package.json")),
+        ("vite.config.js", include_str!("../adapters/web/vue/seed/vite.config.js")),
+        ("index.html", include_str!("../adapters/web/vue/seed/index.html")),
+        ("src/main.js", include_str!("../adapters/web/vue/seed/src/main.js")),
+        ("eslint.config.js", include_str!("../adapters/web/vue/seed/eslint.config.js")),
+        ("stylelint.config.js", include_str!("../adapters/web/vue/seed/stylelint.config.js")),
+        (".gitignore", include_str!("../adapters/web/vue/seed/.gitignore")),
+    ] {
+        assert_eq!(
+            seeded.trim_end_matches('\n'),
+            fenced_after(tree, &format!("`{file}`:")),
+            "`tree.md` fences `{file}` as the seed spells it"
+        );
+    }
+}
+
+// The relative link targets of `doc` outside its code fences, without anchors.
+fn links(doc: &str) -> Vec<&str> {
+    let mut targets = Vec::new();
+    let mut fenced = false;
+    for line in doc.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        for (at, _) in line.match_indices("](") {
+            let rest = &line[at + 2..];
+            let target =
+                rest[..rest.find(')').unwrap_or(rest.len())].split('#').next().unwrap_or("");
+            if !target.is_empty() && !target.contains("://") {
+                targets.push(target);
+            }
+        }
+    }
+    targets
+}
+
+// `target` resolved against the directory of `from`.
+fn resolved(from: &str, target: &str) -> String {
+    let mut segments: Vec<&str> =
+        from.rsplit_once('/').map_or_else(Vec::new, |(dir, _)| dir.split('/').collect());
+    for segment in target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            name => segments.push(name),
+        }
+    }
+    segments.join("/")
+}
+
 #[test]
 fn emery_omnia() {
     target_corpus(emery_omnia::PROSE, "omnia");

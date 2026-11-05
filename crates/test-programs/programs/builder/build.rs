@@ -43,7 +43,33 @@ async fn scenario() {
             let declared: Vec<String> = metadata.merge_rules.iter().map(format_rule).collect();
             assert_eq!(declared, rules, "the merge rules the metadata declares, in order");
         }
-        other => panic!("no argument or `metadata <glob>=<strategy>..`; got {other:?}"),
+        ["init"] => {
+            assert_eq!(
+                run(&Task::Init).await,
+                Outcome::Initialised,
+                "an init answers an initialised tree"
+            );
+        }
+        ["refused", expected, fragment] => {
+            let refusal = Caller
+                .run(ADAPTER, WORKSPACE, &Task::Build(slice()))
+                .await
+                .expect_err("the build of the slice is refused");
+            assert_eq!(
+                refusal.code(),
+                *expected,
+                "the build refused with the wrong class: {}",
+                refusal.description()
+            );
+            assert!(
+                refusal.description().contains(fragment),
+                "the refusal names `{fragment}`: {}",
+                refusal.description()
+            );
+        }
+        other => panic!(
+            "no argument, `metadata <glob>=<strategy>..`, `init`, or `refused <code> <fragment>`; got {other:?}"
+        ),
     }
 }
 

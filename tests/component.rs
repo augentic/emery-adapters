@@ -281,6 +281,50 @@ async fn emery_node() {
     );
 }
 
+// Experiment / non-production. The metadata lowers the one rule; the init
+// scaffolds the seed in the host's tree with no turn; a slice carrying no
+// layout is refused before any turn, since the page is rebuilt from one.
+#[tokio::test]
+async fn emery_vue() {
+    support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &scratch(),
+        &["metadata", "package-lock.json=ours"],
+        ScriptedModel::default(),
+    )
+    .await;
+
+    let project = scratch();
+    let model = support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &project,
+        &["init"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "the init opens no turn");
+    for (path, seeded) in [
+        ("package.json", include_str!("../adapters/web/vue/seed/package.json")),
+        ("src/main.js", include_str!("../adapters/web/vue/seed/src/main.js")),
+        ("layout/capture.mjs", web_rendered_layout::CAPTURE_SCRIPT),
+    ] {
+        assert_eq!(
+            project.read(path).as_deref(),
+            Some(seeded.as_bytes()),
+            "the init scaffolded `{path}` in the host's tree"
+        );
+    }
+
+    let model = support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &project,
+        &["refused", "bad_request", "carries 0 layouts"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "the refusal opens no turn");
+}
+
 // The metadata lowers the seven rules in order; the init scaffolds the
 // template in the lent tree with no turn, the build scaffolds the slice's
 // skeleton from the typed slice the driver lowered — the stem's crate and

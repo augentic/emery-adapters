@@ -1121,6 +1121,7 @@ dependencies = [
  "emery-rendered-layout",
  "emery-sdk",
  "emery-typescript",
+ "emery-vue",
  "omnia",
  "omnia-sdk",
  "omnia-template",
@@ -1129,10 +1130,12 @@ dependencies = [
  "omnia-wasi-otel",
  "opentelemetry-proto",
  "serde_json",
+ "sha2 0.11.1",
  "syn 3.0.9",
  "test-programs",
  "tokio",
  "tracing",
+ "web-rendered-layout",
 ]
 
 [[package]]
@@ -1219,6 +1222,15 @@ dependencies = [
  "oxc_ast_visit",
  "oxc_parser",
  "oxc_span",
+]
+
+[[package]]
+name = "emery-vue"
+version = "0.12.0"
+dependencies = [
+ "emery-sdk",
+ "serde_json",
+ "web-rendered-layout",
 ]
 
 [[package]]

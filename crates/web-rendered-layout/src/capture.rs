@@ -25,7 +25,8 @@ pub const CAPTURE_SCRIPT: &str = include_str!("../../../tools/web-layout-capture
 ///
 /// # Errors
 ///
-/// When the capture carries no stamp, or a file changed, was added, or is gone, each named.
+/// When the capture carries no stamp, or a file changed, was added, or is gone, each named
+/// by its path below `sources`.
 pub fn stamped(capture: &Path, sources: &Path) -> Result<(), Error> {
     let meta = fs::read(capture.join("meta.json")).map_err(|err| {
         Error::new(format!("reading {}: {err}", capture.join("meta.json").display()))
@@ -33,10 +34,7 @@ pub fn stamped(capture: &Path, sources: &Path) -> Result<(), Error> {
     let meta: Value = serde_json::from_slice(&meta)
         .map_err(|err| Error::new(format!("{}/meta.json is not JSON: {err}", capture.display())))?;
     let Some(stamp) = meta["source"]["files"].as_object() else {
-        return Err(Error::new(format!(
-            "the capture in {} carries no source stamp; capture with `--stamp`",
-            capture.display()
-        )));
+        return Err(Error::new("the capture carries no source stamp; capture with `--stamp`"));
     };
     let mut now = BTreeMap::new();
     hash_tree(sources, "", &mut now)?;
@@ -58,9 +56,7 @@ pub fn stamped(capture: &Path, sources: &Path) -> Result<(), Error> {
         return Ok(());
     }
     Err(Error::new(format!(
-        "the capture in {} is not of {} as it stands: {}",
-        capture.display(),
-        sources.display(),
+        "the capture is not of the sources as they stand: {}; capture again",
         differences.join(", ")
     )))
 }

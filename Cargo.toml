@@ -17,6 +17,8 @@ omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+web-rendered-layout.workspace = true
 emery-documentation = { path = "adapters/documentation" }
 emery-intent = { path = "adapters/intent" }
 emery-python = { path = "adapters/python" }
@@ -24,6 +26,7 @@ emery-typescript = { path = "adapters/typescript" }
 emery-node = { path = "adapters/node" }
 emery-omnia = { path = "adapters/omnia" }
 emery-rendered-layout = { path = "adapters/web/rendered-layout" }
+emery-vue = { path = "adapters/web/vue" }
 omnia-template.workspace = true
 syn.workspace = true
 test-programs.workspace = true
@@ -148,6 +151,7 @@ emery-typescript = { opt-level = 2 }
 emery-node = { opt-level = 2 }
 emery-omnia = { opt-level = 2 }
 emery-rendered-layout = { opt-level = 2 }
+emery-vue = { opt-level = 2 }
 test-programs = { opt-level = 2 }
 
 cranelift-assembler-x64 = { opt-level = 2 }

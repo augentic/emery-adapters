@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.emery/
+layout/facts/
+layout/refactor/
+layout/capture/
+layout/capture-shots/
+layout/review/
+layout/verify/capture/
