@@ -10,12 +10,12 @@
 //! unpaired render items. A comparison passes when the lowest score of each
 //! kind over every viewport is at least [`PASS_MARK`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::Serialize;
 
 use crate::facts::{Rect, js_round};
-use crate::items::{PAINT_FIELDS, TEXT_FIELDS, TEXT_SEPARATOR};
+use crate::items::{HeightSweep, PAINT_FIELDS, TEXT_FIELDS, TEXT_SEPARATOR};
 use crate::{Error, Facts, Item, ItemKind, Viewport, Width, items};
 
 /// The lowest score of each kind a passing comparison holds at every viewport.
@@ -176,18 +176,34 @@ pub fn compare(original: &Facts, render: &Facts) -> Result<Comparison, Error> {
     let mut by_width = BTreeMap::new();
     for width in lo..=hi {
         let viewport = Viewport::at(Width(width));
-        by_width.insert(width, tally.point(original, render, viewport));
+        by_width.insert(width, tally.record(&compare_at(original, render, viewport), viewport));
     }
     let mut height_rows: Vec<(String, Point)> = Vec::new();
     let mut by_height = BTreeMap::new();
     for width in &swept {
+        let originals = HeightSweep::new(original, *width);
+        let renders = HeightSweep::new(render, *width);
+        // Where neither side changes along the height, every height compares alike.
+        let still = !originals.varies() && !renders.varies();
+        let mut alike: Option<PointComparison> = None;
         let mut rows = Vec::new();
         for height in hlo..=hhi {
             let viewport = Viewport {
                 width: *width,
                 height: Some(height),
             };
-            rows.push((height.to_string(), tally.point(original, render, viewport)));
+            let found = match alike.take() {
+                Some(found) if still => found,
+                _ => compare_items(
+                    original,
+                    render,
+                    viewport,
+                    &originals.at(height),
+                    &renders.at(height),
+                ),
+            };
+            rows.push((height.to_string(), tally.record(&found, viewport)));
+            alike = Some(found);
         }
         by_height.insert(width.0, summarise(&rows));
         height_rows.extend(
@@ -219,10 +235,15 @@ pub fn compare(original: &Facts, render: &Facts) -> Result<Comparison, Error> {
 
 /// Compares `render` against `original` at `viewport` alone, item by item.
 #[must_use]
-#[expect(clippy::too_many_lines, reason = "the pairing and hold rules read best as one pass")]
 pub fn compare_at(original: &Facts, render: &Facts, viewport: Viewport) -> PointComparison {
-    let originals = items(original, viewport);
-    let renders = items(render, viewport);
+    compare_items(original, render, viewport, &items(original, viewport), &items(render, viewport))
+}
+
+// Compares the items `originals` and `renders` the two show at `viewport`.
+#[expect(clippy::too_many_lines, reason = "the pairing and hold rules read best as one pass")]
+fn compare_items(
+    original: &Facts, render: &Facts, viewport: Viewport, originals: &[Item], renders: &[Item],
+) -> PointComparison {
     let page =
         |facts: &Facts| Facts::box_at(facts.node(facts.root()), viewport).map_or(0.0, |r| r[3]);
     let (page_original, page_render) = (page(original), page(render));
@@ -230,15 +251,15 @@ pub fn compare_at(original: &Facts, render: &Facts, viewport: Viewport) -> Point
 
     let mut matched: BTreeMap<usize, usize> = BTreeMap::new();
     for kind in ItemKind::ALL {
-        let a = indices(&originals, kind);
-        let b = indices(&renders, kind);
+        let a = indices(originals, kind);
+        let b = indices(renders, kind);
         let left: Vec<&Item> = a.iter().map(|&i| &originals[i]).collect();
         let right: Vec<&Item> = b.iter().map(|&j| &renders[j]).collect();
         for (i, j) in pair(&left, &right) {
             matched.insert(a[i], b[j]);
         }
     }
-    let painted: Vec<usize> = indices(&originals, ItemKind::Paint)
+    let painted: Vec<usize> = indices(originals, ItemKind::Paint)
         .into_iter()
         .filter(|i| matched.contains_key(i))
         .collect();
@@ -265,7 +286,7 @@ pub fn compare_at(original: &Facts, render: &Facts, viewport: Viewport) -> Point
         items: ItemKind::ALL
             .iter()
             .map(|&kind| {
-                (kind.name(), [indices(&originals, kind).len(), indices(&renders, kind).len()])
+                (kind.name(), [indices(originals, kind).len(), indices(renders, kind).len()])
             })
             .collect(),
     };
@@ -281,7 +302,7 @@ pub fn compare_at(original: &Facts, render: &Facts, viewport: Viewport) -> Point
             }
             total += item.area;
             let why = match matched.get(&i) {
-                None if kind == ItemKind::Text => text_mismatch(item, &renders),
+                None if kind == ItemKind::Text => text_mismatch(item, renders),
                 None => paint_mismatch(item, &unpaired_paint, true),
                 Some(&j) => {
                     let container = painted
@@ -366,13 +387,20 @@ fn indices(items: &[Item], kind: ItemKind) -> Vec<usize> {
 
 // Pairs `a[i]` with `b[j]` in order where signatures are equal: a longest common subsequence.
 #[expect(clippy::many_single_char_names, reason = "the textbook names of the table")]
-fn pair(a: &[&Item], b: &[&Item]) -> Vec<(usize, usize)> {
+fn pair<'a>(a: &[&'a Item], b: &[&'a Item]) -> Vec<(usize, usize)> {
+    let mut interned: HashMap<&'a str, usize> = HashMap::new();
+    let mut intern = |item: &'a Item| {
+        let next = interned.len();
+        *interned.entry(item.signature.as_str()).or_insert(next)
+    };
+    let a: Vec<usize> = a.iter().map(|item| intern(item)).collect();
+    let b: Vec<usize> = b.iter().map(|item| intern(item)).collect();
     let (n, m) = (a.len(), b.len());
     let stride = m + 1;
     let mut lengths = vec![0_u32; (n + 1) * stride];
     for i in (0..n).rev() {
         for j in (0..m).rev() {
-            lengths[i * stride + j] = if a[i].signature == b[j].signature {
+            lengths[i * stride + j] = if a[i] == b[j] {
                 lengths[(i + 1) * stride + j + 1] + 1
             } else {
                 lengths[(i + 1) * stride + j].max(lengths[i * stride + j + 1])
@@ -382,7 +410,7 @@ fn pair(a: &[&Item], b: &[&Item]) -> Vec<(usize, usize)> {
     let mut out = Vec::new();
     let (mut i, mut j) = (0, 0);
     while i < n && j < m {
-        if a[i].signature == b[j].signature {
+        if a[i] == b[j] {
             out.push((i, j));
             i += 1;
             j += 1;
@@ -492,16 +520,15 @@ struct Tally {
 }
 
 impl Tally {
-    fn point(&mut self, original: &Facts, render: &Facts, viewport: Viewport) -> Point {
+    fn record(&mut self, found: &PointComparison, viewport: Viewport) -> Point {
         let at = viewport.label();
-        let found = compare_at(original, render, viewport);
         for (item, why) in &found.failed {
             self.failed.note(item, &at, why);
         }
         for (item, why) in &found.unpaired {
             self.unpaired.note(item, &at, why);
         }
-        found.point
+        found.point.clone()
     }
 }
 

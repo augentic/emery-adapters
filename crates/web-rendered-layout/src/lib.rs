@@ -22,6 +22,7 @@ mod draw;
 mod error;
 mod facts;
 mod folder;
+mod image;
 mod items;
 mod outline;
 mod review;

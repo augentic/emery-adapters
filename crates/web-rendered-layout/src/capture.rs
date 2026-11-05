@@ -82,7 +82,7 @@ fn hash_tree(dir: &Path, prefix: &str, hashes: &mut BTreeMap<String, String>) ->
     Ok(())
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::with_capacity(bytes.len() * 2), |mut hex, byte| {
         let _ = write!(hex, "{byte:02x}");
         hex

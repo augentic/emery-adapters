@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 720" width="1600" height="720">
+  <rect width="1600" height="720" fill="#7eb6d9"/>
+  <circle cx="1280" cy="120" r="70" fill="#f4e3a3"/>
+  <ellipse cx="300" cy="260" rx="180" ry="50" fill="#dfeaf2" opacity="0.7"/>
+  <ellipse cx="520" cy="200" rx="140" ry="40" fill="#eef4f8" opacity="0.6"/>
+  <path d="M0 360 C200 300 380 340 560 300 C760 250 900 330 1120 280 C1300 240 1480 300 1600 270 L1600 720 L0 720 Z" fill="#3d6b3a"/>
+  <path d="M0 460 C220 400 420 470 680 420 C920 370 1180 460 1600 400 L1600 720 L0 720 Z" fill="#4f8a45"/>
+  <path d="M0 560 C260 520 520 600 840 540 C1100 500 1320 580 1600 530 L1600 720 L0 720 Z" fill="#6aa35a"/>
+  <rect x="180" y="430" width="220" height="140" fill="#8b5a3c"/>
+  <polygon points="170,430 290,340 410,430" fill="#6b3f28"/>
+  <rect x="250" y="490" width="48" height="80" fill="#3d291c"/>
+  <rect x="200" y="460" width="40" height="36" fill="#cfe6ef"/>
+  <rect x="320" y="460" width="40" height="36" fill="#cfe6ef"/>
+  <rect x="420" y="500" width="90" height="70" fill="#a36a42"/>
+  <polygon points="410,500 465,450 520,500" fill="#7a4a2c"/>
+  <g fill="#2f5a28">
+    <ellipse cx="700" cy="520" rx="18" ry="36"/>
+    <ellipse cx="760" cy="500" rx="16" ry="32"/>
+    <ellipse cx="820" cy="530" rx="20" ry="38"/>
+    <ellipse cx="980" cy="510" rx="18" ry="34"/>
+    <ellipse cx="1060" cy="540" rx="22" ry="40"/>
+    <ellipse cx="1180" cy="500" rx="16" ry="30"/>
+  </g>
+  <rect x="0" y="620" width="1600" height="100" fill="#c4a574"/>
+  <path d="M0 640 L1600 610 L1600 680 L0 700 Z" fill="#b08d5a"/>
+</svg>

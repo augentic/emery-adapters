@@ -13,7 +13,7 @@ use std::fmt::Write as _;
 use serde_json::Value;
 
 use crate::facts::{Rect, js_number, js_round, num};
-use crate::{Facts, NodeId, Viewport};
+use crate::{Facts, NodeId, Viewport, Width};
 
 /// The two kinds of item a comparison scores apart.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -83,74 +83,141 @@ const SIDES: [&str; 4] = ["top", "right", "bottom", "left"];
 pub fn items(facts: &Facts, viewport: Viewport) -> Vec<Item> {
     let mut out = Vec::new();
     for id in facts.order() {
-        let node = facts.node(id);
-        if node["tag"] == "#text" {
-            continue;
-        }
-        let Some(rect) = visible(facts, node, viewport) else {
-            continue;
-        };
-        if let Some(signature) = paint_signature(facts, node, viewport) {
-            out.push(paint_item(id.as_str().to_owned(), signature, rect, label(node, id, "")));
-        }
-
-        for (kind, pseudo) in node["pseudo"].as_object().into_iter().flatten() {
-            let Some(pseudo_rect) = visible(facts, pseudo, viewport) else {
-                continue;
-            };
-            let pseudo_id = format!("{id}::{kind}");
-            if let Some(signature) = paint_signature(facts, pseudo, viewport) {
-                out.push(paint_item(
-                    pseudo_id.clone(),
-                    signature,
-                    pseudo_rect,
-                    label(node, id, &format!("::{kind}")),
-                ));
-            }
-            let text = if kind == "marker" {
-                let style = facts.style_at(node, "list-style-type", viewport);
-                marker(&style)
-            } else {
-                literal(&facts.style_at(pseudo, "content", viewport))
-            };
-            out.extend(text_item(facts, pseudo, pseudo_id, &text, &[pseudo_rect], viewport));
-        }
-
-        // runs of consecutive text nodes
-        let mut run: Vec<&Value> = Vec::new();
-        let mut run_id = String::new();
-        let flush = |run: &mut Vec<&Value>, run_id: &str, out: &mut Vec<Item>| {
-            if run.is_empty() {
-                return;
-            }
-            let text: String = run.iter().filter_map(|t| t["text"].as_str()).collect();
-            let rects: Vec<Rect> =
-                run.iter().flat_map(|t| Facts::line_rects(t, viewport)).collect();
-            out.extend(text_item(facts, node, run_id.to_owned(), &text, &rects, viewport));
-            run.clear();
-        };
-        for child in node["children"].as_array().into_iter().flatten().filter_map(Value::as_str) {
-            if child.trim().is_empty() {
-                continue;
-            }
-            match facts.node_by_key(child) {
-                Some(text) if text["tag"] == "#text" => {
-                    if run.is_empty() {
-                        child.clone_into(&mut run_id);
-                    }
-                    run.push(text);
-                }
-                _ => flush(&mut run, &run_id, &mut out),
-            }
-        }
-        flush(&mut run, &run_id, &mut out);
+        element_items(facts, id, viewport, &mut out);
     }
-    out.sort_by(|a, b| {
+    in_visual_order(&mut out);
+    out
+}
+
+/// The items of `facts` along the heights at one width, each element's
+/// read once at the width and again at each height only where the facts
+/// hold it, its pseudo-elements, or its text apart along the height there.
+pub struct HeightSweep<'a> {
+    facts: &'a Facts,
+    width: Width,
+    // Each element's items at the width, in document order.
+    elements: Vec<Vec<Item>>,
+    // The elements that change along the height, by their place in `elements`.
+    varying: Vec<usize>,
+}
+
+impl<'a> HeightSweep<'a> {
+    pub fn new(facts: &'a Facts, width: Width) -> Self {
+        let mut elements = Vec::new();
+        let mut varying = Vec::new();
+        for (k, id) in facts.order().iter().enumerate() {
+            let mut held = Vec::new();
+            element_items(facts, id, Viewport::at(width), &mut held);
+            elements.push(held);
+            if facts.varies_with_height(id, width) {
+                varying.push(k);
+            }
+        }
+        Self {
+            facts,
+            width,
+            elements,
+            varying,
+        }
+    }
+
+    /// Whether any item changes along the height at this width.
+    pub const fn varies(&self) -> bool {
+        !self.varying.is_empty()
+    }
+
+    /// Every item at `height`, in visual order, as [`items`] reads it.
+    pub fn at(&self, height: u32) -> Vec<Item> {
+        let viewport = Viewport {
+            width: self.width,
+            height: Some(height),
+        };
+        let order = self.facts.order();
+        let mut out = Vec::new();
+        let mut varying = self.varying.iter().peekable();
+        for (k, held) in self.elements.iter().enumerate() {
+            if varying.next_if_eq(&&k).is_some() {
+                element_items(self.facts, &order[k], viewport, &mut out);
+            } else {
+                out.extend_from_slice(held);
+            }
+        }
+        in_visual_order(&mut out);
+        out
+    }
+}
+
+fn in_visual_order(items: &mut [Item]) {
+    items.sort_by(|a, b| {
         js_round(a.bounds[1])
             .total_cmp(&js_round(b.bounds[1]))
             .then(js_round(a.bounds[0]).total_cmp(&js_round(b.bounds[0])))
     });
-    out
+}
+
+// The items element `id` shows at `viewport`, in document order: its paint,
+// its pseudo-elements', and its runs of text. None for a text node.
+fn element_items(facts: &Facts, id: &NodeId, viewport: Viewport, out: &mut Vec<Item>) {
+    let node = facts.node(id);
+    if node["tag"] == "#text" {
+        return;
+    }
+    let Some(rect) = visible(facts, node, viewport) else {
+        return;
+    };
+    if let Some(signature) = paint_signature(facts, node, viewport) {
+        out.push(paint_item(id.as_str().to_owned(), signature, rect, label(node, id, "")));
+    }
+
+    for (kind, pseudo) in node["pseudo"].as_object().into_iter().flatten() {
+        let Some(pseudo_rect) = visible(facts, pseudo, viewport) else {
+            continue;
+        };
+        let pseudo_id = format!("{id}::{kind}");
+        if let Some(signature) = paint_signature(facts, pseudo, viewport) {
+            out.push(paint_item(
+                pseudo_id.clone(),
+                signature,
+                pseudo_rect,
+                label(node, id, &format!("::{kind}")),
+            ));
+        }
+        let text = if kind == "marker" {
+            let style = facts.style_at(node, "list-style-type", viewport);
+            marker(&style)
+        } else {
+            literal(&facts.style_at(pseudo, "content", viewport))
+        };
+        out.extend(text_item(facts, pseudo, pseudo_id, &text, &[pseudo_rect], viewport));
+    }
+
+    // runs of consecutive text nodes
+    let mut run: Vec<&Value> = Vec::new();
+    let mut run_id = String::new();
+    let flush = |run: &mut Vec<&Value>, run_id: &str, out: &mut Vec<Item>| {
+        if run.is_empty() {
+            return;
+        }
+        let text: String = run.iter().filter_map(|t| t["text"].as_str()).collect();
+        let rects: Vec<Rect> = run.iter().flat_map(|t| Facts::line_rects(t, viewport)).collect();
+        out.extend(text_item(facts, node, run_id.to_owned(), &text, &rects, viewport));
+        run.clear();
+    };
+    for child in node["children"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+        if child.trim().is_empty() {
+            continue;
+        }
+        match facts.node_by_key(child) {
+            Some(text) if text["tag"] == "#text" => {
+                if run.is_empty() {
+                    child.clone_into(&mut run_id);
+                }
+                run.push(text);
+            }
+            _ => flush(&mut run, &run_id, out),
+        }
+    }
+    flush(&mut run, &run_id, out);
 }
 
 fn label(node: &Value, id: &NodeId, suffix: &str) -> String {
@@ -181,8 +248,8 @@ fn visible(facts: &Facts, node: &Value, viewport: Viewport) -> Option<Rect> {
 pub fn paint_signature(facts: &Facts, node: &Value, viewport: Viewport) -> Option<String> {
     match node["tag"].as_str() {
         Some("img") => {
-            let file = node["extra"]["file"].as_str().map_or("", basename);
-            return Some(format!("img {file}"));
+            let file = node["extra"]["file"].as_str().unwrap_or("");
+            return Some(format!("img {}", facts.image(file)));
         }
         Some("svg") => return Some("svg".to_owned()),
         _ => {}
@@ -344,7 +411,7 @@ fn literal(content: &str) -> String {
     out
 }
 
-// Every `url(…)` naming a captured asset, rewritten to the asset's file name,
+// Every `url(…)` naming a captured asset, rewritten to the image it shows,
 // so two pages serving one image under two URLs agree.
 fn urls(facts: &Facts, value: &str) -> String {
     let mut out = String::new();
@@ -369,7 +436,7 @@ fn urls(facts: &Facts, value: &str) -> String {
                 let whole = 4 + usize::from(quoted) + end + close;
                 match facts.asset(url) {
                     Some(file) => {
-                        let _ = write!(out, "url({})", basename(file));
+                        let _ = write!(out, "url({})", facts.image(file));
                     }
                     None => out.push_str(&rest[at..at + whole]),
                 }
@@ -394,10 +461,6 @@ fn first_family(families: &str) -> String {
     let first = first.strip_prefix(['"', '\'']).unwrap_or(first);
     let first = first.strip_suffix(['"', '\'']).unwrap_or(first);
     first.to_lowercase()
-}
-
-fn basename(file: &str) -> &str {
-    file.rsplit('/').next().unwrap_or(file)
 }
 
 const fn is_js_space(c: char) -> bool {

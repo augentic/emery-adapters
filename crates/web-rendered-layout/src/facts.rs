@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 
 use serde_json::{Map, Value};
 
-use crate::{Error, FactsFolder};
+use crate::{Error, FactsFolder, image};
 
 const VERSION: u64 = 2;
 
@@ -70,6 +70,8 @@ pub struct Facts {
     // The part file each node is held in.
     files: BTreeMap<String, String>,
     order: Vec<NodeId>,
+    // Each asset file's image identity.
+    images: BTreeMap<String, String>,
 }
 
 impl Facts {
@@ -126,11 +128,17 @@ impl Facts {
                 .extend(children.filter(|child| !child.trim().is_empty()).map(str::to_owned).rev());
             order.push(NodeId(id));
         }
+        let images = folder
+            .paths()
+            .filter(|path| path.starts_with("assets/"))
+            .map(|path| (path.to_owned(), image::identity(folder.get(path).unwrap_or_default())))
+            .collect();
         Ok(Self {
             index,
             nodes,
             files,
             order,
+            images,
         })
     }
 
@@ -193,12 +201,38 @@ impl Facts {
         self.index["assets"][url].as_str()
     }
 
+    // What the asset `file` shows, by its content: its image identity, or
+    // its name where the facts do not hold it.
+    pub(crate) fn image<'a>(&'a self, file: &'a str) -> &'a str {
+        self.images
+            .get(file)
+            .map_or_else(|| file.rsplit('/').next().unwrap_or(file), String::as_str)
+    }
+
     pub(crate) fn platform_fonts(&self, token: &str) -> &[Value] {
         self.index["fonts"][token]["platform"].as_array().map_or(&[], Vec::as_slice)
     }
 
     fn default_style(&self, property: &str) -> String {
         self.index["defaults"][property].as_str().map_or_else(String::new, str::to_owned)
+    }
+
+    // Whether element `id`'s items can change along the height at `width`:
+    // the facts hold it, a pseudo-element of it, or a text node in it apart
+    // along the height there.
+    pub(crate) fn varies_with_height(&self, id: &NodeId, width: Width) -> bool {
+        let key = width.0.to_string();
+        let held = |node: &Value| node.get("h").is_some_and(|h| h.get(&key).is_some());
+        let node = self.node(id);
+        held(node)
+            || node["pseudo"].as_object().into_iter().flatten().any(|(_, pseudo)| held(pseudo))
+            || node["children"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .filter_map(|child| self.node_by_key(child))
+                .any(|child| child["tag"] == "#text" && held(child))
     }
 
     // The height facts of `node` at the viewport's width, where the viewport
