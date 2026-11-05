@@ -14,7 +14,7 @@ use emery_sdk::target::{
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
 use omnia_test::SeenWorker;
-use omnia_test::guest::Scripted;
+use omnia_test::guest::ScriptedModel;
 use omnia_test::host::{Scratch, scratch};
 
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
@@ -78,8 +78,8 @@ const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
 const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
-const OMNIA_PIN: &str = "omnia-sdk = \"0.37.0\"\n";
-const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.39.0\"\n";
 
 // The three root files the node target's initialisation scaffolds, as the crate
 // embeds them.
@@ -234,20 +234,20 @@ impl<A: TargetAdapter> Shipped<A> {
             adapter_id: self.name,
             workspace: root(project),
         };
-        match A::run(Task::<Scripted>::Init(ctx)).await? {
+        match A::run(Task::<ScriptedModel>::Init(ctx)).await? {
             Outcome::Initialised => Ok(()),
             outcome => panic!("an init answers an initialised tree, not {outcome}"),
         }
     }
 
     // One build of the slice into `project`, as the component's export puts it.
-    async fn build(&self, project: &Scratch, model: &Scripted) -> Result<Report, Error> {
+    async fn build(&self, project: &Scratch, model: &ScriptedModel) -> Result<Report, Error> {
         self.build_slice(project, model, &slice()).await
     }
 
     // One build of `slice` into `project`, for a scenario over a slice of its own.
     async fn build_slice(
-        &self, project: &Scratch, model: &Scripted, slice: &Slice,
+        &self, project: &Scratch, model: &ScriptedModel, slice: &Slice,
     ) -> Result<Report, Error> {
         let ctx = BuildContext {
             adapter_id: self.name,
@@ -264,7 +264,7 @@ impl<A: TargetAdapter> Shipped<A> {
     }
 
     // One verification of `project`, as the component's export puts it.
-    async fn verify(&self, project: &Scratch, model: &Scripted) -> Result<Verdict, Error> {
+    async fn verify(&self, project: &Scratch, model: &ScriptedModel) -> Result<Verdict, Error> {
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
@@ -311,7 +311,7 @@ impl<A: TargetAdapter> Shipped<A> {
             calls.push(edit_files(edits));
         }
         let calls_made = calls.len();
-        let model = Scripted::answering([report, PASSED]).calling(0, calls);
+        let model = ScriptedModel::answering([report, PASSED]).calling(0, calls);
 
         let report =
             self.build_slice(&project, &model, slice).await.expect("build over the lent tree");
@@ -402,7 +402,7 @@ impl<A: TargetAdapter> Shipped<A> {
     // One verify over `project`, answering `failed`: a verdict that fails is
     // the adapter's answer, carried whole to the caller.
     async fn failed(&self, project: &Scratch, failed: &str) {
-        let model = Scripted::answering([failed]);
+        let model = ScriptedModel::answering([failed]);
 
         let verdict = self
             .verify(project, &model)
@@ -570,7 +570,7 @@ fn delete_files(paths: &[&str]) -> ToolCall {
 
 // The correction the adapter's check put to the model: the one `check`
 // exchange the script refused.
-fn correction(model: &Scripted) -> String {
+fn correction(model: &ScriptedModel) -> String {
     let refused: Vec<String> = model
         .exchanges()
         .into_iter()
@@ -840,7 +840,7 @@ async fn omnia_init_held() {
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/routes.rs", "src/messaging.rs"]}"#;
     let routes = format!("// held\nfn router() {{\n{OMNIA_ROUTE_LINE}}}\n");
     let messaging = format!("// held\nfn topics() {{\n{OMNIA_TOPICS_LINE}}}\n");
-    let model = Scripted::answering([report]).calling(
+    let model = ScriptedModel::answering([report]).calling(
         0,
         [edit_files(&[
             fill_function(),
@@ -889,7 +889,7 @@ async fn omnia_init_held() {
 async fn omnia_scaffold() {
     let project = omnia_tree().await;
     let before = files_under(project.path());
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     let report =
         OMNIA.build_slice(&project, &model, &omnia_slice()).await.expect("a turn filling nothing");
@@ -1055,7 +1055,7 @@ async fn omnia_write_scaffolded_refused() {
     let overwritten = [("crates/orders/src/reading.rs", "//! Written over.\n")];
     let cut = [("crates/orders/src/lib.rs", "//! # orders\n\npub mod reading;\n")];
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report])
+    let model = ScriptedModel::answering([report])
         .calling(0, [write_files(&overwritten), write_files(&cut), edit_files(&[fill_function()])]);
 
     let report = OMNIA.build(&project, &model).await.expect("the edited tree is accepted");
@@ -1117,7 +1117,7 @@ async fn omnia_scaffold_keyed() {
     });
     let laid = "pub struct OrderRef {\n    /// The order id.\n    pub id: Option<String>,\n}";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([report]).calling(
+    let model = ScriptedModel::answering([report]).calling(
         0,
         [
             edit_files(&[(
@@ -1192,7 +1192,7 @@ async fn omnia_write_scaffolded_kept() {
     let entry = OMNIA_ENTRY.replace("        reading::routes(),\n", "");
     let extended = entry.replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report]).calling(
+    let model = ScriptedModel::answering([report]).calling(
         0,
         [write_files(&[
             ("crates/orders/src/reading.rs", &filled),
@@ -1227,7 +1227,7 @@ async fn omnia_write_scaffolded_kept() {
 #[tokio::test]
 async fn omnia_scaffold_held_stem() {
     let project = omnia_tree().await;
-    let first = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
     let manifest_edited = OMNIA_MANIFEST.replace("The `orders` stem", "The `orders` stem, held");
@@ -1244,7 +1244,7 @@ async fn omnia_scaffold_held_stem() {
     slice.requirements[0].scenarios[0].name = "An order is paid".to_owned();
     slice.types = Vec::new();
     slice.brief = vec!["Pays an order.".to_owned()];
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &model, &slice).await.expect("the second slice's turn");
     model.assert_exhausted();
 
@@ -1351,7 +1351,7 @@ async fn omnia_scaffold_status() {
                     integrations\n\nStore (PostgreSQL): orders are read from the database. \
                     Cache (Redis): an order is cached under a TTL.\n"
         .to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1431,7 +1431,7 @@ async fn omnia_scaffold_probe() {
     slice.requirements[0].scenarios[0].when = "GET /health/ready is called".to_owned();
     slice.requirements[0].scenarios[0].then = "the store's readiness is answered".to_owned();
     slice.name = "health".to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#])
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#])
         .calling(0, [write_files(&[("crates/health/src/health.rs", "//! Written over.\n")])]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1505,7 +1505,7 @@ async fn omnia_scaffold_probe_held_manifest() {
         vec!["Answers whether the store answers a probe within its deadline.".to_owned()];
     slice.requirements[0].trigger = Some(routed("GET", "/health/ready"));
     slice.name = "health".to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#])
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#])
         .calling(0, [write_files(&[("crates/health/Cargo.toml", &held)])]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1533,7 +1533,7 @@ async fn omnia_scaffold_probe_held_manifest() {
         "the guard keeps the line the scaffold added: {refusal}"
     );
 
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
@@ -1568,7 +1568,7 @@ async fn omnia_scaffold_roles_scoped() {
                     REQ-009).\n\nStore (PostgreSQL via `pg:Pool`): connection string from \
                     `DATABASE_URL`; order fetch `SELECT * FROM orders WHERE id = $1`.\n"
         .to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1650,7 +1650,7 @@ async fn omnia_scaffold_idioms() {
         slice.design.push_str(
             "\nType: cache.memory\n```\ninterface Memory {\n  entries: number;\n}\n```\n",
         );
-        let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+        let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
         OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
         model.assert_exhausted();
@@ -1722,7 +1722,7 @@ async fn omnia_scaffold_twins() {
             and: Vec::new(),
         }];
     }
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1762,7 +1762,7 @@ async fn omnia_scaffold_twins() {
 async fn omnia_scaffold_start() {
     let project = omnia_tree().await;
     let slice = slice_for("start", &["start.refuse-without-secret", "orders.read"]);
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1790,7 +1790,7 @@ async fn omnia_scaffold_start() {
 #[tokio::test]
 async fn omnia_scaffold_no_route() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice()).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1833,7 +1833,7 @@ async fn omnia_scaffold_conflict() {
     let project = omnia_tree().await;
     let mut slice = slice();
     slice.requirements[0].statement = Vec::new();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1874,7 +1874,7 @@ async fn omnia_scaffold_conflict() {
 #[tokio::test]
 async fn omnia_scaffold_enum() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.OrderStatus", "pub enum OrderStatus {\n    Placed,\n    Paid,\n}"),
@@ -1958,7 +1958,7 @@ async fn omnia_scaffold_enum() {
 #[tokio::test]
 async fn omnia_scaffold_types() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.design = "# Design\n\nType: orders.Order\n```\n```\n\nType: orders.Address\n```\n```\n\n\
                     Type: orders.OrderLine\n```\n```\n\nType: orders.Page\n```\n```\n"
@@ -2047,7 +2047,7 @@ async fn omnia_scaffold_types() {
 #[tokio::test]
 async fn omnia_scaffold_type_defaults() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
@@ -2102,7 +2102,7 @@ async fn omnia_scaffold_type_defaults() {
 #[tokio::test]
 async fn omnia_scaffold_python_types() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
@@ -2166,7 +2166,7 @@ async fn omnia_scaffold_python_types() {
 #[tokio::test]
 async fn omnia_scaffold_type_fallbacks() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.ListQuery", "export type ListQuery = z.infer<typeof listQuerySchema>;"),
@@ -2231,7 +2231,7 @@ async fn omnia_scaffold_type_fallbacks() {
 #[tokio::test]
 async fn omnia_scaffold_rust_type() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
@@ -2294,7 +2294,7 @@ async fn omnia_scaffold_rust_type() {
 #[tokio::test]
 async fn omnia_scaffold_type_crlf() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.Order", "export interface Order {\r\n  id: string;\r\n  note?: string;\r\n}"),
@@ -2336,7 +2336,7 @@ async fn omnia_scaffold_type_crlf() {
 #[tokio::test]
 async fn omnia_scaffold_python_commented_body() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = vec![DesignType {
         key: "orders.Order".to_owned(),
@@ -2367,7 +2367,7 @@ async fn omnia_scaffold_entry_without_mods() {
     let entry =
         OMNIA_ENTRY.replace("pub mod reading;\n\n", "").replace("        reading::routes(),\n", "");
     project.write("crates/orders/src/lib.rs", &entry);
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &omnia_slice()).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2395,7 +2395,7 @@ async fn omnia_scaffold_link_on_the_way() {
     symlink("../../elsewhere", project.path().join("crates/orders/src"))
         .expect("planting the link");
     let before = files_under(project.path());
-    let model = Scripted::default();
+    let model = ScriptedModel::default();
 
     let refusal = OMNIA
         .build_slice(&project, &model, &omnia_slice())
@@ -2440,7 +2440,7 @@ async fn omnia_route_typed() {
         vec!["PATCH /orders/:orderId/lines/:lineId changes a line's quantity.".to_owned()];
     slice.requirements[2].statement = vec!["Sums the order.".to_owned()];
     slice.requirements[2].trigger = Some(routed("HEAD", "/orders/{id}/sum"));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2481,7 +2481,7 @@ async fn omnia_scaffold_start_routed() {
     slice.requirements[0].trigger = Some(routed("GET", "/health/live"));
     slice.requirements[1].statement = vec!["Answers the build's common metadata.".to_owned()];
     slice.requirements[1].trigger = Some(routed("GET", "/common/info"));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2572,7 +2572,7 @@ async fn omnia_scaffold_topic() {
     }
     slice.requirements[2].trigger =
         Some(Trigger::Message("orders\";#[test]fn/**/injected(){}//".to_owned()));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2656,14 +2656,14 @@ async fn omnia_scaffold_topic() {
 #[tokio::test]
 async fn omnia_scaffold_topic_declared() {
     let project = omnia_tree().await;
-    let first = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
     let table = format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs"));
     project.write("crates/common/src/topic.rs", table.as_bytes());
     let mut slice = slice_for("orders-placing", &["orders.on-placed"]);
     slice.requirements[0].trigger = Some(Trigger::Message("order-placed".to_owned()));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("the second slice's turn");
     model.assert_exhausted();
@@ -2705,7 +2705,8 @@ async fn omnia_marker_left() {
     let slice = slice_for("orders-reading", &["orders.get-id.return-order", "orders.count"]);
     let first = r#"{"covered": ["REQ-001", "REQ-002"], "written": []}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired]).calling(1, [edit_files(&[fill_function()])]);
+    let model =
+        ScriptedModel::answering([first, repaired]).calling(1, [edit_files(&[fill_function()])]);
 
     let report =
         OMNIA.build_slice(&project, &model, &slice).await.expect("the filled tree is accepted");
@@ -2736,7 +2737,7 @@ async fn omnia_scenario_ignored() {
                        an_order_is_returned_by_its_id() {\n    assert_eq!(1 + 1, 2);\n}\n";
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([first, first, repaired])
+    let model = ScriptedModel::answering([first, first, repaired])
         .calling(
             0,
             [edit_files(&[(
@@ -2801,7 +2802,7 @@ async fn omnia_scenario_unattributed() {
     let attributed_marker = format!("#[tokio::test]\n{OMNIA_TEST_MARKER}");
     let attributed_filled = format!("#[tokio::test]\n{OMNIA_TEST_FILLED}");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[
@@ -2859,7 +2860,7 @@ async fn omnia_stray_refused() {
     ];
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/pricing.rs", "NOTES.md", "crates/common/src/orders.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/pricing.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
@@ -2907,7 +2908,7 @@ async fn omnia_start_only_no_turn() {
     let project = omnia_tree().await;
     let slice = slice_for("start", &["start.refuse-without-secret", "start.listen-port"]);
     let before = files_under(project.path());
-    let model = Scripted::default();
+    let model = ScriptedModel::default();
 
     let report = OMNIA.build_slice(&project, &model, &slice).await.expect("built with no turn");
     model.assert_exhausted();
@@ -3115,7 +3116,7 @@ async fn omnia_static_drift_refused() {
     let entry = omnia_seed("src/lib.rs");
     let first = entry.lines().next().expect("the entry opens with a line");
     let runtime = omnia_seed("examples/runtime.rs");
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(0, [edit_files(&[("src/lib.rs", first, "//! Edited by a repair.")])])
         .calling(
             1,
@@ -3154,7 +3155,7 @@ async fn omnia_manifest_refused() {
     let project = omnia_tree().await;
     let report =
         r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "Cargo.toml"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [edit_files(&[fill_function(), ("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED)])])
         .calling(1, [edit_files(&[("Cargo.toml", OMNIA_PIN_EDITED, OMNIA_PIN)])]);
 
@@ -3206,7 +3207,7 @@ async fn omnia_verify_process() {
     project.write("crates/orders/tests/runner.rs", "#[test]\nfn run() {}\n");
     let removed =
         ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/orders/src/main_loop.rs"];
-    let model = Scripted::answering([PASSED, PASSED]).calling(1, [delete_files(&removed)]);
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(1, [delete_files(&removed)]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
     model.assert_exhausted();
@@ -3253,7 +3254,7 @@ async fn omnia_verify_manifest_dangling() {
     let number =
         manifest.lines().position(|line| line == start_path.trim_end()).expect("the line") + 1;
     project.write("Cargo.toml", &manifest);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[("Cargo.toml", start_path, ""), ("Cargo.toml", start_crate, "")])],
     );
@@ -3296,7 +3297,7 @@ async fn omnia_build_process_refused() {
         ("crates/orders/src/lib.rs", "pub mod reading;\n", "pub mod reading;\npub mod runner;\n");
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/src/runner.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(0, [write_files(&written), edit_files(&[fill_function(), listed])])
         .calling(
             1,
@@ -3339,7 +3340,7 @@ async fn omnia_stem_without_workspace_lints() {
     let linted = "version.workspace = true\n\n[lints]\nworkspace = true\n";
     let unlinted = "version.workspace = true\nlints.workspace = true\n";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[fill_function(), ("crates/orders/Cargo.toml", linted, unlinted)])],
@@ -3404,7 +3405,7 @@ async fn omnia_build_start_crate_refused() {
     ];
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "crates/start-prefetch/src/lib.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
@@ -3493,7 +3494,7 @@ async fn omnia_build_wrappers_refused() {
     let first_tree = module(&format!("{wrapped}\n{direct}"));
     let written = [("crates/stops/src/client.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/stops/src/client.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("stops", "fetching", "client")])
         .calling(1, [edit_files(&[("crates/stops/src/client.rs", &format!("{wrapped}\n"), "")])]);
 
@@ -3567,7 +3568,7 @@ async fn omnia_build_empty_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/rates/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/rates/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("rates", "table", "cache")])
         .calling(1, [edit_files(&[("crates/rates/src/cache.rs", empty, fetched)])]);
 
@@ -3631,7 +3632,7 @@ async fn omnia_build_crate_private_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/zones/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/zones/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("zones", "table", "cache")])
         .calling(1, [edit_files(&[("crates/zones/src/cache.rs", empty, fetched)])]);
 
@@ -3695,7 +3696,7 @@ async fn omnia_build_second_read_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/zones/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/zones/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("zones", "table", "cache")])
         .calling(1, [edit_files(&[("crates/zones/src/cache.rs", empty, fetched)])]);
 
@@ -3766,7 +3767,7 @@ async fn omnia_build_tail_miss_refused() {
     let first_tree = module(tail, arm);
     let written = [("crates/fees/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/fees/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("fees", "table", "cache")])
         .calling(
             1,
@@ -3840,7 +3841,7 @@ async fn omnia_build_stem_split() {
     let stem_crate = "order-items.workspace = true\n";
     let first = r#"{"covered": [], "written": ["crates/order/Cargo.toml", "crates/order/src/lib.rs", "crates/order/src/items.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": [], "written": ["Cargo.toml"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
@@ -3945,7 +3946,7 @@ async fn omnia_stem_unmerged() {
         omnia_seed("src/messaging.rs")
             .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
     );
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
             "src/routes.rs",
@@ -4025,7 +4026,7 @@ async fn omnia_verify_parts_undeclared() {
         omnia_seed("src/messaging.rs")
             .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
     );
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/orders/src/lib.rs", folded, ""),
@@ -4091,7 +4092,7 @@ async fn omnia_topic_unnamed() {
         "crates/orders/src/reading.rs",
         format!("{OMNIA_PART}\n// A return lands on `topic::ORDER_RETURNED` once stated.\n"),
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/common/src/topic.rs", returned, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4148,7 +4149,7 @@ async fn omnia_dependency_unused() {
          let request = http::Request::builder().body(()).expect(\"a request\");\n    \
          drop(request);\n}\n",
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4195,7 +4196,7 @@ async fn omnia_dependency_unused_in_string() {
          str {\n    \"uuid\"\n}\n\n/// Logs when an order was read.\npub fn read_at() {\n    \
          tracing::info!(at = %chrono::Utc::now(), \"order read, its id a uuid::Uuid\");\n}\n",
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4250,7 +4251,7 @@ async fn omnia_publisher_unreached() {
     let route = "pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
                  &str,\n) -> messaging::Router<P> {\n    router.route(config::topic_for(env, \
                  topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n\n";
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/common/src/topic.rs", charged, &format!("{charged}{OMNIA_TABLE_LINE}")),
@@ -4371,7 +4372,7 @@ async fn omnia_rejection_swallowed() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             (
@@ -4450,7 +4451,7 @@ async fn omnia_rejection_swallowed_on_one_line() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/orders/src/reading.rs", invalid, "    let order = validate(&input)?;\n"),
@@ -4514,7 +4515,7 @@ async fn omnia_format_setting() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
             "crates/orders/src/reading.rs",
@@ -4559,7 +4560,7 @@ async fn omnia_module_unparsed() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED, PASSED])
         .calling(
             1,
             [edit_files(&[(
@@ -4627,7 +4628,7 @@ async fn omnia_rejection_swallowed_across_lines() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
             "crates/orders/src/reading.rs",
@@ -4688,7 +4689,7 @@ async fn omnia_empty_miss_read_across_lines() {
     let first_tree = module(empty);
     let written = [("crates/rates/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/rates/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("rates", "table", "cache")])
         .calling(1, [edit_files(&[("crates/rates/src/cache.rs", empty, fetched)])]);
 
@@ -4734,7 +4735,7 @@ async fn omnia_verify_stem_clean() {
         "crates/orders/tests/reading.rs",
         "#[tokio::test]\nasync fn waits() {\n    tokio::time::sleep(std::time::Duration::from_secs(1)).await;\n}\n",
     );
-    let model = Scripted::answering([PASSED]);
+    let model = ScriptedModel::answering([PASSED]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("verify over the clean stem");
     model.assert_exhausted();

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use emery_sdk::survey::{Inventory, Surface};
 use emery_sdk::{Claim, ClaimKind, Context, Doc, Error, Evidence, SourceAdapter, SourceInput};
-use omnia_test::guest::Scripted;
+use omnia_test::guest::ScriptedModel;
 use omnia_test::host::{Scratch, scratch};
 use omnia_test::{Exchange, Seen};
 
@@ -60,7 +60,7 @@ impl<A: SourceAdapter> Shipped<A> {
     }
 
     // One `extract` over `input`, as the component's export puts it.
-    async fn call(&self, input: &SourceInput, model: &Scripted) -> Result<Evidence, Error> {
+    async fn call(&self, input: &SourceInput, model: &ScriptedModel) -> Result<Evidence, Error> {
         let ctx = Context {
             adapter_id: self.name,
             input,
@@ -72,7 +72,7 @@ impl<A: SourceAdapter> Shipped<A> {
     // A run over `project`: one extract over the tree lent as the source,
     // then one over an inline value, each held to the claim gate, the
     // script consumed exactly.
-    async fn run(&self, project: &Scratch, model: Scripted) -> Scripted {
+    async fn run(&self, project: &Scratch, model: ScriptedModel) -> ScriptedModel {
         let evidence = self.accepted(&workspace(project), &model).await;
         check_evidence(&evidence);
         let evidence = self.accepted(&value(INLINE), &model).await;
@@ -82,23 +82,25 @@ impl<A: SourceAdapter> Shipped<A> {
     }
 
     // One answer per workspace seam, and one for the inline value.
-    async fn extract(&self, project: &Scratch, seams: usize) -> Scripted {
+    async fn extract(&self, project: &Scratch, seams: usize) -> ScriptedModel {
         let answer = answer();
         let answers = std::iter::repeat_n(answer.as_str(), seams + 1);
-        self.run(project, Scripted::answering(answers)).await
+        self.run(project, ScriptedModel::answering(answers)).await
     }
 
     // A surveying adapter's run over a workspace: the scripted survey answer,
     // then one answer per seam, and one for the inline value.
-    async fn mined(&self, project: &Scratch, inventory: &str, seams: usize) -> Scripted {
+    async fn mined(&self, project: &Scratch, inventory: &str, seams: usize) -> ScriptedModel {
         let answer = answer();
         let answers =
             std::iter::once(inventory).chain(std::iter::repeat_n(answer.as_str(), seams + 1));
-        self.run(project, Scripted::answering(answers)).await
+        self.run(project, ScriptedModel::answering(answers)).await
     }
 
     // A `bad_request` over the tree, or over `inline`, the script consumed exactly.
-    async fn refused(&self, project: &Scratch, inline: Option<&str>, model: Scripted) -> Scripted {
+    async fn refused(
+        &self, project: &Scratch, inline: Option<&str>, model: ScriptedModel,
+    ) -> ScriptedModel {
         let input = inline.map_or_else(|| workspace(project), value);
         let refusal = self.call(&input, &model).await.expect_err("extract is refused");
         assert!(
@@ -115,8 +117,9 @@ impl<A: SourceAdapter> Shipped<A> {
     // workspace, the declarations `names` and no other, each anchored at its
     // lines; over `inline`, its `exported` declaration alone, unanchored.
     async fn types(
-        &self, project: &Scratch, inline: &str, exported: &str, names: &[&str], model: Scripted,
-    ) -> Scripted {
+        &self, project: &Scratch, inline: &str, exported: &str, names: &[&str],
+        model: ScriptedModel,
+    ) -> ScriptedModel {
         let evidence = self.accepted(&workspace(project), &model).await;
         check_evidence(&evidence);
         let mut expected = names.to_vec();
@@ -147,8 +150,8 @@ impl<A: SourceAdapter> Shipped<A> {
     // since a value is never surveyed.
     async fn contracts(
         &self, project: &Scratch, inline: &str, triggered: &[(&str, &str, &str, &str)],
-        model: Scripted,
-    ) -> Scripted {
+        model: ScriptedModel,
+    ) -> ScriptedModel {
         let evidence = self.accepted(&workspace(project), &model).await;
         check_evidence(&evidence);
         assert_eq!(triggers(&evidence), triggered, "the surfaces with a trigger, and no other");
@@ -161,7 +164,7 @@ impl<A: SourceAdapter> Shipped<A> {
     }
 
     // Returns the workspace seams' turns of a run that surveys by code alone.
-    fn prompted(&self, model: &Scripted, seams: usize) -> Vec<String> {
+    fn prompted(&self, model: &ScriptedModel, seams: usize) -> Vec<String> {
         let seen = model.seen();
         assert_eq!(
             seen.len(),
@@ -177,7 +180,7 @@ impl<A: SourceAdapter> Shipped<A> {
     // Returns the workspace seams' turns of a surveying adapter's run, which
     // the survey turn opens under `survey.md` — one per workspace, none for
     // the inline value — before the seams' under `extract.md`.
-    fn surveyed(&self, model: &Scripted, seams: usize) -> Vec<String> {
+    fn surveyed(&self, model: &ScriptedModel, seams: usize) -> Vec<String> {
         let seen = model.seen();
         assert_eq!(
             seen.len(),
@@ -192,7 +195,7 @@ impl<A: SourceAdapter> Shipped<A> {
         seen[1..=seams].iter().map(|request| request.messages[0].clone()).collect()
     }
 
-    async fn accepted(&self, input: &SourceInput, model: &Scripted) -> Evidence {
+    async fn accepted(&self, input: &SourceInput, model: &ScriptedModel) -> Evidence {
         self.call(input, model).await.unwrap_or_else(|refusal| {
             panic!("`{}` refused `{}`: {}", self.name, input.name, refusal.description())
         })
@@ -357,7 +360,7 @@ fn copy_tree(from: &Path, project: &Scratch, under: &str) {
 // The `check` rounds a surveying adapter's mining turns put, after the
 // survey's — the run's first exchange, which accepted the scripted inventory
 // at once.
-fn checked(model: &Scripted) -> Vec<Exchange> {
+fn checked(model: &ScriptedModel) -> Vec<Exchange> {
     let exchanges = model.exchanges();
     let (survey, mining) = exchanges.split_first().expect("the survey's check is recorded");
     assert_eq!(survey.tool, "check", "the survey's answer is checked before any seam opens");
@@ -517,7 +520,8 @@ async fn documentation_subjects() {
     );
     let answer = claim("returns.late-returns-policy.fee");
 
-    let model = DOCUMENTATION.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        DOCUMENTATION.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = DOCUMENTATION.surveyed(&model, 1);
     let facts = &model.seen()[0].messages[0];
@@ -539,14 +543,9 @@ async fn documentation_subjects() {
     }
     assert!(!facts.contains("logo.png"), "a file that is not text is no document: {facts}");
     let turn = &turns[0];
-    assert!(
-        turn.contains(
-            "Every subject of the source `source` — 6 subjects in 5 documents under the stems \
-             `invoices`, `membership`, `returns`, `sign-in`."
-        ),
-        "the one seam is held to every stem: {turn}"
-    );
-    for subject in [
+    for expected in [
+        "Every subject of the source `source` — 6 subjects in 5 documents under the stems \
+         `invoices`, `membership`, `returns`, `sign-in`.",
         "- `Invoices` — `features/invoices.feature#L1-L6` — stem `invoices` — ids lead with \
          `invoices`",
         "- `Returning a tool` — `guides/returning-a-tool.md#L1-L11` — stem `returns` — ids lead \
@@ -558,17 +557,12 @@ async fn documentation_subjects() {
          `membership.accounts`",
         "- `Signing in` — `reference/accounts.md#L9-L11` — stem `sign-in` — ids lead with \
          `sign-in`",
+        "The survey placed this document under no subject — an index, a readme, a glossary, a \
+         changelog: `README.md`. It is in `$SOURCE_DIR` for context and never a `path`.",
+        "### `joining.md` (3 lines)",
     ] {
-        assert!(turn.contains(subject), "{subject} is among the subjects: {turn}");
+        assert!(turn.contains(expected), "{expected} is in the turn: {turn}");
     }
-    assert!(
-        turn.contains(
-            "The survey placed this document under no subject — an index, a readme, a glossary, a \
-             changelog: `README.md`. It is in `$SOURCE_DIR` for context and never a `path`."
-        ),
-        "the unreached document is context: {turn}"
-    );
-    assert!(turn.contains("### `joining.md` (3 lines)"), "a subject's document is inlined: {turn}");
     assert!(
         !turn.contains("### `README.md`"),
         "an unreached document is inlined for no call: {turn}"
@@ -609,7 +603,7 @@ async fn documentation_decision() {
     })
     .to_string();
     let answer = answer();
-    let model = Scripted::answering([&survey, &quoted, &decided, &answer]);
+    let model = ScriptedModel::answering([&survey, &quoted, &decided, &answer]);
 
     let evidence = DOCUMENTATION.accepted(&workspace(&project), &model).await;
     check_evidence(&evidence);
@@ -674,7 +668,7 @@ async fn documentation_retire() {
     let strayed = claims("accounts.security-questions");
     let corrected = claims("password-reset.security-questions");
     let answer = answer();
-    let model = Scripted::answering([&survey, &strayed, &corrected, &answer]);
+    let model = ScriptedModel::answering([&survey, &strayed, &corrected, &answer]);
 
     let evidence = DOCUMENTATION.accepted(&workspace(&project), &model).await;
     check_evidence(&evidence);
@@ -720,7 +714,7 @@ async fn documentation_stems() {
     let decision = decision();
 
     let model = DOCUMENTATION
-        .run(&project, Scripted::answering([&survey, &decision, &decision, &decision]))
+        .run(&project, ScriptedModel::answering([&survey, &decision, &decision, &decision]))
         .await;
 
     let turns = DOCUMENTATION.surveyed(&model, 2);
@@ -777,7 +771,7 @@ async fn documentation_survey_check() {
     let answer = answer();
 
     let model = DOCUMENTATION
-        .run(&project, Scripted::answering([&strayed, &corrected, &answer, &answer]))
+        .run(&project, ScriptedModel::answering([&strayed, &corrected, &answer, &answer]))
         .await;
 
     let seen = model.seen();
@@ -948,13 +942,13 @@ async fn intent() {
 #[tokio::test]
 async fn intent_not_one_file() {
     let empty = scratch();
-    let model = INTENT.refused(&empty, None, Scripted::default()).await;
+    let model = INTENT.refused(&empty, None, ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on an empty tree");
 
     let several = scratch();
     several.write("one.md", "first");
     several.write("two.md", "second");
-    let model = INTENT.refused(&several, None, Scripted::default()).await;
+    let model = INTENT.refused(&several, None, ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a tree of several files");
 }
 
@@ -990,7 +984,7 @@ async fn intent_decision() {
         ]
     })
     .to_string();
-    let model = Scripted::answering([&named, &decided, &decided]);
+    let model = ScriptedModel::answering([&named, &decided, &decided]);
 
     let evidence = INTENT.accepted(&workspace(&project), &model).await;
     check_evidence(&evidence);
@@ -1056,7 +1050,7 @@ async fn intent_retire() {
         ]
     })
     .to_string();
-    let model = Scripted::answering([&named, &retired, &retired]);
+    let model = ScriptedModel::answering([&named, &retired, &retired]);
 
     let evidence = INTENT.accepted(&workspace(&project), &model).await;
     check_evidence(&evidence);
@@ -1092,11 +1086,11 @@ async fn intent_retire() {
 async fn intent_empty_brief() {
     let project = scratch();
     project.write("intent.md", "\n\t \n");
-    let model = INTENT.refused(&project, None, Scripted::default()).await;
+    let model = INTENT.refused(&project, None, ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a blank file");
 
     let none = scratch();
-    let model = INTENT.refused(&none, Some("  \n"), Scripted::default()).await;
+    let model = INTENT.refused(&none, Some("  \n"), ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a blank value");
 }
 
@@ -1192,7 +1186,7 @@ async fn typescript_stem() {
     let corrected = claim("orders.create");
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&survey, &strayed, &corrected, &strayed]))
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &strayed]))
         .await;
 
     let seen = model.seen();
@@ -1223,8 +1217,9 @@ async fn typescript_closure() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let start = turn_for(&turns, "start");
@@ -1282,8 +1277,9 @@ async fn typescript_constructed() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let start = turn_for(&turns, "start");
@@ -1371,7 +1367,8 @@ async fn typescript_fixture_cli_jobs() {
     let neutral = decision();
     let answer = answer();
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &neutral, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(
@@ -1508,7 +1505,7 @@ async fn typescript_fixture_express_orders() {
     let model = TYPESCRIPT
         .run(
             &project,
-            Scripted::answering([&survey, &neutral, &neutral, &neutral, &neutral, &answer]),
+            ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &neutral, &answer]),
         )
         .await;
 
@@ -1638,7 +1635,8 @@ async fn typescript_callbacks() {
     );
     let answer = claim("invoices.worker");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(
@@ -1676,7 +1674,8 @@ async fn typescript_survey_facts() {
     let survey = inventory(&[("import command", "src/cli.ts#L6", "import")], &[]);
     let answer = claim("import.run-import");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let survey = &seen[0].messages[0];
@@ -1766,7 +1765,8 @@ async fn emery_typescript_bootstrap_clients() {
     let survey = inventory(&[("GET /api/rates", "src/routes.ts#L5-L7", "rates")], &[]);
     let answer = claim("rates.latest");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -1849,7 +1849,7 @@ async fn typescript_survey_technology_stem() {
     let answer = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&strayed, &corrected, &named, &restated, &answer]))
+        .run(&project, ScriptedModel::answering([&strayed, &corrected, &named, &restated, &answer]))
         .await;
 
     let seen = model.seen();
@@ -2020,7 +2020,8 @@ async fn typescript_autoload_routes() {
     let login = claim("auth.login");
     let answer = answer();
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &login, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &login, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(
@@ -2073,7 +2074,7 @@ async fn typescript_survey_start_stem() {
     let answer = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&strayed, &corrected, &answer, &answer]))
+        .run(&project, ScriptedModel::answering([&strayed, &corrected, &answer, &answer]))
         .await;
 
     let seen = model.seen();
@@ -2120,7 +2121,7 @@ async fn typescript_survey_unplaced() {
     let answer = claim("invoices.remind");
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&partial, &complete, &answer, &answer]))
+        .run(&project, ScriptedModel::answering([&partial, &complete, &answer, &answer]))
         .await;
 
     let seen = model.seen();
@@ -2268,7 +2269,8 @@ async fn typescript_survey_alike() {
     );
     let answer = claim("files.upload.remote");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     for id in ["id `files.upload.local`;", "id `files.upload.remote`;"] {
@@ -2342,7 +2344,8 @@ async fn typescript_decorated_object_path() {
         &[],
     );
     let answer = claim("users.find");
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(
@@ -2397,7 +2400,8 @@ async fn typescript_exports() {
     );
     let answer = claim("parse.text");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -2474,7 +2478,7 @@ async fn typescript_types() {
             "export interface Inline { id: string }\ninterface Local { n: number }\n",
             "Inline",
             &["Currency", "Rounding", "Money"],
-            Scripted::answering([&survey, &answered, &answered]),
+            ScriptedModel::answering([&survey, &answered, &answered]),
         )
         .await;
 
@@ -2500,7 +2504,7 @@ async fn typescript_contracts() {
                 ("orders.find-order", "route", "GET /api/orders/{id}", "src/routes.ts#L9"),
                 ("orders.post", "route", "POST /api/orders", "src/routes.ts#L6-L8"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -2560,7 +2564,7 @@ async fn typescript_contracts_messaged() {
                 ("orders", "message", "orders.cancel-requested", "src/main.ts#L8"),
                 ("paid", "message", "invoice:paid", "src/main.ts#L11"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -2592,7 +2596,7 @@ async fn typescript_contracts_decorated() {
                 ("orders.create", "route", "POST /orders", "src/orders.controller.ts#L14-L17"),
                 ("orders.find", "route", "GET /orders/{id}", "src/orders.controller.ts#L8-L12"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -2636,7 +2640,7 @@ async fn typescript_type_tables() {
         ]
     })
     .to_string();
-    let model = Scripted::answering([&survey, &answered]);
+    let model = ScriptedModel::answering([&survey, &answered]);
 
     let evidence = TYPESCRIPT.accepted(&workspace(&project), &model).await;
     model.assert_exhausted();
@@ -2831,7 +2835,7 @@ async fn typescript_inherited() {
     let inline = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline]))
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
         .await;
 
     let seen = model.seen();
@@ -2899,8 +2903,9 @@ async fn typescript_paths() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "GET /api/orders/:id");
@@ -3051,7 +3056,7 @@ async fn typescript_anchors() {
     let inline = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline]))
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
         .await;
 
     let seen = model.seen();
@@ -3135,7 +3140,7 @@ async fn typescript_steps() {
     let inline = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline]))
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
         .await;
 
     let seen = model.seen();
@@ -3193,8 +3198,9 @@ async fn typescript_stated() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
@@ -3253,8 +3259,9 @@ async fn typescript_unresolved() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
@@ -3307,8 +3314,9 @@ async fn typescript_dynamic() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
@@ -3353,8 +3361,9 @@ async fn typescript_skipped_import() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let orders = turn_for(&turns, "POST /api/orders");
@@ -3397,7 +3406,7 @@ async fn typescript_data() {
     let inline = answer();
 
     let model = TYPESCRIPT
-        .run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline]))
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
         .await;
 
     let seen = model.seen();
@@ -3475,7 +3484,8 @@ async fn typescript_one_module() {
     let survey = inventory(&[("OrderService", "src/orders.ts#L1-L5", "order-service")], &[]);
     let answer = claim("order-service.create");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert_eq!(surfaces(&turns[0]), [("OrderService", "src/orders.ts", "order-service")]);
@@ -3505,7 +3515,7 @@ async fn typescript_no_module() {
         ],
     );
 
-    let model = TYPESCRIPT.refused(&project, None, Scripted::default()).await;
+    let model = TYPESCRIPT.refused(&project, None, ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a tree with no module");
 }
 
@@ -3527,7 +3537,8 @@ async fn typescript_no_surface() {
     let survey = inventory(&[], &["src/lib/config.ts", "src/lib/db.ts"]);
     let answer = claim("shared-helpers.pool");
 
-    let model = TYPESCRIPT.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model =
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
@@ -3556,8 +3567,9 @@ async fn typescript_no_surface_directories() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        TYPESCRIPT.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = TYPESCRIPT
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = TYPESCRIPT.surveyed(&model, 2);
     let seam = |stem: &str| {
@@ -3691,8 +3703,9 @@ async fn python_stem() {
     let strayed = claim("reconciliation.nightly");
     let corrected = claim("orders.create");
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &strayed, &corrected, &strayed])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &strayed]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
@@ -3724,7 +3737,7 @@ async fn python_closure() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -3911,7 +3924,7 @@ async fn emery_python_bootstrap_clients() {
     let survey = inventory(&[("GET /api/rates", "quotes/routes.py#L6-L8", "rates")], &[]);
     let answer = claim("rates.latest");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -3987,7 +4000,7 @@ async fn python_bootstrap_imported() {
     let survey = inventory(&[("import command", "ledger/app.py#L11-L14", "ledger-import")], &[]);
     let answer = claim("import.file");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -4034,7 +4047,7 @@ async fn python_bootstrap_factory() {
     let survey = inventory(&[("GET /health", "app/main.py#L8", "health")], &[]);
     let answer = claim("health.ok");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -4350,7 +4363,7 @@ async fn python_mounts_nested() {
     );
     let answer = claim("billing.get-v1");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
@@ -4536,7 +4549,7 @@ async fn python_decorated() {
     let survey = inventory(&[("GET /users", "app/views.py#L28-L30", "users")], &[]);
     let answer = claim("users.list");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -4646,7 +4659,7 @@ async fn python_registrations() {
     let survey = ledger_inventory();
     let answer = claim("invoices.send");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
@@ -4715,7 +4728,7 @@ async fn python_registrations_patch() {
     );
     let answer = claim("orders.update");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -4762,7 +4775,7 @@ async fn python_survey_facts() {
     let survey = ledger_inventory();
     let answer = claim("import.run-import");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let survey = &seen[0].messages[0];
@@ -4828,7 +4841,7 @@ async fn python_survey_stem_derived() {
     );
     let answer = claim("invoices.send");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
@@ -4907,7 +4920,7 @@ async fn python_survey_stem_tagged() {
     );
     let answer = claim("login.post-access-token");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
@@ -4948,8 +4961,9 @@ async fn python_survey_start_stem() {
     let corrected = py_app_inventory();
     let answer = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&strayed, &corrected, &answer, &answer])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&strayed, &corrected, &answer, &answer]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
@@ -4989,8 +5003,9 @@ async fn python_survey_unplaced() {
     let complete = ledger_inventory();
     let answer = claim("invoices.remind");
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&partial, &complete, &answer, &answer])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&partial, &complete, &answer, &answer]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "two survey rounds, one seam, one for the inline value");
@@ -5123,7 +5138,7 @@ async fn python_exports() {
     );
     let answer = claim("parse.text");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let seen = model.seen();
     let facts = &seen[0].messages[0];
@@ -5209,7 +5224,7 @@ async fn python_types() {
             "class Inline:\n    id: str\n\n\nclass _Local:\n    n: int\n",
             "Inline",
             &["Currency", "Rounding", "Adjust", "Money", "Order"],
-            Scripted::answering([&survey, &answered, &answered]),
+            ScriptedModel::answering([&survey, &answered, &answered]),
         )
         .await;
 
@@ -5248,7 +5263,7 @@ async fn python_contracts() {
                 ),
                 ("orders.post", "route", "POST /orders", "app/orders/routes.py#L6-L8"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -5307,7 +5322,7 @@ async fn python_contracts_registered() {
                 ("orders.create", "route", "POST /orders", "app/server.py#L8"),
                 ("orders.update", "route", "PATCH /orders/{id}", "app/server.py#L9"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -5359,7 +5374,7 @@ async fn python_contracts_messaged() {
                 ("chat", "message", "chat", "app/main.py#L17-L19"),
                 ("orders", "message", "orders.cancel-requested", "app/main.py#L22-L24"),
             ],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -5403,7 +5418,7 @@ async fn python_type_tables() {
         ]
     })
     .to_string();
-    let model = Scripted::answering([&survey, &answered]);
+    let model = ScriptedModel::answering([&survey, &answered]);
 
     let evidence = PYTHON.accepted(&workspace(&project), &model).await;
     model.assert_exhausted();
@@ -5469,7 +5484,7 @@ async fn python_exports_annotated_all() {
              Local:\n    n: int\n",
             "Inline",
             &["Money"],
-            Scripted::answering([&survey, &answer, &answer]),
+            ScriptedModel::answering([&survey, &answer, &answer]),
         )
         .await;
 
@@ -5716,8 +5731,9 @@ async fn python_anchors() {
     let survey = py_deciding_inventory();
     let inline = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
@@ -5809,8 +5825,9 @@ async fn python_steps() {
     let survey = py_deciding_inventory();
     let inline = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
@@ -5894,8 +5911,9 @@ async fn python_anchors_declared() {
     let survey = inventory(&[("POST /users/", "app/urls.py#L6", "users")], &[]);
     let inline = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
@@ -5952,7 +5970,7 @@ async fn python_stated() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6009,7 +6027,7 @@ async fn python_type_checking() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6057,8 +6075,9 @@ async fn python_type_checking_star() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = PYTHON.surveyed(&model, 2);
     let orders = turn_for(&turns, "GET /api/orders/{order_id}");
@@ -6104,7 +6123,7 @@ async fn python_relative_typing_name() {
             "class Inline:\n    id: str\n",
             "Inline",
             &["Status"],
-            Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]),
+            ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]),
         )
         .await;
 
@@ -6152,7 +6171,7 @@ async fn python_unresolved() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6209,7 +6228,7 @@ async fn python_fixture_click_jobs() {
     let neutral = decision();
     let answer = answer();
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &neutral, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &neutral, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(
@@ -6423,7 +6442,7 @@ async fn python_fixture_fastapi_routers() {
     let model = PYTHON
         .run(
             &project,
-            Scripted::answering([&survey, &neutral, &neutral, &neutral, &neutral, &answer]),
+            ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &neutral, &answer]),
         )
         .await;
 
@@ -6538,7 +6557,7 @@ async fn python_dynamic() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6594,7 +6613,7 @@ async fn python_skipped_import() {
     let answer = answer();
 
     let model = PYTHON
-        .run(&project, Scripted::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6646,8 +6665,9 @@ async fn python_data() {
     let survey = py_app_inventory();
     let inline = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &strayed, &corrected, &inline])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &strayed, &corrected, &inline]))
+        .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 4, "the survey, two rounds for the one seam, one for the inline value");
@@ -6795,7 +6815,7 @@ async fn python_one_module() {
     let survey = inventory(&[("OrderService", "src/orders.py#L1-L3", "order-service")], &[]);
     let answer = claim("order-service.create");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert_eq!(surfaces(&turns[0]), [("OrderService", "src/orders.py", "order-service")]);
@@ -6834,7 +6854,7 @@ async fn python_no_surface() {
         inventory(&[], &["src/helpers/__init__.py", "src/helpers/config.py", "src/helpers/db.py"]);
     let answer = claim("acme-shared-helpers.pool");
 
-    let model = PYTHON.run(&project, Scripted::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
@@ -6873,8 +6893,9 @@ async fn python_no_surface_directories() {
     let neutral = decision();
     let answer = answer();
 
-    let model =
-        PYTHON.run(&project, Scripted::answering([&survey, &neutral, &neutral, &answer])).await;
+    let model = PYTHON
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
+        .await;
 
     let turns = PYTHON.surveyed(&model, 2);
     let seam = |stem: &str| {
@@ -6908,6 +6929,6 @@ async fn python_no_module() {
     let project = scratch();
     tree(&project, &["README.md", "src/orders.pyi", "tests/test_orders.py"]);
 
-    let model = PYTHON.refused(&project, None, Scripted::default()).await;
+    let model = PYTHON.refused(&project, None, ScriptedModel::default()).await;
     assert!(model.seen().is_empty(), "no turn is spent on a tree with no module");
 }
