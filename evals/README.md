@@ -416,6 +416,12 @@ curl -sL https://github.com/HackSoftware/Django-Styleguide-Example/archive/a70ef
   | tar -xz --strip-components=1 -C evals/cases/django-styleguide/fixture
 ```
 
+The `greenfield-farm` case (experiment / non-production) reads a page's rendered-layout facts, which no archive holds: capture them from the served page with the capture CLI, its Playwright installed first with `npm ci --ignore-scripts --prefix tools/web-layout-capture` and its browser with `npx --prefix tools/web-layout-capture playwright install chromium-headless-shell`:
+
+```bash
+cargo run -p web-layout-capture -- capture --url <the served page> --out evals/cases/greenfield-farm/fixture
+```
+
 ---
 
 ## Reading a scorecard
