@@ -1,5 +1,6 @@
 //! One stem's share of a slice: its files, held or to scaffold, the items its part declares, and its lines in the lists.
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Marker, Requirement, Scenario, Slice};
@@ -11,6 +12,7 @@ use super::render::{self, dependency_line, topic_constant};
 use super::trigger;
 use super::types::{self, DesignKey};
 use crate::layout::{self, TOPICS, crate_dir, package};
+use crate::syntax;
 
 pub struct Stem {
     pub name: String,
@@ -25,6 +27,9 @@ pub struct Stem {
     // tests arrange the store's rows, or reaches a SQL store, whose
     // `TableStore` the part queries through.
     pub sql: bool,
+    // Whether the slice is a later serial slice (`index > 1`) of its part,
+    // extending a held module and test file in place.
+    serial: bool,
     pub manifest: File,
     pub entry: File,
     pub module: File,
@@ -36,6 +41,12 @@ pub struct Stem {
     pub types: Vec<Type>,
     pub scenarios: Vec<Test>,
     pub lines: Vec<Line>,
+    // Registrations in a held module's `routes()` or `topics(..)` whose chain
+    // could not be located by syntax, left for the turn to wire.
+    pub unanchored_registrations: Vec<String>,
+    // The top-level function names already declared in the held module and
+    // test file before this slice's scaffold extends them.
+    held_fns: BTreeSet<String>,
 }
 
 #[derive(Clone, Copy)]
@@ -53,6 +64,7 @@ impl Kind {
 pub struct File {
     pub path: String,
     pub held: bool,
+    pub extended: bool,
     // What the tree holds at the path, where it holds a file.
     text: String,
 }
@@ -190,6 +202,7 @@ impl Stem {
             package: package(name),
             probing,
             sql,
+            serial: slice.index > 1,
             manifest: File::at(format!("{root}/Cargo.toml")),
             entry: File::at(format!("{root}/src/lib.rs")),
             module: File::at(format!("{root}/src/{part}.rs")),
@@ -203,6 +216,8 @@ impl Stem {
             types: Vec::new(),
             scenarios: Vec::new(),
             lines: Vec::new(),
+            unanchored_registrations: Vec::new(),
+            held_fns: BTreeSet::new(),
         }
     }
 
@@ -215,6 +230,28 @@ impl Stem {
         topics: &mut Topics,
     ) {
         let mut namespaces = Namespaces::default();
+        let held_paths = if self.serial
+            && self.module.held
+            && let Ok(parsed) = syntax::parse(&self.module.text)
+        {
+            let declared = syntax::Declared::of(&parsed);
+            self.held_fns.extend(declared.fns.iter().cloned());
+            namespaces.values.extend(declared.fns);
+            namespaces.types.extend(declared.types);
+            namespaces.constants.extend(declared.constants);
+            declared.paths
+        } else {
+            Vec::new()
+        };
+        if self.serial
+            && let Some(tests) = self.tests.as_ref().filter(|file| file.held)
+            && let Ok(parsed) = syntax::parse(&tests.text)
+        {
+            let declared = syntax::Declared::of(&parsed);
+            self.held_fns.extend(declared.fns.iter().cloned());
+            namespaces.tests.extend(declared.fns);
+        }
+
         let parsed: Vec<types::Parsed> =
             owned.iter().map(|design_type| types::read(&design_type.signature)).collect();
         let names: Vec<String> = owned
@@ -273,14 +310,10 @@ impl Stem {
             }
         }
         for (route, group) in routed {
-            self.handler(route, &group, &mut namespaces);
+            self.handler(route, &group, &held_paths, &mut namespaces);
         }
         for (topic, group) in consumed {
             self.consumer(topic, &group, &mut namespaces, topics);
-        }
-
-        if !self.scenarios.is_empty() {
-            self.tests = Some(File::at(format!("crates/{}/tests/{}.rs", self.dir, self.part)));
         }
     }
 
@@ -288,20 +321,24 @@ impl Stem {
     // one constant; its route function where the method is `POST`, a
     // scenario states a status, or the slice probes and the method is
     // `GET`, since a probe's status follows the outcome.
-    fn handler(&mut self, route: &Route, group: &[&Requirement], namespaces: &mut Namespaces) {
+    fn handler(
+        &mut self, route: &Route, group: &[&Requirement], held_paths: &[(String, String)],
+        namespaces: &mut Namespaces,
+    ) {
         let suffix = number(&group[0].id);
         let base = handler_base(group, &route.to_string());
         let name = namespaces.values.reserve(&base, &format!("_{suffix}"));
         let title = pascal(&name);
-        let constant =
-            if let Some((constant, _)) = self.paths.iter().find(|(_, path)| *path == route.path) {
-                constant.clone()
-            } else {
-                let constant =
-                    namespaces.constants.reserve(&screaming(&route.path), &format!("_{suffix}"));
-                self.paths.push((constant.clone(), route.path.clone()));
-                constant
-            };
+        let constant = if let Some((constant, _)) =
+            self.paths.iter().chain(held_paths).find(|(_, path)| *path == route.path)
+        {
+            constant.clone()
+        } else {
+            let constant =
+                namespaces.constants.reserve(&screaming(&route.path), &format!("_{suffix}"));
+            self.paths.push((constant.clone(), route.path.clone()));
+            constant
+        };
         let encoded = route.method == "POST"
             || states_status(group)
             || (self.probing && route.method == "GET");
@@ -349,12 +386,36 @@ impl Stem {
         });
     }
 
-    pub fn read(&mut self, root: &Path) -> Result<(), Error> {
+    pub fn read(&mut self, root: &Path, requirements: &[&Requirement]) -> Result<(), Error> {
+        if requirements.iter().any(|requirement| !requirement.scenarios.is_empty()) {
+            self.tests = Some(File::at(format!("crates/{}/tests/{}.rs", self.dir, self.part)));
+        }
         let files = [&mut self.manifest, &mut self.entry, &mut self.module];
         for file in files.into_iter().chain(self.tests.as_mut()) {
             file.read(root)?;
         }
         Ok(())
+    }
+
+    // Extends the held module and test file in place for a later serial
+    // slice of a part (`index > 1`): appends the new constants, functions,
+    // handlers, consumers, and tests, and registers new routes and topics in
+    // the held `routes()` and `topics(..)` chains where `syn` locates them.
+    pub fn extend(&mut self) {
+        if !self.serial {
+            return;
+        }
+        if self.module.held {
+            let (next, unanchored) = self.extend_module(&self.module.text);
+            self.module.extend(next);
+            self.unanchored_registrations = unanchored;
+        }
+        if let Some(tests) = self.tests.as_ref().filter(|file| file.held) {
+            let next = self.extend_tests(&tests.text);
+            if let Some(tests) = &mut self.tests {
+                tests.extend(next);
+            }
+        }
     }
 
     // Decides each of the stem's lines against its list, the held entry and
@@ -413,10 +474,10 @@ impl Stem {
     // Each requirement's id, and each item the scaffold named as its
     // declaration spells it, `fn read`, `struct ReadInput`, `const
     // ORDERS_ID`, so the entry's calls and the tests' names still resolve;
-    // a held part is an earlier slice's, so nothing of it is the
-    // scaffold's to hold.
+    // a held part that was not extended is an earlier slice's alone, so
+    // nothing of it is the scaffold's to hold.
     fn module_tokens(&self) -> Vec<String> {
-        if self.module.held {
+        if !self.module.laid() {
             return Vec::new();
         }
         let mut tokens = Vec::new();
@@ -452,7 +513,7 @@ impl Stem {
     // Each scenario's requirement id and its test's name, which the check
     // looks the scenario up by.
     fn test_tokens(&self) -> Vec<String> {
-        if self.tests.as_ref().is_none_or(|file| file.held) {
+        if !self.tests.as_ref().is_some_and(File::laid) {
             return Vec::new();
         }
         self.scenarios
@@ -463,9 +524,9 @@ impl Stem {
 
     // A design type's key for its empty marker, a handler's or a consumer's
     // marker for its body, a function's for its signature and body; a held
-    // part is an earlier slice's, so none.
+    // part that was not extended is an earlier slice's alone, so none.
     fn module_markers(&self) -> Vec<Marker> {
-        if self.module.held {
+        if !self.module.laid() {
             return Vec::new();
         }
         let mut markers: Vec<Marker> = self
@@ -493,7 +554,7 @@ impl Stem {
     // Each scenario's test block under its `#[ignore]` text and under its
     // marker text, so either names the block.
     fn test_markers(&self) -> Vec<Marker> {
-        if self.tests.as_ref().is_none_or(|file| file.held) {
+        if !self.tests.as_ref().is_some_and(File::laid) {
             return Vec::new();
         }
         self.scenarios
@@ -567,6 +628,10 @@ impl Stem {
         }
         lines
     }
+
+    pub fn held_fn(&self, name: &str) -> bool {
+        self.held_fns.contains(name)
+    }
 }
 
 impl File {
@@ -574,6 +639,7 @@ impl File {
         Self {
             path,
             held: false,
+            extended: false,
             text: String::new(),
         }
     }
@@ -602,7 +668,26 @@ impl File {
 
     // Where the file came from, as the brief names it.
     pub const fn origin(&self) -> &'static str {
-        if self.held { "held" } else { "scaffolded" }
+        if self.extended {
+            "held, extended"
+        } else if self.held {
+            "held"
+        } else {
+            "scaffolded"
+        }
+    }
+
+    // Whether the scaffold laid this slice's items into the file: a fresh
+    // file it created, or a held one it extended in place.
+    pub const fn laid(&self) -> bool {
+        !self.held || self.extended
+    }
+
+    fn extend(&mut self, next: String) {
+        if next != self.text {
+            self.text = next;
+            self.extended = true;
+        }
     }
 }
 

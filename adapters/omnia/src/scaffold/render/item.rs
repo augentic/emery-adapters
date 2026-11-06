@@ -254,6 +254,13 @@ impl Uses {
         self.0.is_empty()
     }
 
+    pub fn retain(&mut self, mut keep: impl FnMut(&str, &str) -> bool) {
+        for (path, names) in &mut self.0 {
+            names.retain(|name| keep(path, name));
+        }
+        self.0.retain(|(_, names)| !names.is_empty());
+    }
+
     // `use <path>::<name>;` for one name, `use <path>::{<names>};` for
     // several, the names compressed beneath the brace where the line is
     // too long, and the standard library's group a blank line apart from
@@ -675,7 +682,7 @@ impl Call {
         }
     }
 
-    fn inline(&self) -> String {
+    pub fn inline(&self) -> String {
         let args: Vec<String> = self.args.iter().map(Expr::inline).collect();
         format!("{}({})", self.callee, args.join(", "))
     }

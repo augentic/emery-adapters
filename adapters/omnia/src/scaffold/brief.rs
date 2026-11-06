@@ -200,7 +200,10 @@ impl Stem {
             "- `{}`: {}. {}",
             self.module.path,
             self.module.origin(),
-            if self.module.held {
+            if self.module.extended {
+                "Extended with this slice's markers, listed below; fill them through `edit_files` \
+                 and keep what the earlier slice wrote."
+            } else if self.module.held {
                 HELD
             } else {
                 "Fill its markers, listed below, through `edit_files`."
@@ -208,6 +211,16 @@ impl Stem {
         );
         self.brief_text(Kind::Module, budget, text);
         match &self.tests {
+            Some(tests) if tests.extended => {
+                let _ = write!(
+                    text,
+                    "- `{}`: held, extended with one ignored test per scenario of this slice. \
+                     Fill each new test through `edit_files`, replacing the block listed below, \
+                     and keep the earlier tests passing.",
+                    tests.path
+                );
+                self.brief_text(Kind::Tests, budget, text);
+            }
             Some(tests) if tests.held => {
                 let _ = write!(text, "- `{}`: held. {HELD}", tests.path);
                 self.brief_text(Kind::Tests, budget, text);
@@ -294,6 +307,13 @@ impl Stem {
                 line.text.trim()
             );
         }
+        for registration in &self.unanchored_registrations {
+            let _ = writeln!(
+                text,
+                "- {registration} holds no chain anchor, so the registration was not added: \
+                 register the handler in the router chain through `edit_files`."
+            );
+        }
         text.push('\n');
     }
 
@@ -367,7 +387,7 @@ impl Stem {
 
     fn brief_markers(&self, text: &mut String) {
         self.brief_types(text);
-        if self.module.held || self.tests.as_ref().is_some_and(|tests| tests.held) {
+        if !self.module.laid() || self.tests.as_ref().is_some_and(|tests| !tests.laid()) {
             text.push_str(
                 "The markers below are the ones a fresh scaffold writes; a held file holds \
                  whatever stands in it.\n\n",

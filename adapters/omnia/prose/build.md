@@ -23,10 +23,10 @@ Other slices of the wave build beside you from the same commit. Your files merge
 
 Work in this order. Do not skip ahead.
 
-1. Read the brief whole. It carries the text of every file the adapter wrote for you. Do not read those files again.
-2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it.
+1. Read the brief whole. It carries the text of every file the adapter wrote or extended for you. Do not read those files again.
+2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it. When the brief names a module or test file as **held, extended** (a later slice of a part at `index > 1`), the adapter has already appended your new markers, test stubs, and route registrations to the held file: fill only your new markers through `edit_files` and never rewrite or delete the types, handlers, functions, or tests that earlier slices of the part built.
 3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit: its `find` the key the brief quotes beside the marker, alone, and its `replace` the whole text that takes the quoted block's place, indented as the block is.
-4. Add the list lines the brief says are yours to add, through `edit_files`.
+4. Add the list lines and any unanchored route or topic registrations the brief says are yours to add, through `edit_files`.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
@@ -319,6 +319,7 @@ The report is held to the tree before it is accepted. Each rule the tree breaks 
 The rules are the layout's. The [handlers](references/handlers.md), [testing](references/testing.md), and [translation](references/translation.md) references spell the shapes that keep them.
 
 - A marker of a covered requirement stands, or a scenario of one is still ignored, still a `todo!`, or missing. Fill it, or leave the id out of `covered`.
+- A `pub(crate) async fn` handler in your part is registered by neither `routes()` nor `topics(..)`. Register it in the router chain.
 - A file stands beside your stems' crates and `Cargo.lock` that the tree did not hold before your turn. Remove it through `delete`.
 - A crate is written for a stem your requirements do not lead with, or for a stem split at a hyphen.
 - A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.

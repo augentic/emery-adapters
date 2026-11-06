@@ -39,6 +39,27 @@ async fn scenario() {
             };
             check_verdict(&verdict);
         }
+        ["serial"] => {
+            assert_eq!(
+                run(&Task::Init).await,
+                Outcome::Initialised,
+                "an init answers an initialised tree"
+            );
+
+            for slice in [first_serial_slice(), second_serial_slice()] {
+                let outcome = run(&Task::Build(slice.clone())).await;
+                let Outcome::Built(report) = outcome else {
+                    panic!("a build answers a report, not {outcome}");
+                };
+                check_report(&report, &slice);
+            }
+
+            let outcome = run(&Task::Verify).await;
+            let Outcome::Verified(verdict) = outcome else {
+                panic!("a verify answers a verdict, not {outcome}");
+            };
+            check_verdict(&verdict);
+        }
         ["metadata", expected @ ..] => {
             let declared: Vec<String> = metadata
                 .budget
@@ -125,6 +146,45 @@ fn slice() -> Slice {
         design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
+            .to_owned(),
+    }
+}
+
+fn first_serial_slice() -> Slice {
+    let mut slice = slice();
+    slice.count = 2;
+    slice
+}
+
+fn second_serial_slice() -> Slice {
+    Slice {
+        id: "SLICE-002".to_owned(),
+        part: "PART-001".to_owned(),
+        name: "orders".to_owned(),
+        index: 2,
+        count: 2,
+        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        requirements: vec![Requirement {
+            id: "REQ-002".to_owned(),
+            subject: "orders.read".to_owned(),
+            statement: vec!["Reads an order by its id.".to_owned()],
+            scenarios: vec![Scenario {
+                name: "An order is read".to_owned(),
+                given: vec!["an order 42".to_owned()],
+                when: "GET /orders/42 is called".to_owned(),
+                then: "the order is answered".to_owned(),
+                and: Vec::new(),
+            }],
+            trigger: Some(Trigger::http("GET /orders/{id}").expect("valid route")),
+        }],
+        types: Vec::new(),
+        brief: vec!["Create and read an order.".to_owned()],
+        spec: "# Specification\n\n## Requirement: orders.read\n\nID: REQ-002\n\nGET /orders/{id} \
+               reads an order by its id.\n"
+            .to_owned(),
+        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
+        plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001, REQ-002\nTypes: \
+               orders.Order\nDepends on: none\n"
             .to_owned(),
     }
 }

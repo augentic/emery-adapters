@@ -16,6 +16,7 @@ use crate::layout::{
     PROBE_DEPENDENCY, ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES,
     TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
 };
+use crate::syntax;
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
 // The derives of a type a float reaches, which `Eq` cannot hold.
@@ -199,10 +200,6 @@ impl Stem {
     fn render_tests(&self) -> String {
         let sending = self.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)));
         let delivering = self.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)));
-        let with_body = self
-            .scenarios
-            .iter()
-            .any(|test| matches!(&test.act, Act::Route(route) if carries_body(&route.method)));
         let ident = self.package.replace('-', "_");
 
         let mut source = Source::default();
@@ -210,28 +207,7 @@ impl Stem {
             "The acceptance scenarios of the `{}` part of the `{}` stem, over the guest doubles.",
             self.part, self.name
         )]));
-        let mut uses = Uses::default();
-        if sending {
-            uses.add("axum::body", &["Body", "to_bytes"]);
-            if with_body {
-                uses.add("axum::http::header", &["CONTENT_TYPE"]);
-            }
-            uses.add("axum::http", &["Request", "StatusCode"]);
-        }
-        let common: &[&str] = if delivering { &["config", "topic"] } else { &["config"] };
-        uses.add("common", common);
-        if sending || delivering {
-            uses.add("omnia_sdk::api", &["Client"]);
-        }
-        if delivering {
-            uses.add("omnia_sdk::api::messaging", &["Delivery", "DeliveryError", "Router"]);
-        }
-        uses.add("omnia_test::guest", &["MapConfig", "Provider"]);
-        if sending {
-            uses.add("serde_json", &["Value"]);
-            uses.add("tower", &["ServiceExt as _"]);
-        }
-        source.push(uses);
+        source.push(self.test_imports());
 
         source.push(provider());
         if sending {
@@ -308,18 +284,7 @@ impl Stem {
     // The part's `topics(..)`: one `.route(..)` per consumer, chained over
     // the router.
     fn topics_fn(&self) -> Fn {
-        let calls = self
-            .consumers
-            .iter()
-            .map(|consumer| {
-                let topic = Call::new(
-                    "config::topic_for",
-                    ["env".to_owned(), format!("topic::{}", consumer.constant)],
-                );
-                let consume = Call::new("messaging::consume", [consumer.name.as_str()]);
-                Call::new(".route", [topic, consume])
-            })
-            .collect();
+        let calls = self.consumers.iter().map(Consumer::registration).collect();
         Fn::new("topics")
             .vis(Vis::Crate)
             .generics(GENERICS)
@@ -340,6 +305,154 @@ impl Stem {
             .generics(GENERICS)
             .returns("axum::Router<Client<P>>")
             .body(chain.tail(0))
+    }
+
+    // Extends the held `text` of a module for a later serial slice of the
+    // part: inserts missing imports, registers new routes and topics in
+    // `routes()` and `topics(..)` where `syn` locates their chains (else
+    // records them as unanchored), and appends the slice's new path
+    // constants, design types, handlers, consumers, functions, and decoders
+    // at the end of the file.
+    pub fn extend_module(&self, text: &str) -> (String, Vec<String>) {
+        let parsed = syntax::parse(text).ok();
+        let mut next = text.to_owned();
+        let mut unanchored = Vec::new();
+        let mut chains = Vec::new();
+        for (name, display, calls) in [
+            (
+                "routes",
+                "routes()",
+                self.handlers.iter().map(|h| h.registration().inline()).collect::<Vec<_>>(),
+            ),
+            (
+                "topics",
+                "topics(..)",
+                self.consumers.iter().map(|c| c.registration().inline()).collect::<Vec<_>>(),
+            ),
+        ] {
+            if calls.is_empty() || !self.held_fn(name) {
+                continue;
+            }
+            if let Some(at) = parsed.as_ref().and_then(|file| syntax::chain_end(text, file, name)) {
+                chains.push((at, calls.concat()));
+            } else {
+                for call in calls {
+                    unanchored.push(format!("`{call}` in `{display}` of `{}`", self.module.path));
+                }
+            }
+        }
+        chains.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
+        for (at, calls) in chains {
+            next.insert_str(at, &calls);
+        }
+
+        let uses = missing_uses(self.imports(), parsed.as_ref());
+        insert_uses(&mut next, uses, parsed.as_ref());
+
+        let mut appended = Source::default();
+        if !self.paths.is_empty() {
+            let paths = self.paths.iter().map(|(constant, path)| {
+                Const::new(constant, "&str", format!("\"{}\"", escape(path))).vis(Vis::Crate)
+            });
+            appended.push(Consts::new(paths));
+        }
+        if !self.handlers.is_empty() && !self.held_fn("routes") {
+            appended.push(self.routes_fn());
+        }
+        if !self.consumers.is_empty() && !self.held_fn("topics") {
+            appended.push(self.topics_fn());
+        }
+        for design_type in &self.types {
+            design_type.render(&mut appended);
+        }
+        for handler in &self.handlers {
+            handler.render(&mut appended);
+        }
+        for consumer in &self.consumers {
+            consumer.render(&mut appended);
+        }
+        for function in &self.functions {
+            appended.push(function.render());
+        }
+        let encoded = self.handlers.iter().filter(|handler| handler.route_fn.is_some());
+        let (json, query): (Vec<_>, Vec<_>) =
+            encoded.partition(|handler| carries_body(&handler.route.method));
+        if !json.is_empty() && !self.held_fn("decode_json") {
+            appended.push(decode_json());
+        }
+        if !query.is_empty() && !self.held_fn("decode_query") {
+            appended.push(decode_query());
+        }
+        if !query.is_empty() && !self.held_fn("unescape") {
+            appended.push(unescape());
+        }
+        append_source(&mut next, &appended);
+        (next, unanchored)
+    }
+
+    // Extends the held `text` of a test file for a later serial slice of the
+    // part: inserts missing imports and helpers (`send`, `deliver`), and
+    // appends the slice's new ignored scenario tests at the end of the file.
+    pub fn extend_tests(&self, text: &str) -> String {
+        if self.scenarios.is_empty() {
+            return text.to_owned();
+        }
+        let parsed = syntax::parse(text).ok();
+        let mut next = text.to_owned();
+        let uses = missing_uses(self.test_imports(), parsed.as_ref());
+        insert_uses(&mut next, uses, parsed.as_ref());
+
+        let sending = self.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)));
+        let delivering = self.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)));
+        let ident = self.package.replace('-', "_");
+        let mut appended = Source::default();
+        if sending && !self.held_fn("send") {
+            appended.push(send(&ident));
+        }
+        if delivering && !self.held_fn("deliver") {
+            appended.push(deliver(&ident));
+        }
+        for test in &self.scenarios {
+            appended.push(
+                test.render(self)
+                    .comments(test.steps())
+                    .attr("#[tokio::test]")
+                    .attr(test.ignored()),
+            );
+        }
+        append_source(&mut next, &appended);
+        next
+    }
+
+    fn test_imports(&self) -> Uses {
+        let sending = self.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)));
+        let delivering = self.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)));
+        let with_body = self
+            .scenarios
+            .iter()
+            .any(|test| matches!(&test.act, Act::Route(route) if carries_body(&route.method)));
+        let mut uses = Uses::default();
+        if sending {
+            uses.add("axum::body", &["Body", "to_bytes"]);
+            if with_body {
+                uses.add("axum::http::header", &["CONTENT_TYPE"]);
+            }
+            uses.add("axum::http", &["Request", "StatusCode"]);
+        }
+        let common: &[&str] = if delivering { &["config", "topic"] } else { &["config"] };
+        uses.add("common", common);
+        if sending || delivering {
+            uses.add("omnia_sdk::api", &["Client"]);
+        }
+        if delivering {
+            uses.add("omnia_sdk::api::messaging", &["Delivery", "DeliveryError", "Router"]);
+        }
+        uses.add("omnia_test::guest", &["MapConfig", "Provider"]);
+        if sending {
+            uses.add("serde_json", &["Value"]);
+            uses.add("tower", &["ServiceExt as _"]);
+        }
+        uses
     }
 }
 
@@ -429,6 +542,13 @@ impl Handler {
 }
 
 impl Consumer {
+    fn registration(&self) -> Call {
+        let topic =
+            Call::new("config::topic_for", ["env".to_owned(), format!("topic::{}", self.constant)]);
+        let consume = Call::new("messaging::consume", [self.name.as_str()]);
+        Call::new(".route", [topic, consume])
+    }
+
     // Its input over the delivery, and the handler under its requirements,
     // its body the marker.
     fn render(&self, source: &mut Source) {
@@ -827,4 +947,56 @@ fn stated(stated: &[Stated]) -> Vec<String> {
         .iter()
         .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
         .collect()
+}
+
+// The imports of `uses` that `file` does not already bring into scope.
+fn missing_uses(mut uses: Uses, file: Option<&syn::File>) -> Uses {
+    if let Some(mentions) = file.map(syntax::Mentions::of) {
+        uses.retain(|path, name| {
+            let ident = name.split_whitespace().next().unwrap_or(name);
+            let tail = [path.rsplit("::").next().unwrap_or(path), ident];
+            !(mentions.path_ends(&tail) || mentions.contains(ident))
+        });
+    }
+    uses
+}
+
+fn insert_uses(text: &mut String, uses: Uses, file: Option<&syn::File>) {
+    if uses.is_empty() {
+        return;
+    }
+    let mut source = Source::default();
+    source.push(uses);
+    let rendered = source.render();
+    let trimmed = rendered.trim_end();
+    let mut lines: Vec<&str> = text.lines().collect();
+    if let Some(last) = file
+        .and_then(syntax::last_use_line)
+        .and_then(|line| line.checked_sub(1))
+        .or_else(|| lines.iter().rposition(|line| line.starts_with("use ")))
+    {
+        lines.insert(last + 1, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    if let Some(last) = lines.iter().rposition(|line| line.starts_with("//!")) {
+        lines.insert(last + 1, "");
+        lines.insert(last + 2, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    *text = format!("{rendered}\n{text}");
+}
+
+fn append_source(text: &mut String, appended: &Source) {
+    let rendered = appended.render();
+    if rendered.is_empty() {
+        return;
+    }
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        *text = rendered;
+    } else {
+        *text = format!("{trimmed}\n\n{rendered}");
+    }
 }

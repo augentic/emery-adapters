@@ -355,3 +355,60 @@ async fn emery_omnia() {
         "a seed under a hidden directory reached the host's tree"
     );
 }
+
+// Two serial slices of one part built over one tree: the first scaffolds the
+// part and lays its owned design type, and the second extends the held module
+// and test file in place with its route, handler, and test without rewriting
+// the first slice's code or creating a numbered module.
+#[tokio::test]
+async fn emery_omnia_serial() {
+    let project = scratch();
+    let first_edits = serde_json::json!({ "edits": [
+        { "path": "crates/orders/src/orders.rs", "find": "REQ-001 orders.create: the handler", "replace": OMNIA_HANDLER_FILLED.trim_end() },
+        { "path": "crates/orders/tests/orders.rs", "find": "REQ-001 An order is created: arrange, act, assert", "replace": OMNIA_TEST_FILLED.trim_end() },
+    ]})
+    .to_string();
+    let second_edits = serde_json::json!({ "edits": [
+        { "path": "crates/orders/src/orders.rs", "find": "REQ-002 orders.read: the handler", "replace": "    let ReadInput { id } = input;\n    let _ = (id, context);\n    Ok(ReadOutput {})" },
+        { "path": "crates/orders/tests/orders.rs", "find": "REQ-002 An order is read: arrange, act, assert", "replace": "async fn an_order_is_read() {\n    assert_eq!(2 + 2, 4);\n}" },
+    ]})
+    .to_string();
+    let second_report = r#"{"covered": ["REQ-002"], "written": ["crates/orders/src/orders.rs", "crates/orders/tests/orders.rs"]}"#;
+    let model = ScriptedModel::answering([OMNIA_REPORT, second_report, PASSED])
+        .calling(0, [("edit_files", first_edits)])
+        .calling(1, [("edit_files", second_edits)]);
+
+    let model =
+        support::build(test_programs::TARGET_EMERY_OMNIA, &project, &["serial"], model).await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "two build completions, then the verify");
+    assert!(
+        seen[1].messages[0].contains("Build slice 2 of 2 of part `orders` (PART-001) as SLICE-002"),
+        "the second turn opens with the serial slice position: {}",
+        seen[1].messages[0]
+    );
+    assert!(
+        seen[1].messages[0].contains("- `crates/orders/src/orders.rs`: held, extended."),
+        "the brief names the held module as extended: {}",
+        seen[1].messages[0]
+    );
+    let text = |path: &str| {
+        String::from_utf8(project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`")))
+            .expect("UTF-8")
+    };
+    let module = text("crates/orders/src/orders.rs");
+    for carried in [
+        "pub struct Order {",
+        ".route(ORDERS, create_route()).route(ORDERS_ID, get(read))",
+        "pub(crate) async fn create<P: Capabilities>(",
+        "pub(crate) async fn read<P: Capabilities>(",
+    ] {
+        assert!(module.contains(carried), "the extended module carries `{carried}`: {module}");
+    }
+    let tests = text("crates/orders/tests/orders.rs");
+    for carried in ["async fn an_order_is_created()", "async fn an_order_is_read()"] {
+        assert!(tests.contains(carried), "the extended test file carries `{carried}`: {tests}");
+    }
+    assert!(!tests.contains("#[ignore"), "both scenario tests are filled: {tests}");
+}
