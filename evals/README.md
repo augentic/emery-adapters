@@ -67,9 +67,11 @@ cargo run -p evals -- --facts fastapi-routers
 # Specify, apply, and build the plan through emery:node (default) or emery:omnia
 cargo run -p evals -- --build express-orders
 cargo run -p evals -- --build --target omnia express-orders
+cargo run -p evals -- --build --target omnia --budget 6 express-orders
 
-# Rebuild a previous scorecard's sealed revision from scratch
+# Rebuild a previous scorecard's sealed revision from scratch (optionally under a new --budget)
 cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z express-orders
+cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z --target omnia --budget 6 express-orders
 
 # Resume a previous scorecard's build starting at wave 3
 cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at 3 --target omnia express-orders
@@ -87,6 +89,7 @@ cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | Path to the target adapter Wasm component used when `--build` is set. |
 | `EVAL_RUNS` | `3` | Number of `emery specify` runs per case (3 runs distinguish stable output from single-run variance). |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs <N>` to cap concurrent slice builds per wave. |
+| `EVAL_BUDGET` | unset | Passed to `emery build` as `--budget <N>` to cap requirements per build slice (overridden by CLI `--budget <N>`; falls back to the target adapter's `metadata().budget` default of `12`). |
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Comma-separated timeout/inactivity rungs (`CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`, or `GENAI_TIMEOUT_SECS/GENAI_SHELL_TIMEOUT_SECS` under `emery-dev`) that `emery specify` climbs on timeout. |
 | `EVAL_BUILD_RUNG` | `1200/240` | Fixed timeout/inactivity rung used for `emery build`. Under `emery-dev`, the second number caps individual shell commands (`cargo`), so raise it (e.g., `1200/1200`) if cold builds time out. |
 | `CURSOR_MODEL` / `GENAI_MODEL` | `auto` / `gpt-5.5` | Model identifier recorded in the scorecard header. Pin an explicit model before comparing two runs. |
@@ -123,7 +126,7 @@ The extracted facts are printed to stdout and saved to `target/eval/facts/<case>
 
 ## Building the plan
 
-Passing `--build [--target <node|omnia>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default) or [`emery-omnia`](../adapters/omnia/).
+Passing `--build [--target <node|omnia>] [--budget <N>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default) or [`emery-omnia`](../adapters/omnia/).
 
 ### How `--build` stages and runs
 
@@ -210,7 +213,7 @@ To compare target adapter changes or model settings without re-running `emery sp
 
 ### Full rebuild (`--rebuild`)
 
-`--rebuild <card> [--target <name>] [case|adapter..]` copies the sealed `run-1` specification from `<card>` into a new scorecard directory and runs `emery build` from scratch using your current `EMERY_BIN`, target adapter `.wasm`, `CURSOR_MODEL` / `GENAI_MODEL`, and `EVAL_JOBS`:
+`--rebuild <card> [--target <name>] [--budget <N>] [case|adapter..]` copies the sealed `run-1` specification from `<card>` into a new scorecard directory and runs `emery build` from scratch using your current `EMERY_BIN`, target adapter `.wasm`, `CURSOR_MODEL` / `GENAI_MODEL`, `EVAL_JOBS`, and `--budget` / `EVAL_BUDGET`:
 
 ```bash
 cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z --target omnia express-orders
@@ -443,10 +446,32 @@ Each run writes a Markdown scorecard to `target/eval/<card>.md` and per-run arti
 | `built` | `merged/slices` (plus `~k` slices requiring AI merge conflict resolution, and the failure code if the build aborted). |
 | `verified` | `passed/waves` across the waves executed by `emery build`. |
 | `build wall` | Total wall-clock time for the `emery build` process. |
-| `speedup` | Ratio of serial turn time to critical-path wave time, alongside the theoretical plan width factor (`slices ÷ waves`). |
+| `speedup` | Ratio of serial turn time to critical-path wave time, alongside the theoretical schedule width factor (`slices ÷ waves`). |
 | `covered` | Self-reported `covered` requirement IDs across merged slices vs. total requirements assigned to those slices. |
 | `host checks` | Independent host verification result (`ok <passed>/<total>` when install, typecheck/clippy, and tests all pass, or `✗` on the failing step). |
 | `scenarios named` | `named/scenarios (p%) · k outside · u unreached · p probes` from `run-N.fidelity.md`. |
+
+### Plan shape and schedule sections
+
+Below the per-run notes, the scorecard renders two structural tables for each case:
+
+- **`## Plan shape`** (rendered whenever a run stages a plan or runs a `slicing` turn):
+
+  | Column | Meaning |
+  | --- | --- |
+  | `slicing` | Outcome and wall duration of the `slicing` turn (`ok (14s)`, `corrected (38s)`, `exhausted (120s)`, or `no turn` for a single-stem specification). |
+  | `cap exhausted` | Count of `slicing` completions that exhausted their retry budget over a slice-size or pair-merge finding. Expected to be `0`. |
+  | `parts` | Number of logical `PART-NNN` parts in the staged `plan.json`. |
+  | `waves` | Wave count and per-wave part widths (`3 (1/2/1)`). |
+  | `widest` | Maximum number of parts ready to build in a single wave. |
+  | `merged stems` | Count and names of domain stems merged into another stem's part (`0` when each domain stem is one part; a `start` requirement placed into another stem's part by a shared route/topic trigger is not counted as a merged stem). |
+  | `type-backed edges` | Inter-part `depends-on` edges where a type owned by the dependent part references a type owned by the dependency part in its signature (`1 (\`orders\` → \`customers\` (\`Customer\`))`). |
+  | `unbacked edges` | Inter-part `depends-on` edges not backed by any owned design type signature (`3 (\`customers\` → \`start\`, ...)`). |
+  | `unbacked onto start` | Count of unbacked inter-part edges pointing at the `start` part. |
+
+- **`## Schedule`** (rendered on `--build`, `--rebuild`, and `--resume` runs):
+  - Summarizes the resolved requirement `budget` and its source (`flag`, `config`, `adapter`, `default`), total scheduled slices, schedule wave shape, `widest` wave, and the count and IDs of slices flagged `over budget`.
+  - Lists one row per scheduled slice (`SLICE-NNN <name> (index/count)`), its `part` (`PART-NNN`), scheduled `wave`, requirement count (`req`), total acceptance `scenarios` across its requirements in `spec.json`, `over budget` (`yes`/`no`), and the `duration` and token counts (`input`, `cached`, `output`, `reasoning`) summed across its `build-SLICE-NNN` completions.
 
 ### Diagnostic notes and stability
 

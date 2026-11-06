@@ -917,16 +917,17 @@ impl Fidelity {
     }
 }
 
-// The routes a tree mounts, each marked a probe where the merged slice
-// owning its module has no requirement stating a method and path.
+// The routes a tree mounts, each marked a probe where the merged slices
+// owning its module have no requirement stating a method and path.
 pub fn routes(
     mounted: Vec<(String, String, String)>, slices: &[Integrated], requirements: &[Value],
 ) -> Vec<Route> {
     mounted
         .into_iter()
         .map(|(module, method, path)| {
-            let probe = slice_of(slices, &module)
-                .is_some_and(|slice| !states_route(&slice.requirements, requirements));
+            let owned = slices_of(slices, &module);
+            let probe = !owned.is_empty()
+                && !owned.iter().any(|slice| states_route(&slice.requirements, requirements));
             Route {
                 module,
                 method,
@@ -937,19 +938,28 @@ pub fn routes(
         .collect()
 }
 
-// The merged slice whose module `crates/<stem>/src/<part>.rs` is: the one
+// The merged slices whose module `crates/<stem>/src/<part>.rs` is: those
 // named `<stem>-<part>`, or `<stem>` where the part is the stem itself, or
 // `<part>` where the slice's name went in whole under another crate, as
 // the bootstrap's under `start`; the module spells the name's hyphens as
 // underscores.
-fn slice_of<'a>(slices: &'a [Integrated], module: &str) -> Option<&'a Integrated> {
-    let rest = module.strip_prefix("crates/")?;
-    let (stem, rest) = rest.split_once("/src/")?;
-    let part = rest.strip_suffix(".rs")?;
+fn slices_of<'a>(slices: &'a [Integrated], module: &str) -> Vec<&'a Integrated> {
+    let Some(rest) = module.strip_prefix("crates/") else {
+        return Vec::new();
+    };
+    let Some((stem, rest)) = rest.split_once("/src/") else {
+        return Vec::new();
+    };
+    let Some(part) = rest.strip_suffix(".rs") else {
+        return Vec::new();
+    };
     let stem = stem.replace('-', "_");
     let name = if part == stem { stem } else { format!("{stem}_{part}") };
-    let named = |wanted: &str| slices.iter().find(|slice| slice.name.replace('-', "_") == wanted);
-    named(&name).or_else(|| named(part))
+    let named = |wanted: &str| -> Vec<&'a Integrated> {
+        slices.iter().filter(|slice| slice.name.replace('-', "_") == wanted).collect()
+    };
+    let matched = named(&name);
+    if matched.is_empty() { named(part) } else { matched }
 }
 
 // Whether any of the requirements `ids` name, among `requirements`, states
