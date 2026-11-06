@@ -208,16 +208,22 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the merge rules; the init scaffolds the root manifests in
-// the lent tree with no turn, the build writes the mount through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the budget and the merge rules; the init scaffolds the
+// root manifests in the lent tree with no turn, the build writes the mount
+// through `write_files`, its turns carry the worker grant, and its report and
+// the verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["metadata", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &[
+            "metadata",
+            "budget=12",
+            "package-lock.json=ours",
+            "src/index.ts=union",
+            "**/index.ts=union",
+        ],
         ScriptedModel::default(),
     )
     .await;
@@ -248,11 +254,11 @@ async fn emery_node() {
     );
 }
 
-// The metadata lowers the seven rules in order; the init scaffolds the
-// template in the lent tree with no turn, the build scaffolds the slice's
-// skeleton from the typed slice the driver lowered — the stem's crate and
-// its lines in the seeded lists — before its turn, the handler from the
-// typed route the driver lowered, which the turn fills with the test
+// The metadata lowers the budget and the seven rules in order; the init
+// scaffolds the template in the lent tree with no turn, the build scaffolds
+// the slice's skeleton from the typed slice the driver lowered — the stem's
+// crate and its lines in the seeded lists — before its turn, the handler from
+// the typed route the driver lowered, which the turn fills with the test
 // through `edit_files`, its turns carry the worker grant, and
 // its report and the verdict lift back to the driver, the verify's check
 // finding the static files standing as the template spells them.
@@ -263,6 +269,7 @@ async fn emery_omnia() {
         &scratch(),
         &[
             "metadata",
+            "budget=12",
             "Cargo.lock=ours",
             "Cargo.toml=union",
             "src/routes.rs=union",

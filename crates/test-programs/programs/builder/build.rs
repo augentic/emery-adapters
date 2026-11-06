@@ -39,11 +39,21 @@ async fn scenario() {
             };
             check_verdict(&verdict);
         }
-        ["metadata", rules @ ..] => {
-            let declared: Vec<String> = metadata.merge_rules.iter().map(format_rule).collect();
-            assert_eq!(declared, rules, "the merge rules the metadata declares, in order");
+        ["metadata", expected @ ..] => {
+            let declared: Vec<String> = metadata
+                .budget
+                .map(|budget| format!("budget={budget}"))
+                .into_iter()
+                .chain(metadata.merge_rules.iter().map(format_rule))
+                .collect();
+            assert_eq!(
+                declared, expected,
+                "the budget and merge rules the metadata declares, in order"
+            );
         }
-        other => panic!("no argument or `metadata <glob>=<strategy>..`; got {other:?}"),
+        other => {
+            panic!("no argument or `metadata [budget=<n>] <glob>=<strategy>..`; got {other:?}")
+        }
     }
 }
 
@@ -86,7 +96,10 @@ fn format_rule(rule: &MergeRule) -> String {
 fn slice() -> Slice {
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: "orders".to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         requirements: vec![Requirement {
             id: "REQ-001".to_owned(),
@@ -110,7 +123,7 @@ fn slice() -> Slice {
                creates an order from at least one item.\n"
             .to_owned(),
         design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: orders.Order\n\
+        plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
             .to_owned(),
     }

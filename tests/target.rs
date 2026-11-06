@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::num::NonZeroU32;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
@@ -348,6 +349,7 @@ impl<A: TargetAdapter> Shipped<A> {
         assert_eq!(build.worker, Self::granted(), "the build's worker carries the adapter's grant");
         for carried in [
             "SLICE-001",
+            "PART-001",
             "orders-reading",
             "REQ-001",
             "0123456789abcdef0123456789abcdef01234567",
@@ -488,12 +490,15 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
     let ids: Vec<&str> = requirements.iter().map(|requirement| requirement.id.as_str()).collect();
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: name.to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         spec,
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
         plan: format!(
-            "## Slice: {name}\n\nID: SLICE-001\nRequirements: [{}]\nTypes: [Order]\n",
+            "## Part: {name}\n\nID: PART-001\nRequirements: [{}]\nTypes: [Order]\n",
             ids.join(", ")
         ),
         requirements,
@@ -694,6 +699,15 @@ fn node_worker() {
         "the worker grant the adapter's turns carry"
     );
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
+}
+
+#[test]
+fn node_budget() {
+    assert_eq!(
+        emery_node::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
 }
 
 #[tokio::test]
@@ -3096,6 +3110,15 @@ fn omnia_worker() {
         "the worker grant the adapter's turns carry"
     );
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
+}
+
+#[test]
+fn omnia_budget() {
+    assert_eq!(
+        emery_omnia::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
 }
 
 #[tokio::test]
