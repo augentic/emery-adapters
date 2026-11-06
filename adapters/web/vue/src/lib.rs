@@ -76,12 +76,6 @@ pub static PROSE: &[Doc] = emery_sdk::prose![
     "../prose/references/capture.md",
     "../prose/references/facts.md",
     "../prose/references/tree.md",
-    "../prose/references/vue-style-guide/SOURCE.md",
-    "../prose/references/vue-style-guide/index.md",
-    "../prose/references/vue-style-guide/rules-essential.md",
-    "../prose/references/vue-style-guide/rules-strongly-recommended.md",
-    "../prose/references/vue-style-guide/rules-recommended.md",
-    "../prose/references/vue-style-guide/rules-use-with-caution.md",
 ];
 
 const CAPTURE: Doc =
@@ -94,36 +88,8 @@ pub static EXTRACT: &[Doc] =
     &[Doc::new("build.md", include_str!("../prose/build.md")), CAPTURE, FACTS, TREE];
 /// The refactor turn's table, `refactor.md` put under the name `build.md`
 /// the SDK prompts a build with.
-pub static REFACTOR: &[Doc] = &[
-    Doc::new("build.md", include_str!("../prose/refactor.md")),
-    CAPTURE,
-    FACTS,
-    TREE,
-    Doc::new(
-        "references/vue-style-guide/SOURCE.md",
-        include_str!("../prose/references/vue-style-guide/SOURCE.md"),
-    ),
-    Doc::new(
-        "references/vue-style-guide/index.md",
-        include_str!("../prose/references/vue-style-guide/index.md"),
-    ),
-    Doc::new(
-        "references/vue-style-guide/rules-essential.md",
-        include_str!("../prose/references/vue-style-guide/rules-essential.md"),
-    ),
-    Doc::new(
-        "references/vue-style-guide/rules-strongly-recommended.md",
-        include_str!("../prose/references/vue-style-guide/rules-strongly-recommended.md"),
-    ),
-    Doc::new(
-        "references/vue-style-guide/rules-recommended.md",
-        include_str!("../prose/references/vue-style-guide/rules-recommended.md"),
-    ),
-    Doc::new(
-        "references/vue-style-guide/rules-use-with-caution.md",
-        include_str!("../prose/references/vue-style-guide/rules-use-with-caution.md"),
-    ),
-];
+pub static REFACTOR: &[Doc] =
+    &[Doc::new("build.md", include_str!("../prose/refactor.md")), CAPTURE, FACTS, TREE];
 /// The verification turn's table: `verify.md` and the references it links.
 pub static VERIFY: &[Doc] =
     &[Doc::new("verify.md", include_str!("../prose/verify.md")), CAPTURE, TREE];
