@@ -1,57 +1,62 @@
 # Vue style
 
-Curated rules for this adapter's refactor turn. Written for the model; not a
-copy of the upstream guide.
-
 **Attribution.** Drawn from the [Vue.js Style Guide](https://vuejs.org/style-guide/)
 (CC BY 4.0; Copyright (c) 2019-present, Yuxi (Evan) You and Vue documentation
 contributors). Upstream source pinned at
 https://github.com/vuejs/docs/tree/40aa88af0094f7bab4aaf786e55c748a6a251d88/src/style-guide.
-This turn reaches no network, so those URLs are names only — do not open them.
+This turn reaches no network, so those URLs are names only: do not open them.
 
-This document is the adapter's recipe under `prose/references/`, the same place
-node and omnia keep layout recipes and python/typescript keep worked examples:
-short, linked from the prompt, embedded in `PROSE`. It is not a vendored reprint
-of the upstream pages.
-
-## Priority A — essential
-
-Follow each rule. `npm run lint` (eslint-plugin-vue `flat/recommended`) enforces
-several; the check also refuses an unscored `<style>` and absolute/fixed
-positioning under `src/`.
+## Priority A: essential
 
 - **Multi-word component names.** Every component except the root is
-  multi-word (`SiteHeader`, `ProduceCard`). The root is `Page` (the guide's
-  `App`); the seed allows that single-word name.
+  multi-word (`SiteHeader`, `ProduceCard`).
+- **Detailed prop definitions.** Declare props with types (`defineProps` with
+  types or a runtime declaration), never as a bare list of names.
 - **Keyed `v-for`.** Every `v-for` carries a stable `:key`.
-- **No `v-if` with `v-for` on the same element.** Filter in a computed or wrap
-  the conditional in a nested element.
-- **Scoped styling.** Every component's `<style>` is `scoped`. Only `html`,
-  `body`, `:root`, and `@font-face` may sit in a non-scoped `<style>` on
-  `src/Page.vue`.
-- **Detailed props when props appear.** Prefer typed props (`defineProps` with
-  types or a runtime declaration) over undeclared ones.
+- **No `v-if` with `v-for` on the same element.** Filter in a computed, or move
+  the condition to a wrapping element.
+- **Component-scoped styling.** Scope each component's styles.
 
-## Priority B — strongly recommended (this tree)
+## Priority B: strongly recommended
 
-- **One component per file** under `src/components/`, PascalCase filenames
-  (`ProduceCard.vue`).
-- **`src/Page.vue` is the root**; `src/main.js` mounts it and is not rewritten.
-- **Use `<script setup>`** in every SFC.
-- **Self-close** components with no slot content: `<ProduceCard />`.
-- **PascalCase** in templates for component tags; **camelCase** prop names in
-  script, kebab-case in templates when passed as attributes.
-- **Keep template expressions simple**; push logic into script (`computed`,
-  methods, data).
+- **One component per file**, with PascalCase filenames (`ProduceCard.vue`).
+- **Self-close** components that have no content: `<ProduceCard />`.
+- **PascalCase** component tags in templates.
+- **camelCase** prop names in script, kebab-case when passed in templates.
+- **Simple template expressions.** Move logic into `computed` or functions in
+  script.
 
-## Priority C and D
+## Priority C: recommended
 
-Prefer the Priority C defaults. Reach for a Priority D feature
-(`v-if` / `v-for` on the same element is already forbidden above; `v-html`,
-scoped slot misuse, and similar) only when the page's facts require it and no
-simpler shape works.
+- **Component options order.** Keep the parts of a component in a consistent
+  order.
+- **Element attribute order.** Keep attributes in a consistent order
+  (definition, list rendering, conditionals, identifiers, other attributes,
+  events, content).
+- **Empty lines** between multi-line component options where they help
+  reading.
+- **SFC top-level order.** `<script>`, then `<template>`, then `<style>`, in
+  every file.
 
-## How this fits the prompt
+## Priority D: use with caution
 
-The prompt's Code section and the seed's lint config are the gate. Where this
-recipe and looking like the reference conflict, the prompt's rules win.
+- **Element selectors with `scoped`.** Prefer class selectors; element
+  selectors in scoped styles are slower.
+- **Implicit parent-child communication.** Use props and events, not
+  `this.$parent` or mutating props.
+
+## This adapter's rules
+
+These come from this adapter's Code rules and check, not from the upstream
+guide.
+
+- The root component is `src/Page.vue` (the guide's `App`), mounted by
+  `src/main.js`, which is not rewritten. It may keep its single-word name.
+- Components live one per file under `src/components/` and use
+  `<script setup>`.
+- Every component's `<style>` is `scoped`. Only `html`, `body`, `:root`, and
+  `@font-face` may sit in a non-scoped `<style>`, and only in `src/Page.vue`.
+- Nothing under `src/` uses `position: absolute` or `position: fixed`.
+- `npm run lint` (eslint-plugin-vue `flat/recommended`) passes.
+
+Where this document and the prompt's Code rules disagree, the Code rules win.
