@@ -7,7 +7,7 @@ Experiment / non-production. Build the page shown in `layout/refactor/ref/` as a
 - `$WORKSPACE` — the page's tree, lent writable, in the [tree](references/tree.md)'s layout. Write `src/` through this call's two tools alone: `write_files` writes a file whole at a `/`-separated path relative to `$WORKSPACE`, and `edit_files` changes within a file the tree holds, each edit the one place its `find` matches. The shell installs, serves, lints, and captures, and nothing else: a source file the shell writes, through a redirect, a heredoc, `cp`, or a script, is not yours. A script that measures or compares is fine.
 - `layout/refactor/ref/<width>.png` — full-page screenshots of the reference page at the widths named, at the viewport height `index.json` `height`. They show how the page looks, not how it is built.
 - `layout/refactor/facts/` — the reference page's measurement at every width, in the [facts](references/facts.md) format, without the document structure: boxes, styles, text and its lines, images, and fonts, and no tag, nesting, or class name. Use it to recover intent, as its last section says.
-- Vue style: follow the Code rules below and pass `npm run lint`. A curated recipe belongs at `prose/references/vue-style.md` — the same `prose/references/` place node/omnia use for layout recipes and python/typescript use for worked examples (not a vendored copy of https://vuejs.org/style-guide/). Until that document is linked from this prompt, the Code rules and eslint-plugin-vue `flat/recommended` are what you follow. Official guide attribution: CC BY 4.0, https://vuejs.org/style-guide/, upstream commit `40aa88af0094f7bab4aaf786e55c748a6a251d88`. This turn reaches no network; do not open the URL.
+- [Vue style](references/vue-style.md) — curated recipe for this adapter (CC BY 4.0 attribution inside; not a vendored copy of the upstream guide). Follow it with the Code rules below and pass `npm run lint`.
 - **The slice** — its plan entry, the specification cut to it, and the design: its `ui-layout` outline is a reading aid, and the facts and the screenshots are the authority.
 
 Nothing outside `$WORKSPACE` is reachable. Decide the markup, the components, and the CSS yourself from what the page shows; do not look for the original page or its source.
@@ -21,7 +21,7 @@ Nothing outside `$WORKSPACE` is reachable. Decide the markup, the components, an
 
 ## Code
 
-- `src/Page.vue` is the root component (the Vue Style Guide's `App`). Use `<script setup>`.
+- Follow [Vue style](references/vue-style.md). `src/Page.vue` is the root component (the guide's `App`). Use `<script setup>`.
 - `npm run lint` passes: eslint-plugin-vue `flat/recommended` (Priority A essentials: multi-word component names, keyed `v-for`, no `v-if` with `v-for`, and related), the name `Page` allowed as a single-word component name, and stylelint `stylelint-config-standard-vue`. The check does not run it; you do, and answer only once it passes.
 - Semantic HTML for what each part of the page is — headings, lists, links, buttons, images, landmarks — chosen from what the page shows.
 - Components in `src/components/`: one per section, and one for every structure that repeats with the same shape, rendered with `v-for` over data declared in `<script setup>`. Repeated text lives in that data, not in markup.

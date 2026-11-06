@@ -76,12 +76,15 @@ pub static PROSE: &[Doc] = emery_sdk::prose![
     "../prose/references/capture.md",
     "../prose/references/facts.md",
     "../prose/references/tree.md",
+    "../prose/references/vue-style.md",
 ];
 
 const CAPTURE: Doc =
     Doc::new("references/capture.md", include_str!("../prose/references/capture.md"));
 const FACTS: Doc = Doc::new("references/facts.md", include_str!("../prose/references/facts.md"));
 const TREE: Doc = Doc::new("references/tree.md", include_str!("../prose/references/tree.md"));
+const STYLE: Doc =
+    Doc::new("references/vue-style.md", include_str!("../prose/references/vue-style.md"));
 
 /// The extraction turn's table: `build.md` and the references it links.
 pub static EXTRACT: &[Doc] =
@@ -89,7 +92,7 @@ pub static EXTRACT: &[Doc] =
 /// The refactor turn's table, `refactor.md` put under the name `build.md`
 /// the SDK prompts a build with.
 pub static REFACTOR: &[Doc] =
-    &[Doc::new("build.md", include_str!("../prose/refactor.md")), CAPTURE, FACTS, TREE];
+    &[Doc::new("build.md", include_str!("../prose/refactor.md")), CAPTURE, FACTS, TREE, STYLE];
 /// The verification turn's table: `verify.md` and the references it links.
 pub static VERIFY: &[Doc] =
     &[Doc::new("verify.md", include_str!("../prose/verify.md")), CAPTURE, TREE];
