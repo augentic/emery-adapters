@@ -247,7 +247,7 @@ pub trait Config: Send + Sync {
 pub trait StateStore: Send + Sync {
     fn get(&self, key: &str) -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;
     fn set(&self, key: &str, value: &[u8], ttl_secs: Option<u64>)
-        -> impl Future<Output = Result<Option<Vec<u8>>>> + Send;   // the value replaced
+        -> impl Future<Output = Result<()>> + Send;
     fn delete(&self, key: &str) -> impl Future<Output = Result<()>> + Send;
     fn cas(&self, key: &str, expected: Option<&[u8]>, value: &[u8])
         -> impl Future<Output = Result<(), CasError>> + Send;
@@ -290,7 +290,7 @@ pub trait DocumentStore: Send + Sync {
     fn delete(&self, store: &str, id: &str) -> impl Future<Output = Result<bool>> + Send;
     fn query(&self, store: &str, options: QueryOptions) -> impl Future<Output = Result<QueryResult>> + Send;
 }
-// omnia_sdk::document_store
+// omnia_sdk::docstore
 pub struct Document { pub id: String, pub data: Vec<u8> }
 pub struct QueryOptions {
     pub filter: Option<Filter>,
