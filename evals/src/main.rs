@@ -1370,32 +1370,22 @@ mod tests {
         root
     }
 
-    // A handler module a statement of either root list names is reached
-    // whatever the stem's spelling; one neither names is listed, as is a
-    // table constant its list does not name; `lib.rs`, a module with no
-    // handler, and `common` itself are passed over.
-    // A handler module is reached through its stem's entry, which names its
-    // `routes()` or its `topics`, and its stem through the root lists, which
-    // merge its `router()` and register its `topics(..)`; a crate nothing
-    // merges and its own tests alone name is unreached, a topic constant no
-    // module names is unreached, and a module with no handler is passed over.
+    // A handler module is reached through its stem's entry, which lists its
+    // `handlers()`, and its stem through the root router, which lists the
+    // stem's `handlers()`, whatever the stem's spelling; a crate the root
+    // lists nothing of and its own tests alone name is unreached, a topic
+    // constant no module names is unreached, and a module with no handler
+    // is passed over.
     #[test]
     fn omnia_modules_unreached_by_the_lists() {
         let root = scratch(
             "omnia-unreached",
             &[
                 (
-                    "src/routes.rs",
-                    "    let router = axum::Router::new();\n    \
-                     let router = router.merge(order_items::router());\n    \
-                     let router = router.merge(health::router());\n    \
-                     router.with_state(Client::new(OWNER, provider))\n",
-                ),
-                (
-                    "src/messaging.rs",
-                    "    let router = messaging::Router::new(Client::new(OWNER, provider));\n    \
-                     let router = order_items::topics(router, &env);\n    \
-                     let router = health::topics(router, &env);\n",
+                    "src/lib.rs",
+                    "pub fn router<P: Capabilities>(provider: P) -> Router<P> {\n    \
+                     Handlers::from([order_items::handlers(), health::handlers()])\n        \
+                     .with_state(Client::new(provider))\n}\n",
                 ),
                 (
                     "crates/common/src/topic.rs",
@@ -1403,17 +1393,12 @@ mod tests {
                      /// Shipped.\npub const ITEM_SHIPPED: &str = \"items-shipped.v1\";\n\
                      /// Unwired.\npub const ITEM_LOST: &str = \"items-lost.v1\";\n",
                 ),
-                ("crates/common/src/config.rs", "pub async fn env(provider: &impl Config) {}\n"),
                 ("crates/order-items/Cargo.toml", "[package]\nname = \"order-items\"\n"),
                 (
                     "crates/order-items/src/lib.rs",
                     "pub mod fulfilment;\npub mod placing;\npub mod reading;\n\n\
-                     pub fn router<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     common::routers([\n        // one entry per part with routes\n        \
-                     reading::routes(),\n    ])\n}\n\n\
-                     pub fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
-                     common::topics(router, env, [\n        // one entry per part with topics\n        \
-                     fulfilment::topics,\n    ])\n}\n",
+                     pub fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     Handlers::from([reading::handlers(), fulfilment::handlers()])\n}\n",
                 ),
                 ("crates/key-vault/Cargo.toml", "[package]\nname = \"key-vault\"\n"),
                 ("crates/key-vault/src/lib.rs", "pub mod secrets;\n"),
@@ -1427,23 +1412,23 @@ mod tests {
                 ),
                 (
                     "crates/order-items/src/reading.rs",
-                    "pub(crate) async fn list<P>(input: Q, context: Context<P>) -> Result<Vec<Item>> {}\n",
+                    "pub(crate) async fn list<P>(context: Context<P>) -> Result<Json<Vec<Item>>> {}\n",
                 ),
                 (
                     "crates/order-items/src/fulfilment.rs",
-                    "pub(crate) async fn on_placed<P>(input: Item, context: Context<P>) -> Result<()> {\n    \
+                    "pub(crate) async fn on_placed<P>(context: Context<P>, input: Item) -> Result<()> {\n    \
                      let _ = topic::ITEM_SHIPPED;\n    let _ = topic::ITEM_PLACED;\n}\n",
                 ),
                 (
                     "crates/order-items/src/placing.rs",
-                    "pub(crate) async fn place<P>(input: Place, context: Context<P>) -> Result<Item> {}\n",
+                    "pub(crate) async fn place<P>(context: Context<P>, Json(input): Json<Place>) -> Result<Json<Item>> {}\n",
                 ),
                 ("crates/order-items/src/types.rs", "pub struct Item;\n"),
                 ("crates/health/Cargo.toml", "[package]\nname = \"health\"\n"),
                 ("crates/health/src/lib.rs", "pub mod health;\n"),
                 (
                     "crates/health/src/health.rs",
-                    "pub(crate) async fn live<P>(input: Q, context: Context<P>) -> Result<()> {}\n",
+                    "pub(crate) async fn live<P>(context: Context<P>) -> Result<()> {}\n",
                 ),
             ],
         );
@@ -1461,13 +1446,13 @@ mod tests {
         );
     }
 
-    // Each `.route(` of a part's `routes()` is one entry per method its
+    // Each `.route(` of a part's `handlers()` is one entry per method its
     // second argument spells, attributed to the part's module, the path read
-    // from the constant the module declares or a literal, a route fn of the
-    // part's own spelling no method, a `.route(` over a topic none; a route is
-    // a probe when the slice owning the module, found by the module's
-    // spelling of its name, has no requirement carrying a typed HTTP trigger,
-    // and a module no merged slice owns is no probe.
+    // from the constant the module declares or a literal, a method router of
+    // the part's own spelling no method, a `.topic(` or `.topic_with(` no
+    // route; a route is a probe when the slice owning the module, found by
+    // the module's spelling of its name, has no requirement carrying a typed
+    // HTTP trigger, and a module no merged slice owns is no probe.
     #[test]
     fn omnia_routes_per_module() {
         let root = scratch(
@@ -1477,8 +1462,8 @@ mod tests {
                     "crates/orders/src/reading.rs",
                     "pub(crate) const ORDER: &str = \"/orders/{id}\";\n\
                      pub(crate) const ORDERS: &str = \"/orders\";\n\n\
-                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new()\n        .route(ORDER, get(get_order))\n        \
+                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     Handlers::new()\n        .route(ORDER, get(get_order))\n        \
                      .route(ORDER, delete(cancel_order))\n        \
                      .route(ORDERS, get(list_orders))\n}\n",
                 ),
@@ -1486,26 +1471,22 @@ mod tests {
                     "crates/orders/src/placing.rs",
                     "pub(crate) const ORDERS: &str = \"/orders\";\n\
                      pub(crate) const ORDER_NOTES: &str = \"/orders/{id}/notes\";\n\n\
-                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(ORDERS, place_order_route()).route(ORDER_NOTES, notes_route())\n}\n\n\
-                     pub(crate) fn topics<P: Capabilities>(router: messaging::Router<P>, env: &str) -> messaging::Router<P> {\n    \
-                     router.route(config::topic_for(env, topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n\n\
-                     pub(crate) fn place_order_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
-                     handle_with(\n        MethodFilter::POST,\n        place_order,\n        \
-                     |raw: RawRequest<'_>| -> Result<PlaceOrderInput, DecodeError> {\n            \
-                     decode_json(raw.path_params, raw.body)\n        },\n        \
-                     |output: PlaceOrderOutput| (StatusCode::CREATED, Json(output)).into_response(),\n    )\n}\n",
+                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     Handlers::new()\n        .route(ORDERS, post(place_order))\n        \
+                     .route(ORDER_NOTES, notes())\n        \
+                     .topic(topic::ORDER_PLACED, on_placed)\n        \
+                     .topic_with(topic::ORDER_SHIPPED, on_shipped, decode)\n}\n",
                 ),
                 (
                     "crates/architecture/src/architecture.rs",
                     "pub(crate) const LAYERING: &str = \"/architecture/layering\";\n\n\
-                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(LAYERING, get(describe))\n}\n",
+                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     Handlers::new().route(LAYERING, get(describe))\n}\n",
                 ),
                 (
                     "crates/health/src/health.rs",
-                    "pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(\"/health/ready\", get(ready))\n}\n",
+                    "pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     Handlers::new().route(\"/health/ready\", get(ready))\n}\n",
                 ),
             ],
         );
@@ -1597,7 +1578,7 @@ mod tests {
 2026-10-12T07:13:47.500000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo clippy\" result_bytes=1024
 2026-10-12T07:13:48.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=400]) deleted=Some([]) error=None
 2026-10-12T07:13:49.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=None deleted=None error=Some(\"write_files: `crates/a/src/a.rs` would shrink\")
-2026-10-12T07:13:50.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"src/routes.rs\"]) error=None
+2026-10-12T07:13:50.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"src/lib.rs\"]) error=None
 2026-10-12T07:13:51.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" wrote=Some([\"crates/b/src/b.rs\"=0]) deleted=Some([]) error=None
 2026-10-12T07:13:52.000000Z DEBUG complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo test\"
 2026-10-12T07:13:53.000000Z  INFO complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=9000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
@@ -1871,26 +1852,28 @@ mod tests {
         }
     }
 
+    // The root files are the template's entries, at this workspace's lock,
+    // and the lockfile; a root list an earlier template laid is outside.
     #[test]
     fn omnia_layout_membership() {
         let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
         for path in [
             "Cargo.toml",
             "Cargo.lock",
+            "Makefile",
             "rust-toolchain.toml",
             "clippy.toml",
             "deny.toml",
             ".gitignore",
             "src/lib.rs",
-            "src/routes.rs",
-            "src/messaging.rs",
             "tests/routes.rs",
             "tests/messaging.rs",
             "examples/runtime.rs",
             ".github/workflows/ci.yaml",
             "supply-chain/config.toml",
+            "crates/common/Cargo.toml",
+            "crates/common/src/lib.rs",
             "crates/common/src/topic.rs",
-            "crates/common/src/config.rs",
             "crates/orders/Cargo.toml",
             "crates/orders/src/reading.rs",
             "crates/orders/tests/reading.rs",
@@ -1902,8 +1885,11 @@ mod tests {
         for path in [
             "README.md",
             "src/main.rs",
+            "src/routes.rs",
+            "src/messaging.rs",
             "app/src/lib.rs",
             "tests/orders.rs",
+            "crates/common/src/config.rs",
             "crates/common/src/orders.rs",
             "crates/payments/src/lib.rs",
             "scripts/check.sh",

@@ -77,43 +77,15 @@ impl Target {
         }
     }
 
-    // The root files the layout admits: for `omnia`, the template the adapter
-    // scaffolds and the lockfile.
-    const fn root_files(self) -> &'static [&'static str] {
+    // Whether `path` is a root file the layout admits: for `omnia`, a file of
+    // the template the adapter scaffolds, at this workspace's lock, or the
+    // lockfile.
+    fn root_file(self, path: &str) -> bool {
         match self {
-            Self::Node => &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"],
-            Self::Omnia => &[
-                "Cargo.toml",
-                "Cargo.lock",
-                "src/lib.rs",
-                "src/routes.rs",
-                "src/messaging.rs",
-                "tests/routes.rs",
-                "tests/messaging.rs",
-                "examples/runtime.rs",
-                "crates/common/Cargo.toml",
-                "crates/common/src/lib.rs",
-                "crates/common/src/topic.rs",
-                "crates/common/src/config.rs",
-                "Makefile",
-                "mise.toml",
-                "rust-toolchain.toml",
-                "rustfmt.toml",
-                "taplo.toml",
-                "clippy.toml",
-                "deny.toml",
-                ".gitignore",
-                ".vscode/settings.json",
-                "supply-chain/README.md",
-                "supply-chain/config.toml",
-                "supply-chain/audits.toml",
-                ".github/dependabot.yml",
-                ".github/workflows/audit.yaml",
-                ".github/workflows/ci.yaml",
-                ".github/workflows/patch.yaml",
-                ".github/workflows/release.yaml",
-                ".github/workflows/publish.yaml",
-            ],
+            Self::Node => {
+                ["package.json", "package-lock.json", "tsconfig.json", ".gitignore"].contains(&path)
+            }
+            Self::Omnia => path == self.lockfile() || omnia_template::entry(path).is_some(),
         }
     }
 
@@ -123,7 +95,7 @@ impl Target {
     // held in every tree a build lands in and written by no slice, so it is
     // never outside.
     pub fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
-        if path.starts_with(SPECIFICATION) || self.root_files().contains(&path) {
+        if path.starts_with(SPECIFICATION) || self.root_file(path) {
             return true;
         }
         match self {
@@ -228,10 +200,10 @@ impl Target {
     }
 
     // Every module the layout's lists do not reach, sorted: a handler module
-    // `crates/<stem>/src/<part>.rs` whose stem's entry names neither its
-    // `routes()` nor its `topics`, a stem crate `crates/<stem>/` neither root
-    // list merges and no Rust file outside it names as `<stem>::`, a
-    // constant of the topic table no stem's module names, or a stem's or a
+    // `crates/<stem>/src/<part>.rs` whose stem's entry does not name its
+    // `handlers()`, a stem crate `crates/<stem>/` whose `handlers()` the root
+    // router does not list and no Rust file outside it names as `<stem>::`,
+    // a constant of the topic table no stem's module names, or a stem's or a
     // part's `index.ts` the list above it does not re-export. A module's own
     // tests pass without the list, so the checks cannot see it.
     pub fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
@@ -259,10 +231,8 @@ impl Target {
                 }
             }
             Self::Omnia => {
-                let routes =
-                    code_lines(&fs::read_to_string(export.join(ROUTE_LIST)).unwrap_or_default());
-                let topics =
-                    code_lines(&fs::read_to_string(export.join(TOPIC_LIST)).unwrap_or_default());
+                let root =
+                    code_lines(&fs::read_to_string(export.join(ROOT_ROUTER)).unwrap_or_default());
                 let mut paths = Vec::new();
                 files_under(export, export, "target", &mut paths)?;
                 let mut sources = Vec::new();
@@ -287,10 +257,9 @@ impl Target {
                     let entry =
                         code_lines(&fs::read_to_string(src.join("lib.rs")).unwrap_or_default());
 
-                    // a stem neither list merges and nothing outside it names
+                    // a stem the root router does not list and nothing outside it names
                     let own = format!("crates/{stem}/");
-                    let merged = spells_word(&routes, &format!("{name}::router"))
-                        || spells_word(&topics, &format!("{name}::topics"));
+                    let merged = spells_word(&root, &format!("{name}::handlers"));
                     if !merged
                         && crates.join(&stem).join("Cargo.toml").is_file()
                         && !sources
@@ -300,7 +269,7 @@ impl Target {
                         unreached.push(own);
                     }
 
-                    // a handler module the entry's arrays do not name
+                    // a handler module the entry's list does not name
                     for entry_path in fs::read_dir(&src)? {
                         let path = entry_path?.path();
                         let Some(part) = path.file_stem().and_then(|part| part.to_str()) else {
@@ -312,8 +281,7 @@ impl Target {
                         let text = code_lines(&fs::read_to_string(&path)?);
                         if part != "lib"
                             && text.contains("Context<")
-                            && !spells_word(&entry, &format!("{part}::routes"))
-                            && !spells_word(&entry, &format!("{part}::topics"))
+                            && !spells_word(&entry, &format!("{part}::handlers"))
                         {
                             unreached.push(format!("crates/{stem}/src/{part}.rs"));
                         }
@@ -334,11 +302,11 @@ impl Target {
     }
 
     // Every route the tree registers, in tree order: for `omnia`, each
-    // `.route(<path>, <method>(<handler>))` of a part's `routes()`,
+    // `.route(<path>, <method>(<handler>))` of a part's `handlers()`,
     // attributed to the part's module `crates/<stem>/src/<part>.rs`, the
     // path read from the constant the module declares or a literal, and the
-    // method each route fn, or `MethodFilter`, in its second argument
-    // spells; a `.route(..)` over a topic is none. The TypeScript layout
+    // method each route fn in its second argument spells; a topic registers
+    // through `.topic(..)`, which is no route. The TypeScript layout
     // registers routes on an app a slice is handed, which no one file
     // spells, so it lists none.
     pub fn routes(self, export: &Path) -> Vec<(String, String, String)> {
@@ -371,10 +339,7 @@ impl Target {
                 }
                 let text = fs::read_to_string(&path).unwrap_or_default();
                 let module = format!("crates/{stem}/src/{part}.rs");
-                for statement in registered(&text, &text) {
-                    if statement.topic {
-                        continue;
-                    }
+                for statement in registered(&text) {
                     for method in statement.methods {
                         routes.push((module.clone(), method, statement.path.clone()));
                     }
@@ -389,9 +354,9 @@ impl Target {
 // every repository a build lands in.
 const SPECIFICATION: &str = "spec/";
 
-// The omnia layout's two root lists and the topic table of `common`.
-const ROUTE_LIST: &str = "src/routes.rs";
-const TOPIC_LIST: &str = "src/messaging.rs";
+// The omnia layout's root router, listing each stem's `handlers()`, and the
+// topic table of `common`.
+const ROOT_ROUTER: &str = "src/lib.rs";
 const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
 
 // Each `pub const <NAME>: &str = "<text>";` or `pub(crate) const ..` of a
@@ -452,31 +417,27 @@ fn spells_word(text: &str, word: &str) -> bool {
     false
 }
 
-// One `.route(<path>, <method>(<handler>))` statement of a list: whether it
-// registers a topic, its first argument qualified through `topic_for` or
-// `topic`; the path, a literal or the table's constant the first argument
-// names by its last segment, `?` where it is neither; and the methods the
-// second argument spells, one per route fn (`get(..)`) or
-// `MethodFilter::<M>`, those of the `handle_with(..)` a route function of
-// the list's own text names where the argument calls one (`create_route()`),
-// `?` where it spells none.
+// One `.route(<path>, <method>(<handler>))` statement of a module's
+// `handlers()`: the path, a literal or the constant the module declares
+// that the first argument names by its last segment, `?` where it is
+// neither; and the methods the second argument spells, one per route fn
+// (`get(..)`), `?` where it spells none.
 struct Registered {
-    topic: bool,
     path: String,
     methods: Vec<String>,
 }
 
-// Each statement of a list, in order.
-fn registered(list: &str, table: &str) -> Vec<Registered> {
-    let constants = constants(table);
+// Each statement of a module, in order.
+fn registered(module: &str) -> Vec<Registered> {
+    let constants = constants(module);
     let mut routes = Vec::new();
     let mut from = 0;
-    while let Some(found) = list[from..].find(".route(") {
+    while let Some(found) = module[from..].find(".route(") {
         let open = from + found + ".route(".len();
-        let Some(close) = closing(&list[open..]).map(|at| open + at) else {
+        let Some(close) = closing(&module[open..]).map(|at| open + at) else {
             break;
         };
-        let call = &list[open..close];
+        let call = &module[open..close];
         let (first, second) =
             top_level_comma(call).map_or((call, ""), |at| (&call[..at], &call[at + 1..]));
         let first = first.trim();
@@ -490,15 +451,11 @@ fn registered(list: &str, table: &str) -> Vec<Registered> {
             })
             .unwrap_or("?")
             .to_owned();
-        let topic = first.contains("topic_for(") || first.contains("topic(");
         let mut methods = methods_in(second);
-        if methods.is_empty() {
-            methods = declared_methods(list, second);
-        }
         if methods.is_empty() {
             methods.push("?".to_owned());
         }
-        routes.push(Registered { topic, path, methods });
+        routes.push(Registered { path, methods });
         from = close;
     }
     routes
@@ -553,7 +510,7 @@ fn literal(text: &str) -> Option<&str> {
 }
 
 // The methods a route expression spells, in order: each route fn called
-// bare (`get(..)`, never `map.get(..)`) and each `MethodFilter::<M>`.
+// bare (`get(..)`, never `map.get(..)`).
 fn methods_in(expression: &str) -> Vec<String> {
     const VERBS: [&str; 7] = ["get", "post", "put", "patch", "delete", "head", "options"];
     let mut methods = Vec::new();
@@ -566,46 +523,12 @@ fn methods_in(expression: &str) -> Vec<String> {
         let word = &expression[start..end];
         let before = &expression[..start];
         let called = expression[end..].starts_with('(');
-        if before.ends_with("MethodFilter::") && word.bytes().all(|b| b.is_ascii_uppercase()) {
-            methods.push(word.to_owned());
-        } else if VERBS.contains(&word) && called && !before.ends_with('.') {
+        if VERBS.contains(&word) && called && !before.ends_with('.') {
             methods.push(word.to_ascii_uppercase());
         }
         at = end;
     }
     methods
-}
-
-// The methods a route expression spells through a route function of the
-// module, `<name>()` or `<name>::<P>()`: those the `handle_with(..)` in the
-// body of `fn <name>` names; none where the expression calls no function,
-// the module declares none of that name, or its body names no filter.
-fn declared_methods(module: &str, expression: &str) -> Vec<String> {
-    let expression = expression.trim();
-    let end = expression
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .unwrap_or(expression.len());
-    let name = &expression[..end];
-    if name.is_empty() || !expression[end..].contains('(') {
-        return Vec::new();
-    }
-    let declaration = format!("fn {name}");
-    let mut from = 0;
-    while let Some(at) = module[from..].find(&declaration) {
-        let start = from + at;
-        let after = module[start + declaration.len()..].chars().next();
-        if matches!(after, Some('(' | '<')) {
-            let body = &module[start..];
-            let Some(call) = body.find("handle_with(") else {
-                return Vec::new();
-            };
-            let open = call + "handle_with(".len();
-            let close = closing(&body[open..]).map_or(body.len(), |at| open + at);
-            return methods_in(&body[open..close]);
-        }
-        from = start + declaration.len();
-    }
-    Vec::new()
 }
 
 // The names of the directories under `dir`; none where `dir` is no directory.

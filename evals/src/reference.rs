@@ -280,12 +280,15 @@ impl Shape {
         }
         let dependencies = named.difference(&packages).cloned().collect();
 
-        // the settings: the catalog where a tree keeps one, and the per-part
-        // constants spelled as their own names where the layout declares them
+        // the settings: the catalog where a tree keeps one, the per-part
+        // constants spelled as their own names, and the keys of each part's
+        // settings struct
         let common = root.join("crates/common/src");
         let mut config = str_consts(&read_or_empty(&common.join("config.rs")));
         for path in rust.iter().filter(|path| path.starts_with("crates/")) {
-            config.extend(setting_consts(&fs::read_to_string(root.join(path))?));
+            let text = fs::read_to_string(root.join(path))?;
+            config.extend(setting_consts(&text));
+            config.extend(setting_fields(&text));
         }
 
         // the topic table, wherever the tree's shape keeps it
@@ -346,6 +349,50 @@ fn setting_consts(text: &str) -> BTreeSet<String> {
             (literal == name.trim()).then(|| literal.to_owned())
         })
         .collect()
+}
+
+// The key of every field of a `#[derive(.., Settings)]` struct of `text`,
+// as the derive reads it: the field's name upper-cased behind the struct's
+// `#[setting(prefix = "..")]`, or the field's own `#[setting(key = "..")]`.
+fn setting_fields(text: &str) -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    let mut from = 0;
+    while let Some(at) = text[from..].find("#[derive(") {
+        let start = from + at + "#[derive(".len();
+        let Some(close) = text[start..].find(")]") else { break };
+        from = start + close;
+        if !text[start..from].split(',').any(|name| name.trim() == "Settings") {
+            continue;
+        }
+        let Some(open) = text[from..].find('{') else { break };
+        let Some(end) = text[from + open..].find('}') else { break };
+        let prefix = setting_attribute(&text[from..from + open], "prefix").unwrap_or_default();
+        let mut explicit = None;
+        for line in text[from + open + 1..from + open + end].lines().map(str::trim) {
+            if let Some(key) = setting_attribute(line, "key") {
+                explicit = Some(key);
+            } else if !line.starts_with("//")
+                && !line.starts_with('#')
+                && let Some((field, _)) = line.split_once(':')
+            {
+                let field = field.rsplit(' ').next().unwrap_or(field);
+                keys.insert(
+                    explicit
+                        .take()
+                        .unwrap_or_else(|| format!("{prefix}{}", field.to_ascii_uppercase())),
+                );
+            }
+        }
+        from += open + end;
+    }
+    keys
+}
+
+// The string a `#[setting(<name> = "..")]` attribute in `text` spells.
+fn setting_attribute(text: &str, name: &str) -> Option<String> {
+    let lead = format!("{name} = \"");
+    let at = text.find(&lead)? + lead.len();
+    text[at..].split_once('"').map(|(value, _)| value.to_owned())
 }
 
 // The body of `mod <name> { ... }` in `text`, braces balanced; empty where
@@ -1411,6 +1458,25 @@ oracle-shared /stops, /routes?all=true
         let text = "// Where the upstream answers.\npub(crate) const RATES_URL: &str = \"RATES_URL\";\npub(crate) const ORDERS: &str = \"/orders\";\nconst TTL: u64 = 600;\npub const KEY: &str = \"orders/rates\";\n";
         let consts = setting_consts(text);
         assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["RATES_URL"]);
+    }
+
+    // A prefixed struct's fields read under its prefix, a field's own key
+    // over it, an unprefixed struct's bare; a struct deriving no `Settings`
+    // and a field comment spelling a colon add nothing.
+    #[test]
+    fn setting_fields_of_a_part() {
+        let text = "// The settings the part reads: `ORDERS_RATE_URL`, `ORDERS_TYPE`.\n\
+                    #[derive(Debug, Settings)]\n#[setting(prefix = \"ORDERS_\")]\n\
+                    pub(crate) struct PlacingSettings {\n    // Where the rates are: the upstream.\n    \
+                    rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n    \
+                    ttl_secs: u64,\n}\n\n#[derive(Debug, Deserialize)]\npub struct Order {\n    \
+                    pub id: String,\n}\n\n#[derive(Settings)]\nstruct Probe {\n    pub(crate) \
+                    deadline_ms: u64,\n}\n";
+        let keys = setting_fields(text);
+        assert_eq!(
+            keys.into_iter().collect::<Vec<_>>(),
+            ["DEADLINE_MS", "ORDERS_RATE_URL", "ORDERS_TTL_SECS", "ORDERS_TYPE"]
+        );
     }
 
     #[test]

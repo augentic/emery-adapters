@@ -158,7 +158,7 @@ pub fn skipped_entry(name: &std::ffi::OsStr) -> bool {
 // is built — the template's finding, not the model's. So the drift is read
 // here from the commit the resume starts at, through `omnia-template` at
 // this workspace's lock, the template `emery_omnia.wasm` built from the
-// same lock embeds: the root manifest held outside its two stem lists and
+// same lock embeds: the root manifest held outside its stem list and
 // every static file byte for byte, as the gate holds them. The files are
 // read out of the commit into `scratch`, which is removed after; a file the
 // commit lacks is left lacking, which the hold reads as drift. The drift as
