@@ -842,7 +842,8 @@ async fn omnia_init_held() {
         );
     }
 
-    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/lib.rs"]}"#;
+    let report =
+        r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/lib.rs"]}"#;
     let root = "// held\nfn router() {\n    Handlers::from([orders::handlers()])\n}\n";
     let model = ScriptedModel::answering([report])
         .calling(0, [edit_files(&[fill_function(), ("src/lib.rs", "// held\n", root)])]);
@@ -1082,7 +1083,11 @@ async fn omnia_write_scaffolded_refused() {
         OMNIA_FUNCTION_MODULE.replace(OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED),
         "the skeleton stands, its marker filled through the edit"
     );
-    assert_eq!(text(&project, "crates/orders/src/lib.rs"), omnia_function_entry(), "the entry stands");
+    assert_eq!(
+        text(&project, "crates/orders/src/lib.rs"),
+        omnia_function_entry(),
+        "the entry stands"
+    );
 }
 
 // The `orders` stem's entry for a stem whose parts register nothing: the
@@ -2697,8 +2702,10 @@ async fn omnia_scaffold_start_routed() {
         assert!(root.contains(merged), "the root's array lists `{merged}`: {root}");
     }
     let manifest = text(&project, "Cargo.toml");
-    for listed in ["health = { path = \"crates/health\" }\n", "common-stem = { path = \"crates/common-stem\" }\n"]
-    {
+    for listed in [
+        "health = { path = \"crates/health\" }\n",
+        "common-stem = { path = \"crates/common-stem\" }\n",
+    ] {
         assert!(manifest.contains(listed), "the root manifest lists `{listed}`: {manifest}");
     }
     let brief = &model.seen()[0].messages[0];
@@ -3407,10 +3414,7 @@ async fn omnia_static_drift_refused() {
     let first = common.lines().next().expect("the common entry opens with a line");
     let runtime = omnia_seed("examples/runtime.rs");
     let model = ScriptedModel::answering([PASSED, PASSED])
-        .calling(
-            0,
-            [edit_files(&[("crates/common/src/lib.rs", first, "//! Edited by a repair.")])],
-        )
+        .calling(0, [edit_files(&[("crates/common/src/lib.rs", first, "//! Edited by a repair.")])])
         .calling(
             1,
             [
@@ -3587,10 +3591,8 @@ async fn omnia_broad_bounds() {
         .replace(OMNIA_HANDLER_MARKER, broad)
         .replace(OMNIA_SDK_USE, imported);
     project.write("crates/orders/src/reading.rs", &module);
-    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
-        1,
-        [edit_files(&[("crates/orders/src/reading.rs", bound, narrowed)])],
-    );
+    let model = ScriptedModel::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", bound, narrowed)])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the narrowed tree is accepted");
     model.assert_exhausted();
@@ -3688,7 +3690,9 @@ async fn omnia_old_settings() {
     assert!(!correction.contains("ORDERS_REGION"), "an optional read is no finding: {correction}");
     let repaired = text(&project, "crates/orders/src/reading.rs");
     assert!(
-        repaired.contains(settings) && repaired.contains(loaded) && !repaired.contains("Config::get"),
+        repaired.contains(settings)
+            && repaired.contains(loaded)
+            && !repaired.contains("Config::get"),
         "{repaired}"
     );
 }
@@ -4303,7 +4307,10 @@ async fn omnia_build_stem_split() {
     assert!(project.read("crates/order/src/items.rs").is_none(), "the split crate is emptied");
     let manifest = text(&project, "Cargo.toml");
     assert!(manifest.contains(stem_path), "the root manifest names the stem: {manifest}");
-    assert!(!manifest.contains(head_path), "the root manifest no longer names the head: {manifest}");
+    assert!(
+        !manifest.contains(head_path),
+        "the root manifest no longer names the head: {manifest}"
+    );
     assert_eq!(report.written, ["Cargo.toml"], "a removed file is not reported");
 }
 
@@ -4395,8 +4402,10 @@ async fn omnia_verify_parts_undeclared() {
                   f64) -> i64 {\n        (total * 100.0) as i64\n    }\n}\n";
     let entry = format!(
         "{}{folded}",
-        OMNIA_ENTRY
-            .replace("use omnia_sdk::api::Handlers;\n", "use omnia_sdk::api::{Context, Handlers};\n")
+        OMNIA_ENTRY.replace(
+            "use omnia_sdk::api::Handlers;\n",
+            "use omnia_sdk::api::{Context, Handlers};\n"
+        )
     );
     project.write("crates/orders/src/lib.rs", &entry);
     project.write("crates/orders/src/reading.rs", OMNIA_PART);
@@ -5251,7 +5260,8 @@ async fn omnia_scaffold_serial_route_registered() {
          {module}"
     );
     assert!(
-        text(&project, "crates/orders/src/lib.rs").contains("Handlers::from([reading::handlers()])"),
+        text(&project, "crates/orders/src/lib.rs")
+            .contains("Handlers::from([reading::handlers()])"),
         "the stem's entry gains `reading::handlers()` when the part gains its first route"
     );
     assert_parses(&project, &["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]);
@@ -5272,7 +5282,10 @@ async fn omnia_scaffold_serial_route_registered() {
     third.requirements[0].trigger = Some(routed("DELETE", "/orders/{id}"));
     third.requirements[0].scenarios.clear();
     third.types = Vec::new();
-    let third_model = ScriptedModel::answering([r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#]).calling(
+    let third_model = ScriptedModel::answering([
+        r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(
         0,
         [edit_files(&[(
             "crates/orders/src/reading.rs",

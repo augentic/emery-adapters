@@ -1243,8 +1243,8 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
         Expression::TemplateLiteral(template) => {
             let [head] = template.expressions.as_slice() else { return None };
             let [lead, tail] = template.quasis.as_slice() else { return None };
-            (is_module_dir(head) && lead.value.cooked.is_some_and(|lead| lead.is_empty()))
-                .then(|| tail.value.cooked.and_then(|tail| tail.as_str().map(str::to_owned)))
+            (is_module_dir(head) && lead.value.cooked?.is_empty())
+                .then(|| tail.value.cooked?.as_str().map(str::to_owned))
                 .flatten()
         }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
