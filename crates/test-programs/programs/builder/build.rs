@@ -11,7 +11,7 @@ use emery_sdk::target::{
 use emery_sdk::{Standing, Trigger, standing};
 use test_programs::{ADAPTER, Caller, WORKSPACE, arguments, check_version};
 
-omnia_sdk::command!(scenario);
+omnia_sdk::api::command::export!(scenario);
 
 async fn scenario() {
     let metadata = Caller.metadata(ADAPTER);

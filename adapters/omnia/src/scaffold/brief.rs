@@ -13,8 +13,8 @@ use super::lists::{Line, Placement};
 use super::names::escape;
 use super::reference::{self, Laid, Needs};
 use super::stem::{Handler, Kind, Stem};
-use super::{Scaffold, render, trigger};
-use crate::layout::{self, TOPICS, crate_dir};
+use super::{Scaffold, render};
+use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
 
@@ -124,11 +124,14 @@ impl Scaffold {
             if !stem.handlers.is_empty() {
                 laid.insert(Laid::Routes);
             }
-            if stem.handlers.iter().any(|handler| handler.route_fn.is_some()) {
-                laid.insert(Laid::Encoded);
+            if stem.handlers.iter().any(|handler| handler.status) {
+                laid.insert(Laid::Status);
             }
             if !stem.consumers.is_empty() {
                 laid.insert(Laid::Consumers);
+            }
+            if stem.settings.is_some() {
+                laid.insert(Laid::Settings);
             }
             if stem.tests.is_some() {
                 laid.insert(Laid::Tests);
@@ -177,23 +180,21 @@ impl Stem {
              does not pin carries its version instead.",
             self.manifest.path,
             self.manifest.origin(),
-            self.brief_sql_dependency(),
-            if self.sql { "seven" } else { "six" }
+            self.brief_topic_dependency(),
+            self.brief_dependency_count()
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
-        if !self.handlers.is_empty() {
-            entry_lines.push(format!("`{}::routes(),`", self.part));
-        }
-        if !self.consumers.is_empty() {
-            entry_lines.push(format!("`{}::topics,`", self.part));
+        if self.registers() {
+            entry_lines.push(format!("`{}::handlers()`", self.part));
         }
         let _ = writeln!(
             text,
-            "- `{}`: {}, {} {} its lists.",
+            "- `{}`: {}, {} {} its {}.",
             self.entry.path,
             self.entry.origin(),
             listed(&entry_lines),
-            if self.entry.held { "added to" } else { "in" }
+            if self.entry.held { "added to" } else { "in" },
+            if self.registers() { "lists" } else { "list" }
         );
         let _ = write!(
             text,
@@ -242,25 +243,30 @@ impl Stem {
         self.brief_lines(text);
     }
 
-    // The clause after the manifest's origin naming the SQL crate laid among
-    // its dependencies and what for, or nothing for a slice that neither
-    // probes nor reaches a SQL store.
-    fn brief_sql_dependency(&self) -> String {
-        if !self.sql {
+    // The clause after the manifest's origin naming the topic table's crate
+    // laid among its dependencies and what for, or nothing for a part that
+    // names no topic.
+    fn brief_topic_dependency(&self) -> String {
+        if self.consumers.is_empty() {
             return String::new();
         }
-        let line = render::dependency_line(layout::PROBE_DEPENDENCY);
+        let line = render::dependency_line(TOPIC_DEPENDENCY);
         let how = match self.lines.iter().find(|held| held.path == self.manifest.path) {
             None => "among",
             Some(laid) if laid.placement == Placement::Held => "already held among",
             Some(_) => "added at the end of",
         };
-        let what = if self.probing {
-            "the `Row` the probe's tests arrange the store's answer with"
-        } else {
-            "the SQL store the slice reaches"
-        };
-        format!(", `{line}` {how} its `[dependencies]` for {what}")
+        format!(", `{line}` {how} its `[dependencies]` for the topic table's constants")
+    }
+
+    // How many crates the manifest names as scaffolded, in words.
+    fn brief_dependency_count(&self) -> &'static str {
+        let count = STEM_DEPENDENCIES.len() + usize::from(!self.consumers.is_empty());
+        match count {
+            4 => "four",
+            5 => "five",
+            _ => "several",
+        }
     }
 
     // The stem's lines in the root lists and the topic table, each spelled,
@@ -276,9 +282,7 @@ impl Stem {
             .collect();
         let _ = writeln!(
             text,
-            "- `Cargo.toml`, `{}`, `{}`: the stem's lines {}: {}.",
-            layout::ROUTES,
-            layout::MESSAGING,
+            "- `Cargo.toml`, `{ENTRY}`: the stem's lines {}: {}.",
             if added { "added" } else { "already held" },
             spelled.join(", ")
         );
@@ -385,8 +389,28 @@ impl Stem {
         text.push('\n');
     }
 
+    // The settings struct laid from the keys the slice spells, what to load
+    // it with, and where its values are seeded.
+    fn brief_settings(&self, text: &mut String) {
+        let Some(settings) = &self.settings else { return };
+        let keys: Vec<String> = settings.keys().map(|key| format!("`{key}`")).collect();
+        let _ = writeln!(
+            text,
+            "The settings `{}` in `{}` read {}, as the slice spells them: load them with \
+             `{}::load(context.config()).await?` where a body needs one, narrow each field from \
+             `String` to the type its value parses as, drop a field the slice spells for \
+             something other than a setting, and give each key its value in place of \
+             `\"<value>\"` in the tests' `provider()`.\n",
+            settings.name,
+            self.module.path,
+            listed(&keys),
+            settings.name
+        );
+    }
+
     fn brief_markers(&self, text: &mut String) {
         self.brief_types(text);
+        self.brief_settings(text);
         if !self.module.laid() || self.tests.as_ref().is_some_and(|tests| !tests.laid()) {
             text.push_str(
                 "The markers below are the ones a fresh scaffold writes; a held file holds \
@@ -417,16 +441,18 @@ impl Stem {
             count += 1;
             let _ = writeln!(
                 text,
-                "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill `{}` and `{}` with the \
-                 wire's fields, then replace this block with the body. {}\n\n{}",
+                "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill {} with the wire's \
+                 fields, then replace this block with the body. {}{} Narrow `P: Capabilities` to \
+                 the traits the body reaches through the context, `P: StateStore + Config` for \
+                 `context.state()` and `context.config()`.\n\n{}",
                 handler.name,
                 handler.route,
                 self.module.path,
                 handler.marker,
-                handler.input,
-                handler.output,
+                handler.filled(),
                 handler.status_hint(),
-                render::fenced("rust", &render::stub(&handler.marker))
+                handler.params_hint(),
+                render::fenced("rust", &handler.stub())
             );
         }
         for consumer in &self.consumers {
@@ -434,15 +460,21 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
-                 part's `topics(..)` under `topic::{}`: fill `{}` with the delivery's fields, \
-                 then replace this block with the body.\n\n{}",
+                 part's `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, \
+                 then replace this block with the body, narrowing `P: Capabilities` to the \
+                 traits the body reaches. Where the payload is not JSON, register it through \
+                 `.topic_with(topic::{}, {}, decode)` instead, over a `fn decode(delivery: \
+                 &Delivery) -> std::result::Result<{}, DecodeError>` of the part.\n\n{}",
                 consumer.name,
                 consumer.topic,
                 self.module.path,
                 consumer.marker,
                 consumer.constant,
                 consumer.input,
-                render::fenced("rust", &render::stub(&consumer.marker))
+                consumer.constant,
+                consumer.name,
+                consumer.input,
+                render::fenced("rust", &consumer.stub())
             );
         }
         for function in &self.functions {
@@ -480,33 +512,44 @@ impl Stem {
 }
 
 impl Handler {
+    // The types the turn fills with the wire's fields: the input where the
+    // method carries a body, and the output.
+    fn filled(&self) -> String {
+        self.input.as_ref().map_or_else(
+            || format!("`{}`", self.output),
+            |input| format!("`{input}` and `{}`", self.output),
+        )
+    }
+
     // How the handler's `Ok` reaches the wire, and where another status is
     // set.
     fn status_hint(&self) -> String {
-        self.route_fn.as_ref().map_or_else(
-            || {
-                format!(
-                    "Its `Ok` is answered `200` as JSON; for another status, declare a route \
-                     function over `handle_with(MethodFilter::{}, {}, decode, |output: {}| \
-                     (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers \
-                     reference shows and name it in `routes()` in place of `{}({})`.",
-                    self.route.method,
-                    self.name,
-                    self.output,
-                    trigger::method_fn(&self.route.method),
-                    self.name
-                )
-            },
-            |route_fn| {
-                format!(
-                    "Its `Ok` is answered as JSON under the status the encoder in `{route_fn}` \
-                     names, `StatusCode::OK`, which is this slice's to decide there: a `201` \
-                     for a creation, or one read off the output, `503` where a probe found its \
-                     store down; an error status, a `404`, is the error the errors passage \
-                     maps to it."
-                )
-            },
-        )
+        if self.status {
+            format!(
+                "Its `Ok` is a `(StatusCode, Json<{}>)` pair, since a scenario states a status: \
+                 answer the status the outcome earns, `StatusCode::CREATED` for a creation, \
+                 `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down; an error \
+                 status, a `404`, is the error the errors passage maps to it.",
+                self.output
+            )
+        } else {
+            format!(
+                "Its `Ok` is answered `200` as JSON; for another status, change the return type \
+                 to `Result<(StatusCode, Json<{}>)>` and answer the pair, as the handlers \
+                 reference shows.",
+                self.output
+            )
+        }
+    }
+
+    // How the path's parameters reach the body, where the route has any.
+    fn params_hint(&self) -> String {
+        if self.params.is_empty() {
+            return String::new();
+        }
+        " Each path parameter is extracted as a `String`; where the design keys it as an \
+         integer, extract it typed, `Path<i64>`, and let axum answer `400` for a malformed one."
+            .to_owned()
     }
 }
 

@@ -1,126 +1,87 @@
 # Handlers
 
-A requirement lands as a handler in the slice's module and the lines that wire it: a path or a setting as a constant of the part, a `.route(..)` in the part's `routes()` or `topics(..)`, the part's entry in its stem's lists, and the stem's statements in the root lists, as the [layout](layout.md) places them. The shapes below compile against the `omnia-sdk` the root manifest pins; use them as they stand, and read the signatures behind them in [the omnia API](omnia-api.md) rather than probing the crates.
+A requirement lands as a handler in the slice's module and the lines that wire it: a path as a constant of the part, a setting as a field of its `Settings` struct, a `.route(..)` or `.topic(..)` in the part's `handlers()`, the part's entry in its stem's array, and the stem's entry in the root's, as the [layout](layout.md) places them. The shapes below are the exemplar's fixture stem and compile against the `omnia-sdk` the root manifest pins; use them as they stand, and read the signatures behind them in [the omnia API](omnia-api.md) rather than probing the crates.
 
 ## A route
 
-A requirement carrying a route, its `Route:` line, is one route, in the slice's module and one entry of its stem's routes list:
+A requirement carrying a route, its `Route:` line, is one route, in the slice's module and one entry of its stem's array:
 
 ```rust
 // crates/orders/src/placing.rs
-use common::Capabilities;
-use omnia_sdk::api::Client;
-use omnia_sdk::api::http::post;
+use axum::routing::post;
+use omnia_sdk::Capabilities;
+use omnia_sdk::api::Handlers;
 
 // The paths the part serves.
 pub(crate) const ORDERS: &str = "/orders";
 
-pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {
-    axum::Router::new().route(ORDERS, post(place_order))
+pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {
+    Handlers::new().route(ORDERS, post(place))
 }
 ```
 
 ```rust
-// crates/orders/src/lib.rs, the routes array, after its comment
-        placing::routes(),
+// crates/orders/src/lib.rs, the array
+    Handlers::from([placing::handlers()])
 ```
 
-and the stem's statement in the root route list, `let router = router.merge(orders::router());`, and its two lines in the root manifest, `orders = { path = "crates/orders" }` after `common`'s and `orders.workspace = true` at the end, each once per stem, written by the first slice of the stem and found in the tree by every other.
+and the stem's entry in the root router's array, `orders::handlers()`, and its line in the root manifest, `orders = { path = "crates/orders" }` at the end, each once per stem, written by the first slice of the stem and found in the tree by every other.
 
-- A path parameter is `{name}` in the path and a field of that name on the input; which route function decodes the input from where is stated beside its signature in [the omnia API](omnia-api.md). Two methods on one path are two `.route(..)` calls over one constant in one part, or one `.route(ORDERS, get(list_orders).post(place_order))`; two parts of one stem never serve one path.
-- The handler's `Ok` is answered `200` with the output as JSON. For another status or body, the part declares a route function of its own over `handle_with(filter, handler, decode, encode)`, which takes the method, a decoder from the raw request to the input, and an encoder from the output to the response, and `routes()` names it in place of a route function of `omnia_sdk::api::http`. The adapter scaffolds one, `<name>_route`, for every `POST` handler, for every handler whose scenarios state a status other than `200`, and for a probe's `GET`, over a decoder of the part — `decode_json`, reading the JSON body with the path parameters as `post` does, for a body method; `decode_query`, reading the path parameters and the query string together as `get` does, for `GET` and `DELETE`, every field the query fills a `String` or a type that deserialises from one, an `Option<String>` where the query may leave it out — and an encoder spelling `StatusCode::OK`, so a `201` or a `503` is that one token changed; for any other handler the part declares the function as shown:
-
-```rust
-use axum::Json;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::routing::{MethodFilter, MethodRouter};
-use omnia_sdk::api::Client;
-use omnia_sdk::api::http::{DecodeError, RawRequest, handle_with};
-
-// The `POST /orders` route: a placed order is answered `201`.
-pub(crate) fn place_order_route<P>() -> MethodRouter<Client<P>>
-where
-    P: Config + Publish + StateStore + Send + Sync + 'static,
-{
-    handle_with(
-        MethodFilter::POST,
-        place_order,
-        |raw: RawRequest<'_>| -> Result<PlaceOrder, DecodeError> {
-            serde_json::from_slice(raw.body).map_err(|error| DecodeError::new(error.to_string()))
-        },
-        |order: Order| (StatusCode::CREATED, Json(order)).into_response(),
-    )
-}
-
-pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {
-    axum::Router::new().route(ORDERS, place_order_route())
-}
-```
-
-A `204` is `|(): ()| StatusCode::NO_CONTENT.into_response()` over a handler answering `Ok(())`. The bounds on `P` are the handler's capabilities with `Send + Sync + 'static` after them; `common::Capabilities` satisfies every such bound, so `routes()` and `topics(..)` bound on it alone.
+- A path parameter is `{name}` in the path and a `Path` extractor on the handler, `Path(id): Path<String>`, or `Path((id, line)): Path<(String, u32)>` for several, typed where the design keys it so a malformed one is axum's `400`; the query string is `Query(input): Query<ListCatalogue>` over a struct deriving `Deserialize`, each field an `Option` where the query may leave it out; a JSON body is `Json(input): Json<PlaceOrder>`, last. Two methods on one path are two `.route(..)` calls over one constant in one part, or one `.route(ORDERS, get(list).post(place))`; two parts of one stem never serve one path.
+- The handler's `Ok` is what it answers: `Json<O>` is `200` with the output as JSON; `(StatusCode, Json<O>)` the status named, `StatusCode::CREATED` for a creation, `StatusCode::ACCEPTED` for work still settling, `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down; `StatusCode::NO_CONTENT` alone an empty `204`. The adapter scaffolds `Result<Json<O>>` and, where a scenario states a status, `Result<(StatusCode, Json<O>)>`; changing the one is the return type and the `Ok` expression.
 
 ## A topic
 
-A requirement that consumes a topic is one topic: a constant in the topic table where no slice has declared it, a `.route(..)` in the part's `topics(..)`, and one entry of the stem's topics list.
+A requirement that consumes a topic is one topic: a constant in the topic table where no slice has declared it, a `.topic(..)` in the part's `handlers()`, the `common` line in the stem's manifest, and the part's entry in the stem's array.
 
 ```rust
 // crates/common/src/topic.rs, at the end
 /// An order was placed.
-pub const ORDER_PLACED: &str = "orders-placed.v1";
+pub const ORDER_PLACED: &str = "order-placed";
 ```
 
 ```rust
-// crates/orders/src/fulfilment.rs
-use common::{Capabilities, config, topic};
-use omnia_sdk::api::messaging;
+// crates/orders/src/placing.rs
+use common::topic;
 
-pub(crate) fn topics<P: Capabilities>(
-    router: messaging::Router<P>, env: &str,
-) -> messaging::Router<P> {
-    router.route(config::topic_for(env, topic::ORDER_PLACED), messaging::consume(on_placed))
+pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {
+    Handlers::new().route(ORDERS, post(place)).topic(topic::ORDER_PLACED, on_placed)
 }
 ```
 
-```rust
-// crates/orders/src/lib.rs, the topics array, after its comment
-        fulfilment::topics,
-```
-
-and the stem's statement in the root topic list, `let router = orders::topics(router, &env);`, once per stem. The handler is a `Handler` as a route's is, its input the payload decoded as JSON and its output dropped:
+The consumer is a `Handler` as a route's is, its input the payload decoded as JSON in place of an extractor and its output dropped:
 
 ```rust
 use omnia_sdk::api::Context;
-use omnia_sdk::{StateStore, server_error};
+use omnia_sdk::{Result, StateStore, bad_request};
 
-pub(crate) async fn on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()>
+// The state key of the running count of lines placed.
+pub(crate) const LINES_PLACED: &str = "orders/lines-placed";
+
+pub(crate) async fn on_placed<P>(context: Context<P>, input: Placed) -> Result<()>
 where
     P: StateStore,
 {
-    let bytes = serde_json::to_vec(&input).map_err(|error| server_error!("order `{}`: {error}", input.id))?;
-    context.provider().set(&key(&input.id), &bytes, None).await?;
+    let delta = i64::try_from(input.lines).map_err(|error| bad_request!("{error}"))?;
+    let total = context.state().increment(LINES_PLACED, delta).await?;
+    tracing::info!(lines = input.lines, total, "order placed");
     Ok(())
 }
 ```
 
-- A payload that is not JSON is decoded by a `fn(&Delivery) -> Result<I, DecodeError>` of the part, and `topics(..)` registers the pair through `messaging::consume_with(on_notice, decode_notice)`. A malformed wire payload fails in the decoder with `Err(DecodeError::new(..))`. `I` is the wire's root type itself — the one a stage slice of the stem declared where it owns the type key — read straight from `&delivery.payload` through the format's `serde` reader or the stage's own parse function; the decoder never hands the handler the raw bytes or text under a carrier of its own (`struct InboundBody { xml: String }`) for the handler to parse again.
-- A topic handler returns `Err(omnia_sdk::Error)` when a delivery is rejected or cannot be processed — `bad_request!` when validation or timeliness rejects the message, `bad_gateway!` when an upstream fails — rather than catching the error and returning `Ok(())`: the host owns the consumer loop and advances past a rejected delivery on `Err`.
-- The suffix never carries the environment: `topics(..)` qualifies it as `{env}-<suffix>` through `config::topic_for` over the `env` the root resolved once, and a publisher through `config::topic`, so the constant is the same on both sides.
-- A handler that publishes names the constant its consumer is registered under, and the slice that consumes declares it; where no slice consumes, the publisher declares it. The requirement that consumes a topic owns the handler; the one that publishes owns the `send`. Two parts of one stem never consume one topic.
+- A payload that is not JSON is decoded by a `fn decode(delivery: &Delivery) -> std::result::Result<I, DecodeError>` of the part, and `handlers()` registers the pair through `.topic_with(topic::ORDER_DISPATCHED, on_dispatched, decode_dispatch_xml)`. A malformed wire payload fails in the decoder with `Err(DecodeError::new(..))`. `I` is the wire's root type itself — the one a stage slice of the stem declared where it owns the type key — read straight from `delivery.payload` through the format's `serde` reader or the stage's own parse function, `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML; the decoder never hands the handler the raw bytes or text under a carrier of its own (`struct InboundBody { xml: String }`) for the handler to parse again.
+- A consumer returns `Err(omnia_sdk::Error)` when a delivery is rejected or cannot be processed — `bad_request!` when validation or timeliness rejects the message, `bad_gateway!` when an upstream fails — rather than catching the error and returning `Ok(())`: the host owns the consumer loop and advances past a rejected delivery on `Err`.
+- The topic carries no environment: the constant is the topic as the host maps it, the same on both sides.
+- A handler that publishes names the constant its consumer is registered under, `context.publish().send(topic::ORDER_PLACED, &Message::json(&placed)?).await?`, and the slice that consumes declares it; where no slice consumes, the publisher declares it. The requirement that consumes a topic owns the handler; the one that publishes owns the `send`. Two parts of one stem never consume one topic.
 
 ## The handler
 
 ```rust
+use axum::Json;
+use axum::extract::Path;
 use omnia_sdk::api::Context;
-use omnia_sdk::{StateStore, not_found, server_error};
+use omnia_sdk::{Result, StateStore, StateStoreExt as _, not_found};
 use serde::{Deserialize, Serialize};
-
-/// The input of `GET /orders/{id}`: the path parameter.
-#[derive(Debug, Deserialize)]
-pub struct GetOrder {
-    /// The order's id.
-    pub id: String,
-}
 
 /// An order as the design states it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -133,132 +94,168 @@ pub struct Order {
     pub placed_at: chrono::DateTime<chrono::Utc>,
 }
 
-pub(crate) async fn get_order<P>(input: GetOrder, context: Context<P>) -> omnia_sdk::Result<Order>
+pub(crate) async fn get_order<P>(context: Context<P>, Path(id): Path<String>) -> Result<Json<Order>>
 where
     P: StateStore,
 {
-    let GetOrder { id } = input;
-    let bytes = context
-        .provider()
-        .get(&key(&id))
+    let order = context
+        .state()
+        .get_json(&order_key(&id))
         .await?
         .ok_or_else(|| not_found!("no order `{id}`"))?;
-    serde_json::from_slice(&bytes).map_err(|error| server_error!("order `{id}`: {error}"))
+    Ok(Json(order))
 }
 
 /// The state-store key of an order.
 #[must_use]
-pub fn key(id: &str) -> String {
-    format!("orders/{id}")
+pub fn order_key(id: &str) -> String {
+    format!("orders/order/{id}")
 }
 ```
 
-- A handler is `pub(crate) async fn name<P: Capabilities>(input: I, context: Context<P>) -> omnia_sdk::Result<O>`, scaffolded by the adapter for each route a requirement states over an empty `I` deriving `Deserialize` and an empty `O` deriving `Serialize`, its body a `todo!("REQ-.. <subject>: the handler")` under a `let _ = (&input, &context);` line. Fill `I` with one field per path parameter, which the adapter scaffolded as a `String`, query parameter, or body field, and `O` with the response's fields; a route with no input keeps the empty struct. Replace the two lines together with the body, as one `edit_files` edit whose `find` is the marker's key the brief quotes, the `todo!`'s text alone; the bound `P: Capabilities` narrows to the capabilities the body uses, or stays. The input is taken by value, so destructure it (`let PlaceOrder { items } = input;`) rather than reading its fields through a reference the lints flag. A handler is reached through the stem's `router()` or `topics(..)` alone, so it is `pub(crate)`, as the part's paths, settings, state keys, `routes()`, and `topics(..)` are; what another module uses — a type, a key function, a rule — is `pub`. A topic's handler, which the adapter does not scaffold, takes the same shape over the payload's type.
+- A handler is `pub(crate) async fn name<P>(context: Context<P>, <extractors>) -> Result<Json<O>> where P: Capabilities`, scaffolded by the adapter for each route a requirement states over the route's extractors, an empty `I` deriving `Deserialize` where the method carries a body, and an empty `O` deriving `Serialize`, its body a `todo!("REQ-.. <subject>: the handler")` under a `let _ = (&context, ..);` line borrowing each parameter. Fill `I` with the body's fields and `O` with the response's; a route with no body keeps no `I`. Replace the two lines together with the body, as one `edit_files` edit whose `find` is the marker's key the brief quotes, the `todo!`'s text alone, and narrow `P: Capabilities` to the traits the body reaches through the context, `where P: StateStore + Config`, since a bound wider than the body is a finding of the verify. A `Json(input)` is taken by value, so destructure it (`let PlaceOrder { lines } = input;`) or read its fields by move rather than through a reference the lints flag. A handler is reached through the stem's `handlers()` alone, so it is `pub(crate)`, as the part's paths, settings, state keys, and `handlers()` are; what another module uses — a type, a key function, a rule — is `pub`. A consumer takes the same shape over the payload's type in place of the extractors.
 - Every `pub` item carries a `///`: each type, each field, each helper; a fallible `pub fn` carries `# Errors` naming when it fails; a `pub fn` that answers a value and reaches nothing carries `#[must_use]`. The workspace lints deny their absence.
-- The design's types are `pub` structs and enums deriving `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize`, and `Deserialize`, declared once in the module of the slice that owns the type key and used from there by every other module, through the stem's crate. The adapter lays each from the design's signature, fenced in the type's doc: a TypeScript interface, object alias, or class, a Python model, dataclass, or typed dict, or a Rust struct as a `pub struct` of documented fields, a `string` or `str` a `String`, a `number` an `i64` where the field's last word counts (`cents`, `count`, `id`, `index`, `page`, `size`, `total`, `quantity`, `seconds`, `millis`) and an `f64` otherwise, an `int` an `i64`, a `float` an `f64`, a `Date` or `datetime` a `String`, an array a `Vec`, a `Record` or `dict` a `BTreeMap<String, ..>`, an optional field or a `None` default an `Option`, `unknown` or `Any` a `serde_json::Value`, a field's wire name kept through `#[serde(rename = "..")]` over its snake_case spelling, a Python default a `#[serde(default = "default_<field>")]` over a fn beside the struct; an enumeration — a Rust `enum`, a union of string literals, a TypeScript `enum`, a class over `Enum` — as a `pub enum` of PascalCase variants, each `#[serde(rename = "<literal>")]` where the wire carries one; a field typed by a design type the slice owns by that type's name, and by one another slice declares as a `serde_json::Value` under a doc naming the design type, since that slice's module is not in the tree. `Eq` is dropped where a field is a float or holds a type that dropped it, since `assert_eq!` in a test wants `PartialEq` and `f64` has no `Eq`. A signature the adapter cannot lay whole — an alias inferred from a schema, a union of object types, a table — is an empty `pub struct {}` or `pub enum {}` under the fenced signature, the brief's marker, which the slice fills by the same rules. What a module stores is the type serialised with `serde_json`, and what it reads back is the same type deserialised.
-- A type that crosses the wire — a message published, a payload consumed, an upstream's response read — is declared in the wire's shape, as the design's `apis` section spells it: each field at the path and nesting the wire carries, a nested object a struct of its own, a constant the wire carries a field set to it, and a field whose wire name is not a Rust identifier, or not snake_case, carried through `#[serde(rename = "..")]` — `#[serde(rename = "orderId")] pub order_id: String`, `#[serde(rename = "shippingAddress")] pub shipping_address: ShippingAddress` — never renamed to read better in Rust, since the consumer on the other side reads the wire, not the struct. Even when the design's `apis` section spells `response.data` or `data.all[].carrierId` (extracted from Axios in TypeScript), `data` is the HTTP client's property on its response object and **never** a JSON field on the wire, and the adapter refuses any `Deserialize` struct whose body holds a single `data` field: a JSON array endpoint (`/rates`) deserializes `response.body()` directly into `Vec<Rate>`, and a JSON object endpoint (`/shipments/allocations`) deserializes its fields (`pub all: Vec<CarrierAllocation>`) at the root of the struct, never inside `struct ... { data: ... }`. In `quick_xml::de::from_str::<T>` and `from_slice::<T>`, `T` itself is the root XML element (`<Envelope>`), and `T`'s fields are that root element's direct children (`#[serde(rename = "ShipmentNotice")] pub notice: Option<ShipmentNotice>`); never wrap `T` in an outer struct with `#[serde(rename = "Envelope")]`, which makes `quick_xml` expect `<Outer><Envelope>...` and fail on every valid `<Envelope><ShipmentNotice>...` payload. An element the wire repeats under one name — the items of an order, the legs of a shipment — is a plain `Vec<T>` field under `#[serde(default)]` and nothing else: the XML reader collects repeated siblings into a sequence for a plain `Vec` alone and reports the second as a duplicate field under a `deserialize_with`, so a test of the type parses a payload holding two of them. An element the design types `boolean` is a `bool` under `#[serde(default)]`, never an `i32`, since the wire spells `true` and `false`. Every field is one the wire carries, named as the wire names it and placed on the element that carries it, never invented or lifted to the root, as the [translation](translation.md)'s root-element item spells out.
+- The design's types are `pub` structs and enums deriving `Debug`, `Clone`, `PartialEq`, `Eq`, `Serialize`, and `Deserialize`, declared once in the module of the slice that owns the type key and used from there by every other module, through the stem's crate. The adapter lays each from the design's signature, fenced in the type's doc: a TypeScript interface, object alias, or class, a Python model, dataclass, or typed dict, or a Rust struct as a `pub struct` of documented fields, a `string` or `str` a `String`, a `number` an `i64` where the field's last word counts (`cents`, `count`, `id`, `index`, `page`, `size`, `total`, `quantity`, `seconds`, `millis`) and an `f64` otherwise, an `int` an `i64`, a `float` an `f64`, a `Date` or `datetime` a `String`, an array a `Vec`, a `Record` or `dict` a `BTreeMap<String, ..>`, an optional field or a `None` default an `Option`, `unknown` or `Any` a `serde_json::Value`, a field's wire name kept through `#[serde(rename = "..")]` over its snake_case spelling, a Python default a `#[serde(default = "default_<field>")]` over a fn beside the struct; an enumeration — a Rust `enum`, a union of string literals, a TypeScript `enum`, a class over `Enum` — as a `pub enum` of PascalCase variants, each `#[serde(rename = "<literal>")]` where the wire carries one; a field typed by a design type the slice owns by that type's name, and by one another slice declares as a `serde_json::Value` under a doc naming the design type, since that slice's module is not in the tree. `Eq` is dropped where a field is a float or holds a type that dropped it, since `assert_eq!` in a test wants `PartialEq` and `f64` has no `Eq`. A signature the adapter cannot lay whole — an alias inferred from a schema, a union of object types, a table — is an empty `pub struct {}` or `pub enum {}` under the fenced signature, the brief's marker, which the slice fills by the same rules. What a module stores is the type as JSON through `set_json`, and what it reads back is the same type through `get_json`.
+- A type that crosses the wire — a message published, a payload consumed, an upstream's response read — is declared in the wire's shape, as the design's `apis` section spells it: each field at the path and nesting the wire carries, a nested object a struct of its own, a constant the wire carries a field set to it, and a field whose wire name is not a Rust identifier, or not snake_case, carried through `#[serde(rename = "..")]` — `#[serde(rename = "orderId")] pub order_id: String`, `#[serde(rename = "shippingAddress")] pub shipping_address: ShippingAddress` — never renamed to read better in Rust, since the consumer on the other side reads the wire, not the struct. Even when the design's `apis` section spells `response.data` or `data.all[].carrierId` (extracted from Axios in TypeScript), `data` is the HTTP client's property on its response object and **never** a JSON field on the wire, and the adapter refuses any `Deserialize` struct whose body holds a single `data` field: a JSON array endpoint (`/rates`) is read as `Vec<Rate>`, and a JSON object endpoint (`/shipments/allocations`) as a struct whose fields (`pub all: Vec<CarrierAllocation>`) sit at its root, never inside `struct ... { data: ... }`. In `quick_xml::de::from_str::<T>` and `from_reader::<T>`, `T` itself is the root XML element (`<Envelope>`), and `T`'s fields are that root element's direct children (`#[serde(rename = "ShipmentNotice")] pub notice: Option<ShipmentNotice>`); never wrap `T` in an outer struct with `#[serde(rename = "Envelope")]`, which makes `quick_xml` expect `<Outer><Envelope>...` and fail on every valid `<Envelope><ShipmentNotice>...` payload. An element the wire repeats under one name — the items of an order, the legs of a shipment — is a plain `Vec<T>` field under `#[serde(default)]` and nothing else: the XML reader collects repeated siblings into a sequence for a plain `Vec` alone and reports the second as a duplicate field under a `deserialize_with`, so a test of the type parses a payload holding two of them. An element the design types `boolean` is a `bool` under `#[serde(default)]`, never an `i32`, since the wire spells `true` and `false`. Every field is one the wire carries, named as the wire names it and placed on the element that carries it, never invented or lifted to the root, as the [translation](translation.md)'s root-element item spells out.
 - A requirement that states a count, a measurement, or a level the operator observes is one `tracing` event where the behaviour happens, read by the host's metrics layer through its field's prefix: `tracing::info!(monotonic_counter.orders.rejected_expired = 1)` for a count, `tracing::info!(histogram.orders.fulfilment_latency_ms = elapsed)` for a measurement (`elapsed` the difference of two `chrono::Utc::now()` readings, or `Utc::now()` minus a timestamp the input carries, never `std::time::Instant::now()`), `tracing::info!(gauge.catalog.rates_cached = rates.len())` for a level, the name in snake_case under the stem; no counter type, no `StateStore` key, no exporter.
-- The host is reached through `context.provider()` alone, bounded on the handler as `P: StateStore` or whichever capabilities it uses, each a trait of `omnia_sdk`. Where two bounded capabilities share a method name — `Config::get` beside `StateStore::get` — call the trait's method by name: `StateStore::get(context.provider(), &key)`.
-- A setting is read by a constant the part declares, `pub(crate) const RATES_URL: &str = "RATES_URL";`, its value its name and a `//` above it naming what the deployment provides, through `Config::get(context.provider(), RATES_URL)`, never by a literal; two parts that read one setting each declare it under the same name, and no part reads a setting another declares. The identity `Identity::access_token` is asked for is such a setting — `pub(crate) const UPSTREAM_IDENTITY: &str = "UPSTREAM_IDENTITY";`, read through `Config::get` and handed on, `Identity::access_token(provider, Config::get(provider, UPSTREAM_IDENTITY).await?).await?` — never a literal name. What is a setting and what is a constant of the part is the [layout](layout.md)'s rule.
-- A failure is a classified error, never a panic: `bad_request!`, `not_found!`, `server_error!`, and `bad_gateway!` each take a format string and build an `omnia_sdk::Error`, answered as `400`, `404`, `500`, or `502` with the JSON body `{"error": "<code>", "message": ".."}`. Because `bad_request!` hardcodes `code: "bad_request"`, when a requirement or scenario names a specific `400` reason code (`"outdated"`, `"no_update"`, `"wrong_time"`), construct `omnia_sdk::Error::BadRequest { code: "<reason>".to_owned(), description: format!(..) }` directly so the reason code reaches the wire's `"error"` field. A provider call answers `anyhow::Result`, so `?` on it carries the host's failure into the handler's error as a `server_error`, and a handler that ends on such a call closes with `Ok(())` after it rather than returning the call's result.
-- A status outside those four is an error type of the module's: an enum deriving `thiserror::Error`, with a variant wrapping `omnia_sdk::Error` under `#[from]` so `?` still works, converted into the response by `From<ThatError> for omnia_sdk::HttpError`. The handler answers `Result<O, ThatError>`; `thiserror` is pinned in the root manifest and named in the stem's manifest as every other crate is:
+- The host is reached through the context's accessor for each capability, `context.state()`, `context.config()`, `context.http()`, `context.publish()`, `context.tables()`, `context.docs()`, `context.blobs()`, `context.identity()`, `context.broadcast()`, each present where the handler's `P` is bounded on its trait, so two traits that share a method name — `Config::get` beside `StateStore::get` — are told apart by the accessor. The `*Ext` methods — `get_json`, `set_json`, `query_as`, `fetch_json`, `get_parsed`, `get_as`, `access_token` — are the trait's extension, imported `as _`: `use omnia_sdk::{StateStore, StateStoreExt as _}`. A helper several capabilities serve takes `context.provider()` under a bound of its own, `fn read_order<P: TableStore>(provider: &P, id: &str)`.
+- A setting is a field of the part's `Settings` struct, loaded where a body needs one, `let settings = PlacingSettings::load(context.config()).await?;` under `P: Config`, and read as `settings.limit`, never by a literal key in a handler; two parts that read one setting each declare it under the same key, and no part reads a setting another declares. The identity `access_token` is asked for is such a setting — a field `upstream_identity: String` under `#[setting(key = "UPSTREAM_IDENTITY")]`, handed on, `context.identity().access_token(&settings.upstream_identity).await?` — never a literal name. What is a setting and what is a constant of the part is the [layout](layout.md)'s rule.
+- A failure is a classified error, never a panic: `bad_request!`, `not_found!`, `server_error!`, and `bad_gateway!` each take a format string and build an `omnia_sdk::Error`, answered as `400`, `404`, `500`, or `502` with the JSON body `{"error": "<code>", "message": ".."}`. Because `bad_request!` spells the code `bad_request`, when a requirement or scenario names a specific `400` reason code (`"outdated"`, `"no_update"`, `"wrong_time"`), call `omnia_sdk::Error::bad_request("<reason>", format!(..))` so the reason code reaches the wire's `"error"` field. A provider call answers `anyhow::Result`, so `?` on it carries the host's failure into the handler's error as a `server_error`, and a handler that ends on such a call closes with `Ok(())` after it rather than returning the call's result.
+
+## A status of its own
+
+A status outside the four errors' is an error type of the module's: an enum deriving `thiserror::Error`, with a variant wrapping `omnia_sdk::Error` under `#[from]` so `?` still works and a `From<anyhow::Error>` so a provider call's `?` works too, implementing `IntoResponse` itself. The handler answers `Result<(StatusCode, Json<O>), ThatError>`, its `Ok` the status the outcome earns; `thiserror` is pinned in the root manifest and named in the stem's manifest as every other crate is. The fixture's `lookup.rs`:
 
 ```rust
+use axum::Json;
+use axum::extract::Path;
 use axum::http::StatusCode;
-use omnia_sdk::HttpError;
+use axum::response::{IntoResponse, Response};
+use omnia_sdk::api::Context;
+use omnia_sdk::{StateStore, StateStoreExt as _, not_found};
 
-/// Why an order cannot be cancelled.
+/// Why an order lookup was refused.
 #[derive(Debug, thiserror::Error)]
-pub enum CancelError {
-    /// The order has shipped.
-    #[error("order `{0}` is shipped")]
-    Shipped(String),
-    /// The host failed.
+pub enum LookupError {
+    /// Another operation holds a lock on the order.
+    #[error("order `{0}` is locked")]
+    Conflict(String),
+    /// The store or a precondition failed.
     #[error(transparent)]
     Host(#[from] omnia_sdk::Error),
 }
 
-impl From<CancelError> for HttpError {
-    fn from(error: CancelError) -> Self {
-        match error {
-            CancelError::Shipped(_) => Self::new(StatusCode::CONFLICT, error.to_string()),
-            CancelError::Host(inner) => inner.into(),
+impl From<anyhow::Error> for LookupError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Host(error.into())
+    }
+}
+
+impl IntoResponse for LookupError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Conflict(ref id) => {
+                let body = serde_json::json!({
+                    "error": "conflict",
+                    "message": self.to_string(),
+                    "id": id,
+                });
+                (StatusCode::CONFLICT, Json(body)).into_response()
+            }
+            Self::Host(inner) => inner.into_response(),
         }
     }
 }
+
+// `202 Accepted` while the order is still settling.
+pub(crate) async fn lookup<P>(
+    context: Context<P>, Path(id): Path<String>,
+) -> Result<(StatusCode, Json<OrderStatus>), LookupError>
+where
+    P: StateStore,
+{
+    let key = order_key(&id);
+    let status: OrderStatus = context
+        .state()
+        .get_json(&key)
+        .await?
+        .ok_or_else(|| not_found!("order `{id}` not found"))?;
+    if status.locked {
+        return Err(LookupError::Conflict(id));
+    }
+    let code = if status.settled { StatusCode::OK } else { StatusCode::ACCEPTED };
+    Ok((code, Json(status)))
+}
 ```
+
+Where every status the handler answers is a success or one of the four, no error type is needed: `Result<(StatusCode, Json<O>)>` over `omnia_sdk::Error` answers `201` and `404` alike, and the adapter scaffolds that shape where a scenario states a status.
 
 ## The capabilities
 
-Each capability is a trait on the provider, bounded where it is used and called through `context.provider()`; every call is `async`, and `?` carries its failure into the handler's error. The methods, their arguments, and the types they carry are in [the omnia API](omnia-api.md), one block per trait.
+Each capability is a trait on the provider, bounded where it is used and reached through the context's accessor; every call is `async`, and `?` carries its failure into the handler's error. The methods, their arguments, and the types they carry are in [the omnia API](omnia-api.md), one block per trait.
 
-| Capability | What it reaches |
-| --- | --- |
-| `Config` | a setting of the deployment, under a constant of the part that reads it |
-| `StateStore` | a key-value store of bytes |
-| `BlobStore` | objects in named containers |
-| `DocumentStore` | JSON documents by id in a named store |
-| `TableStore` | SQL over a named connection; `Row` and `DataType` are the `omnia-wasi-sql` crate's, named in the stem's manifest as `omnia-wasi-sql.workspace = true` |
-| `HttpRequest` | an outbound HTTP call |
-| `Identity` | an access token for a named identity, the name read through `Config::get` under a setting of the part, never a literal |
-| `Publish` | a message to a topic of `common::topic`, qualified through `config::topic` |
-| `Broadcast` | an event to connected WebSocket clients |
+| Capability | Accessor | What it reaches |
+| --- | --- | --- |
+| `Config` | `context.config()` | a setting of the deployment, under a field of the part's `Settings` struct |
+| `StateStore` | `context.state()` | a key-value store of bytes; `get_json` and `set_json` through `StateStoreExt` |
+| `BlobStore` | `context.blobs()` | objects in named containers |
+| `DocumentStore` | `context.docs()` | JSON documents by id in a named store; `get_as` through `DocumentStoreExt` |
+| `TableStore` | `context.tables()` | SQL over a named connection; `query_as` into a `FromRow` type through `TableStoreExt`, `Row` and `DataType` from `omnia_sdk::sql` |
+| `HttpRequest` | `context.http()` | an outbound HTTP call; `fetch_json` through `HttpRequestExt` |
+| `Identity` | `context.identity()` | an access token for a named identity, the name a setting of the part, never a literal |
+| `Publish` | `context.publish()` | a message to a topic of `common::topic` |
+| `Broadcast` | `context.broadcast()` | an event to connected WebSocket clients |
+| `Vault` | `context.vault()` | a secret by key |
 
 A handler that reads a setting, fetches, and publishes:
 
 ```rust
+use axum::Json;
 use axum::body::Body;
+use axum::extract::Path;
 use axum::http::Request;
-use common::{config, topic};
+use common::topic;
 use omnia_sdk::api::Context;
-use omnia_sdk::{Config, HttpRequest, Message, Publish, bad_gateway};
+use omnia_sdk::{Config, HttpRequest, HttpRequestExt as _, Message, Publish, Result, Settings, bad_gateway};
 
-// Where the rates upstream answers.
-pub(crate) const RATES_URL: &str = "RATES_URL";
+// The settings the part reads: `RATES_URL`.
+#[derive(Debug, Settings)]
+pub(crate) struct RatingSettings {
+    rates_url: String,
+}
 
-pub(crate) async fn rate<P>(input: RateQuery, context: Context<P>) -> omnia_sdk::Result<Rate>
+pub(crate) async fn rate<P>(context: Context<P>, Path(currency): Path<String>) -> Result<Json<Rate>>
 where
     P: Config + HttpRequest + Publish,
 {
-    let RateQuery { currency } = input;
-    let provider = context.provider();
-    let base = Config::get(provider, RATES_URL).await?;
-    let request = Request::get(format!("{base}/{currency}"))
+    let settings = RatingSettings::load(context.config()).await?;
+    let request = Request::get(format!("{}/{currency}", settings.rates_url))
         .body(Body::empty())
         .map_err(|error| bad_gateway!("{error}"))?;
-    let response = HttpRequest::fetch(provider, request).await?;
-    if !response.status().is_success() {
-        return Err(bad_gateway!("rates upstream answered {}", response.status()));
-    }
-    let rate: Rate = serde_json::from_slice(response.body())
-        .map_err(|error| bad_gateway!("rates upstream body: {error}"))?;
-    let payload = serde_json::to_vec(&rate).map_err(|error| bad_gateway!("{error}"))?;
-    let topic = config::topic(provider, topic::RATE_SEEN).await;
-    Publish::send(provider, &topic, &Message::new(&payload)).await?;
-    Ok(rate)
+    let rate: Rate = context.http().fetch_json(request).await?;
+    context.publish().send(topic::RATE_SEEN, &Message::json(&rate)?).await?;
+    Ok(Json(rate))
 }
 ```
 
-The capability is the one way to each of these; what a guest reaches no other way is in the [guardrails](guardrails.md).
+`fetch_json` answers a non-2xx status or an unreadable body as a `bad_gateway!`; where a status needs handling of its own, `context.http().fetch(request).await?` answers the `Response<Bytes>` and the handler reads `response.status()` and `response.body()`. The capability is the one way to each of these; what a guest reaches no other way is in the [guardrails](guardrails.md).
 
 ## A probe
 
-A readiness or health requirement probes a store with one call through the capability that reaches it, awaited: the probe passed when the call answered what a live store answers, and failed when it answered `Err`. The host bounds every call, so the probe sets no deadline of its own: no timer, no race, no `within` helper, no `PROBE_TIMEOUT_MS` setting, and the source's parallel probes run one after the other. A SQL store is probed by `SELECT 1` over `TableStore::query` under the connection's constant, one row the pass and `Err` or no row the failure; a key-value store by `StateStore::get` of a probe key, a miss as much a pass as a hit, since the store answered. Never an `HttpRequest` to a store's address: the connection is the host's, named by a constant of the part whose value is the name the deployment binds, never a URL.
+A readiness or health requirement probes a store with one call through the capability that reaches it, awaited: the probe passed when the call answered what a live store answers, and failed when it answered `Err`. The host bounds every call, so the probe sets no deadline of its own: no timer, no race, no `within` helper, no `PROBE_TIMEOUT_MS` setting, and the source's parallel probes run one after the other. A SQL store is probed by `SELECT 1` over `context.tables().query(..)` under the connection's constant, one row the pass and `Err` or no row the failure; a key-value store by `context.state().get(..)` of a probe key, a miss as much a pass as a hit, since the store answered. Never an `HttpRequest` to a store's address: the connection is the host's, named by a constant of the part whose value is the name the deployment binds, never a URL. The status follows the outcome, so the handler answers the `(StatusCode, Json<O>)` pair:
 
 ```rust
+use axum::Json;
+use axum::http::StatusCode;
 use omnia_sdk::api::Context;
-use omnia_sdk::{StateStore, TableStore};
-use serde::{Deserialize, Serialize};
+use omnia_sdk::{Result, StateStore, TableStore};
+use serde::Serialize;
 
 // The SQL connection the deployment binds for the orders tables.
 pub(crate) const ORDERS_DB: &str = "orders";
 
 // The key the cache probe reads; what it holds, if anything, is not read.
 const PROBE: &str = "health/probe";
-
-/// The input of `GET /health/ready`: nothing.
-#[derive(Debug, Deserialize)]
-pub struct ReadyInput {}
 
 /// Whether each store answered.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -269,54 +266,28 @@ pub struct Readiness {
     pub cache: bool,
 }
 
-pub(crate) async fn ready<P>(input: ReadyInput, context: Context<P>) -> omnia_sdk::Result<Readiness>
+// `503` where the store did not answer.
+pub(crate) async fn ready<P>(context: Context<P>) -> Result<(StatusCode, Json<Readiness>)>
 where
     P: StateStore + TableStore,
 {
-    let ReadyInput {} = input;
-    let provider = context.provider();
-    let store =
-        TableStore::query(provider, ORDERS_DB.to_string(), "SELECT 1".to_string(), Vec::new())
-            .await
-            .is_ok_and(|rows| !rows.is_empty());
-    let cache = StateStore::get(provider, PROBE).await.is_ok();
-    Ok(Readiness { store, cache })
+    let store = context
+        .tables()
+        .query(ORDERS_DB, "SELECT 1", &[])
+        .await
+        .is_ok_and(|rows| !rows.is_empty());
+    let cache = context.state().get(PROBE).await.is_ok();
+    let status = if store { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
+    Ok((status, Json(Readiness { store, cache })))
 }
 ```
 
-A status that follows the outcome, `503` where the store failed, is set in a route function of the part's own over `handle_with`, whose encoder reads the output, named in `routes()`; the scaffold lays that function beside a probe's `GET` handler with its encoder answering `StatusCode::OK`, so the status is the encoder's one expression to change, and the function below is whole with the `use` lines it needs, since `into_response` is a method of `axum::response::IntoResponse`, which must be in scope, the `where` clause names the capability traits, and the decoder names its error type. Every test of the probe arranges the store's answer on `ScriptedTables`, since a statement the double holds no rule for panics naming it: `.on_query(|sql, _| sql == "SELECT 1", vec![])` is the store down; one `Row { index: "1".into(), fields: Vec::new() }` is the store up, `Row` being the `omnia-wasi-sql` crate's, named in the stem's manifest as `omnia-wasi-sql.workspace = true`, a line the scaffold lays for a probing slice, so no manifest is edited for it, the root's least of all. `Memory` answers every read, so the cache's failure is the host's to produce and no test arranges it.
+Every test of the probe arranges the store's answer on `ScriptedTables`, since a statement the double holds no rule for panics naming it: `.on_query(|sql, _| sql == "SELECT 1", vec![])` is the store down; one `Row { index: "1".into(), fields: Vec::new() }` is the store up, `Row` being `omnia_sdk::sql::Row`, so no manifest is edited for it. `Memory` answers every read, so the cache's failure is the host's to produce and no test arranges it.
 
 ```rust
-use axum::Json;
-use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::routing::MethodRouter;
-use omnia_sdk::api::http::{MethodFilter, RawRequest, handle_with};
-use omnia_sdk::api::{Client, DecodeError};
-use omnia_sdk::{StateStore, TableStore};
-
-// In `routes()`: `.route(HEALTH_READY, ready_route())`, as the scaffold registers it.
-
-// The `GET /health/ready` route: `200` where the store answered, `503` where it did not.
-pub(crate) fn ready_route<P>() -> MethodRouter<Client<P>>
-where
-    P: StateStore + TableStore + Send + Sync + 'static,
-{
-    handle_with(
-        MethodFilter::GET,
-        ready,
-        |_: RawRequest<'_>| -> Result<ReadyInput, DecodeError> { Ok(ReadyInput {}) },
-        |output: Readiness| {
-            let status =
-                if output.store { StatusCode::OK } else { StatusCode::SERVICE_UNAVAILABLE };
-            (status, Json(output)).into_response()
-        },
-    )
-}
-
-// In `tests/<part>.rs`, over the scaffolded `provider()` and `send`:
+// In `tests/<part>.rs`, over the scaffolded `provider()` and `call`:
+use omnia_sdk::sql::Row;
 use omnia_test::guest::ScriptedTables;
-use omnia_wasi_sql::Row;
 
 // REQ-004 health.ready: The store is down
 //   Given the store answers no row
@@ -327,7 +298,7 @@ async fn the_store_is_down() {
     let provider =
         provider().tables(ScriptedTables::default().on_query(|sql, _| sql == "SELECT 1", vec![]));
     let request = Request::get("/health/ready").body(Body::empty()).expect("request");
-    let (status, body) = send(provider, request).await;
+    let (status, body) = call(&provider, request).await;
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE, "{body}");
     assert_eq!(body["store"], false);
 }
@@ -345,7 +316,7 @@ async fn the_store_is_up() {
     let provider =
         provider().tables(ScriptedTables::default().on_query(|sql, _| sql == "SELECT 1", up));
     let request = Request::get("/health/ready").body(Body::empty()).expect("request");
-    let (status, body) = send(provider, request).await;
+    let (status, body) = call(&provider, request).await;
     assert_eq!(status, StatusCode::OK, "{body}");
     assert_eq!(body["store"], true);
 }
@@ -353,96 +324,165 @@ async fn the_store_is_up() {
 
 ## A cache-aside read
 
-A record read by id through a cache in front of a store is one handler: the cache read first, a hit decoded and answered, a miss read from the store, written to the cache under its TTL, and answered, and a store miss `not_found`. A miss never answers an empty record or an empty list in place of the store's read, and the write path deletes the key after the store's update rather than refreshing it. A table the source loaded whole and refreshed on a schedule is the same shape over one key, as the [translation's fragment](translation.md#a-reference-table) spells it.
+A record read by id through a cache in front of a store is one handler: the cache read first through `get_json`, a hit answered, a miss read from the store, written to the cache through `set_json` under its TTL, and answered, and a store miss `not_found`. A miss never answers an empty record or an empty list in place of the store's read, and the write path deletes the key after the store's update rather than refreshing it. A table the source loaded whole and refreshed on a schedule is the same shape over one key, as the [translation's fragment](translation.md#a-reference-table) spells it. The fixture's `catalogue.rs`:
 
 ```rust
+use axum::Json;
+use axum::extract::Query;
 use omnia_sdk::api::Context;
-use omnia_sdk::{StateStore, TableStore, not_found, server_error};
+use omnia_sdk::sql::{DataType, FromRow};
+use omnia_sdk::{Result, StateStore, StateStoreExt as _, TableStore, TableStoreExt as _};
+use serde::{Deserialize, Serialize};
 
-// How long a cached order stands, in seconds.
-pub(crate) const ORDER_TTL_SECS: u64 = 60;
+// The relational connection the part queries.
+pub(crate) const CONNECTION: &str = "db";
 
-pub(crate) async fn get_order<P>(input: GetOrder, context: Context<P>) -> omnia_sdk::Result<Order>
+// The state key and TTL of the cached catalogue.
+pub(crate) const CATALOGUE_KEY: &str = "orders/catalogue";
+const CATALOGUE_TTL_SECS: u64 = 60;
+
+/// Optional filter on the catalogue listing.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ListCatalogue {
+    /// Minimum price in cents (`0` when omitted).
+    pub min_cents: Option<i64>,
+}
+
+/// One item in the catalogue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, FromRow)]
+pub struct CatalogueItem {
+    /// Item SKU.
+    pub sku: String,
+    /// Unit price in cents.
+    pub cents: i64,
+    /// Whether the item is currently in stock.
+    pub in_stock: bool,
+}
+
+/// The catalogue items matching the query.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CatalogueReply {
+    /// Matching items ordered by SKU.
+    pub items: Vec<CatalogueItem>,
+}
+
+pub(crate) async fn list_catalogue<P>(
+    context: Context<P>, Query(input): Query<ListCatalogue>,
+) -> Result<Json<CatalogueReply>>
 where
     P: StateStore + TableStore,
 {
-    let GetOrder { id } = input;
-    let provider = context.provider();
-    let key = key(&id);
-    if let Some(bytes) = StateStore::get(provider, &key).await? {
-        return serde_json::from_slice(&bytes).map_err(|error| server_error!("order `{id}`: {error}"));
+    let min_cents = input.min_cents.unwrap_or(0);
+
+    if min_cents == 0
+        && let Some(items) = context.state().get_json(CATALOGUE_KEY).await?
+    {
+        return Ok(Json(CatalogueReply { items }));
     }
-    let order = read_order(provider, &id).await?.ok_or_else(|| not_found!("no order `{id}`"))?;
-    let bytes = serde_json::to_vec(&order).map_err(|error| server_error!("order `{id}`: {error}"))?;
-    StateStore::set(provider, &key, &bytes, Some(ORDER_TTL_SECS)).await?;
-    Ok(order)
+
+    let items: Vec<CatalogueItem> = context
+        .tables()
+        .query_as(
+            CONNECTION,
+            "SELECT sku, cents, in_stock FROM catalogue WHERE cents >= $1 ORDER BY sku ASC",
+            &[DataType::Int64(Some(min_cents))],
+        )
+        .await?;
+
+    if min_cents == 0 {
+        context.state().set_json(CATALOGUE_KEY, &items, Some(CATALOGUE_TTL_SECS)).await?;
+    }
+
+    Ok(Json(CatalogueReply { items }))
 }
 ```
 
-`read_order` is the part's own function over `TableStore::query`, answering `Ok(None)` for no row, and `key` the part's key function. Where the design makes the TTL a setting of the deployment, it is a `pub(crate) const` naming the setting, read through `Config::get` and parsed at the moment of use, as the [layout](layout.md) has every setting. In a test, `Memory` holds what `insert_state` put there, so a hit is arranged by inserting the record's bytes under the key and asserted by `provider.tables.statements()` being empty, and a miss by `on_query` answering the row and `provider.storage.state(&key)` holding the bytes after the call.
+Where the design makes the TTL a setting of the deployment, it is a `u64` field of the part's `Settings` struct, loaded at the moment of use, as the [layout](layout.md) has every setting. In a test, `Memory` holds what `insert_state` put there, so a hit is arranged by inserting the record's JSON bytes under the key and asserted by `provider.tables.statements()` being empty, and a miss by `on_query` answering the rows and `provider.storage.state(CATALOGUE_KEY)` holding the bytes after the call; an entry set with a TTL expires in `Memory` as it does in the store.
 
 ## A SQL query
 
-A query over `TableStore` binds parameters as `DataType` values (`$1`, `$2`, ..) and reads each returned `Row`'s `fields` by column name (`Field { name, value }` from `omnia_wasi_sql`, or `common::RowExt` where `common` exports it); never call `.tables()` on `&P` or `.as_i64()` on `Field`:
-
-```rust
-use omnia_sdk::{TableStore, not_found, server_error};
-use omnia_wasi_sql::{DataType, Field, Row};
-
-pub(crate) const DB: &str = "db";
-
-fn col_str<'a>(row: &'a Row, name: &str) -> omnia_sdk::Result<&'a str> {
-    match row.fields.iter().find(|Field { name: col, .. }| col == name).map(|f| &f.value) {
-        Some(DataType::Str(Some(value))) => Ok(value.as_str()),
-        _ => Err(server_error!("missing or non-string column `{name}`")),
-    }
-}
-
-pub(crate) async fn read_customer<P: TableStore>(provider: &P, id: &str) -> omnia_sdk::Result<Customer> {
-    let rows = TableStore::query(
-        provider,
-        DB.to_owned(),
-        "SELECT id, email FROM customers WHERE id = $1".to_owned(),
-        vec![DataType::Str(Some(id.to_owned()))],
-    )
-    .await?;
-    let row = rows.first().ok_or_else(|| not_found!("no customer `{id}`"))?;
-    Ok(Customer { id: col_str(row, "id")?.to_owned(), email: col_str(row, "email")?.to_owned() })
-}
-```
-
-In a test, `ScriptedTables::default().on_query(|sql, _| sql.contains("FROM customers"), vec![Row { index: "0".to_owned(), fields: vec![Field { name: "id".to_owned(), value: DataType::Str(Some("c-1".to_owned())) }, ..] }])` scripts the rows and `provider.tables.statements()` records what ran.
-
-## A compare-and-swap update
-
-An optimistic-concurrency update reads the current bytes with `StateStore::get`, checks the caller's expected version or ETag, and writes the updated bytes through `StateStore::cas(provider, &key, Some(&current), &next)`. Because `omnia_sdk::Error` has no `409` variant, map `Err(CasError::Conflict(_))` (and a version mismatch) to `StatusCode::CONFLICT` through a module error type as shown above:
+A query over `TableStore` binds parameters as `DataType` values (`$1`, `$2`, ..) and reads its rows into a type deriving `omnia_sdk::sql::FromRow` through `query_as`, each field read from the column of its name; a single column is `row.get::<T>("column")?` over the `Row`s `query` answers. Never read `row.fields` by hand, and never call `.as_i64()` on a `Field`:
 
 ```rust
 use omnia_sdk::api::Context;
+use omnia_sdk::sql::{DataType, FromRow};
+use omnia_sdk::{Result, TableStore, TableStoreExt as _, not_found};
+use serde::Serialize;
+
+// The relational connection the part queries.
+pub(crate) const DB: &str = "db";
+
+/// A customer as the table holds one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, FromRow)]
+pub struct Customer {
+    /// The customer's id.
+    pub id: String,
+    /// The customer's email.
+    pub email: String,
+}
+
+pub(crate) async fn read_customer<P: TableStore>(provider: &P, id: &str) -> Result<Customer> {
+    let mut customers: Vec<Customer> = provider
+        .query_as(
+            DB,
+            "SELECT id, email FROM customers WHERE id = $1",
+            &[DataType::Str(Some(id.to_owned()))],
+        )
+        .await?;
+    customers.pop().ok_or_else(|| not_found!("no customer `{id}`"))
+}
+
+pub(crate) async fn count_orders<P: TableStore>(context: &Context<P>, id: &str) -> Result<i64> {
+    let rows = context
+        .tables()
+        .query(DB, "SELECT COUNT(*) AS orders FROM orders WHERE customer_id = $1", &[
+            DataType::Str(Some(id.to_owned())),
+        ])
+        .await?;
+    let row = rows.first().ok_or_else(|| not_found!("no customer `{id}`"))?;
+    Ok(row.get::<i64>("orders")?)
+}
+```
+
+A write is `context.tables().exec(DB, "UPDATE ..", &[..]).await?`, answering the rows affected. In a test, `ScriptedTables::default().on_query(|sql, params| sql.starts_with("SELECT id, email") && matches!(params, [DataType::Str(Some(id))] if id == "c-1"), vec![Row { index: "0".to_owned(), fields: vec![Field { name: "id".to_owned(), value: DataType::Str(Some("c-1".to_owned())) }, ..] }])` scripts the rows, `Row`, `Field`, and `DataType` from `omnia_sdk::sql`, and `provider.tables.statements()` records what ran.
+
+## A compare-and-swap update
+
+An optimistic-concurrency update reads the current bytes with `context.state().get(..)`, checks the caller's expected version or ETag, and writes the updated bytes through `context.state().cas(&key, Some(&current), &next)`. Because `omnia_sdk::Error` has no `409` variant, map `Err(CasError::Conflict(_))` (and a version mismatch) to `StatusCode::CONFLICT` through a module error type as "A status of its own" shows:
+
+```rust
+use axum::Json;
+use axum::extract::Path;
+use omnia_sdk::api::Context;
 use omnia_sdk::{CasError, StateStore, not_found, server_error};
 
-pub(crate) async fn amend_order<P: StateStore>(
-    input: AmendOrder, context: Context<P>,
-) -> Result<Order, AmendError> {
-    let provider = context.provider();
-    let key = key(&input.id);
-    let current = StateStore::get(provider, &key).await.map_err(omnia_sdk::Error::from)?
-        .ok_or_else(|| not_found!("no order `{}`", input.id))?;
-    let mut order: Order = serde_json::from_slice(&current).map_err(|err| server_error!("{err}"))?;
+pub(crate) async fn amend_order<P>(
+    context: Context<P>, Path(id): Path<String>, Json(input): Json<AmendOrder>,
+) -> Result<Json<Order>, AmendError>
+where
+    P: StateStore,
+{
+    let key = order_key(&id);
+    let current = context
+        .state()
+        .get(&key)
+        .await?
+        .ok_or_else(|| not_found!("no order `{id}`"))?;
+    let mut order: Order = serde_json::from_slice(&current).map_err(|error| server_error!("{error}"))?;
     if order.version != input.expected_version {
-        return Err(AmendError::Conflict(input.id));
+        return Err(AmendError::Conflict(id));
     }
     order.version += 1;
     order.items = input.items;
-    let next = serde_json::to_vec(&order).map_err(|err| server_error!("{err}"))?;
-    match StateStore::cas(provider, &key, Some(&current), &next).await {
-        Ok(()) => Ok(order),
-        Err(CasError::Conflict(_)) => Err(AmendError::Conflict(input.id)),
-        Err(CasError::Store(err)) => Err(server_error!("{err}").into()),
+    let next = serde_json::to_vec(&order).map_err(|error| server_error!("{error}"))?;
+    match context.state().cas(&key, Some(&current), &next).await {
+        Ok(()) => Ok(Json(order)),
+        Err(CasError::Conflict(_)) => Err(AmendError::Conflict(id)),
+        Err(CasError::Store(error)) => Err(server_error!("{error}").into()),
     }
 }
 ```
 
 ## Ids and time
 
-An id the design leaves to the program is `uuid::Uuid::new_v4().to_string()`, and a timestamp is `chrono::Utc::now()`, both from crates the root manifest pins and the stem's manifest names with `.workspace = true`. A key in the state store joins the stem and the id, `format!("orders/{id}")`, through one `key` function the module's readers and writers share, `pub(crate)` within the stem and `pub` where another stem reads the same entries.
+An id the design leaves to the program is `uuid::Uuid::new_v4().to_string()`, and a timestamp is `chrono::Utc::now()`, both from crates the root manifest pins and the stem's manifest names with `.workspace = true`. A key in the state store joins the stem and the id, `format!("orders/order/{id}")`, through one key function the module's readers and writers share, `pub(crate)` within the stem and `pub` where another stem reads the same entries.

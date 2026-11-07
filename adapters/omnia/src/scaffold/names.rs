@@ -100,6 +100,10 @@ impl Names {
         self.0.extend(names);
     }
 
+    pub fn contains(&self, name: &str) -> bool {
+        self.0.contains(name)
+    }
+
     // Reserves `name` where nothing took it, else `name` with `suffix` after
     // it, then with a counter after both, answering the name reserved.
     pub fn reserve(&mut self, name: &str, suffix: &str) -> String {

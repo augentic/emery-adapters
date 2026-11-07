@@ -9,7 +9,7 @@ pub const MAX_WIDTH: usize = 100;
 pub const TAB: usize = 4;
 // The columns a line of a fn body has past the block indent, which the
 // expression printer lays within: every expression it lays stands in one.
-const BODY_WIDTH: usize = MAX_WIDTH - TAB;
+pub const BODY_WIDTH: usize = MAX_WIDTH - TAB;
 
 // A source file's items in order, printed one blank line apart.
 #[derive(Default)]
@@ -53,8 +53,8 @@ pub struct Const {
 }
 
 // A function: the `//` lines above it, its docs and attributes, its
-// signature, and its body as lines relative to the block, indented once
-// when rendered.
+// signature, the bounds of its `where` clause, and its body as lines
+// relative to the block, indented once when rendered.
 #[derive(Default)]
 pub struct Fn {
     comments: Vec<String>,
@@ -67,12 +67,15 @@ pub struct Fn {
     generics: String,
     params: Vec<String>,
     ret: String,
+    bounds: Vec<String>,
     body: Vec<String>,
 }
 
-// A struct: its generics, `<T>`, printed after the name where it has any.
+// A struct: the `//` lines above it, its docs and attributes, and its
+// generics, `<T>`, printed after the name where it has any.
 #[derive(Default)]
 pub struct Struct {
+    comments: Vec<String>,
     docs: Doc,
     attrs: Vec<String>,
     vis: Vis,
@@ -397,6 +400,13 @@ impl Fn {
         self
     }
 
+    // The bounds of a `where` clause, `P: Capabilities`, one per line
+    // under `where`, the brace alone on the line after them.
+    pub fn bounds<B: Into<String>>(mut self, bounds: impl IntoIterator<Item = B>) -> Self {
+        self.bounds = bounds.into_iter().map(Into::into).collect();
+        self
+    }
+
     // The body as lines relative to the block: a statement unindented, a
     // line nested in one indented past it.
     pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
@@ -420,7 +430,9 @@ impl Fn {
     // compressed beneath the opener and the return on the closer's line
     // where there are parameters, and otherwise the brace alone on the next
     // line where the signature fits before it, three columns past the width
-    // at most, and the return on the next line past that.
+    // at most, and the return on the next line past that. A `where` clause
+    // takes the brace off the signature's last line: it follows the bounds,
+    // alone on its line.
     fn head(&self, out: &mut String) {
         let lead = format!(
             "{}{}{}fn {}",
@@ -431,27 +443,38 @@ impl Fn {
         );
         let opener = format!("{lead}{}(", self.generics);
         let arrow = if self.ret.is_empty() { String::new() } else { format!(" -> {}", self.ret) };
-        let joined = format!("{opener}{}){arrow} {{", self.params.join(", "));
-        let bounds = self.generics.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'));
+        let brace = if self.bounds.is_empty() { " {" } else { "" };
+        let joined = format!("{opener}{}){arrow}{brace}", self.params.join(", "));
+        let generics = self.generics.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'));
         if width(&joined) <= MAX_WIDTH {
             let _ = writeln!(out, "{joined}");
-        } else if let Some(bounds) = bounds.filter(|_| width(&opener) + 3 > MAX_WIDTH) {
-            let _ = writeln!(out, "{lead}<\n{}{bounds},", pad(TAB));
+        } else if let Some(generics) = generics.filter(|_| width(&opener) + 3 > MAX_WIDTH) {
+            let _ = writeln!(out, "{lead}<\n{}{generics},", pad(TAB));
             if self.params.is_empty() {
-                let _ = writeln!(out, ">(){arrow} {{");
+                let _ = writeln!(out, ">(){arrow}{brace}");
             } else {
                 let _ = writeln!(out, ">(");
                 compressed(&self.params, TAB, out);
-                let _ = writeln!(out, "){arrow} {{");
+                let _ = writeln!(out, "){arrow}{brace}");
             }
         } else if !self.params.is_empty() {
             let _ = writeln!(out, "{opener}");
             compressed(&self.params, TAB, out);
-            let _ = writeln!(out, "){arrow} {{");
-        } else if width(&joined) <= MAX_WIDTH + 3 || arrow.is_empty() {
-            let _ = writeln!(out, "{opener}){arrow}\n{{");
+            let _ = writeln!(out, "){arrow}{brace}");
+        } else if brace.is_empty() || width(&joined) <= MAX_WIDTH + 3 || arrow.is_empty() {
+            let _ = writeln!(out, "{opener}){arrow}");
+            if !brace.is_empty() {
+                out.push_str("{\n");
+            }
         } else {
             let _ = writeln!(out, "{opener})\n-> {} {{", self.ret);
+        }
+        if !self.bounds.is_empty() {
+            out.push_str("where\n");
+            for bound in &self.bounds {
+                let _ = writeln!(out, "{}{bound},", pad(TAB));
+            }
+            out.push_str("{\n");
         }
     }
 }
@@ -462,6 +485,11 @@ impl Struct {
             name: name.into(),
             ..Self::default()
         }
+    }
+
+    pub fn comments<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.comments.extend(lines.into_iter().map(Into::into));
+        self
     }
 
     pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
@@ -495,6 +523,7 @@ impl Struct {
     }
 
     fn render(&self, out: &mut String) {
+        marked("//", &self.comments, out);
         self.docs.render("///", out);
         attributes(&self.attrs, out);
         let decl = format!("{}struct {}{}", self.vis.prefix(), self.name, self.generics);
@@ -849,20 +878,6 @@ impl Display for Fence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
-}
-
-// A closure `at` columns into the body, `close` after it: `<head> <body>`
-// on one line where it fits, else the body in a block.
-pub fn closure(at: usize, head: &str, body: &str, close: &str) -> Vec<String> {
-    let joined = format!("{}{head} {body}{close}", pad(at));
-    if width(&joined) <= BODY_WIDTH {
-        return vec![joined];
-    }
-    vec![
-        format!("{}{head} {{", pad(at)),
-        format!("{}{body}", pad(at + TAB)),
-        format!("{}}}{close}", pad(at)),
-    ]
 }
 
 // The lines of a fn body as the file holds them: each non-empty line a

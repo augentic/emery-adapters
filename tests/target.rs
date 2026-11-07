@@ -47,36 +47,33 @@ const OMNIA_FUNCTION_FILLED: &str = "    Ok(())\n";
 // the block the brief quotes for the edit's `find`, and the bodies a turn puts
 // in their place, the test's `#[ignore]` line gone and its act lines kept.
 const OMNIA_HANDLER_MARKER: &str =
-    "    let _ = (&input, &context);\n    todo!(\"REQ-001 orders.read: the handler\")\n";
-const OMNIA_HANDLER_FILLED: &str = "    let ReadInput { id } = input;\n    let _ = (id, context, \
-                                    common::topic::ORDER_PLACED);\n    Ok(ReadOutput {})\n";
+    "    let _ = (&context, &id);\n    todo!(\"REQ-001 orders.read: the handler\")\n";
+const OMNIA_HANDLER_FILLED: &str =
+    "    let _ = (id, context, common::topic::ORDER_PLACED);\n    Ok(Json(ReadOutput {}))\n";
 const OMNIA_TEST_MARKER: &str = "#[ignore = \"REQ-001 An order is returned by its id: \
                                  unfilled\"]\nasync fn an_order_is_returned_by_its_id() {\n    \
                                  let id = \"<id>\";\n    let request = \
                                  Request::get(format!(\"/orders/{id}\")).body(Body::empty()).\
-                                 expect(\"request\");\n    let (status, body) = send(provider(), \
-                                 request).await;\n    let _ = (&status, &body);\n    \
-                                 todo!(\"REQ-001 An order is returned by its id: arrange, act, \
-                                 assert\")\n}\n";
+                                 expect(\"request\");\n    let (status, body) = \
+                                 call(&provider(), request).await;\n    let _ = (&status, \
+                                 &body);\n    todo!(\"REQ-001 An order is returned by its id: \
+                                 arrange, act, assert\")\n}\n";
 const OMNIA_TEST_FILLED: &str = "async fn an_order_is_returned_by_its_id() {\n    let request = \
                                  Request::get(\"/orders/42\").body(Body::empty()).\
-                                 expect(\"request\");\n    let (status, _body) = send(provider(), \
-                                 request).await;\n    assert_eq!(status, StatusCode::OK);\n}\n";
+                                 expect(\"request\");\n    let (status, _body) = \
+                                 call(&provider(), request).await;\n    assert_eq!(status, \
+                                 StatusCode::OK);\n}\n";
 // The lines the omnia slice adds to the seed's lists, each after the anchor
-// the seeded file holds: the topic table's constant at its end, the route
-// list's and the topic list's statements, and the stem in the root
-// manifest's two lists.
+// the seeded file holds: the topic table's constant at its end, the stem's
+// `handlers()` in the root router's array, and the stem's crate at the end
+// of the root manifest.
 const OMNIA_TABLE_LINE: &str =
     "\n/// An order was placed.\npub const ORDER_PLACED: &str = \"order-placed\";\n";
-const OMNIA_ROUTE_ANCHOR: &str = "    let router = axum::Router::new();\n";
-const OMNIA_ROUTE_LINE: &str = "    let router = router.merge(orders::router());\n";
-const OMNIA_TOPICS_ANCHOR: &str =
-    "    let router = messaging::Router::new(Client::new(OWNER, provider));\n";
-const OMNIA_TOPICS_LINE: &str = "    let router = orders::topics(router, &env);\n";
-const OMNIA_PATH_CRATE_ANCHOR: &str = "common = { path = \"crates/common\" }\n";
+const OMNIA_ROOT_ANCHOR: &str = "    Handlers::from([]).with_state(Client::new(provider))\n";
+const OMNIA_ROOT_LINE: &str =
+    "    Handlers::from([orders::handlers()]).with_state(Client::new(provider))\n";
+const OMNIA_PATH_CRATE_ANCHOR: &str = "omnia-sdk.workspace = true\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
-const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
-const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
 const OMNIA_PIN: &str = "omnia-sdk = \"0.38.0\"\n";
@@ -91,7 +88,7 @@ const NODE_SEED: [(&str, &str); 3] = [
 ];
 
 // The `orders` stem's manifest as the adapter scaffolds it for the stem's first
-// slice: the layout's one text, its `[dependencies]` the six fixed lines.
+// slice: the layout's one text, its `[dependencies]` the four fixed lines.
 const OMNIA_MANIFEST: &str = "[package]\nname = \"orders\"\ndescription = \"The `orders` \
                               stem\"\npublish.workspace = true\nedition.workspace = \
                               true\nrust-version.workspace = true\nversion.workspace = \
@@ -99,75 +96,67 @@ const OMNIA_MANIFEST: &str = "[package]\nname = \"orders\"\ndescription = \"The 
                               wasm32 dependency graph never sees the doubles.\n[target.'cfg(not(\
                               target_arch = \"wasm32\"))'.dev-dependencies]\nomnia-test = { \
                               workspace = true, features = [\"guest\"] }\ntokio.workspace = \
-                              true\ntower.workspace = true\n\n# One line per crate the stem's \
-                              files use, each added at the end.\n[dependencies]\naxum.workspace = \
-                              true\ncommon.workspace = true\nomnia-sdk.workspace = \
-                              true\nserde.workspace = true\nserde_json.workspace = \
-                              true\ntracing.workspace = true\n";
-// The line a probing stem's manifest carries after the six, naming the crate
-// whose `Row` the quoted probe tests arrange the store's answer with.
-const OMNIA_PROBE_DEPENDENCY: &str = "omnia-wasi-sql.workspace = true\n";
+                              true\n\n# One line per crate the stem's files use, each added at \
+                              the end.\n[dependencies]\naxum.workspace = true\nomnia-sdk.\
+                              workspace = true\nserde.workspace = true\nserde_json.workspace = \
+                              true\n";
+// The line a consuming stem's manifest carries among the four, naming the
+// crate whose topic table the part's registration reads.
+const OMNIA_TOPIC_DEPENDENCY: &str = "common.workspace = true\n";
 // The `orders` stem's entry as the adapter scaffolds it for the routed slice: the
-// part's line, then the `router()` the root route list merges, the part's
-// routes its one entry, and the `topics(..)` the root topic list registers,
-// its array empty since the adapter derives no topic.
+// part's line, then the `handlers()` the root router lists, the part's
+// handlers its one entry.
 const OMNIA_ENTRY: &str = "//! # orders\n//!\n//! The `orders` stem.\n\npub mod reading;\n\nuse \
-                           common::Capabilities;\nuse omnia_sdk::api::{Client, messaging};\n\n/// \
-                           The stem's routes, merged onto the root router.\npub fn router<P: \
-                           Capabilities>() -> axum::Router<Client<P>> {\n    common::routers([\n        \
-                           // one entry per part with routes, each added at the end\n        \
-                           reading::routes(),\n    ])\n}\n\n/// The stem's topics, registered on \
-                           the root messaging router under `env`.\n#[must_use]\npub fn topics<P: \
-                           Capabilities>(router: messaging::Router<P>, env: &str) -> \
-                           messaging::Router<P> {\n    common::topics(router, env, [\n        \
-                           // one entry per part with topics, each added at the end\n    ])\n}\n";
+                           omnia_sdk::Capabilities;\nuse omnia_sdk::api::Handlers;\n\n/// The \
+                           stem's handlers, merged onto the root routers.\npub fn handlers<P: \
+                           Capabilities>() -> Handlers<P> {\n    \
+                           Handlers::from([reading::handlers()])\n}\n";
 // The routed slice's part as the adapter scaffolds it: the module doc from the
 // plan's brief, the imports its handler needs, the path constant and the
-// `routes()` over it, the owned design type laid from its signature with the
-// signature fenced in its doc, the handler's input and output over the
-// route, and the handler under its requirement, its body the marker.
-const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse common::Capabilities;\nuse \
-                            omnia_sdk::api::http::get;\nuse omnia_sdk::api::{Client, \
-                            Context};\nuse serde::{Deserialize, Serialize};\n\n// The paths the \
+// `handlers()` over it, the owned design type laid from its signature with
+// the signature fenced in its doc, the handler's output over the route, and
+// the handler under its requirement, its path parameter extracted and its
+// body the marker.
+const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse axum::Json;\nuse \
+                            axum::extract::Path;\nuse axum::routing::get;\nuse \
+                            omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, \
+                            Result};\nuse serde::{Deserialize, Serialize};\n\n// The paths the \
                             part serves.\npub(crate) const ORDERS_ID: &str = \
-                            \"/orders/{id}\";\n\npub(crate) fn routes<P: Capabilities>() -> \
-                            axum::Router<Client<P>> {\n    axum::Router::new().route(ORDERS_ID, \
+                            \"/orders/{id}\";\n\npub(crate) fn handlers<P: Capabilities>() -> \
+                            Handlers<P> {\n    Handlers::new().route(ORDERS_ID, \
                             get(read))\n}\n\n/// The design type `orders.Order`.\n///\n/// \
                             ```text\n/// interface Order {\n///   id: string;\n/// }\n/// \
                             ```\n#[derive(Debug, Clone, PartialEq, Eq, Serialize, \
                             Deserialize)]\npub struct Order {\n    /// The `id` field.\n    pub \
-                            id: String,\n}\n\n/// The input of `GET \
-                            /orders/{id}`.\n#[derive(Debug, Deserialize)]\npub struct ReadInput \
-                            {\n    /// The `id` path parameter.\n    pub id: String,\n}\n\n/// \
-                            The output of `GET /orders/{id}`.\n#[derive(Debug, \
-                            Serialize)]\npub struct ReadOutput {}\n\n// REQ-001 orders.read: \
-                            Answers the order by its id.\npub(crate) async fn read<P: \
-                            Capabilities>(\n    input: ReadInput, context: Context<P>,\n) -> \
-                            omnia_sdk::Result<ReadOutput> {\n    let _ = (&input, \
-                            &context);\n    todo!(\"REQ-001 orders.read: the handler\")\n}\n";
+                            id: String,\n}\n\n/// The output of `GET \
+                            /orders/{id}`.\n#[derive(Debug, Serialize)]\npub struct ReadOutput \
+                            {}\n\n// REQ-001 orders.read: Answers the order by its \
+                            id.\npub(crate) async fn read<P>(context: Context<P>, Path(id): \
+                            Path<String>) -> Result<Json<ReadOutput>>\nwhere\n    P: \
+                            Capabilities,\n{\n    let _ = (&context, &id);\n    \
+                            todo!(\"REQ-001 orders.read: the handler\")\n}\n";
 // The routed slice's tests as the adapter scaffolds them: the prelude over the
-// doubles with the request helper the routed scenario sends through, then one
-// ignored test per scenario, the scenario's steps in a comment above it and
-// its request laid from the typed route before its marker.
+// doubles with the router and the request helper the routed scenario calls
+// through, then one ignored test per scenario, the scenario's steps in a
+// comment above it and its request laid from the typed route before its
+// marker.
 const OMNIA_TESTS: &str = "//! The acceptance scenarios of the `reading` part of the `orders` \
-                           stem, over the guest doubles.\n\nuse axum::body::{Body, \
-                           to_bytes};\nuse axum::http::{Request, StatusCode};\nuse \
-                           common::config;\nuse omnia_sdk::api::Client;\nuse \
-                           omnia_test::guest::{MapConfig, Provider};\nuse serde_json::Value;\nuse \
-                           tower::ServiceExt as _;\n\n// The doubles every scenario starts from: \
-                           set a setting or a response on them in the arrangement.\nfn provider() \
-                           -> Provider {\n    \
-                           Provider::default().config(MapConfig::default().with([(config::ENV, \
-                           \"test\")]))\n}\n\n// One request through the stem's router, answered \
-                           as its status and its body as JSON:\n// `Value::Null` for an empty \
-                           body, the text as a `Value::String` where it is not JSON.\nasync fn \
-                           send(provider: Provider, request: Request<Body>) -> (StatusCode, \
-                           Value) {\n    let router = \
-                           orders::router().with_state(Client::new(\"test\", provider));\n    let \
-                           response = router.oneshot(request).await.expect(\"response\");\n    \
-                           let status = response.status();\n    let body = \
-                           to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");\n    \
-                           let body = if body.is_empty() {\n        Value::Null\n    } else {\n        \
+                           stem, over the guest doubles.\n\nuse axum::body::Body;\nuse \
+                           axum::http::{Request, StatusCode};\nuse omnia_sdk::api::{Client, \
+                           Router};\nuse omnia_test::guest::{Provider, send};\nuse \
+                           serde_json::Value;\n\n// The doubles every scenario starts from: set a \
+                           setting or a response on them in the arrangement.\nfn provider() -> \
+                           Provider {\n    Provider::default()\n}\n\n// The stem's router over \
+                           the doubles, as the guest builds it.\nfn router(provider: &Provider) \
+                           -> Router<Provider> {\n    \
+                           orders::handlers().with_state(Client::new(provider.clone()))\n}\n\n// \
+                           One request through the stem's router, answered as its status and its \
+                           body as JSON:\n// `Value::Null` for an empty body, the text as a \
+                           `Value::String` where it is not JSON.\nasync fn call(provider: \
+                           &Provider, request: Request<Body>) -> (StatusCode, Value) {\n    let \
+                           response = send(&router(provider), request).await;\n    let status = \
+                           response.status();\n    let body = response.into_body();\n    let body \
+                           = if body.is_empty() {\n        Value::Null\n    } else {\n        \
                            serde_json::from_slice(&body)\n            .unwrap_or_else(|_| \
                            Value::String(String::from_utf8_lossy(&body).into_owned()))\n    \
                            };\n    (status, body)\n}\n\n// REQ-001 orders.read: An order is \
@@ -177,35 +166,32 @@ const OMNIA_TESTS: &str = "//! The acceptance scenarios of the `reading` part of
                            an_order_is_returned_by_its_id() {\n    let id = \"<id>\";\n    let \
                            request = \
                            Request::get(format!(\"/orders/{id}\")).body(Body::empty()).\
-                           expect(\"request\");\n    let (status, body) = send(provider(), \
+                           expect(\"request\");\n    let (status, body) = call(&provider(), \
                            request).await;\n    let _ = (&status, &body);\n    todo!(\"REQ-001 An \
                            order is returned by its id: arrange, act, assert\")\n}\n";
 // The default slice's part as the adapter scaffolds it: its requirement states no
-// route, so the part is one `pub fn` with a marker and no `routes()`.
-const OMNIA_FUNCTION_MODULE: &str = "//! The `reading` part of the `orders` stem.\n\n// REQ-001 \
+// route, so the part is one `pub fn` with a marker and no `handlers()`.
+const OMNIA_FUNCTION_MODULE: &str = "//! The `reading` part of the `orders` stem.\n\nuse \
+                                     omnia_sdk::Result;\n\n// REQ-001 \
                                      orders.get-id.return-order: The behaviour \
                                      `orders.get-id.return-order` states.\n/// The behaviour \
                                      `orders.get-id.return-order` states.\n///\n/// # \
                                      Errors\n///\n/// As the requirement states.\npub fn \
-                                     get_id_return_order() -> omnia_sdk::Result<()> {\n    \
-                                     todo!(\"REQ-001 orders.get-id.return-order: the \
-                                     behaviour\")\n}\n";
+                                     get_id_return_order() -> Result<()> {\n    todo!(\"REQ-001 \
+                                     orders.get-id.return-order: the behaviour\")\n}\n";
 // The part behind the entry: its path as a `pub(crate)` constant, its
-// routes and topics, and its handlers, `pub(crate)` so one the stem never
-// routes is the compiler's to refuse.
-const OMNIA_PART: &str = "//! Reads orders.\n\nuse common::{Capabilities, config, topic};\nuse \
-                          omnia_sdk::api::http::get;\nuse omnia_sdk::api::{Client, Context, \
-                          messaging};\n\npub(crate) const ORDER: &str = \"/orders/{id}\";\n\n\
-                          pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                          axum::Router::new().route(ORDER, get(get_order))\n}\n\npub(crate) fn \
-                          topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
-                          &str,\n) -> messaging::Router<P> {\n    \
-                          router.route(config::topic_for(env, topic::ORDER_PLACED), \
-                          messaging::consume(on_placed))\n}\n\npub(crate) async fn \
-                          get_order<P>(input: GetOrder, context: Context<P>) -> \
-                          omnia_sdk::Result<Order> {\n    todo!()\n}\n\npub(crate) async fn \
-                          on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()> \
-                          {\n    todo!()\n}\n";
+// `handlers()` over a route and a topic, and its handlers, `pub(crate)` so
+// one the stem never registers is the compiler's to refuse.
+const OMNIA_PART: &str = "//! Reads orders.\n\nuse axum::Json;\nuse axum::extract::Path;\nuse \
+                          axum::routing::get;\nuse common::topic;\nuse omnia_sdk::api::{Context, \
+                          Handlers};\nuse omnia_sdk::{Capabilities, Result};\n\npub(crate) const \
+                          ORDER: &str = \"/orders/{id}\";\n\npub(crate) fn handlers<P: \
+                          Capabilities>() -> Handlers<P> {\n    Handlers::new().route(ORDER, \
+                          get(get_order)).topic(topic::ORDER_PLACED, \
+                          on_placed)\n}\n\npub(crate) async fn get_order<P>(context: Context<P>, \
+                          Path(id): Path<String>) -> Result<Json<Order>> {\n    \
+                          todo!()\n}\n\npub(crate) async fn on_placed<P>(context: Context<P>, \
+                          input: Order) -> Result<()> {\n    todo!()\n}\n";
 
 // A shipped target adapter: its name, the prose its turns open under, and
 // the `Adapter` every call goes through.
@@ -721,9 +707,9 @@ async fn node_verify() {
 // the adapter, both before the slice's turn, and neither is the turn's: the
 // turn fills the handler and the test the adapter scaffolded and adds the
 // constant of a topic the adapter does not derive to the seeded table, the
-// stem's lines standing in the route list, the topic list, and the root
-// manifest's two lists as the adapter added them, every other file of the
-// seed as the template spells it.
+// stem's lines standing in the root router's array and the root manifest's
+// list as the adapter added them, every other file of the seed as the
+// template spells it.
 #[tokio::test]
 async fn omnia() {
     let table = omnia_seed("crates/common/src/topic.rs");
@@ -734,7 +720,7 @@ async fn omnia() {
     ];
     let project = OMNIA.built(&omnia_slice(), &[], &edits, OMNIA_REPORT).await;
 
-    let lists = ["Cargo.toml", "src/routes.rs", "src/messaging.rs", "crates/common/src/topic.rs"];
+    let lists = ["Cargo.toml", "src/lib.rs", "crates/common/src/topic.rs"];
     for entry in omnia_template::ENTRIES {
         let held = project.read(entry.path);
         if lists.contains(&entry.path) {
@@ -756,7 +742,7 @@ async fn omnia() {
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
         OMNIA_ENTRY,
-        "the stem's entry holds the part's line and the two routers the root merges"
+        "the stem's entry holds the part's line and the handlers the root lists"
     );
     assert_eq!(
         text(&project, "crates/orders/src/reading.rs"),
@@ -773,24 +759,15 @@ async fn omnia() {
         format!("{table}{OMNIA_TABLE_LINE}"),
         "the topic table holds the topic's constant after its doc"
     );
-    let routes = text(&project, "src/routes.rs");
-    assert!(
-        routes.contains(&format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}    router.with_state")),
-        "the route list holds the stem's one statement before the terminal line: {routes}"
+    assert_eq!(
+        text(&project, "src/lib.rs"),
+        omnia_root_with_orders(),
+        "the root router's array holds the stem's one entry"
     );
-    let topics = text(&project, "src/messaging.rs");
-    assert!(
-        topics.contains(&format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}    tracing::debug!")),
-        "the topic list holds the stem's one statement before its trace: {topics}"
-    );
-    let manifest = text(&project, "Cargo.toml");
-    assert!(
-        manifest.contains(&format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}\n")),
-        "the root manifest's path list holds the stem after `common`: {manifest}"
-    );
-    assert!(
-        manifest.ends_with(&format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}")),
-        "the root manifest ends with the stem's one line: {manifest}"
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders(),
+        "the root manifest ends with the stem's one line"
     );
 }
 
@@ -851,45 +828,33 @@ async fn omnia_init_held() {
         );
     }
 
-    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/routes.rs", "src/messaging.rs"]}"#;
-    let routes = format!("// held\nfn router() {{\n{OMNIA_ROUTE_LINE}}}\n");
-    let messaging = format!("// held\nfn topics() {{\n{OMNIA_TOPICS_LINE}}}\n");
-    let model = ScriptedModel::answering([report]).calling(
-        0,
-        [edit_files(&[
-            fill_function(),
-            ("src/routes.rs", "// held\n", &routes),
-            ("src/messaging.rs", "// held\n", &messaging),
-        ])],
-    );
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/lib.rs"]}"#;
+    let root = "// held\nfn router() {\n    Handlers::from([orders::handlers()])\n}\n";
+    let model = ScriptedModel::answering([report])
+        .calling(0, [edit_files(&[fill_function(), ("src/lib.rs", "// held\n", root)])]);
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
     assert_eq!(
         report.written,
-        ["crates/orders/src/reading.rs", "src/messaging.rs", "src/routes.rs"],
-        "the report names the module the turn filled and the lists it added to, no other seed \
+        ["crates/orders/src/reading.rs", "src/lib.rs"],
+        "the report names the module the turn filled and the list it added to, no other seed \
          file"
     );
     assert_eq!(text(&project, ".gitignore"), "# held\n", "the build writes no file of the seed");
     assert_eq!(
-        text(&project, "src/routes.rs"),
-        routes,
+        text(&project, "src/lib.rs"),
+        root,
         "a held list without its anchor takes no line from the adapter, the turn's alone"
     );
     assert_eq!(
         text(&project, "Cargo.toml"),
         omnia_manifest_with_orders(),
-        "the held root manifest takes the stem's lines at its anchors"
+        "the held root manifest takes the stem's line at its anchor"
     );
     let brief = &model.seen()[0].messages[0];
-    for carried in [
-        "`src/routes.rs` holds no anchor for `let router = router.merge(orders::router());`, so \
-         the line was not added",
-        "`src/messaging.rs` holds no anchor for `let router = orders::topics(router, &env);`, \
-         so the line was not added",
-    ] {
-        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
-    }
+    let carried = "`src/lib.rs` holds no anchor for `orders::handlers()`, so the line was not \
+                   added";
+    assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
 }
 
 // The slice's skeleton is the adapter's, scaffolded from the typed slice before
@@ -944,16 +909,9 @@ async fn omnia_scaffold() {
     );
     assert_eq!(text(&project, "Cargo.toml"), omnia_manifest_with_orders());
     assert_eq!(
-        text(&project, "src/routes.rs"),
-        omnia_seed("src/routes.rs")
-            .replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}")),
-        "the route list merges the stem before the terminal line"
-    );
-    assert_eq!(
-        text(&project, "src/messaging.rs"),
-        omnia_seed("src/messaging.rs")
-            .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
-        "the topic list registers the stem before its trace"
+        text(&project, "src/lib.rs"),
+        omnia_root_with_orders(),
+        "the root router's array lists the stem's handlers on its one line"
     );
     assert_eq!(
         text(&project, "crates/common/src/topic.rs"),
@@ -983,21 +941,25 @@ fn assert_omnia_scaffold_brief(brief: &str) {
          is the whole text that takes the quoted block's place, its lines indented as the \
          block's are:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
          `crates/orders/src/reading.rs`, key `REQ-001 orders.read: the handler`: \
-         fill `ReadInput` and `ReadOutput` with the wire's fields, then replace this block with \
-         the body. Its `Ok` is answered `200` as JSON; for another status, declare a route \
-         function over `handle_with(MethodFilter::GET, read, decode, |output: ReadOutput| \
-         (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers reference \
-         shows and name it in `routes()` in place of \
-         `get(read)`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
+         fill `ReadOutput` with the wire's fields, then replace this block with the body. Its \
+         `Ok` is answered `200` as JSON; for another status, change the return type to \
+         `Result<(StatusCode, Json<ReadOutput>)>` and answer the pair, as the handlers reference \
+         shows. Each path parameter is extracted as a `String`; where the design keys it as an \
+         integer, extract it typed, `Path<i64>`, and let axum answer `400` for a malformed one. \
+         Narrow `P: Capabilities` to the traits the body reaches through the context, `P: \
+         StateStore + Config` for `context.state()` and \
+         `context.config()`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
          `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`, key `REQ-001 An \
          order is returned by its id: arrange, act, assert`: replace this block with the filled \
          test, its `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
          laid, and the assertions the scenario states.\n\n```rust\n{OMNIA_TEST_MARKER}```\n"
     );
     for carried in [
-        "Stem `orders`, part `reading`:\n\n- `crates/orders/Cargo.toml`: scaffolded.",
-        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` and `reading::routes(),` in \
-         its lists.",
+        "Stem `orders`, part `reading`:\n\n- `crates/orders/Cargo.toml`: scaffolded. One \
+         `<crate>.workspace = true` line at the end of `[dependencies]` for each crate your code \
+         uses beyond the four it holds",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` and `reading::handlers()` \
+         in its lists.",
         "- `crates/orders/src/reading.rs`: scaffolded. Fill its markers, listed below, through \
          `edit_files`. Its text:",
         &module_text,
@@ -1005,16 +967,14 @@ fn assert_omnia_scaffold_brief(brief: &str) {
          scenario, each sending the request or the delivery its requirement carries. Fill each \
          test through `edit_files`, replacing the block listed below. Its text:",
         &tests_text,
-        "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines added: `orders = { \
-         path = \"crates/orders\" }` in `Cargo.toml`, `orders.workspace = true` in `Cargo.toml`, \
-         `let router = router.merge(orders::router());` in `src/routes.rs`, `let router = \
-         orders::topics(router, &env);` in `src/messaging.rs`.",
+        "- `Cargo.toml`, `src/lib.rs`: the stem's lines added: `orders = { path = \
+         \"crates/orders\" }` in `Cargo.toml`, `orders::handlers()` in `src/lib.rs`.",
         &markers,
         "The check: once your edits are in, run `cargo clippy -p orders --all-targets -- -D \
          warnings && cargo test -p orders && cargo check --target wasm32-wasip2 && cargo +nightly \
          fmt --all -- --check` in `$WORKSPACE`",
-        "From `references/omnia-api.md`, under \"Routing — `omnia_sdk::api::http`\":\n\nOne route \
-         function per method",
+        "From `references/omnia-api.md`, under \"Routing — `Handlers::route`\":\n\nOne \
+         `.route(PATH, method(handler))` per route",
         "From `references/omnia-api.md`, under \"The handler — `omnia_sdk::api`\":\n\n```rust\npub \
          struct Context<P> {",
         "From `references/omnia-api.md`, under \"The capabilities — `omnia_sdk`\":\n\n```rust\npub \
@@ -1033,17 +993,19 @@ fn assert_omnia_scaffold_brief(brief: &str) {
     }
     for absent in [
         "`start`",
-        "The general constructor",
-        "Messaging — `omnia_sdk::api::messaging`",
+        "Messaging — `Handlers::topic`",
+        "under \"Settings",
+        "under \"A status of its own\"",
         "pub trait StateStore",
+        "pub async fn deliver",
         "a message is consumed",
         "under \"A probe\"",
         "under \"A cache-aside read\"",
     ] {
         assert!(
             !scaffolded.contains(absent),
-            "no `{absent}` for a routed slice with no `start` id, no consumer, no body route, a \
-             design naming no store, and text calling for no idiom: {scaffolded}"
+            "no `{absent}` for a routed slice with no `start` id, no consumer, no status, no \
+             setting, a design naming no store, and text calling for no idiom: {scaffolded}"
         );
     }
     assert!(
@@ -1093,12 +1055,9 @@ async fn omnia_write_scaffolded_refused() {
         writes[1].starts_with(
             "write_files: nothing written: `crates/orders/src/lib.rs` was scaffolded before this \
              turn and this content drops what the skeleton holds: `//! The `orders` stem.`, \
-             `use common::Capabilities;`, `use omnia_sdk::api::{Client, messaging};`, `/// The \
-             stem's routes, merged onto the root router.`, `pub fn router<P: Capabilities>() -> \
-             axum::Router<Client<P>> {`, `common::routers([`, `// one entry per part with \
-             routes, each added at the end`, `])`, `}`, `/// The stem's topics, registered on \
-             the root messaging router under `env`.`, and 4 more; change the file through \
-             `edit_files`"
+             `use omnia_sdk::Capabilities;`, `use omnia_sdk::api::Handlers;`, `/// The stem's \
+             handlers, merged onto the root routers.`, `pub fn handlers<P: Capabilities>() -> \
+             Handlers<P> {`, `Handlers::from([])`, `}`; change the file through `edit_files`"
         ),
         "a list keeps every line it holds: {}",
         writes[1]
@@ -1109,11 +1068,13 @@ async fn omnia_write_scaffolded_refused() {
         OMNIA_FUNCTION_MODULE.replace(OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED),
         "the skeleton stands, its marker filled through the edit"
     );
-    assert_eq!(
-        text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("        reading::routes(),\n", ""),
-        "the entry stands"
-    );
+    assert_eq!(text(&project, "crates/orders/src/lib.rs"), omnia_function_entry(), "the entry stands");
+}
+
+// The `orders` stem's entry for a stem whose parts register nothing: the
+// `handlers()` array empty.
+fn omnia_function_entry() -> String {
+    OMNIA_ENTRY.replace("reading::handlers()", "")
 }
 
 // A marker is filled by an `edit_files` edit whose `find` is the key the
@@ -1203,8 +1164,8 @@ async fn omnia_scaffold_keyed() {
 async fn omnia_write_scaffolded_kept() {
     let project = omnia_tree().await;
     let filled = OMNIA_FUNCTION_MODULE.replace(OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED);
-    let entry = OMNIA_ENTRY.replace("        reading::routes(),\n", "");
-    let extended = entry.replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n");
+    let extended =
+        omnia_function_entry().replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([report]).calling(
         0,
@@ -1234,7 +1195,7 @@ async fn omnia_write_scaffolded_kept() {
 }
 
 // A stem the tree already holds from an earlier slice keeps its manifest
-// and its entry, the part's `pub mod` line and `routes()` entry added to
+// and its entry, the part's `pub mod` line and `handlers()` entry added to
 // the entry's lists, the module and the tests scaffolded fresh beside the
 // held part, and the root lists, which already name the stem, left as they
 // stand; the brief says which file was held and which scaffolded.
@@ -1244,11 +1205,10 @@ async fn omnia_scaffold_held_stem() {
     let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
-    let manifest_edited = format!("{OMNIA_MANIFEST}{OMNIA_PROBE_DEPENDENCY}");
+    let manifest_edited = format!("{OMNIA_MANIFEST}tracing.workspace = true\n");
     project.write("crates/orders/Cargo.toml", manifest_edited.as_bytes());
     let before = files_under(project.path());
-    let root_lists =
-        ["Cargo.toml", "src/routes.rs", "src/messaging.rs"].map(|path| text(&project, path));
+    let root_lists = ["Cargo.toml", "src/lib.rs"].map(|path| text(&project, path));
 
     let mut slice = omnia_slice();
     slice.name = "orders-paying".to_owned();
@@ -1276,12 +1236,11 @@ async fn omnia_scaffold_held_stem() {
     );
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("pub mod reading;\n", "pub mod paying;\npub mod reading;\n").replace(
-            "        reading::routes(),\n",
-            "        reading::routes(),\n        paying::routes(),\n"
-        ),
+        OMNIA_ENTRY
+            .replace("pub mod reading;\n", "pub mod paying;\npub mod reading;\n")
+            .replace("reading::handlers()", "reading::handlers(), paying::handlers()"),
         "the held entry takes the part's `pub mod` line where the formatter sorts it and its \
-         routes entry at the end of the array"
+         handlers entry at the end of the array"
     );
     assert_eq!(
         text(&project, "crates/orders/src/reading.rs"),
@@ -1291,28 +1250,22 @@ async fn omnia_scaffold_held_stem() {
     let paying = text(&project, "crates/orders/src/paying.rs");
     for carried in [
         "//! Pays an order.\n",
-        "use axum::Json;\nuse axum::http::StatusCode;\nuse axum::response::IntoResponse;\nuse \
-         axum::routing::MethodRouter;\nuse common::Capabilities;\nuse \
-         omnia_sdk::api::http::{DecodeError, MethodFilter, RawRequest, handle_with};\nuse \
-         omnia_sdk::api::{Client, Context};\nuse serde::de::DeserializeOwned;\nuse \
+        "use axum::Json;\nuse axum::extract::Path;\nuse axum::routing::post;\nuse \
+         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, Result};\nuse \
          serde::{Deserialize, Serialize};\n",
         "pub(crate) const ORDERS_ID_PAY: &str = \"/orders/{id}/pay\";\n",
-        "axum::Router::new().route(ORDERS_ID_PAY, pay_route())\n",
-        "// The `POST /orders/{id}/pay` route: the handler's `Ok` answered as JSON under the \
-         status named here.\npub(crate) fn pay_route<P: Capabilities>() -> \
-         MethodRouter<Client<P>> {\n    handle_with(\n        MethodFilter::POST,\n        pay,\n        \
-         |raw: RawRequest<'_>| -> Result<PayInput, DecodeError> {\n            \
-         decode_json(raw.path_params, raw.body)\n        },\n        |output: PayOutput| \
-         (StatusCode::OK, Json(output)).into_response(),\n    )\n}\n",
-        "pub(crate) async fn pay<P: Capabilities>(",
-        "    todo!(\"REQ-001 orders.pay: the handler\")\n",
-        "fn decode_json<I: DeserializeOwned>(\n    params: &[(String, String)], body: &[u8],\n) \
-         -> Result<I, DecodeError> {\n",
+        "    Handlers::new().route(ORDERS_ID_PAY, post(pay))\n",
+        "/// The input of `POST /orders/{id}/pay`.\n#[derive(Debug, Deserialize)]\npub struct \
+         PayInput {}\n",
+        "pub(crate) async fn pay<P>(\n    context: Context<P>, Path(id): Path<String>, \
+         Json(input): Json<PayInput>,\n) -> Result<Json<PayOutput>>\nwhere\n    P: \
+         Capabilities,\n{\n    let _ = (&context, &id, &input);\n    todo!(\"REQ-001 orders.pay: \
+         the handler\")\n}\n",
     ] {
         assert!(paying.contains(carried), "the part carries `{carried}`: {paying}");
     }
     assert!(!paying.contains("pub struct Order"), "the type is the first slice's: {paying}");
-    for (path, held) in ["Cargo.toml", "src/routes.rs", "src/messaging.rs"].iter().zip(root_lists) {
+    for (path, held) in ["Cargo.toml", "src/lib.rs"].iter().zip(root_lists) {
         assert_eq!(text(&project, path), held, "`{path}` already names the stem and stands");
     }
     let tests = text(&project, "crates/orders/tests/paying.rs");
@@ -1320,7 +1273,7 @@ async fn omnia_scaffold_held_stem() {
         "use axum::http::header::CONTENT_TYPE;\n",
         "    let id = \"<id>\";\n    let request = Request::post(format!(\"/orders/{id}/pay\"))\n        \
          .header(CONTENT_TYPE, \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
-         .expect(\"request\");\n    let (status, body) = send(provider(), request).await;\n",
+         .expect(\"request\");\n    let (status, body) = call(&provider(), request).await;\n",
     ] {
         assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
     }
@@ -1328,17 +1281,15 @@ async fn omnia_scaffold_held_stem() {
     let brief = &model.seen()[0].messages[0];
     for carried in [
         "- `crates/orders/Cargo.toml`: held.",
-        "- `crates/orders/src/lib.rs`: held, `pub mod paying;` and `paying::routes(),` added to \
-         its lists.",
+        "- `crates/orders/src/lib.rs`: held, `pub mod paying;` and `paying::handlers()` added \
+         to its lists.",
         "- `crates/orders/src/paying.rs`: scaffolded. Fill its markers, listed below, through \
          `edit_files`.",
-        "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines already held:",
-        "Its `Ok` is answered as JSON under the status the encoder in `pay_route` names, \
-         `StatusCode::OK`, which is this slice's to decide there: a `201` for a creation, or \
-         one read off the output, `503` where a probe found its store down; an error status, a \
-         `404`, is the error the errors passage maps to it.",
-        "From `references/omnia-api.md`, under \"Routing — `omnia_sdk::api::http`\":\n\nThe \
-         general constructor",
+        "- `Cargo.toml`, `src/lib.rs`: the stem's lines already held:",
+        "fill `PayInput` and `PayOutput` with the wire's fields, then replace this block with \
+         the body. Its `Ok` is answered `200` as JSON; for another status, change the return \
+         type to `Result<(StatusCode, Json<PayOutput>)>` and answer the pair, as the handlers \
+         reference shows.",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
@@ -2888,7 +2839,7 @@ async fn omnia_scenario_placeholder_unfilled() {
                             body) = send(provider(), request).await;\n    assert_eq!(status, \
                             StatusCode::OK);\n    assert_eq!(body[\"id\"], \"42\");\n}\n";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[
@@ -5148,10 +5099,17 @@ fn files_under(root: &Path) -> BTreeSet<String> {
     files
 }
 
-// The seed's root manifest with the `orders` stem's line in each list.
+// The seed's root manifest with the `orders` stem's line after its anchor,
+// the last line of the seed.
 fn omnia_manifest_with_orders() -> String {
     omnia_seed("Cargo.toml").replace(
         OMNIA_PATH_CRATE_ANCHOR,
         &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-    ) + OMNIA_STEM_LINE
+    )
+}
+
+// The seed's root entry with the `orders` stem's handlers as the one entry
+// of the router's array, laid on the anchor's line as the formatter lays it.
+fn omnia_root_with_orders() -> String {
+    omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
 }

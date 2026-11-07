@@ -5,6 +5,7 @@ mod lists;
 mod names;
 mod reference;
 mod render;
+mod settings;
 mod stem;
 mod trigger;
 mod types;
@@ -70,8 +71,6 @@ impl Scaffold {
         let design_keys = types::design_keys(&slice.design);
         let idioms = reference::idioms(slice);
         let roles = reference::roles(slice);
-        let probing = idioms.contains(&Idiom::Probe);
-        let sql = probing || roles.contains(&Role::Table);
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
@@ -101,7 +100,7 @@ impl Scaffold {
             match plans.iter_mut().find(|plan| plan.stem.name == name) {
                 Some(plan) => plan.requirements.push(requirement),
                 None => plans.push(StemPlan {
-                    stem: Stem::new(&name, slice, probing, sql),
+                    stem: Stem::new(&name, slice),
                     requirements: vec![requirement],
                     owned: Vec::new(),
                 }),

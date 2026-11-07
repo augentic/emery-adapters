@@ -23,8 +23,7 @@ use self::tree::Tree;
 const RULES: &[MergeRule] = &[
     MergeRule::ours("Cargo.lock"),
     MergeRule::union("Cargo.toml"),
-    MergeRule::union("src/routes.rs"),
-    MergeRule::union("src/messaging.rs"),
+    MergeRule::union("src/lib.rs"),
     MergeRule::union("crates/common/src/topic.rs"),
     MergeRule::union("crates/*/Cargo.toml"),
     MergeRule::union("crates/*/src/lib.rs"),

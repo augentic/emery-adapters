@@ -1,0 +1,22 @@
+# Resolves the omnia path patches from this directory, so a guest tree the
+# adapter renders beneath it (under `target/eval/`, `target/smoke/`) builds
+# against the same sibling checkouts as the workspace root: the template's own
+# `[patch.crates-io]` spells `../omnia/crates/*` relative to the rendered
+# manifest, and a config patch of the same crate takes precedence over it.
+# Comment out this table to rely on the manifest patches alone, and swap the
+# manifest patches back to git before CI.
+[patch.crates-io]
+omnia = { path = "../omnia/crates/omnia" }
+omnia-sdk = { path = "../omnia/crates/sdk" }
+omnia-test = { path = "../omnia/crates/test" }
+omnia-wasi-blobstore = { path = "../omnia/crates/wasi-blobstore" }
+omnia-wasi-config = { path = "../omnia/crates/wasi-config" }
+omnia-wasi-docstore = { path = "../omnia/crates/wasi-docstore" }
+omnia-wasi-http = { path = "../omnia/crates/wasi-http" }
+omnia-wasi-identity = { path = "../omnia/crates/wasi-identity" }
+omnia-wasi-keyvalue = { path = "../omnia/crates/wasi-keyvalue" }
+omnia-wasi-messaging = { path = "../omnia/crates/wasi-messaging" }
+omnia-wasi-otel = { path = "../omnia/crates/wasi-otel" }
+omnia-wasi-sql = { path = "../omnia/crates/wasi-sql" }
+omnia-wasi-websocket = { path = "../omnia/crates/wasi-websocket" }
+omnia-http-cache = { path = "../omnia-ext/crates/http-cache" }

@@ -6,8 +6,8 @@ use std::mem;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprLit, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList, Path, ReturnType,
-    Type, UseTree, Visibility,
+    Expr, ExprLit, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList, Path, Type, UseTree,
+    Visibility,
 };
 
 // Where `syn` refused a file, and why.
@@ -345,10 +345,13 @@ pub fn last_use_line(file: &syn::File) -> Option<usize> {
         .max()
 }
 
-// The byte offset where the tail `.route(..)` chain in the top-level
-// `fn <name>` ends: the closing `)` of the last `.route(..)` call, or the
-// end of the receiver (`axum::Router::new()` or `router`), so a new
-// `.route(..)` call appended there extends the chain.
+// The methods a part's `handlers()` chains over `Handlers::new()`.
+const REGISTRATIONS: [&str; 4] = ["route", "topic", "topic_with", "command"];
+
+// The byte offset where the registration chain in the top-level `fn
+// <name>` ends: the closing `)` of the last `.route(..)` or `.topic(..)`
+// call, or of the `Handlers::new()` receiver, so a new call appended there
+// extends the chain.
 pub fn chain_end(text: &str, file: &syn::File, name: &str) -> Option<usize> {
     let item = file.items.iter().find_map(|item| match item {
         Item::Fn(item) if item.sig.ident == name => Some(item),
@@ -358,35 +361,27 @@ pub fn chain_end(text: &str, file: &syn::File, name: &str) -> Option<usize> {
         return None;
     };
     let span = match expr {
-        Expr::MethodCall(call) if is_route_chain(expr, name) => call.paren_token.span.close(),
-        Expr::Call(call) if is_router_new(call, name) => call.paren_token.span.close(),
-        Expr::Path(path) if name == "topics" && path.path.is_ident("router") => {
-            path.path.segments.last()?.ident.span()
-        }
+        Expr::MethodCall(call) if is_registration_chain(expr) => call.paren_token.span.close(),
+        Expr::Call(call) if is_handlers_new(call) => call.paren_token.span.close(),
         _ => return None,
     };
     let end = span.end();
     byte_offset(text, end.line, end.column)
 }
 
-fn is_route_chain(mut expr: &Expr, name: &str) -> bool {
+fn is_registration_chain(mut expr: &Expr) -> bool {
     while let Expr::MethodCall(call) = expr {
-        if call.method != "route" {
+        if !REGISTRATIONS.iter().any(|method| call.method == method) {
             return false;
         }
         expr = &call.receiver;
     }
-    match expr {
-        Expr::Call(call) => is_router_new(call, name),
-        Expr::Path(path) if name == "topics" => path.path.is_ident("router"),
-        _ => false,
-    }
+    matches!(expr, Expr::Call(call) if is_handlers_new(call))
 }
 
-fn is_router_new(call: &syn::ExprCall, name: &str) -> bool {
-    name == "routes"
-        && call.args.is_empty()
-        && matches!(&*call.func, Expr::Path(path) if path_ends(&path.path, &["Router", "new"]))
+fn is_handlers_new(call: &syn::ExprCall) -> bool {
+    call.args.is_empty()
+        && matches!(&*call.func, Expr::Path(path) if path_ends(&path.path, &["Handlers", "new"]))
 }
 
 fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
@@ -403,26 +398,19 @@ fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
     (current_line == line && column == 0).then_some(offset)
 }
 
-// Every `pub(crate) async fn(<input>, <context>: Context<..>)` handler in
-// `file` that is named by no `.route(..)` in `routes()` or `topics(..)` and
-// by no `<name>_route` function that `routes()` names, at its line.
+// Every `pub(crate) async fn(<context>: Context<..>, ..)` handler in
+// `file` that `handlers()` names in no `.route(..)`, `.topic(..)`, or
+// `.topic_with(..)`, at its line.
 pub fn unregistered_handlers(file: &syn::File) -> Vec<(usize, String)> {
-    let mut registered = BTreeSet::new();
-    let mut route_fns: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-    for item in &file.items {
-        let Item::Fn(item) = item else { continue };
-        let name = item.sig.ident.to_string();
-        if name == "routes" || name == "topics" {
-            registered.extend(Idents::of(&item.block));
-        } else if is_route_fn(item) {
-            route_fns.insert(name, Idents::of(&item.block));
-        }
-    }
-    for (route_fn, idents) in route_fns {
-        if registered.contains(&route_fn) {
-            registered.extend(idents);
-        }
-    }
+    let registered: BTreeSet<String> = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Fn(item) if item.sig.ident == "handlers" => Some(Idents::of(&item.block)),
+            _ => None,
+        })
+        .flatten()
+        .collect();
     file.items
         .iter()
         .filter_map(|item| {
@@ -438,22 +426,16 @@ fn is_crate(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
 }
 
-fn is_handler_fn(item: &ItemFn) -> bool {
-    if !is_crate(&item.vis) || item.sig.asyncness.is_none() || item.sig.inputs.len() != 2 {
+// A handler takes the context first: a `pub(crate) async fn` whose first
+// parameter is a `Context<..>`.
+pub fn is_handler_fn(item: &ItemFn) -> bool {
+    if !is_crate(&item.vis) || item.sig.asyncness.is_none() {
         return false;
     }
-    let Some(FnArg::Typed(second)) = item.sig.inputs.iter().nth(1) else {
+    let Some(FnArg::Typed(first)) = item.sig.inputs.first() else {
         return false;
     };
-    matches!(&*second.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
-}
-
-fn is_route_fn(item: &ItemFn) -> bool {
-    matches!(
-        &item.sig.output,
-        ReturnType::Type(_, ty)
-            if matches!(&**ty, Type::Path(ty) if path_ends(&ty.path, &["MethodRouter"]))
-    )
+    matches!(&*first.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
 }
 
 #[derive(Default)]

@@ -1,5 +1,6 @@
 //! Holds the lent tree to the layout's rules before a report or verdict is accepted.
 
+mod bounds;
 mod lists;
 mod misses;
 mod process;
@@ -85,7 +86,7 @@ impl<'ast> Visit<'ast> for Markers {
 }
 
 // The Rust files of a tree, read once: the stems' sources, the stems' tests,
-// and the root lists the tree holds, with the crates under `crates/` and
+// and the root list the tree holds, with the crates under `crates/` and
 // the manifest of each that holds one.
 pub struct Tree<'a> {
     root: &'a Path,
@@ -121,11 +122,9 @@ impl<'a> Tree<'a> {
             }
         }
         let mut lists = Vec::new();
-        for path in [layout::ROUTES, layout::MESSAGING] {
-            let file = root.join(path);
-            if file.is_file() {
-                lists.push(Module::read(root, &file)?);
-            }
+        let file = root.join(layout::ENTRY);
+        if file.is_file() {
+            lists.push(Module::read(root, &file)?);
         }
         Ok(Self {
             root,
@@ -151,6 +150,8 @@ impl<'a> Tree<'a> {
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
         findings.extend(self.check_common()?);
+        findings.extend(self.broad_bounds());
+        findings.extend(self.old_settings());
         Ok(findings)
     }
 
@@ -309,7 +310,7 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement is implemented, so no marker of its stands: fill each \
              `todo!(\"REQ-..\")` the adapter scaffolded for a covered requirement through \
-             `edit_files` — a handler's body in place of its `let _ = (&input, &context);` line \
+             `edit_files` — a handler's body in place of its `let _ = (&context, ..);` borrow \
              and the marker, a function's body — or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
@@ -319,6 +320,7 @@ impl<'a> Tree<'a> {
     // unread here.
     fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
         let mut lines = Vec::new();
+        let mut seeded: Vec<&str> = Vec::new();
         for expected in scaffold
             .expected_tests()
             .filter(|expected| covered.iter().any(|covered| covered == expected.id))
@@ -326,6 +328,16 @@ impl<'a> Tree<'a> {
             let test = match self.module(expected.path) {
                 Some(module) => {
                     let Some(file) = module.file() else { continue };
+                    if !seeded.contains(&expected.path) {
+                        seeded.push(expected.path);
+                        for (line, lit) in provider_placeholders(file) {
+                            lines.push(format!(
+                                "{}:{line}: {} is covered and `provider()` seeds the placeholder \
+                                 `\"{lit}\"`",
+                                expected.path, expected.id
+                            ));
+                        }
+                    }
                     test_of(file, expected.test)
                 }
                 None => None,
@@ -374,17 +386,19 @@ impl<'a> Tree<'a> {
             "a covered requirement's scenarios are tests that run and pass: each scenario of a \
              covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
              part's test file, filled, its `#[tokio::test]` line kept, its `#[ignore = ..]` \
-             line removed, and any `\"<param>\"` path-parameter placeholder replaced with a \
+             line removed, any `\"<param>\"` path-parameter placeholder replaced with a \
              concrete value, since a function without the attribute is no test and `<` in a \
-             request path panics with `InvalidUriChar`; fill each through `edit_files`, or leave \
-             the requirement out of `covered`:\n{}",
+             request path panics with `InvalidUriChar`, and each `\"<value>\"` the file's \
+             `provider()` seeds a setting with replaced with the value the scenarios run \
+             under; fill each through `edit_files`, or leave the requirement out of \
+             `covered`:\n{}",
             lines.join("\n")
         ))
     }
 
-    // A `pub(crate) async fn(<input>, <context>: Context<..>)` handler in a
-    // part of the slice's stems that neither `routes()` nor `topics(..)`
-    // registers is dead code the router never reaches.
+    // A `pub(crate) async fn(<context>: Context<..>, ..)` handler in a part
+    // of the slice's stems that `handlers()` does not register is dead code
+    // the router never reaches.
     fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
         let prefixes: Vec<String> = scaffold
             .stems()
@@ -398,8 +412,7 @@ impl<'a> Tree<'a> {
             let Some(file) = module.file() else { continue };
             for (number, name) in syntax::unregistered_handlers(file) {
                 lines.push(format!(
-                    "{}:{number}: handler `{name}` is registered by neither `routes()` nor \
-                     `topics(..)`",
+                    "{}:{number}: handler `{name}` is registered by no call of `handlers()`",
                     module.path
                 ));
             }
@@ -409,10 +422,10 @@ impl<'a> Tree<'a> {
         }
         lines.sort();
         Some(format!(
-            "every `pub(crate) async fn` handler in a part is registered in its `routes()` or \
-             `topics(..)` router chain, since an unregistered handler is dead code the router \
-             never reaches: register each handler named in `routes()` or `topics(..)` through \
-             `edit_files`:\n{}",
+            "every `pub(crate) async fn` handler in a part is registered in its `handlers()` \
+             chain, `.route(PATH, get(handler))` for a route and `.topic(topic::NAME, handler)` \
+             for a topic, since an unregistered handler is dead code the router never reaches: \
+             register each handler named in `handlers()` through `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
@@ -558,6 +571,34 @@ fn is_placeholder(value: &str) -> bool {
     };
     !inner.is_empty()
         && inner.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+}
+
+// Every `"<value>"` placeholder the test file's `provider()` seeds a
+// setting with, at its line.
+fn provider_placeholders(file: &syn::File) -> Vec<(usize, String)> {
+    #[derive(Default)]
+    struct Seeds {
+        found: Vec<(usize, String)>,
+    }
+
+    impl<'ast> Visit<'ast> for Seeds {
+        fn visit_lit_str(&mut self, node: &'ast syn::LitStr) {
+            let value = node.value();
+            if is_placeholder(&value) {
+                self.found.push((syntax::line(node.span()), value));
+            }
+        }
+    }
+
+    let mut seeds = Seeds::default();
+    for item in &file.items {
+        if let syn::Item::Fn(item) = item
+            && item.sig.ident == "provider"
+        {
+            seeds.visit_block(&item.block);
+        }
+    }
+    seeds.found
 }
 
 // The test `name` declares in a test file: its line, whether a `test` and
