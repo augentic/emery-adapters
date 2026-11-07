@@ -696,7 +696,7 @@ mod tests {
     use super::*;
     use crate::build::{
         Build, Integrated, Landed, Rewound, SliceMetrics, Tree, budget_from, chain, empty_before,
-        failure, history, log, schedule_from,
+        failure, history, schedule_from,
     };
     use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
@@ -1466,9 +1466,8 @@ mod tests {
     // from the constant the module declares or a literal, a route fn of the
     // part's own spelling no method, a `.route(` over a topic none; a route is
     // a probe when the slice owning the module, found by the module's
-    // spelling of its name, has no requirement carrying a typed route or
-    // stating a method and path in its body or scenarios, and a module no
-    // merged slice owns is no probe.
+    // spelling of its name, has no requirement carrying a typed HTTP trigger,
+    // and a module no merged slice owns is no probe.
     #[test]
     fn omnia_routes_per_module() {
         let root = scratch(
@@ -1508,18 +1507,6 @@ mod tests {
                     "pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
                      axum::Router::new().route(\"/health/ready\", get(ready))\n}\n",
                 ),
-                (
-                    "crates/order-items/src/order_items.rs",
-                    "pub(crate) const ORDER_ITEMS: &str = \"/order-items\";\n\n\
-                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(ORDER_ITEMS, get(list))\n}\n",
-                ),
-                (
-                    "crates/start/src/application_bootstrap.rs",
-                    "pub(crate) const LIFECYCLE: &str = \"/bootstrap/lifecycle\";\n\n\
-                     pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                     axum::Router::new().route(LIFECYCLE, get(lifecycle))\n}\n",
-                ),
             ],
         );
         let routes_read = Target::Omnia.routes(&root);
@@ -1538,17 +1525,11 @@ mod tests {
             owned("orders-reading", &["REQ-001"]),
             owned("orders-placing", &["REQ-002"]),
             owned("architecture", &["REQ-003"]),
-            owned("order-items", &["REQ-004"]),
-            owned("application-bootstrap", &["REQ-005"]),
         ];
         let spec = serde_json::json!([
-            {"id": "REQ-001", "body": ["`GET /orders/{id}` answers the order."]},
-            {"id": "REQ-002", "body": ["A client places an order."],
-             "trigger": {"http": {"method": "POST", "path": "/orders"}},
-             "scenarios": [{"when": "an order is placed with valid fields", "then": "201"}]},
-            {"id": "REQ-003", "body": ["Controllers never import repositories directly."], "trigger": null},
-            {"id": "REQ-004", "body": ["Items are listed."], "scenarios": [{"given": ["GET /order-items is called"]}]},
-            {"id": "REQ-005", "body": ["The application enables shutdown hooks."]},
+            {"id": "REQ-001", "trigger": {"http": {"method": "GET", "path": "/orders/{id}"}}},
+            {"id": "REQ-002", "trigger": {"http": {"method": "POST", "path": "/orders"}}},
+            {"id": "REQ-003", "trigger": null},
         ]);
         let requirements = spec.as_array().unwrap();
         let read: Vec<(String, String, String, bool)> = routes(routes_read, &slices, requirements)
@@ -1558,13 +1539,11 @@ mod tests {
         let expected = [
             ("crates/architecture/src/architecture.rs", "GET", "/architecture/layering", true),
             ("crates/health/src/health.rs", "GET", "/health/ready", false),
-            ("crates/order-items/src/order_items.rs", "GET", "/order-items", false),
             ("crates/orders/src/placing.rs", "POST", "/orders", false),
             ("crates/orders/src/placing.rs", "?", "/orders/{id}/notes", false),
             ("crates/orders/src/reading.rs", "GET", "/orders/{id}", false),
             ("crates/orders/src/reading.rs", "DELETE", "/orders/{id}", false),
             ("crates/orders/src/reading.rs", "GET", "/orders", false),
-            ("crates/start/src/application_bootstrap.rs", "GET", "/bootstrap/lifecycle", true),
         ];
         let expected: Vec<(String, String, String, bool)> = expected
             .iter()
@@ -1602,68 +1581,24 @@ mod tests {
         assert!(!reexported("export { main } from \"./bootstrap/index.ts\";", "bootstrap"));
     }
 
-    // The files a wave's seal holds are read from the chain the repository
-    // answers: a seal of the lock rewrite alone reads `lock only`, a seal of
-    // repairs names them, and a wave sealing nothing has no line.
-    #[test]
-    fn wave_seals_read_from_the_chain() {
-        let root = scratch("wave-seals", &[(".gitignore", ".emery/\n"), ("Cargo.lock", "v1\n")]);
-        let commit = |message: &str| {
-            git(&root, &["add", "--all"]).unwrap();
-            git(&root, &["commit", "--quiet", "--message", message]).unwrap();
-        };
-        git(&root, &["init", "--quiet", "--initial-branch=main"]).unwrap();
-        commit("Initialise");
-        fs::create_dir_all(root.join("crates/start/src")).unwrap();
-        fs::write(root.join("crates/start/src/lib.rs"), "pub mod api;\n").unwrap();
-        commit("SLICE-001 start\n\nSlice: SLICE-001\nRevision: feb4bd36\nWave: 1");
-        fs::write(root.join("Cargo.lock"), "v2\n").unwrap();
-        commit("Wave 1 verified\n\nRevision: feb4bd36\nSlices: SLICE-001");
-        fs::write(root.join("crates/start/src/api.rs"), "pub fn mount() {}\n").unwrap();
-        commit("SLICE-002 start-api\n\nSlice: SLICE-002\nRevision: feb4bd36\nWave: 2");
-        fs::write(root.join("Cargo.lock"), "v3\n").unwrap();
-        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        fs::write(root.join("crates/start/Cargo.toml"), "[package]\n").unwrap();
-        commit("Wave 2 verified\n\nRevision: feb4bd36\nSlices: SLICE-002");
-        fs::write(root.join("crates/start/src/more.rs"), "pub fn mount() {}\n").unwrap();
-        commit("SLICE-003 start-more\n\nSlice: SLICE-003\nRevision: feb4bd36\nWave: 3");
-        let history = log(&root, "HEAD");
-        fs::remove_dir_all(&root).unwrap();
-
-        assert_eq!(history.len(), 6);
-        assert_eq!(history[1].sealed(), Some(2));
-        assert_eq!(history[0].sealed(), None, "a merge seals no wave");
-        let mut build = build_from(0, "{}", "", history);
-        build.target = Target::Omnia;
-        let repairs = build.repairs();
-        assert_eq!(repairs.get(&1), Some(&Vec::new()), "wave 1 sealed the lock rewrite alone");
-        assert_eq!(
-            repairs.get(&2).map(Vec::as_slice),
-            Some(&["Cargo.toml".to_owned(), "crates/start/Cargo.toml".to_owned()][..])
-        );
-        assert_eq!(repairs.get(&3), None, "wave 3 sealed nothing");
-    }
-
     // Two builds interleave and a verify follows: each completion's writes
     // are the `responded` lines of its own turn, closed by its outcome
     // line, a file written again is a rewrite, one at zero bytes is empty,
-    // one at under half its last size is shrinking, both the SDK's per-file
-    // `wrote=` form and the earlier `files=` with a call total read, the
-    // total a file's size only when the call wrote one file, a refused call
-    // counted apart; a completion's shell use is its own calls, paired by
-    // subject, with the result bytes summed.
+    // one at under half its last size is shrinking, a refused call counted
+    // apart; a completion's shell use is its own calls, paired by subject,
+    // with the result bytes summed.
     #[test]
     fn writes_and_shell_read_per_completion() {
         let log = "\
 2026-10-12T07:13:44.000000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo clippy\"
 2026-10-12T07:13:45.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=1000, \"crates/a/Cargo.toml\"=200]) deleted=Some([]) error=None
-2026-10-12T07:13:45.500000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\", \"crates/b/Cargo.toml\"]) deleted=Some([]) bytes=1500
-2026-10-12T07:13:46.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\"]) deleted=Some([]) bytes=900
+2026-10-12T07:13:45.500000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" wrote=Some([\"crates/b/src/b.rs\"=1500, \"crates/b/Cargo.toml\"=200]) deleted=Some([]) error=None
+2026-10-12T07:13:46.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" wrote=Some([\"crates/b/src/b.rs\"=900]) deleted=Some([]) error=None
 2026-10-12T07:13:47.500000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo clippy\" result_bytes=1024
 2026-10-12T07:13:48.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=400]) deleted=Some([]) error=None
 2026-10-12T07:13:49.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=None deleted=None error=Some(\"write_files: `crates/a/src/a.rs` would shrink\")
 2026-10-12T07:13:50.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"src/routes.rs\"]) error=None
-2026-10-12T07:13:51.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" files=Some([\"crates/b/src/b.rs\"]) deleted=Some([]) bytes=0
+2026-10-12T07:13:51.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-002 tool=\"write_files\" wrote=Some([\"crates/b/src/b.rs\"=0]) deleted=Some([]) error=None
 2026-10-12T07:13:52.000000Z DEBUG complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo test\"
 2026-10-12T07:13:53.000000Z  INFO complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=9000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
 2026-10-12T07:13:55.000000Z DEBUG complete{n=2 model=\"m\" format=schema label=\"build-SLICE-002\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo test\" result_bytes=2048
@@ -1708,8 +1643,7 @@ mod tests {
                 shrinking: 1,
                 edits: 0,
                 refused: 0
-            },
-            "a size a many-file call leaves unknown makes the next write a rewrite, not shrinking"
+            }
         );
         assert_eq!(
             completions[1].shell,

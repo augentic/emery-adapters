@@ -786,7 +786,7 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
     let mut completions = Vec::new();
     let mut shells: BTreeMap<u64, ShellUse> = BTreeMap::new();
     let mut started: BTreeMap<(u64, String), Vec<u64>> = BTreeMap::new();
-    let mut open: BTreeMap<String, (Writes, BTreeMap<String, Option<u64>>)> = BTreeMap::new();
+    let mut open: BTreeMap<String, (Writes, BTreeMap<String, u64>)> = BTreeMap::new();
     for line in stderr.lines() {
         if let Some((head, tail)) = line.split_once(": completion outcome=") {
             let label = head
@@ -893,11 +893,9 @@ fn span_n(head: &str) -> Option<u64> {
 }
 
 // One `responded` line of the SDK's writer, after `turn=<id> `, folded into
-// the turn's counts: a `write_files` call (`wrote=Some(["path"=bytes, ..])`,
-// or `files=Some(["path", ..]) … bytes=<total>` before the SDK logged each
-// file, where a one-file call's total is the file's), an `edit_files` call
-// (`edited=Some([..])`), or either refused (`error=Some(..)`).
-fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, Option<u64>>) {
+// the turn's counts: a `write_files` call (`wrote=Some(["path"=bytes, ..])`),
+// an `edit_files` call (`edited=Some([..])`), or either refused (`error=Some(..)`).
+fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, u64>) {
     if rest.contains("error=Some(") {
         writes.refused += 1;
         return;
@@ -908,46 +906,30 @@ fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, Optio
     }
     writes.calls += 1;
     for (path, bytes) in written_in(rest) {
-        if let Some(last) = sizes.get(&path) {
+        if let Some(&last) = sizes.get(&path) {
             writes.rewrites += 1;
-            if let (Some(bytes), Some(last)) = (bytes, *last)
-                && last > 0
-                && bytes * 2 < last
-            {
+            if last > 0 && bytes * 2 < last {
                 writes.shrinking += 1;
             }
         }
-        if bytes == Some(0) {
+        if bytes == 0 {
             writes.empty += 1;
         }
         sizes.insert(path, bytes);
     }
 }
 
-// The files a `write_files` line wrote, each with its bytes where the line
-// says: `wrote=Some(["path"=bytes, ..])`, or the earlier `files=Some(["path",
-// ..]) … bytes=<total>`, whose total is the file's when the call wrote one.
-fn written_in(rest: &str) -> Vec<(String, Option<u64>)> {
-    if let Some(list) = between(rest, "wrote=Some([") {
-        return list
-            .split(", ")
-            .filter_map(|entry| {
-                let (path, bytes) = entry.trim().rsplit_once("\"=")?;
-                Some((path.trim_start_matches('"').to_owned(), bytes.trim().parse().ok()))
-            })
-            .collect();
-    }
-    let Some(list) = between(rest, "files=Some([") else {
+// The files a `write_files` line wrote, each with its bytes: `wrote=Some(["path"=bytes, ..])`.
+fn written_in(rest: &str) -> Vec<(String, u64)> {
+    let Some(list) = between(rest, "wrote=Some([") else {
         return Vec::new();
     };
-    let paths: Vec<String> = list
-        .split(',')
-        .map(|path| path.trim().trim_matches('"').to_owned())
-        .filter(|path| !path.is_empty())
-        .collect();
-    let total = field(rest, "bytes=").and_then(|b| b.parse::<u64>().ok());
-    let one = (paths.len() == 1).then_some(total).flatten();
-    paths.into_iter().map(|path| (path, one)).collect()
+    list.split(", ")
+        .filter_map(|entry| {
+            let (path, bytes) = entry.trim().rsplit_once("\"=")?;
+            Some((path.trim_start_matches('"').to_owned(), bytes.trim().parse().ok()?))
+        })
+        .collect()
 }
 
 // The text between `key` and the `])` closing its list.

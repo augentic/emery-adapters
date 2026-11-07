@@ -2611,10 +2611,9 @@ async fn omnia_path_params() {
     assert!(
         tests.contains(
             "async fn a_line_is_read() {\n    let id = \"<id>\";\n    let line_id = \
-             \"<line_id>\";\n    let request = \
-             Request::get(format!(\"/orders/{id}/lines/{line_id}\"))\n        \
-             .body(Body::empty())\n        .expect(\"request\");\n    let (status, body) = \
-             call(&provider(), request).await;\n"
+             \"<line_id>\";\n    let request =\n        \
+             Request::get(format!(\"/orders/{id}/lines/{line_id}\")).body(Body::empty()).expect(\"request\");\n    \
+             let (status, body) = call(&provider(), request).await;\n"
         ),
         "the test binds each parameter and formats the path from them: {tests}"
     );

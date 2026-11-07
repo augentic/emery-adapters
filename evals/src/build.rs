@@ -1082,7 +1082,7 @@ pub fn history(project: &Path, n: usize, revision: &str) -> Vec<Landed> {
 
 // The first-parent chain from `tip`, newest first; empty where `tip` is
 // nothing the repository holds.
-pub fn log(at: &Path, tip: &str) -> Vec<Landed> {
+fn log(at: &Path, tip: &str) -> Vec<Landed> {
     let format = "--format=%x1e%H%x1f%s%x1f%(trailers:key=Revision,valueonly)%x1f\
                   %(trailers:key=Slice,valueonly)%x1f%(trailers:key=Wave,valueonly)%x1f\
                   %(trailers:key=Requirements,valueonly)%x1f%(trailers:key=Covered,valueonly)%x1f";

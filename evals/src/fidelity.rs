@@ -962,49 +962,13 @@ fn slices_of<'a>(slices: &'a [Integrated], module: &str) -> Vec<&'a Integrated> 
     if matched.is_empty() { named(part) } else { matched }
 }
 
-// Whether any of the requirements `ids` name, among `requirements`, states
-// an HTTP surface: the typed `trigger` the engine lowers from the survey's
-// contract where it is an `http` route, else a method in capitals followed
-// by a path, `GET /orders/{id}`, in backticks or bare, in its body or in a
-// scenario's given, when, then, or and, which an older revision spells it by.
+// Whether any of the requirements `ids` name, among `requirements`, carries
+// an HTTP `trigger`.
 fn states_route(ids: &[String], requirements: &[Value]) -> bool {
-    const METHODS: [&str; 7] = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
-    let texts = |value: &Value| -> Vec<String> {
-        match value {
-            Value::String(text) => vec![text.clone()],
-            Value::Array(items) => {
-                items.iter().filter_map(Value::as_str).map(str::to_owned).collect()
-            }
-            _ => Vec::new(),
-        }
-    };
-    let named: Vec<&Value> = requirements
-        .iter()
-        .filter(|requirement| {
-            requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
-        })
-        .collect();
-    if named.iter().any(|requirement| requirement["trigger"]["http"]["method"].is_string()) {
-        return true;
-    }
-    named
-        .into_iter()
-        .flat_map(|requirement| {
-            let mut lines = texts(&requirement["body"]);
-            for scenario in requirement["scenarios"].as_array().into_iter().flatten() {
-                for clause in ["given", "when", "then", "and"] {
-                    lines.extend(texts(&scenario[clause]));
-                }
-            }
-            lines
-        })
-        .any(|line| {
-            let words: Vec<&str> = line
-                .split(|c: char| c.is_whitespace() || c == '`')
-                .filter(|w| !w.is_empty())
-                .collect();
-            words.windows(2).any(|pair| METHODS.contains(&pair[0]) && pair[1].starts_with('/'))
-        })
+    requirements.iter().any(|requirement| {
+        requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
+            && requirement["trigger"]["http"]["method"].is_string()
+    })
 }
 
 impl Display for Fidelity {

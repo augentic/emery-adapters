@@ -113,7 +113,7 @@ rm -f ~/.emery/adapters/eval_*
 
 Recommended quick smoke-test subsets:
 
-- **TypeScript:** `orders`, `cli-jobs`, `hono-mounted` (or all 8 `typescript` cases when modifying `survey.md`).
+- **TypeScript:** `orders`, `cli-jobs`, `hono-mounted` (or all 7 `typescript` cases when modifying `survey.md`).
 - **Python:** `fastapi-orders`, `click-jobs`, `flask-blueprints` (or all 6 authored `python` cases when modifying `survey.md`).
 
 ### Survey facts without a model turn (`--facts`)
@@ -175,7 +175,7 @@ All host check results are written to `run-N.fidelity.md` and summarized in the 
 
 ## Reference comparison
 
-A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path pointing to a hand-written Omnia Rust guest implementing the same service (such as [`cases/train/reference`](cases/train/reference/README.md) and [`cases/train-pair/reference`](cases/train-pair/reference/README.md)). When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md` covering two checks:
+A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path pointing to a hand-written Omnia Rust guest implementing the same service (such as [`cases/train/reference`](cases/train/reference/)). When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md` covering two checks:
 
 ### Structural measures
 
@@ -360,7 +360,6 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 | [`cli-jobs`](cases/cli-jobs/expected.toml) | Commander CLI with background queue workers. | `start`, `import`, `reconcile`, `nightly`, `serve`, `invoices` |
 | [`api-routes`](cases/api-routes/expected.toml) | Next.js App Router API with file-path routing and no bootstrap. | `orders`, `customers`, `health` |
 | [`hono-mounted`](cases/hono-mounted/expected.toml) | Hono sub-apps mounted via `app.route("/orders", orders)`. | `start`, `orders`, `customers`, `health` |
-| [`cli-table`](cases/cli-table/expected.toml) | Three CLI commands registered from a table in a loop. | `start`, `import`, `reconcile`, `nightly` |
 | [`fastify-demo`](cases/fastify-demo/expected.toml) | Vendored official Fastify demo (`@fastify/autoload` directory plugins and `db:*` scripts). | `start`, `home`, `api`, `auth`, `users`, `tasks`, `create-database`, `drop-database`, `migrate`, `seed-database` |
 | [`nestjs-boilerplate`](cases/nestjs-boilerplate/expected.toml) | Vendored 177-module NestJS application (scale benchmark). | `start`, `auth`, `users`, `files`, `home`, `run-seed` |
 | [`train`](cases/train/expected.toml) | Production Kafka XML consumer with `[[absent]]` bootstrap spans and a 22-fixture Omnia `reference/` guest. | `train-update` (`start` surveyed with 0 requirements) |
@@ -394,14 +393,11 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 | Case | What it probes | Expected reconciliation |
 | --- | --- | --- |
 | [`orders-triad`](cases/orders-triad/expected.toml) | Documentation (`docs`), TypeScript (`code`), and inline intent (`brief`) with differing stem names. | 5 shared behaviors, 2 doc-only behaviors. |
-| [`orders-brief`](cases/orders-brief/expected.toml) | Documentation alongside a higher-ranked intent brief that overrides one rule. | `divergence` (intent outranks documentation). |
 | [`orders-divergence`](cases/orders-divergence/expected.toml) | Documentation and TypeScript code disagreeing on two rules. | `divergence` on both rules. |
 | [`orders-conflict`](cases/orders-conflict/expected.toml) | Two `documentation` sources (`docs` and `faq`) contradicting each other at equal rank. | `conflict`. |
-| [`orders-ranked`](cases/orders-ranked/expected.toml) | Same sources as `orders-conflict`, with `faq` lowered to `rank = 4`. | `divergence` (`docs` outranks `faq`). |
-| [`orders-spelled`](cases/orders-spelled/expected.toml) | Documentation rewritten to use the exact same claim IDs as the code. | Cross-source pre-merge on matching IDs. |
 | [`orders-broker`](cases/orders-broker/expected.toml) | Two ADRs naming Confluent Kafka and KeyVault alongside TypeScript code with vendor-named identifiers. | `leaks = 0`; vendor choices recorded as `decision` claims; secret surface stemmed as `secrets`. |
 | [`nestjs-pair`](cases/nestjs-pair/expected.toml) | `nestjs-docs` combined with the 177-module `nestjs-boilerplate` codebase. | 14 shared behaviors, 3 doc-only behaviors. |
-| [`train-pair`](cases/train-pair/expected.toml) | Multi-repo pipeline combining the SOAP `connector` and Kafka `train` services into one Omnia guest. | `inbound` and `train` stems; `reference/` guest with both crates. |
+| [`train-pair`](cases/train-pair/expected.toml) | Multi-repo pipeline combining the SOAP `connector` and Kafka `train` services into one specification. | `inbound` and `train-update` stems. |
 
 ### Fetching vendored fixtures
 
