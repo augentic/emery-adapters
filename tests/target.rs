@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::num::NonZeroU32;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
@@ -348,6 +349,7 @@ impl<A: TargetAdapter> Shipped<A> {
         assert_eq!(build.worker, Self::granted(), "the build's worker carries the adapter's grant");
         for carried in [
             "SLICE-001",
+            "PART-001",
             "orders-reading",
             "REQ-001",
             "0123456789abcdef0123456789abcdef01234567",
@@ -488,12 +490,15 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
     let ids: Vec<&str> = requirements.iter().map(|requirement| requirement.id.as_str()).collect();
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: name.to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         spec,
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
         plan: format!(
-            "## Slice: {name}\n\nID: SLICE-001\nRequirements: [{}]\nTypes: [Order]\n",
+            "## Part: {name}\n\nID: PART-001\nRequirements: [{}]\nTypes: [Order]\n",
             ids.join(", ")
         ),
         requirements,
@@ -694,6 +699,15 @@ fn node_worker() {
         "the worker grant the adapter's turns carry"
     );
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
+}
+
+#[test]
+fn node_budget() {
+    assert_eq!(
+        emery_node::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
 }
 
 #[tokio::test]
@@ -3172,6 +3186,15 @@ fn omnia_worker() {
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
+#[test]
+fn omnia_budget() {
+    assert_eq!(
+        emery_omnia::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
+}
+
 #[tokio::test]
 async fn omnia_verify() {
     OMNIA.failed(&omnia_tree().await, OMNIA_FAILED).await;
@@ -4804,6 +4827,293 @@ async fn omnia_verify_stem_clean() {
     model.assert_exhausted();
 
     assert!(verdict.passed, "the modules simulate nothing: {:?}", verdict.failures);
+}
+
+// A later serial slice of a part (`index > 1`) extends the held module and
+// test file in place: its new path constants, handlers, functions, and
+// ignored scenario tests are appended byte for byte after what the first
+// slice's turn left, its new route is chained onto `routes()`, the guard
+// holds the appended items and markers, and the brief names the module and
+// test file as `held, extended`.
+#[tokio::test]
+async fn omnia_scaffold_serial_second_slice() {
+    let project = omnia_tree().await;
+    let mut first = omnia_slice();
+    first.count = 2;
+    let first_report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let first_model = ScriptedModel::answering([first_report]).calling(
+        0,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+            ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        ])],
+    );
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice builds");
+    first_model.assert_exhausted();
+    let held_module = text(&project, "crates/orders/src/reading.rs");
+    let held_tests = text(&project, "crates/orders/tests/reading.rs");
+    let before = files_under(project.path());
+
+    let mut second = slice_for("orders-reading", &["orders.list", "orders.count"]);
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 2;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.requirements[0].statement = vec!["Lists every order.".to_owned()];
+    second.requirements[0].trigger = Some(routed("GET", "/orders"));
+    second.requirements[0].scenarios = vec![Scenario {
+        name: "Every order is listed".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "GET /orders is called".to_owned(),
+        then: "the orders are answered".to_owned(),
+        and: Vec::new(),
+    }];
+    second.requirements[1].id = "REQ-003".to_owned();
+    second.requirements[1].statement = vec!["Counts the orders.".to_owned()];
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &second_model, &second).await.expect("second slice scaffolds");
+    second_model.assert_exhausted();
+
+    assert_eq!(files_under(project.path()), before, "no numbered module or extra file is written");
+    let expected_module = format!(
+        "{}\n\npub(crate) const ORDERS: &str = \"/orders\";\n\n/// The input of `GET \
+         /orders`.\n#[derive(Debug, Deserialize)]\npub struct ListInput {{}}\n\n/// The output of \
+         `GET /orders`.\n#[derive(Debug, Serialize)]\npub struct ListOutput {{}}\n\n// REQ-002 \
+         orders.list: Lists every order.\npub(crate) async fn list<P: Capabilities>(\n    input: \
+         ListInput, context: Context<P>,\n) -> omnia_sdk::Result<ListOutput> {{\n    let _ = \
+         (&input, &context);\n    todo!(\"REQ-002 orders.list: the handler\")\n}}\n\n// REQ-003 \
+         orders.count: Counts the orders.\n/// The behaviour `orders.count` states.\n///\n/// # \
+         Errors\n///\n/// As the requirement states.\npub fn count() -> omnia_sdk::Result<()> {{\n    \
+         todo!(\"REQ-003 orders.count: the behaviour\")\n}}\n",
+        held_module
+            .replace(
+                "axum::Router::new().route(ORDERS_ID, get(read))",
+                "axum::Router::new().route(ORDERS_ID, get(read)).route(ORDERS, get(list))"
+            )
+            .trim_end()
+    );
+    assert_eq!(
+        text(&project, "crates/orders/src/reading.rs"),
+        expected_module,
+        "the held module is extended byte for byte with the second slice's route, handler, and \
+         function"
+    );
+    let expected_tests = format!(
+        "{}\n\n// REQ-002 orders.list: Every order is listed\n//   Given an order 42\n//   When GET \
+         /orders is called\n//   Then the orders are answered\n#[tokio::test]\n#[ignore = \
+         \"REQ-002 Every order is listed: unfilled\"]\nasync fn every_order_is_listed() {{\n    \
+         let request = Request::get(\"/orders\").body(Body::empty()).expect(\"request\");\n    \
+         let (status, body) = send(provider(), request).await;\n    let _ = (&status, &body);\n    \
+         todo!(\"REQ-002 Every order is listed: arrange, act, assert\")\n}}\n",
+        held_tests.trim_end()
+    );
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        expected_tests,
+        "the held test file is extended byte for byte with the second slice's ignored test"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]);
+    let brief = &second_model.seen()[0].messages[0];
+    for carried in [
+        "- `crates/orders/src/reading.rs`: held, extended. Extended with this slice's markers, \
+         listed below; fill them through `edit_files` and keep what the earlier slice wrote.",
+        "- `crates/orders/tests/reading.rs`: held, extended with one ignored test per scenario of \
+         this slice. Fill each new test through `edit_files`, replacing the block listed below, \
+         and keep the earlier tests passing.",
+        "1. The handler `list` of `GET /orders` in `crates/orders/src/reading.rs`, key `REQ-002 \
+         orders.list: the handler`",
+        "2. The function `count` in `crates/orders/src/reading.rs`, key `REQ-003 orders.count: \
+         the behaviour`",
+        "3. The test `every_order_is_listed` in `crates/orders/tests/reading.rs`, key `REQ-002 \
+         Every order is listed: arrange, act, assert`",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
+// When a later serial slice of a part adds a route or a topic to a held
+// module, each new registration is chained onto the held `routes()` or
+// `topics(..)` function (or scaffolded fresh when the first slice had only
+// functions), and when a held `routes()` chain was rewritten into a shape
+// `syn` cannot anchor, the brief names the unanchored registration for the
+// turn to wire.
+#[tokio::test]
+async fn omnia_scaffold_serial_route_registered() {
+    let project = omnia_tree().await;
+    let mut first = slice_for("orders-reading", &["orders.validate"]);
+    first.count = 3;
+    let first_model = ScriptedModel::answering([
+        r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            "REQ-001 orders.validate: the behaviour",
+            "pub fn validate() -> omnia_sdk::Result<()> {\n    Ok(())\n}",
+        )])],
+    );
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice of functions");
+    first_model.assert_exhausted();
+
+    let mut second = omnia_slice();
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 3;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.types = Vec::new();
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &second_model, &second).await.expect("second slice adds routes()");
+    second_model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        module.contains(
+            "pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
+             axum::Router::new().route(ORDERS_ID, get(read))\n}\n"
+        ),
+        "a held module with no `routes()` yet gains `routes()` on the first routed slice: {module}"
+    );
+    assert!(
+        text(&project, "crates/orders/src/lib.rs").contains("        reading::routes(),\n"),
+        "the stem's entry gains `reading::routes(),` when the part gains its first route"
+    );
+    assert_parses(&project, &["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]);
+
+    // rewrite `routes()` to bind a local router so `chain_end` finds no tail chain
+    let custom_routes = module.replace(
+        "    axum::Router::new().route(ORDERS_ID, get(read))\n",
+        "    let router = axum::Router::new().route(ORDERS_ID, get(read));\n    router\n",
+    );
+    project.write("crates/orders/src/reading.rs", &custom_routes);
+
+    let mut third = omnia_slice();
+    third.id = "SLICE-003".to_owned();
+    third.index = 3;
+    third.count = 3;
+    third.requirements[0].id = "REQ-003".to_owned();
+    third.requirements[0].subject = "orders.remove".to_owned();
+    third.requirements[0].trigger = Some(routed("DELETE", "/orders/{id}"));
+    third.requirements[0].scenarios.clear();
+    third.types = Vec::new();
+    let third_model = ScriptedModel::answering([r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#]).calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            "    let router = axum::Router::new().route(ORDERS_ID, get(read));\n    router\n",
+            "    axum::Router::new().route(ORDERS_ID, get(read)).route(ORDERS_ID, delete(remove))\n",
+        )])],
+    );
+    OMNIA
+        .build_slice(&project, &third_model, &third)
+        .await
+        .expect("third slice with unanchored chain");
+    third_model.assert_exhausted();
+
+    let brief = &third_model.seen()[0].messages[0];
+    let unanchored = "- `.route(ORDERS_ID, delete(remove))` in `routes()` of \
+                      `crates/orders/src/reading.rs` holds no chain anchor, so the registration \
+                      was not added: register the handler in the router chain through \
+                      `edit_files`.";
+    assert!(brief.contains(unanchored), "the brief names the unanchored registration: {brief}");
+}
+
+// A part's owned design types travel with its first slice alone: the first
+// slice lays `Order` into the module and points the design's `Type:` block at
+// the scaffold section, while the second slice (`types` empty) leaves `Order`
+// standing in the held module without re-laying it.
+#[tokio::test]
+async fn omnia_serial_types_first_slice_only() {
+    let project = omnia_tree().await;
+    let mut first = omnia_slice();
+    first.count = 2;
+    first.design =
+        "# Design\n\nType: orders.Order\n```ts\ninterface Order {\n  id: string;\n}\n```\n"
+            .to_owned();
+    let first_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice lays types");
+    first_model.assert_exhausted();
+
+    let first_brief = &first_model.seen()[0].messages[0];
+    assert!(
+        first_brief.contains(
+            "Type: orders.Order — laid in the tree by the adapter before this turn, as the \
+             scaffold section says."
+        ),
+        "the first slice's brief replaces the laid type block with a pointer: {first_brief}"
+    );
+
+    let mut second = omnia_slice();
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 2;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.requirements[0].subject = "orders.archive".to_owned();
+    second.requirements[0].statement = vec!["Archives an Order by its id.".to_owned()];
+    second.requirements[0].trigger = Some(routed("POST", "/orders/{id}/archive"));
+    second.types = Vec::new();
+    second.design = first.design.clone();
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA
+        .build_slice(&project, &second_model, &second)
+        .await
+        .expect("second slice carries no owned types");
+    second_model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert_eq!(
+        module.matches("pub struct Order {").count(),
+        1,
+        "`Order` is laid once by the first slice and kept on the second: {module}"
+    );
+    let second_brief = &second_model.seen()[0].messages[0];
+    assert!(
+        !second_brief.contains("The design types `Order`"),
+        "the second slice lays no design types of its own: {second_brief}"
+    );
+    assert!(
+        second_brief.contains("Type: orders.Order\n```ts\ninterface Order"),
+        "the second slice's design cut keeps `Order` as a referenced type: {second_brief}"
+    );
+}
+
+// A `pub(crate) async fn` handler in a slice's part that neither `routes()`
+// nor `topics(..)` registers is refused by `check_build` with the handler's
+// line named; registering the handler in `routes()` repairs the tree.
+#[tokio::test]
+async fn omnia_unregistered_handler_finding() {
+    let project = omnia_tree().await;
+    let slice = omnia_slice();
+    let unchained = "    axum::Router::new()\n";
+    let chained = "    axum::Router::new().route(ORDERS_ID, get(read))\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", chained, unchained),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", unchained, chained)])]);
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the registered handler passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: handler `read` is registered by neither `routes()` nor \
+         `topics(..)`",
+        line_of(OMNIA_MODULE, "pub(crate) async fn read")
+    );
+    assert!(
+        correction.contains("every `pub(crate) async fn` handler in a part is registered")
+            && correction.contains(&expected),
+        "the correction names the unregistered handler at its line: {correction}"
+    );
 }
 
 // A tree holding every file of the seed, as the engine's holds it once the

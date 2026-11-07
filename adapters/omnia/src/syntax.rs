@@ -1,11 +1,14 @@
 //! What the scaffold and the checks read of Rust through `syn`: the parse, the lines, and the shapes several rules share.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprLit, Item, ItemUse, Lit, LitStr, Macro, MetaList, Path, UseTree, Visibility};
+use syn::{
+    Expr, ExprLit, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList, Path, ReturnType,
+    Type, UseTree, Visibility,
+};
 
 // Where `syn` refused a file, and why.
 pub struct Unparsed {
@@ -289,4 +292,183 @@ pub fn todo_marker(mac: &Macro) -> Option<(usize, String)> {
     }
     let text = mac.parse_body::<LitStr>().ok()?.value();
     text.starts_with("REQ-").then(|| (line(mac.bang_token.span), text))
+}
+
+// The top-level declarations of a file, partitioned by namespace, with the
+// string constants `pub(crate) const` declares.
+#[derive(Default)]
+pub struct Declared {
+    pub fns: Vec<String>,
+    pub types: Vec<String>,
+    pub constants: Vec<String>,
+    pub paths: Vec<(String, String)>,
+}
+
+impl Declared {
+    pub fn of(file: &syn::File) -> Self {
+        let mut declared = Self::default();
+        for item in &file.items {
+            match item {
+                Item::Fn(item) => declared.fns.push(item.sig.ident.to_string()),
+                Item::Struct(item) => declared.types.push(item.ident.to_string()),
+                Item::Enum(item) => declared.types.push(item.ident.to_string()),
+                Item::Type(item) => declared.types.push(item.ident.to_string()),
+                Item::Union(item) => declared.types.push(item.ident.to_string()),
+                Item::Trait(item) => declared.types.push(item.ident.to_string()),
+                Item::Const(item) => {
+                    let name = item.ident.to_string();
+                    if is_crate(&item.vis)
+                        && let Expr::Lit(ExprLit {
+                            lit: Lit::Str(lit), ..
+                        }) = &*item.expr
+                    {
+                        declared.paths.push((name.clone(), lit.value()));
+                    }
+                    declared.constants.push(name);
+                }
+                Item::Static(item) => declared.constants.push(item.ident.to_string()),
+                _ => {}
+            }
+        }
+        declared
+    }
+}
+
+// The closing line of the last top-level `use` item in `file`.
+pub fn last_use_line(file: &syn::File) -> Option<usize> {
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Use(item) => Some(line(item.semi_token.span)),
+            _ => None,
+        })
+        .max()
+}
+
+// The byte offset where the tail `.route(..)` chain in the top-level
+// `fn <name>` ends: the closing `)` of the last `.route(..)` call, or the
+// end of the receiver (`axum::Router::new()` or `router`), so a new
+// `.route(..)` call appended there extends the chain.
+pub fn chain_end(text: &str, file: &syn::File, name: &str) -> Option<usize> {
+    let item = file.items.iter().find_map(|item| match item {
+        Item::Fn(item) if item.sig.ident == name => Some(item),
+        _ => None,
+    })?;
+    let syn::Stmt::Expr(expr, None) = item.block.stmts.last()? else {
+        return None;
+    };
+    let span = match expr {
+        Expr::MethodCall(call) if is_route_chain(expr, name) => call.paren_token.span.close(),
+        Expr::Call(call) if is_router_new(call, name) => call.paren_token.span.close(),
+        Expr::Path(path) if name == "topics" && path.path.is_ident("router") => {
+            path.path.segments.last()?.ident.span()
+        }
+        _ => return None,
+    };
+    let end = span.end();
+    byte_offset(text, end.line, end.column)
+}
+
+fn is_route_chain(mut expr: &Expr, name: &str) -> bool {
+    while let Expr::MethodCall(call) = expr {
+        if call.method != "route" {
+            return false;
+        }
+        expr = &call.receiver;
+    }
+    match expr {
+        Expr::Call(call) => is_router_new(call, name),
+        Expr::Path(path) if name == "topics" => path.path.is_ident("router"),
+        _ => false,
+    }
+}
+
+fn is_router_new(call: &syn::ExprCall, name: &str) -> bool {
+    name == "routes"
+        && call.args.is_empty()
+        && matches!(&*call.func, Expr::Path(path) if path_ends(&path.path, &["Router", "new"]))
+}
+
+fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
+    let mut current_line = 1;
+    let mut offset = 0;
+    for segment in text.split_inclusive('\n') {
+        if current_line == line {
+            let col_bytes: usize = segment.chars().take(column).map(char::len_utf8).sum();
+            return (col_bytes <= segment.len()).then_some(offset + col_bytes);
+        }
+        offset += segment.len();
+        current_line += 1;
+    }
+    (current_line == line && column == 0).then_some(offset)
+}
+
+// Every `pub(crate) async fn(<input>, <context>: Context<..>)` handler in
+// `file` that is named by no `.route(..)` in `routes()` or `topics(..)` and
+// by no `<name>_route` function that `routes()` names, at its line.
+pub fn unregistered_handlers(file: &syn::File) -> Vec<(usize, String)> {
+    let mut registered = BTreeSet::new();
+    let mut route_fns: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for item in &file.items {
+        let Item::Fn(item) = item else { continue };
+        let name = item.sig.ident.to_string();
+        if name == "routes" || name == "topics" {
+            registered.extend(Idents::of(&item.block));
+        } else if is_route_fn(item) {
+            route_fns.insert(name, Idents::of(&item.block));
+        }
+    }
+    for (route_fn, idents) in route_fns {
+        if registered.contains(&route_fn) {
+            registered.extend(idents);
+        }
+    }
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Fn(item) = item else { return None };
+            let name = item.sig.ident.to_string();
+            (is_handler_fn(item) && !registered.contains(&name))
+                .then(|| (line(item.sig.fn_token.span), name))
+        })
+        .collect()
+}
+
+fn is_crate(vis: &Visibility) -> bool {
+    matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
+}
+
+fn is_handler_fn(item: &ItemFn) -> bool {
+    if !is_crate(&item.vis) || item.sig.asyncness.is_none() || item.sig.inputs.len() != 2 {
+        return false;
+    }
+    let Some(FnArg::Typed(second)) = item.sig.inputs.iter().nth(1) else {
+        return false;
+    };
+    matches!(&*second.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
+}
+
+fn is_route_fn(item: &ItemFn) -> bool {
+    matches!(
+        &item.sig.output,
+        ReturnType::Type(_, ty)
+            if matches!(&**ty, Type::Path(ty) if path_ends(&ty.path, &["MethodRouter"]))
+    )
+}
+
+#[derive(Default)]
+struct Idents(BTreeSet<String>);
+
+impl Idents {
+    fn of(block: &syn::Block) -> BTreeSet<String> {
+        let mut idents = Self::default();
+        idents.visit_block(block);
+        idents.0
+    }
+}
+
+impl<'ast> Visit<'ast> for Idents {
+    fn visit_ident(&mut self, node: &'ast Ident) {
+        self.0.insert(node.to_string());
+    }
 }

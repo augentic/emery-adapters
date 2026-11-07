@@ -23,6 +23,7 @@ mod card;
 mod case;
 mod fidelity;
 mod grade;
+mod plan;
 mod reference;
 mod run;
 mod stage;
@@ -143,6 +144,8 @@ struct Args {
     oracle: Option<String>,
     // the target a build runs through; none where no build runs
     target: Option<Target>,
+    // the requirement budget per slice passed as `--budget` to `emery build`
+    budget: Option<NonZeroUsize>,
 }
 
 // A build of a card's committed plans again: fresh, or on from a wave of the
@@ -182,6 +185,7 @@ impl Args {
         let mut at: Option<usize> = None;
         let mut oracle: Option<String> = None;
         let mut target: Option<Target> = None;
+        let mut budget: Option<NonZeroUsize> = None;
         while let Some(arg) = argv.next() {
             if arg == "--rebuild" {
                 rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
@@ -195,38 +199,14 @@ impl Args {
             } else if arg == "--target" {
                 let name = argv.next().ok_or("`--target` names a target adapter")?;
                 target = Some(Target::parse(&name)?);
+            } else if arg == "--budget" {
+                let cap = argv.next().ok_or("`--budget` names a requirement budget")?;
+                budget = Some(cap.parse().map_err(|error| format!("`--budget {cap}`: {error}"))?);
             } else {
                 filter.insert(arg);
             }
         }
-        let again = match (rebuild, resume, at) {
-            (Some(_), Some(_), _) => {
-                return Err(
-                    "`--rebuild` and `--resume` each build a card's plans again; name one".into()
-                );
-            }
-            (Some(card), None, None) => Some(Again::Rebuild { card }),
-            (_, None, Some(_)) => {
-                return Err("`--at` names the wave a `--resume` resumes at".into());
-            }
-            (None, Some(card), Some(wave)) => {
-                if wave < 2 {
-                    return Err(
-                        "`--at` names a wave past the first; a resume at wave 1 is a `--rebuild`"
-                            .into(),
-                    );
-                }
-                let drifted = filter.remove("--drifted");
-                Some(Again::Resume { card, wave, drifted })
-            }
-            (None, Some(_), None) => {
-                return Err("`--resume` names the wave to resume at through `--at`".into());
-            }
-            (None, None, None) => None,
-        };
-        if filter.remove("--drifted") {
-            return Err("`--drifted` admits the seed a `--resume` resumes over".into());
-        }
+        let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
         let facts_only = filter.remove("--facts");
         let build = filter.remove("--build") || again.is_some();
         if facts_only && filter.is_empty() {
@@ -258,13 +238,55 @@ impl Args {
                     .into(),
             );
         }
+        if budget.is_some() && !build {
+            return Err(
+                "`--budget` sets the requirement budget for `--build`, `--rebuild`, or `--resume`"
+                    .into(),
+            );
+        }
         Ok(Self {
             filter,
             facts_only,
             again,
             oracle,
             target: build.then(|| target.unwrap_or_default()),
+            budget,
         })
+    }
+
+    fn resolve_again(
+        rebuild: Option<String>, resume: Option<String>, at: Option<usize>,
+        filter: &mut BTreeSet<String>,
+    ) -> Result<Option<Again>, Box<dyn std::error::Error>> {
+        let again = match (rebuild, resume, at) {
+            (Some(_), Some(_), _) => {
+                return Err(
+                    "`--rebuild` and `--resume` each build a card's plans again; name one".into()
+                );
+            }
+            (Some(card), None, None) => Some(Again::Rebuild { card }),
+            (_, None, Some(_)) => {
+                return Err("`--at` names the wave a `--resume` resumes at".into());
+            }
+            (None, Some(card), Some(wave)) => {
+                if wave < 2 {
+                    return Err(
+                        "`--at` names a wave past the first; a resume at wave 1 is a `--rebuild`"
+                            .into(),
+                    );
+                }
+                let drifted = filter.remove("--drifted");
+                Some(Again::Resume { card, wave, drifted })
+            }
+            (None, Some(_), None) => {
+                return Err("`--resume` names the wave to resume at through `--at`".into());
+            }
+            (None, None, None) => None,
+        };
+        if filter.remove("--drifted") {
+            return Err("`--drifted` admits the seed a `--resume` resumes over".into());
+        }
+        Ok(again)
     }
 }
 
@@ -281,6 +303,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         again,
         oracle,
         target,
+        budget,
     } = Args::parse(env::args().skip(1))?;
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
@@ -305,7 +328,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
-    let mut settings = Settings::from_env(root, &adapters, target)?;
+    let mut settings = Settings::from_env(root, &adapters, target, budget)?;
     settings.again = again;
 
     if let Some(again) = settings.again.clone() {
@@ -324,12 +347,7 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
                 runs: vec![vec![attempt]],
             });
         }
-        let card = scorecard(&settings, &reports, &started, &card_name);
-        let out = eval_dir.join(format!("{card_name}.md"));
-        fs::write(&out, &card)?;
-        print!("{card}");
-        eprintln!("eval: scorecard at {}", out.display());
-        return Ok(());
+        return write_scorecard(&eval_dir, &settings, &reports, &started, &card_name);
     }
     if facts_only {
         for case in &cases {
@@ -377,13 +395,17 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
         reports.push(Report { case, runs });
     }
 
-    // write the scorecard
-    let card = scorecard(&settings, &reports, &started, &card_name);
+    write_scorecard(&eval_dir, &settings, &reports, &started, &card_name)
+}
+
+fn write_scorecard(
+    eval_dir: &Path, settings: &Settings, reports: &[Report<'_>], started: &str, card_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let card = scorecard(settings, reports, started, card_name);
     let out = eval_dir.join(format!("{card_name}.md"));
     fs::write(&out, &card)?;
     print!("{card}");
     eprintln!("eval: scorecard at {}", out.display());
-
     Ok(())
 }
 
@@ -437,6 +459,9 @@ struct Settings {
     // the width cap a `--build` run passes as `--jobs`; none leaves the
     // engine's default
     jobs: Option<NonZeroUsize>,
+    // the requirement budget per slice passed as `--budget` to `emery build`;
+    // none leaves the adapter's or engine's default
+    budget: Option<NonZeroUsize>,
     runs: usize,
     ladder: Vec<Rung>,
     // the one rung every `emery build` runs at, since a slice's turn writes
@@ -457,6 +482,7 @@ struct Settings {
 impl Settings {
     fn from_env(
         root: &Path, adapters: &BTreeSet<&str>, target: Option<Target>,
+        budget_flag: Option<NonZeroUsize>,
     ) -> Result<Self, String> {
         // a relative path is from the repository root, the directory the
         // runner is run from; the binary runs with each staged project as
@@ -492,6 +518,13 @@ impl Settings {
             }
             Err(_) => None,
         };
+        let budget = match (budget_flag, env::var("EVAL_BUDGET")) {
+            (Some(budget), _) => Some(budget),
+            (None, Ok(budget)) => {
+                Some(budget.parse().map_err(|error| format!("EVAL_BUDGET: `{budget}`: {error}"))?)
+            }
+            (None, Err(_)) => None,
+        };
         let ladder = env::var("EVAL_LADDER").unwrap_or_else(|_| LADDER.to_owned());
         let ladder: Vec<Rung> = ladder
             .split(',')
@@ -516,6 +549,7 @@ impl Settings {
             wasm,
             target,
             jobs,
+            budget,
             runs,
             ladder,
             build_rung,
@@ -661,16 +695,21 @@ mod tests {
 
     use super::*;
     use crate::build::{
-        Build, Integrated, Landed, Rewound, Tree, chain, empty_before, failure, history, log,
+        Build, Integrated, Landed, Rewound, SliceMetrics, Tree, budget_from, chain, empty_before,
+        failure, history, log, schedule_from,
     };
-    use crate::card::factor;
+    use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
         declared_tests, named_by, reexported, routes, scenarios_of, tap_counts, unrun,
     };
     use crate::grade::{absent, behaviours, identifier};
-    use crate::run::{Landing, ShellUse, Writes, accepted, completions, surveyed, unreached};
+    use crate::plan::{Edge, PlanShape, type_name};
+    use crate::run::{
+        Landing, ShellUse, Tokens, Writes, accepted, cap_exhaustions, completions, surveyed,
+        unreached,
+    };
     use crate::stage::{clone_root, git, repository};
 
     const RUNG: Rung = Rung {
@@ -690,6 +729,7 @@ mod tests {
             waves: None,
             evidence: accepted(stderr),
             completions: completions(stderr),
+            cap_exhausted: cap_exhaustions(stderr),
             surveyed: surveyed(stderr),
             unreached: unreached(stderr),
             spec,
@@ -716,11 +756,17 @@ mod tests {
     // A build read from its log and envelope, as `build` reads them, over
     // the chain `history` would answer.
     fn build_from(exit: i32, stdout: &str, stderr: &str, history: Vec<Landed>) -> Build {
+        let envelope: Option<Value> = serde_json::from_str(stdout).ok();
+        let (budget, budget_source) = budget_from(envelope.as_ref(), stderr);
+        let schedule = schedule_from(envelope.as_ref());
         Build {
             target: Target::Node,
             wall: Duration::ZERO,
             exit: Some(exit),
-            envelope: serde_json::from_str(stdout).ok(),
+            envelope,
+            budget,
+            budget_source,
+            schedule,
             failure: failure(stderr),
             completions: completions(stderr),
             history,
@@ -970,8 +1016,8 @@ mod tests {
         let sealed = empty_before(&envelope, 4).swap_remove(1);
         assert_eq!(
             sealed.message("rev", "1111"),
-            "SLICE-002 start-prefetch\n\nSlice: SLICE-002\nRevision: rev\nRequirements: \
-             REQ-004\nCovered: \nAdapter: target\nBase: 1111\nWave: 3"
+            "SLICE-002 start-prefetch\n\nSlice: SLICE-002\nPart: PART-002\nRevision: rev\nBudget: \
+             12\nRequirements: REQ-004\nCovered: \nAdapter: target\nBase: 1111\nWave: 3"
         );
     }
 
@@ -2752,5 +2798,305 @@ mod tests {
         );
         assert_eq!((graded.status_met, graded.status_expected), (1, 1));
         assert_eq!(graded.to_string(), "2/2");
+    }
+
+    #[test]
+    fn budget_args() {
+        let build = Args::parse(
+            ["--build", "--target", "omnia", "--budget", "6", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(build.budget, NonZeroUsize::new(6));
+        assert_eq!(build.target, Some(Target::Omnia));
+
+        let rebuild = Args::parse(
+            ["--rebuild", "card", "--budget", "12", "express-orders"].map(String::from).into_iter(),
+        )
+        .unwrap();
+        assert_eq!(rebuild.budget, NonZeroUsize::new(12));
+
+        let resume = Args::parse(
+            ["--resume", "card", "--at", "2", "--budget", "8", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(resume.budget, NonZeroUsize::new(8));
+
+        for argv in [
+            &["--budget", "6", "express-orders"][..],
+            &["--facts", "--budget", "6", "express-orders"][..],
+            &["--oracle", "card", "--budget", "6", "train"][..],
+            &["--build", "--budget", "0", "express-orders"][..],
+            &["--build", "--budget", "six", "express-orders"][..],
+            &["--build", "--budget"][..],
+        ] {
+            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
+        }
+    }
+
+    #[test]
+    fn slicing_cap_exhaustions_counted() {
+        let cap_rejected = "DEBUG judge{question=\"slicing\"}: emery_engine::brief: candidate \
+                            rejected findings=[\"- the stem `orders` is cut into 5 slices \
+                            (`orders-get` 2, `orders-amend` 5), yet `orders-get` (2 requirements) \
+                            and `orders-amend` (5) fit one slice of 7 within the cap of 12\"]\n";
+        let stem_rejected = "DEBUG judge{question=\"slicing\"}: emery_engine::brief: candidate \
+                             rejected findings=[\"- requirements sharing the stem `orders` are \
+                             split across `orders-a`, `orders-b`\"]\n";
+
+        let exhausted_cap = cap_rejected.to_owned() + &completion("slicing", "exhausted");
+        assert_eq!(cap_exhaustions(&exhausted_cap), 1);
+
+        let corrected_cap = cap_rejected.to_owned() + &completion("slicing", "corrected");
+        assert_eq!(cap_exhaustions(&corrected_cap), 0, "a corrected turn did not exhaust");
+
+        let exhausted_stem = stem_rejected.to_owned() + &completion("slicing", "exhausted");
+        assert_eq!(cap_exhaustions(&exhausted_stem), 0, "a stem split is no cap exhaustion");
+
+        let envelope_cap = completion("slicing", "exhausted")
+            + "{\n  \"error\": \"bad_request\",\n  \"message\": \"slicing failed: fit one slice \
+               of 8 within the cap of 12\"\n}\n";
+        assert_eq!(cap_exhaustions(&envelope_cap), 1);
+    }
+
+    #[test]
+    fn plan_shape_and_edges() {
+        let spec_doc = serde_json::json!({
+            "requirements": [
+                {"id": "REQ-001", "subject": "start.require-db", "trigger": null},
+                {"id": "REQ-002", "subject": "start.health-ready",
+                 "trigger": {"http": {"method": "GET", "path": "/health/ready"}}},
+                {"id": "REQ-003", "subject": "health.get-ready",
+                 "trigger": {"http": {"method": "GET", "path": "/health/ready"}}},
+                {"id": "REQ-004", "subject": "customers.get", "trigger": null},
+                {"id": "REQ-005", "subject": "orders.create", "trigger": null},
+                {"id": "REQ-006", "subject": "auth.login", "trigger": null},
+                {"id": "REQ-007", "subject": "session.refresh", "trigger": null},
+            ]
+        });
+        let design_doc = serde_json::json!({
+            "sections": [{
+                "kind": "domain-model",
+                "blocks": [
+                    {"type": {"key": "Customer (src/customers.ts#L3)", "signature": "interface Customer { id: string; }", "role": "data"}},
+                    {"type": {"key": "Order (src/orders.ts#L10)", "signature": "interface Order { id: string; customer: Customer; }", "role": "data"}},
+                ]
+            }]
+        });
+        let plan_doc = serde_json::json!({
+            "parts": [
+                {"id": "PART-001", "name": "start", "requirements": ["REQ-001"],
+                 "types": [], "depends-on": []},
+                {"id": "PART-002", "name": "health", "requirements": ["REQ-002", "REQ-003"],
+                 "types": [], "depends-on": ["PART-001"]},
+                {"id": "PART-003", "name": "customers", "requirements": ["REQ-004"],
+                 "types": ["Customer (src/customers.ts#L3)"], "depends-on": ["PART-001"]},
+                {"id": "PART-004", "name": "orders", "requirements": ["REQ-005"],
+                 "types": ["Order (src/orders.ts#L10)"], "depends-on": ["PART-001", "PART-003"]},
+                {"id": "PART-005", "name": "auth", "requirements": ["REQ-006", "REQ-007"],
+                 "types": [], "depends-on": []},
+            ]
+        });
+
+        assert_eq!(type_name("Order (src/orders.ts#L10)"), "Order");
+        assert_eq!(type_name("orders.Order (src/orders.ts#L10)"), "Order");
+
+        let plan_shape = PlanShape::of(Some(&plan_doc), Some(&spec_doc), Some(&design_doc), None);
+        assert_eq!(plan_shape.parts, 5);
+        assert_eq!(plan_shape.waves, 3);
+        assert_eq!(plan_shape.widest, 2);
+        assert_eq!(plan_shape.wave_shape, "3 (2/2/1)");
+        assert_eq!(
+            plan_shape.merged_stems(),
+            1,
+            "start.health-ready is trigger-pulled, not merged"
+        );
+        assert_eq!(plan_shape.merged_cell(), "1 (`auth`: `auth` + `session`)");
+        assert_eq!(
+            plan_shape.type_backed,
+            vec![Edge {
+                from: "orders".to_owned(),
+                to: "customers".to_owned(),
+                types: vec!["Customer".to_owned()],
+            }]
+        );
+        assert_eq!(plan_shape.type_backed_cell(), "1 (`orders` → `customers` (`Customer`))");
+        assert_eq!(plan_shape.unbacked.len(), 3);
+        assert_eq!(plan_shape.unbacked_start, 3);
+
+        let expected = case("[[source]]\nadapter = \"typescript\"\nfixture = \"f\"\n").unwrap();
+        let mut run = run_from(Some(0), &timed("slicing", "ok", 14_000), Some(spec_doc));
+        run.design = Some(design_doc);
+        run.plan = Some(plan_doc);
+        let attempt = Attempt {
+            grade: grade(&expected, &run),
+            run,
+        };
+        let mut text = String::new();
+        plan_shape_section(&mut text, &[vec![attempt]]).unwrap();
+        assert!(text.contains("## Plan shape"), "{text}");
+        assert!(
+            text.contains(
+                "| 1 | ok (14s) | 0 | 5 | 3 (2/2/1) | 2 | 1 (`auth`: `auth` + `session`) | \
+                 1 (`orders` → `customers` (`Customer`)) | 3 (`health` → `start`, `customers` → \
+                 `start`, `orders` → `start`) | 3 |"
+            ),
+            "{text}"
+        );
+    }
+
+    const SCHEDULED_ENVELOPE: &str = r#"{
+        "revision": "feb4bd36",
+        "budget": 6,
+        "budget-source": "flag",
+        "parts": [["PART-001"], ["PART-002"]],
+        "schedule": [
+            {"id": "SLICE-001", "part": "PART-001", "name": "start", "index": 1, "count": 1,
+             "requirements": ["REQ-001"], "types": [], "over-budget": false},
+            {"id": "SLICE-002", "part": "PART-002", "name": "orders", "index": 1, "count": 2,
+             "requirements": ["REQ-002", "REQ-003"], "types": ["Order"], "over-budget": false},
+            {"id": "SLICE-003", "part": "PART-002", "name": "orders", "index": 2, "count": 2,
+             "requirements": ["REQ-004"], "types": [], "over-budget": true}
+        ],
+        "waves": [["SLICE-001"], ["SLICE-002"], ["SLICE-003"]],
+        "slices": [
+            {"id": "SLICE-001", "part": "PART-001", "name": "start", "index": 1, "count": 1,
+             "wave": 1, "covered": [], "uncovered": ["REQ-001"], "written": [], "commit": null},
+            {"id": "SLICE-002", "part": "PART-002", "name": "orders", "index": 1, "count": 2,
+             "wave": 2, "covered": ["REQ-002", "REQ-003"], "uncovered": [],
+             "written": ["crates/orders/src/orders.rs"], "commit": "aaaa"},
+            {"id": "SLICE-003", "part": "PART-002", "name": "orders", "index": 2, "count": 2,
+             "wave": 3, "covered": ["REQ-004"], "uncovered": [],
+             "written": ["crates/orders/src/orders.rs"], "commit": "bbbb"}
+        ],
+        "verified": [
+            {"wave": 2, "slices": ["SLICE-002"], "head": "aaaa"},
+            {"wave": 3, "slices": ["SLICE-003"], "head": "bbbb"}
+        ],
+        "head": "bbbb",
+        "label": "emery/feb4bd36",
+        "repository": "./.emery/vcs/repos/run-1"
+    }"#;
+
+    #[test]
+    fn schedule_metrics_and_section() {
+        let stderr = timed("build-SLICE-002", "ok", 90_000)
+            + &timed("verify", "ok", 20_000)
+            + &timed("build-SLICE-003", "corrected", 40_000)
+            + &timed("build-SLICE-003", "ok", 80_000)
+            + &timed("verify", "ok", 25_000);
+        let build = build_from(0, SCHEDULED_ENVELOPE, &stderr, Vec::new());
+        assert_eq!(build.budget, Some(6));
+        assert_eq!(build.budget_source.as_deref(), Some("flag"));
+        assert_eq!(build.scheduled_count(2), 3);
+        assert_eq!(build.schedule_waves(), "3 (1/1/1)");
+        assert_eq!(build.schedule_widest(), 1);
+        assert_eq!(build.over_budget().len(), 1);
+        assert_eq!(build.over_budget()[0].id, "SLICE-003");
+
+        let spec_doc = serde_json::json!({
+            "requirements": [
+                {"id": "REQ-001", "subject": "start.env", "scenarios": [{"name": "a"}]},
+                {"id": "REQ-002", "subject": "orders.get", "scenarios": [{"name": "b"}, {"name": "c"}]},
+                {"id": "REQ-003", "subject": "orders.list", "scenarios": [{"name": "d"}]},
+                {"id": "REQ-004", "subject": "orders.post", "scenarios": [{"name": "e"}, {"name": "f"}, {"name": "g"}]},
+            ]
+        });
+        let metrics = build.slice_metrics(Some(&spec_doc));
+        assert_eq!(metrics.len(), 3);
+        assert_eq!(metrics[0].scenario_count, 1);
+        assert_eq!(metrics[0].duration, Duration::ZERO);
+        assert_eq!(
+            metrics[1],
+            SliceMetrics {
+                id: "SLICE-002".to_owned(),
+                part: "PART-002".to_owned(),
+                name: "orders".to_owned(),
+                index: 1,
+                count: 2,
+                wave: 2,
+                requirements: 2,
+                scenario_count: 3,
+                over_budget: false,
+                duration: Duration::from_secs(90),
+                tokens: Tokens {
+                    input: 5,
+                    cached: 0,
+                    output: 2,
+                    reasoning: 0,
+                },
+            }
+        );
+        assert_eq!(metrics[2].scenario_count, 3);
+        assert!(metrics[2].over_budget);
+        assert_eq!(metrics[2].duration, Duration::from_secs(120));
+        assert_eq!(metrics[2].tokens.input, 10);
+
+        let expected = case("[[source]]\nadapter = \"typescript\"\nfixture = \"f\"\n").unwrap();
+        let mut run = run_from(Some(0), "", Some(spec_doc));
+        run.build = Some(build);
+        let attempt = Attempt {
+            grade: grade(&expected, &run),
+            run,
+        };
+        let mut text = String::new();
+        schedule_section(&mut text, &[vec![attempt]]).unwrap();
+        assert!(
+            text.contains(
+                "Run 1: budget 6 (flag) · 3 slices in 3 (1/1/1) waves · widest 1 · 1 over budget \
+                 (`SLICE-003`)"
+            ),
+            "{text}"
+        );
+        assert!(
+            text.contains("| `SLICE-002` `orders` (1/2) | `PART-002` | 2 | 2 | 3 | no | 90s |"),
+            "{text}"
+        );
+        assert!(
+            text.contains("| `SLICE-003` `orders` (2/2) | `PART-002` | 3 | 1 | 3 | yes | 120s |"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn serial_part_routes_not_probes() {
+        let slices = [
+            Integrated {
+                id: "SLICE-001".to_owned(),
+                name: "start".to_owned(),
+                wave: 1,
+                requirements: vec!["REQ-001".to_owned()],
+                covered: Vec::new(),
+                files: Vec::new(),
+                commit: None,
+                resolved: Vec::new(),
+            },
+            Integrated {
+                id: "SLICE-002".to_owned(),
+                name: "start".to_owned(),
+                wave: 2,
+                requirements: vec!["REQ-002".to_owned()],
+                covered: vec!["REQ-002".to_owned()],
+                files: vec!["crates/health/src/start.rs".to_owned()],
+                commit: Some("aaaa".to_owned()),
+                resolved: Vec::new(),
+            },
+        ];
+        let spec_doc = serde_json::json!([
+            {"id": "REQ-001", "body": ["DATABASE_URL is required."], "trigger": null},
+            {"id": "REQ-002", "body": ["Liveness probe."],
+             "trigger": {"http": {"method": "GET", "path": "/health/live"}}},
+        ]);
+        let mounted = vec![(
+            "crates/health/src/start.rs".to_owned(),
+            "GET".to_owned(),
+            "/health/live".to_owned(),
+        )];
+        let checked = routes(mounted, &slices, spec_doc.as_array().unwrap());
+        assert_eq!(checked.len(), 1);
+        assert!(!checked[0].probe, "the second serial slice of `start` carries the route trigger");
     }
 }

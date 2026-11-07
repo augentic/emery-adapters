@@ -11,7 +11,7 @@ use crate::Settings;
 use crate::build::Tree;
 use crate::case::Case;
 use crate::fidelity::Target;
-use crate::run::{Run, accepted, completions, surveyed, unreached};
+use crate::run::{Run, accepted, cap_exhaustions, completions, surveyed, unreached};
 
 // Copies each source's fixture into a project of its own beneath `dir` —
 // `emery` mounts its invocation directory, so the tree must sit inside it,
@@ -329,6 +329,7 @@ pub fn restaged(
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
+        cap_exhausted: cap_exhaustions(&stderr),
         surveyed: surveyed(&stderr),
         unreached: unreached(&stderr),
         spec: None,

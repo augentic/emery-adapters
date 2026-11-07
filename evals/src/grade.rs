@@ -7,6 +7,7 @@ use emery_sdk::{Anchor, Claim, ClaimKind};
 use serde_json::Value;
 
 use crate::case::{Behaviour, Case, Expected, ExpectedClaim, ExpectedSurface, Item};
+use crate::plan::PlanShape;
 use crate::run::Run;
 
 pub struct Report<'a> {
@@ -30,6 +31,8 @@ pub struct Grade {
     pub sources: Vec<SourceGrade>,
     // where the specification's own words name a technology; expected empty
     pub leaks: Vec<String>,
+    // the staged plan's parts, waves, merged stems, and dependency edges
+    pub plan: PlanShape,
 }
 
 // The accepted requirement claims anchored within the spans expected to
@@ -135,6 +138,7 @@ pub fn grade(expected: &Expected, run: &Run) -> Grade {
         behaviours: behaviours(&expected.behaviours, run),
         sources,
         leaks: run.leaks(),
+        plan: run.plan_shape(),
     }
 }
 

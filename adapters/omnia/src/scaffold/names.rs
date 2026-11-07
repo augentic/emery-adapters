@@ -95,6 +95,11 @@ impl Names {
         Self(taken.iter().map(|name| (*name).to_owned()).collect())
     }
 
+    // Reserves `names` as already taken in this namespace.
+    pub fn extend(&mut self, names: impl IntoIterator<Item = String>) {
+        self.0.extend(names);
+    }
+
     // Reserves `name` where nothing took it, else `name` with `suffix` after
     // it, then with a counter after both, answering the name reserved.
     pub fn reserve(&mut self, name: &str, suffix: &str) -> String {

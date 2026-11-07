@@ -279,7 +279,7 @@ impl Module {
     // The part this module is where it stands directly under `prefix`, the
     // stem's `src/`, as `<part>.rs`; the entry and a file deeper down are
     // none.
-    fn part_under<'m>(&'m self, prefix: &str) -> Option<&'m str> {
+    pub fn part_under<'m>(&'m self, prefix: &str) -> Option<&'m str> {
         let part = self.path.strip_prefix(prefix)?.strip_suffix(".rs")?;
         (!part.is_empty() && !part.contains('/') && part != "lib").then_some(part)
     }

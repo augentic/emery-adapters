@@ -143,6 +143,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
+        findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -377,6 +378,41 @@ impl<'a> Tree<'a> {
              concrete value, since a function without the attribute is no test and `<` in a \
              request path panics with `InvalidUriChar`; fill each through `edit_files`, or leave \
              the requirement out of `covered`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
+    // A `pub(crate) async fn(<input>, <context>: Context<..>)` handler in a
+    // part of the slice's stems that neither `routes()` nor `topics(..)`
+    // registers is dead code the router never reaches.
+    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
+        let prefixes: Vec<String> = scaffold
+            .stems()
+            .map(|stem| format!("crates/{}/src/", layout::crate_dir(stem)))
+            .collect();
+        let mut lines = Vec::new();
+        for module in &self.modules {
+            if !prefixes.iter().any(|prefix| module.part_under(prefix).is_some()) {
+                continue;
+            }
+            let Some(file) = module.file() else { continue };
+            for (number, name) in syntax::unregistered_handlers(file) {
+                lines.push(format!(
+                    "{}:{number}: handler `{name}` is registered by neither `routes()` nor \
+                     `topics(..)`",
+                    module.path
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "every `pub(crate) async fn` handler in a part is registered in its `routes()` or \
+             `topics(..)` router chain, since an unregistered handler is dead code the router \
+             never reaches: register each handler named in `routes()` or `topics(..)` through \
+             `edit_files`:\n{}",
             lines.join("\n")
         ))
     }

@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::card::short;
 use crate::case::Case;
 use crate::fidelity::{Fidelity, Target};
+use crate::plan::format_wave_shape;
 use crate::reference::Reference;
 use crate::run::{Completion, Run, ShellUse, Tokens, completions, tail};
 use crate::stage::{
@@ -66,9 +67,13 @@ pub fn build(
     let rust_log = settings.rust_log(case);
     let reference = Reference::locate(&settings.root, case.expected.reference.as_deref());
     let jobs = settings.jobs.map(|jobs| jobs.to_string());
+    let budget = settings.budget.map(|budget| budget.to_string());
     let mut args = vec!["build", "--config", "emery.toml"];
     if let Some(jobs) = &jobs {
         args.extend(["--jobs", jobs]);
+    }
+    if let Some(budget) = &budget {
+        args.extend(["--budget", budget]);
     }
     let started = Instant::now();
     let output = emery(project, settings, &rust_log, settings.build_rung, &args, Turns::Live)?;
@@ -80,11 +85,17 @@ pub fn build(
     let target =
         settings.target.ok_or_else(|| io::Error::other("a build runs through a target"))?;
 
+    let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+    let (budget, budget_source) = budget_from(envelope.as_ref(), &stderr);
+    let schedule = schedule_from(envelope.as_ref());
     let mut build = Build {
         target,
         wall,
         exit: output.status.code(),
-        envelope: serde_json::from_str(&stdout).ok(),
+        envelope,
+        budget,
+        budget_source,
+        schedule,
         failure: failure(&stderr),
         completions: completions(&stderr),
         history: history(project, n, revision),
@@ -304,6 +315,12 @@ pub struct Build {
     pub exit: Option<i32>,
     // the `build` envelope on success
     pub envelope: Option<Value>,
+    // the requirement budget per slice the schedule was cut under, and
+    // where it came from (`flag`, `config`, `adapter`, `default`)
+    pub budget: Option<usize>,
+    pub budget_source: Option<String>,
+    // the slices the schedule cut the plan's parts into, in schedule order
+    pub schedule: Vec<Scheduled>,
     // the failure envelope the binary wrote among its log lines
     pub failure: Option<Failure>,
     pub completions: Vec<Completion>,
@@ -317,6 +334,37 @@ pub struct Build {
     // the chain this build resumed, for a `--resume`; none for a build from
     // the root
     pub rewound: Option<Rewound>,
+}
+
+// One slice of a build's `schedule`, cut from one part of the plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scheduled {
+    pub id: String,
+    pub part: String,
+    pub name: String,
+    pub index: u32,
+    pub count: u32,
+    pub wave: usize,
+    pub requirements: Vec<String>,
+    pub types: Vec<String>,
+    pub over_budget: bool,
+}
+
+// One scheduled slice paired with its build turn's duration, token usage,
+// and the scenario count of its requirements in `spec.json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SliceMetrics {
+    pub id: String,
+    pub part: String,
+    pub name: String,
+    pub index: u32,
+    pub count: u32,
+    pub wave: usize,
+    pub requirements: usize,
+    pub scenario_count: usize,
+    pub over_budget: bool,
+    pub duration: Duration,
+    pub tokens: Tokens,
 }
 
 // Where a `--resume` build started: the card whose chain it resumed, the
@@ -336,23 +384,28 @@ pub struct Rewound {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Empty {
     pub id: String,
+    part: String,
     name: String,
     wave: usize,
+    budget: usize,
     requirements: Vec<String>,
     covered: Vec<String>,
 }
 
 impl Empty {
     // The message the engine seals a slice under, as `emery_engine::vcs::Message`
-    // spells it, over `base`: the first line `<id> <name>`, then the seven
+    // spells it, over `base`: the first line `<id> <name>`, then the nine
     // trailers, every one present, so the engine's resume reads the slice
     // back from the label's chain.
     pub fn message(&self, revision: &str, base: &str) -> String {
         format!(
-            "{id} {name}\n\nSlice: {id}\nRevision: {revision}\nRequirements: {requirements}\n\
-             Covered: {covered}\nAdapter: {TARGET_NAME}\nBase: {base}\nWave: {wave}",
+            "{id} {name}\n\nSlice: {id}\nPart: {part}\nRevision: {revision}\nBudget: \
+             {budget}\nRequirements: {requirements}\nCovered: {covered}\nAdapter: \
+             {TARGET_NAME}\nBase: {base}\nWave: {wave}",
             id = self.id,
+            part = self.part,
             name = self.name,
+            budget = self.budget,
             requirements = self.requirements.join(", "),
             covered = self.covered.join(", "),
             wave = self.wave,
@@ -363,6 +416,8 @@ impl Empty {
 // The slices of `envelope`, a landed build's, merged as nothing in a wave
 // before `wave`, in wave then id order.
 pub fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
+    let budget =
+        envelope["budget"].as_u64().and_then(|budget| usize::try_from(budget).ok()).unwrap_or(12);
     let mut empty: Vec<Empty> = envelope["slices"]
         .as_array()
         .map(|slices| {
@@ -372,13 +427,19 @@ pub fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
                 .filter_map(|slice| {
                     let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
                     (landed < wave).then(|| {
+                        let id = slice["id"].as_str().unwrap_or("").to_owned();
+                        let part = slice["part"]
+                            .as_str()
+                            .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned);
                         let covered = strings(&slice["covered"]);
                         let mut requirements = covered.clone();
                         requirements.extend(strings(&slice["uncovered"]));
                         Empty {
-                            id: slice["id"].as_str().unwrap_or("").to_owned(),
+                            id,
+                            part,
                             name: slice["name"].as_str().unwrap_or("").to_owned(),
                             wave: landed,
+                            budget,
                             requirements,
                             covered,
                         }
@@ -520,6 +581,8 @@ impl Build {
         let stdout = fs::read_to_string(project.join(format!("{tag}.build.stdout")))?;
         let stderr = fs::read_to_string(project.join(format!("{tag}.build.stderr")))?;
         let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+        let (budget, budget_source) = budget_from(envelope.as_ref(), &stderr);
+        let schedule = schedule_from(envelope.as_ref());
         let failure = failure(&stderr);
         let exit = match (&envelope, &failure) {
             (Some(_), _) => Some(0),
@@ -536,6 +599,9 @@ impl Build {
             wall: Duration::ZERO,
             exit,
             envelope,
+            budget,
+            budget_source,
+            schedule,
             failure,
             completions: completions(&stderr),
             history: history(project, n, revision),
@@ -545,10 +611,115 @@ impl Build {
         })
     }
 
+    pub const fn scheduled_count(&self, fallback: usize) -> usize {
+        if self.schedule.is_empty() { fallback } else { self.schedule.len() }
+    }
+
+    pub fn schedule_wave_count(&self, fallback: usize) -> usize {
+        let widths = self.schedule_wave_widths();
+        if widths.is_empty() { fallback } else { widths.len() }
+    }
+
+    pub fn schedule_waves(&self) -> String {
+        format_wave_shape(&self.schedule_wave_widths())
+    }
+
+    pub fn schedule_widest(&self) -> usize {
+        self.schedule_wave_widths().into_iter().max().unwrap_or(0)
+    }
+
+    fn schedule_wave_widths(&self) -> Vec<usize> {
+        self.envelope.as_ref().and_then(|out| out["waves"].as_array()).map_or_else(
+            || {
+                let mut by_wave: BTreeMap<usize, usize> = BTreeMap::new();
+                for slice in &self.schedule {
+                    if slice.wave > 0 {
+                        *by_wave.entry(slice.wave).or_default() += 1;
+                    }
+                }
+                by_wave.into_values().collect()
+            },
+            |waves| waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len)).collect(),
+        )
+    }
+
+    pub fn over_budget(&self) -> Vec<&Scheduled> {
+        self.schedule.iter().filter(|slice| slice.over_budget).collect()
+    }
+
+    // Per-slice build metrics: each scheduled slice paired with its
+    // `build-SLICE-NNN` completion duration and tokens, the scenario count
+    // of its requirements in `spec.json`, and its `over_budget` flag. Falls
+    // back to the integrated slices when the envelope carries no `schedule`.
+    pub fn slice_metrics(&self, spec: Option<&Value>) -> Vec<SliceMetrics> {
+        let scenarios_by_req: BTreeMap<&str, usize> = spec
+            .and_then(|spec| spec["requirements"].as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|req| {
+                let id = req["id"].as_str()?;
+                let count = req["scenarios"].as_array().map_or(0, Vec::len);
+                Some((id, count))
+            })
+            .collect();
+        let fallback: Vec<Scheduled>;
+        let slices: &[Scheduled] = if self.schedule.is_empty() {
+            fallback = self
+                .integrated()
+                .into_iter()
+                .map(|slice| Scheduled {
+                    part: slice.id.replace("SLICE-", "PART-"),
+                    id: slice.id,
+                    name: slice.name,
+                    index: 1,
+                    count: 1,
+                    wave: slice.wave,
+                    requirements: slice.requirements,
+                    types: Vec::new(),
+                    over_budget: false,
+                })
+                .collect();
+            &fallback
+        } else {
+            &self.schedule
+        };
+        slices
+            .iter()
+            .map(|slice| {
+                let label = format!("build-{}", slice.id);
+                let mut duration = Duration::ZERO;
+                let mut tokens = Tokens::default();
+                for completion in self.completions.iter().filter(|c| c.label == label) {
+                    duration += completion.duration;
+                    tokens = tokens.add(completion.tokens);
+                }
+                let scenario_count = slice
+                    .requirements
+                    .iter()
+                    .map(|id| scenarios_by_req.get(id.as_str()).copied().unwrap_or(0))
+                    .sum();
+                SliceMetrics {
+                    id: slice.id.clone(),
+                    part: slice.part.clone(),
+                    name: slice.name.clone(),
+                    index: slice.index,
+                    count: slice.count,
+                    wave: slice.wave,
+                    requirements: slice.requirements.len(),
+                    scenario_count,
+                    over_budget: slice.over_budget,
+                    duration,
+                    tokens,
+                }
+            })
+            .collect()
+    }
+
     pub fn summary(&self, slices: usize) -> String {
+        let total = self.scheduled_count(slices);
         match self.exit {
             Some(0) => format!(
-                "ok in {}s, {}/{slices} merged in {} waves{}",
+                "ok in {}s, {}/{total} merged in {} waves{}",
                 self.wall.as_secs(),
                 self.integrated().len(),
                 self.waves(),
@@ -786,6 +957,86 @@ pub fn strings(value: &Value) -> Vec<String> {
         .as_array()
         .map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned).collect())
         .unwrap_or_default()
+}
+
+// Reads `budget` and `budget-source` from the build envelope, or from the
+// engine's `building` log line when the run failed before writing an envelope.
+pub fn budget_from(envelope: Option<&Value>, stderr: &str) -> (Option<usize>, Option<String>) {
+    if let Some(envelope) = envelope {
+        let budget = envelope["budget"].as_u64().and_then(|budget| usize::try_from(budget).ok());
+        let source = envelope["budget-source"].as_str().map(str::to_owned);
+        if budget.is_some() || source.is_some() {
+            return (budget, source);
+        }
+    }
+    for line in stderr.lines() {
+        if line.contains("emery_engine::build:") && line.contains(" building") {
+            let budget = line
+                .split_once(" budget=")
+                .and_then(|(_, rest)| rest.split_whitespace().next())
+                .and_then(|value| value.parse::<usize>().ok());
+            let source = line
+                .split_once(" budget_source=")
+                .and_then(|(_, rest)| rest.split_whitespace().next())
+                .map(|value| value.trim_matches('"').to_owned());
+            if budget.is_some() || source.is_some() {
+                return (budget, source);
+            }
+        }
+    }
+    (None, None)
+}
+
+// Reads the scheduled slices from the build envelope, pairing each with its
+// wave number from the envelope's `waves` or `slices`.
+pub fn schedule_from(envelope: Option<&Value>) -> Vec<Scheduled> {
+    let Some(envelope) = envelope else {
+        return Vec::new();
+    };
+    let Some(entries) = envelope["schedule"].as_array() else {
+        return Vec::new();
+    };
+    let waves = envelope["waves"].as_array();
+    let built = envelope["slices"].as_array();
+    entries
+        .iter()
+        .map(|entry| {
+            let id = entry["id"].as_str().unwrap_or("").to_owned();
+            let wave = waves
+                .and_then(|waves| {
+                    waves
+                        .iter()
+                        .position(|wave| {
+                            wave.as_array().is_some_and(|ids| {
+                                ids.iter().any(|item| item.as_str() == Some(id.as_str()))
+                            })
+                        })
+                        .map(|index| index + 1)
+                })
+                .or_else(|| {
+                    built
+                        .into_iter()
+                        .flatten()
+                        .find(|slice| slice["id"].as_str() == Some(id.as_str()))
+                        .and_then(|slice| slice["wave"].as_u64())
+                        .and_then(|wave| usize::try_from(wave).ok())
+                })
+                .unwrap_or(0);
+            Scheduled {
+                part: entry["part"]
+                    .as_str()
+                    .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned),
+                id,
+                name: entry["name"].as_str().unwrap_or("").to_owned(),
+                index: entry["index"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(1),
+                count: entry["count"].as_u64().and_then(|n| u32::try_from(n).ok()).unwrap_or(1),
+                wave,
+                requirements: strings(&entry["requirements"]),
+                types: strings(&entry["types"]),
+                over_budget: entry["over-budget"].as_bool().unwrap_or(false),
+            }
+        })
+        .collect()
 }
 
 // The failure envelope the binary prints among its log lines: pretty JSON,

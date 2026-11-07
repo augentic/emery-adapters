@@ -13,6 +13,7 @@ use serde_json::Value;
 use crate::build::{Build, apply, build, strings};
 use crate::case::{Behaviour, Case, ExpectedClaim};
 use crate::grade::{Holders, Stated, citations, cites, held, mechanism, stem, under};
+use crate::plan::{PlanShape, format_wave_shape};
 use crate::stage::retarget;
 use crate::{Rung, Settings, Turns, emery};
 
@@ -25,12 +26,15 @@ pub struct Run {
     pub wall: Duration,
     pub exit: Option<i32>,
     pub tail: String,
-    // the staged plan's slices grouped into the sets ready to build at
+    // the staged plan's parts grouped into the sets ready to build at
     // once, as the specify envelope reports them
     pub waves: Option<Value>,
     // each seam's accepted evidence, under the source it was mined from
     pub evidence: Vec<(String, Evidence)>,
     pub completions: Vec<Completion>,
+    // the `slicing` completions that exhausted their retry budget over a
+    // size or pair-merge finding
+    pub cap_exhausted: usize,
     // the surfaces each source's seams were cut from, as its adapter logged them
     pub surveyed: BTreeMap<String, Vec<Surveyed>>,
     // the modules each source's survey placed under no surface, by the
@@ -422,7 +426,32 @@ impl Run {
     }
 
     pub fn slices(&self) -> usize {
-        self.plan.as_ref().and_then(|plan| plan["slices"].as_array()).map_or(0, Vec::len)
+        self.plan
+            .as_ref()
+            .and_then(|plan| plan["parts"].as_array().or_else(|| plan["slices"].as_array()))
+            .map_or(0, Vec::len)
+    }
+
+    pub fn plan_shape(&self) -> PlanShape {
+        PlanShape::of(
+            self.plan.as_ref(),
+            self.spec.as_ref(),
+            self.design.as_ref(),
+            self.waves.as_ref(),
+        )
+    }
+
+    // The `slicing` turn's summary for the plan-shape table: its outcome and
+    // duration, or `no turn` when a single-stem specification took the code
+    // shortcut.
+    pub fn slicing_cell(&self) -> String {
+        let slicing: Vec<&Completion> =
+            self.completions.iter().filter(|c| c.label == "slicing").collect();
+        let Some(last) = slicing.last() else {
+            return if self.plan.is_some() { "no turn".to_owned() } else { "—".to_owned() };
+        };
+        let duration: Duration = slicing.iter().map(|c| c.duration).sum();
+        format!("{} ({}s)", last.outcome, duration.as_secs())
     }
 
     pub fn wave_count(&self) -> usize {
@@ -432,19 +461,13 @@ impl Run {
     // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
     // is three waves of one, two, and one slices; `0` where no plan was staged.
     pub fn waves(&self) -> String {
-        let widths: Vec<String> = self
+        let widths: Vec<usize> = self
             .waves
             .as_ref()
             .and_then(Value::as_array)
-            .map(|waves| {
-                waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len).to_string()).collect()
-            })
+            .map(|waves| waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len)).collect())
             .unwrap_or_default();
-        if widths.is_empty() {
-            "0".to_owned()
-        } else {
-            format!("{} ({})", widths.len(), widths.join("/"))
-        }
+        format_wave_shape(&widths)
     }
 
     pub fn tokens(&self) -> Tokens {
@@ -478,7 +501,7 @@ impl Display for Landing {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Tokens {
     pub input: u64,
     pub cached: u64,
@@ -589,6 +612,7 @@ pub fn run(
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
+        cap_exhausted: cap_exhaustions(&stderr),
         surveyed: surveyed(&stderr),
         unreached: unreached(&stderr),
         spec: None,
@@ -817,6 +841,50 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
         }
     }
     completions
+}
+
+// How many `slicing` completions exhausted their retry budget over a size or
+// pair-merge finding (`SLICE_CAP` / `verify_cut`).
+pub fn cap_exhaustions(stderr: &str) -> usize {
+    let mut count = 0;
+    let mut pending_cap_finding = false;
+    let mut unhandled_exhausted = 0usize;
+    for line in stderr.lines() {
+        if line.contains("candidate rejected")
+            && (line.contains("question=\"slicing") || !line.contains("question=\""))
+            && is_cap_finding(line)
+        {
+            pending_cap_finding = true;
+        } else if let Some((head, tail)) = line.split_once(": completion outcome=") {
+            let label = head
+                .split_once("label=\"")
+                .and_then(|(_, rest)| rest.split_once('"'))
+                .map_or("", |(label, _)| label);
+            if label == "slicing" {
+                let outcome = tail.split(' ').next().unwrap_or("").trim_matches('"');
+                if outcome == "exhausted" {
+                    if pending_cap_finding {
+                        count += 1;
+                    } else {
+                        unhandled_exhausted += 1;
+                    }
+                }
+                pending_cap_finding = false;
+            }
+        }
+    }
+    if unhandled_exhausted > 0 && is_cap_finding(stderr) {
+        count += unhandled_exhausted;
+    }
+    count
+}
+
+fn is_cap_finding(text: &str) -> bool {
+    text.contains("fit one slice")
+        || text.contains("fit one part")
+        || text.contains("within the cap")
+        || text.contains("merge the stem's")
+        || text.contains("past the cap")
 }
 
 // The `n` of the `complete{n=…}` span a backend line sits under.

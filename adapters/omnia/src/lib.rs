@@ -11,6 +11,7 @@ mod scaffold;
 mod syntax;
 mod tree;
 
+use std::num::NonZeroU32;
 use std::path::Path;
 
 use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
@@ -47,6 +48,7 @@ impl TargetAdapter for Adapter {
         Metadata {
             rules: RULES,
             grants: &[CARGO, RUSTUP],
+            budget: NonZeroU32::new(12),
         }
     }
 
