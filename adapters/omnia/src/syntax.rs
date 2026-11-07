@@ -411,8 +411,50 @@ pub fn json_registrations(file: &syn::File) -> Vec<usize> {
             _ => None,
         })
         .collect();
-    let mut found = JsonRegistrations {
-        stubs: &stubs,
+    registrations(file, &["topic"], &stubs)
+}
+
+// Every `.topic(..)` and `.topic_with(..)` registration of the top-level
+// `fn handlers` in `file`, at its line, a stub's among them: the part
+// consumes a stream whatever decodes it.
+pub fn topic_registrations(file: &syn::File) -> Vec<usize> {
+    registrations(file, &["topic", "topic_with"], &BTreeSet::new())
+}
+
+// The line of the `Handlers::from(..)` fold in the top-level `fn handlers`
+// of an entry, where a part's `handlers()` is listed.
+pub fn handlers_from(file: &syn::File) -> Option<usize> {
+    struct Fold(Option<usize>);
+
+    impl<'ast> Visit<'ast> for Fold {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if self.0.is_none()
+                && let Expr::Path(path) = &*call.func
+                && path_ends(&path.path, &["Handlers", "from"])
+            {
+                self.0 = Some(line(call.paren_token.span.open()));
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+
+    let mut fold = Fold(None);
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            fold.visit_block(&item.block);
+        }
+    }
+    fold.0
+}
+
+// The lines of the calls of `methods` in the top-level `fn handlers`, less
+// those registering a handler of `stubs`.
+fn registrations(file: &syn::File, methods: &[&str], stubs: &BTreeSet<String>) -> Vec<usize> {
+    let mut found = Registrations {
+        methods,
+        stubs,
         lines: Vec::new(),
     };
     for item in &file.items {
@@ -425,14 +467,15 @@ pub fn json_registrations(file: &syn::File) -> Vec<usize> {
     found.lines
 }
 
-struct JsonRegistrations<'s> {
+struct Registrations<'s> {
+    methods: &'s [&'s str],
     stubs: &'s BTreeSet<String>,
     lines: Vec<usize>,
 }
 
-impl<'ast> Visit<'ast> for JsonRegistrations<'_> {
+impl<'ast> Visit<'ast> for Registrations<'_> {
     fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
-        if call.method == "topic" {
+        if self.methods.iter().any(|method| call.method == method) {
             let handler = call.args.iter().nth(1).and_then(|arg| match arg {
                 Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
                 _ => None,

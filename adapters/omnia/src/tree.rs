@@ -144,6 +144,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.default_decoders(scaffold));
+        findings.extend(self.unconsumed_streams(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -474,6 +475,61 @@ impl<'a> Tree<'a> {
             wire = wire.name(),
             reader = wire.reader(),
             lines = lines.join("\n")
+        ))
+    }
+
+    // The design lists an inbound stream for the part, and its deliveries
+    // are the trigger of the requirements the bullet cites, so a stem of
+    // those requirements whose crate registers no topic is never run. The
+    // rule waits for the part's last slice, since an earlier slice may leave
+    // the registration to the one that builds the consumer, and reads the
+    // crate whole, since the registration may stand in a part an earlier
+    // slice wrote. A bullet citing none of the slice's own requirements
+    // holds every stem of the slice to it.
+    fn unconsumed_streams(&self, scaffold: &Scaffold) -> Option<String> {
+        let inbound = scaffold.inbound()?;
+        if !scaffold.last() {
+            return None;
+        }
+        let cited: Vec<&str> =
+            scaffold.stems().filter(|stem| inbound.stems.contains(*stem)).collect();
+        let stems = if cited.is_empty() { scaffold.stems().collect() } else { cited };
+        let mut lines = Vec::new();
+        for stem in stems {
+            let prefix = format!("crates/{}/src/", layout::crate_dir(stem));
+            let own: Vec<&Module> =
+                self.modules.iter().filter(|module| module.path.starts_with(&prefix)).collect();
+            let consumes = own.iter().any(|module| {
+                module.file().is_some_and(|file| !syntax::topic_registrations(file).is_empty())
+            });
+            if consumes {
+                continue;
+            }
+            let entry = format!("{prefix}lib.rs");
+            let number = own
+                .iter()
+                .find(|module| module.path == entry)
+                .and_then(|module| module.file())
+                .and_then(syntax::handlers_from)
+                .unwrap_or(1);
+            lines.push(format!(
+                "{entry}:{number}: `Handlers::from([..])` lists no part consuming the inbound \
+                 stream the design lists (\"{}\")",
+                inbound.lead
+            ));
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "the host runs a stem through its `handlers()` alone, and this slice is the last of \
+             its part, so the inbound stream the design's `## APIs and integrations` lists for \
+             the part is consumed by a registration in one of these stems now or never: the \
+             trigger is the stream's deliveries setting off the requirements its bullet cites, \
+             never a route in its place, a `start` crate, or a requirement of the registration's \
+             own; {}:\n{}",
+            lists::registration(scaffold.wire()),
+            lines.join("\n")
         ))
     }
 

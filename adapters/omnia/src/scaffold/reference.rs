@@ -305,6 +305,30 @@ const INBOUND_WORDS: &[&str] = &[
     "subscription",
 ];
 
+// The words a lead spells of a stream, so an inbound HTTP surface, which a
+// route reaches, is no stream the design lists.
+const STREAM_WORDS: &[&str] = &[
+    "broker",
+    "brokers",
+    "consumer",
+    "consumers",
+    "deliveries",
+    "delivery",
+    "message",
+    "messages",
+    "messaging",
+    "queue",
+    "queues",
+    "stream",
+    "streams",
+    "subscriber",
+    "subscribers",
+    "subscription",
+    "subscriptions",
+    "topic",
+    "topics",
+];
+
 // The words a sentence spells of a message leaving, so a format named
 // alone in the inbound stream's bullet is not read from its export clause.
 const OUTBOUND_WORDS: &[&str] = &[
@@ -440,22 +464,22 @@ pub fn roles(slice: &Slice) -> BTreeSet<Role> {
         .collect()
 }
 
-// The wire format of the inbound stream the slice consumes, where the design
-// says it is no JSON: the first paragraph naming one decides, read from the
-// design's `## APIs and integrations` and `## Technical logic` paragraphs
-// that speak to the slice, as `roles` reads them, then from the slice's own
-// text. None means JSON, the default decoder's. The wire is the slice's, not
-// a topic's: a slice consuming two streams of two formats is told the first
-// found.
+// The wire format of the inbound stream the slice's part consumes, where
+// the design says it is no JSON: the first paragraph naming one decides,
+// read from the design's `## APIs and integrations` and `## Technical logic`
+// paragraphs that speak to the part (citing one of its ids, or none), then
+// from the slice's own text. None means JSON, the default decoder's. The
+// wire is the part's, not a topic's: a part consuming two streams of two
+// formats is told the first found, and every slice of the part is told the
+// same, whichever registers the consumer.
 pub fn wire(slice: &Slice) -> Option<Wire> {
-    let ids: Vec<&str> =
-        slice.requirements.iter().map(|requirement| requirement.id.as_str()).collect();
+    let ids = part_ids(slice);
     let mut texts: Vec<&str> = Vec::new();
     for heading in ["APIs and integrations", "Technical logic"] {
         if let Some((_, section)) = section(&slice.design, heading) {
             for paragraph in section.split("\n\n") {
                 let cited = cited(paragraph);
-                if cited.is_empty() || cited.iter().any(|id| ids.contains(&id.as_str())) {
+                if cited.is_empty() || cited.iter().any(|id| ids.contains(id)) {
                     texts.push(paragraph);
                 }
             }
@@ -463,6 +487,58 @@ pub fn wire(slice: &Slice) -> Option<Wire> {
     }
     texts.extend(own_texts(slice));
     texts.iter().find_map(|text| wire_in(text))
+}
+
+// The inbound stream the design lists for the slice's part: the lead
+// sentence of the bullet, and the stems of the slice's requirements its
+// deliveries set off.
+pub struct Inbound {
+    pub lead: String,
+    pub stems: BTreeSet<String>,
+}
+
+// The inbound stream the design's `## APIs and integrations` lists for the
+// part: the first paragraph whose lead sentence speaks of a stream and of a
+// delivery read, not of a message leaving, and which cites an id of the
+// part. An inbound HTTP surface, a status bullet naming the consumer and the
+// producer together, and a stream the design lists for another part alone
+// are passed over.
+pub fn inbound(slice: &Slice) -> Option<Inbound> {
+    let ids = part_ids(slice);
+    let (_, section) = section(&slice.design, "APIs and integrations")?;
+    section.split("\n\n").find_map(|paragraph| {
+        let lead = sentences(paragraph).next()?.trim().trim_end_matches(['.', ';', '!', '?']);
+        if !spells(lead, INBOUND_WORDS)
+            || !spells(lead, STREAM_WORDS)
+            || spells(lead, OUTBOUND_WORDS)
+        {
+            return None;
+        }
+        let cited = cited(paragraph);
+        if !cited.iter().any(|id| ids.contains(id)) {
+            return None;
+        }
+        let stems = slice
+            .requirements
+            .iter()
+            .filter(|requirement| cited.contains(&requirement.id))
+            .map(|requirement| requirement.stem().to_owned())
+            .collect();
+        Some(Inbound {
+            lead: lead.to_owned(),
+            stems,
+        })
+    })
+}
+
+// The requirement ids of the part the slice is cut from: its own and those
+// the `Requirements:` line of the part's plan entry lists, so a slice reads
+// what the design says of the part whole.
+fn part_ids(slice: &Slice) -> BTreeSet<String> {
+    let listed = slice.plan.lines().find_map(|line| line.strip_prefix("Requirements:"));
+    let mut ids: BTreeSet<String> = listed.map(cited).unwrap_or_default().into_iter().collect();
+    ids.extend(slice.requirements.iter().map(|requirement| requirement.id.clone()));
+    ids
 }
 
 // The wire a paragraph names: a sentence spelling a format beside an inbound

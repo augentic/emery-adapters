@@ -17,8 +17,8 @@ use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
 use emery_sdk::{Error, Standing, push_unique, server_error, unique, write_whole};
 
 use self::lists::{Lists, Placement, Topics};
-pub use self::reference::Wire;
 use self::reference::{Idiom, Role};
+pub use self::reference::{Inbound, Wire};
 use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
 use crate::layout;
@@ -34,6 +34,9 @@ pub struct Plan {
     roles: BTreeSet<Role>,
     idioms: BTreeSet<Idiom>,
     wire: Option<Wire>,
+    inbound: Option<Inbound>,
+    // Whether the slice is the last of its part's cut.
+    last: bool,
 }
 
 // A slice's skeleton as written, which the turn fills and the check holds
@@ -74,6 +77,7 @@ impl Scaffold {
         let idioms = reference::idioms(slice);
         let roles = reference::roles(slice);
         let wire = reference::wire(slice);
+        let inbound = reference::inbound(slice);
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
@@ -141,6 +145,8 @@ impl Scaffold {
             roles,
             idioms,
             wire,
+            inbound,
+            last: slice.index == slice.count,
         })
     }
 
@@ -212,6 +218,18 @@ impl Scaffold {
     // where it is no JSON.
     pub const fn wire(&self) -> Option<Wire> {
         self.plan.wire
+    }
+
+    // The inbound stream the design lists for the slice's part, where it
+    // lists one.
+    pub const fn inbound(&self) -> Option<&Inbound> {
+        self.plan.inbound.as_ref()
+    }
+
+    // Whether the slice is the last of its part's cut, after which no slice
+    // of the part registers anything.
+    pub const fn last(&self) -> bool {
+        self.plan.last
     }
 
     pub fn expected_tests(&self) -> impl Iterator<Item = ExpectedTest<'_>> {

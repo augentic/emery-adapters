@@ -3033,67 +3033,83 @@ async fn omnia_non_json_consumer_hint() {
 }
 
 // The wire format is read from the design's `## APIs and integrations` and
-// `## Technical logic` paragraphs that speak to the slice and from its own
-// words: a sentence naming a format beside an inbound word decides, a
-// format named of an export or in another slice's paragraph does not, and a
-// design naming none leaves the slice JSON's with no word of a format.
+// `## Technical logic` paragraphs that speak to the slice's part and from
+// its own words: a sentence naming a format beside an inbound word decides,
+// a format named of an export or in another part's paragraph does not, and
+// a design naming none leaves the slice JSON's with no word of a format. A
+// paragraph citing an id the part's plan entry lists speaks to every slice
+// of the part, the one registering the consumer among them.
 #[tokio::test]
 async fn omnia_wire_read() {
     let told = "The design says the inbound stream's payload is";
-    let cases: [(&str, Option<&str>); 9] = [
+    let own = "REQ-001";
+    let shipments = "## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                     `shipments`, XML notices (REQ-007 through REQ-009).\n";
+    let cases: [(&str, &str, Option<&str>); 11] = [
         (
             "## APIs and integrations\n\n**Message broker (inbound consumer)** — Endpoints \
              default to `kafka.example.com:9092` from `KAFKA_HOSTS`. Wire payload is XML; \
              decoding uses `x2js` before `ta-json` deserialisation under the configured root \
              element. Deliveries drive order processing (REQ-001).\n",
+            own,
             Some("XML"),
         ),
         (
             "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
              Technical logic\n\nXML deserialization uses `xml2js` under the root element from \
              `Config.rootElement`, then `TypedJSON.deserialize` into `Message`.\n",
+            own,
             Some("XML"),
         ),
         (
             "## APIs and integrations\n\n**Message broker (inbound consumer)** — topic \
              `order-placed` from `KAFKA_SOURCE_TOPIC`. A nightly CSV export is written to the \
              blob store. Deliveries drive order processing (REQ-001).\n",
+            own,
             None,
         ),
         (
             "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
              payload XML read through `x2js`; deliveries set off REQ-001.\n",
+            own,
             Some("XML"),
         ),
         (
             "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
              Technical logic\n\n**Deserialisation** — the incoming message parses as CSV, one \
              record per line.\n",
+            own,
             Some("CSV"),
         ),
         (
             "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed` \
              carries protobuf frames (REQ-001).\n\n**Outbound stream (producer)** — topic \
              `order-events`, JSON (REQ-001).\n",
+            own,
             Some("protobuf"),
         ),
         (
             "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
              JSON (REQ-001). **Export** — a nightly XML export is written to the blob store \
              (REQ-001).\n",
+            own,
             None,
         ),
-        (
-            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `shipments`, XML \
-             notices (REQ-007 through REQ-009).\n",
-            None,
-        ),
-        ("## Overview\n\nThe program consumes XML train updates.\n", None),
+        (shipments, own, None),
+        (shipments, "REQ-001, REQ-007, REQ-008, REQ-009", Some("XML")),
+        (shipments, "REQ-001, REQ-010", None),
+        ("## Overview\n\nThe program consumes XML train updates.\n", own, None),
     ];
-    for (design, wire) in cases {
+    for (design, listed, wire) in cases {
         let project = omnia_tree().await;
         let mut slice = slice();
         slice.design = format!("# Design\n\n{design}");
+        slice.plan = format!(
+            "## Part: orders-reading\n\nID: PART-001\nRequirements: [{listed}]\nTypes: [Order]\n"
+        );
+        // the first of two slices, so a turn filling nothing is held to no
+        // registration and the brief alone is read
+        slice.count = 2;
         let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
         OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -3217,6 +3233,128 @@ async fn omnia_default_decoder() {
     let model = ScriptedModel::answering([report]).calling(0, [edits(&project)]);
 
     OMNIA.build_slice(&project, &model, &slice()).await.expect("the JSON consumer passes");
+    model.assert_exhausted();
+}
+
+// The design lists an inbound stream whose deliveries set off the slice's
+// requirement, and the slice is its part's last, so a turn that fills the
+// requirement as a function and registers no topic in the stem's crate is
+// refused at the entry's `Handlers::from(` line with the bullet quoted and
+// the decoding registration spelled, registers the consumer through
+// `topic_with`, and is accepted; the same turn at an earlier slice of the
+// part, or under a design listing no stream, is accepted as it stands.
+#[tokio::test]
+async fn omnia_unconsumed_stream() {
+    let design = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                  `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`; \
+                  deliveries set off REQ-001.\n\n**Outbound stream (producer)** — topic \
+                  `order-events`, JSON (REQ-001).\n";
+    let filled = "/// The behaviour `orders.get-id.return-order` states.\n///\n/// # \
+                  Errors\n///\n/// As the requirement states.\npub fn get_id_return_order() -> \
+                  Result<()> {\n    Ok(())\n}\n";
+    let consumer = "/// A delivery of `order-placed`.\n#[derive(Debug, Deserialize)]\npub struct \
+                    OnPlacedInput {\n    /// The order's id.\n    pub id: \
+                    String,\n}\n\npub(crate) async fn on_placed<P: StateStore>(context: \
+                    Context<P>, input: OnPlacedInput) -> Result<()> {\n    \
+                    context.state().set(&format!(\"orders/{}\", input.id), b\"placed\").await?;\n    \
+                    Ok(())\n}\n";
+    let imports = "use omnia_sdk::Result;\n";
+    let registration = "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, decode)\n";
+    let decoded = format!(
+        "use common::topic;\nuse omnia_sdk::api::{{Context, DecodeError, Delivery, \
+         Handlers}};\nuse omnia_sdk::{{Capabilities, Result, StateStore}};\nuse \
+         serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> \
+         {{\n{registration}}}\n\nfn decode(delivery: &Delivery) -> \
+         std::result::Result<OnPlacedInput, DecodeError> {{\n    \
+         quick_xml::de::from_reader(delivery.payload.as_slice())\n        .map_err(|error| \
+         DecodeError::new(error.to_string()))\n}}\n"
+    );
+    let table_doc = "//! the topic by construction.\n";
+    let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let registered = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/lib.rs", "crates/orders/Cargo.toml", "crates/common/src/topic.rs"]}"#;
+
+    // the function alone is refused at the part's last slice, and the
+    // registration repairs it
+    let project = omnia_tree().await;
+    let mut last = slice();
+    last.design = design.to_owned();
+    let model = ScriptedModel::answering([function_only, registered])
+        .calling(0, [edit_files(&[fill_function()])])
+        .calling(
+            1,
+            [edit_files(&[
+                (
+                    "crates/common/src/topic.rs",
+                    table_doc,
+                    &format!("{table_doc}{OMNIA_TABLE_LINE}"),
+                ),
+                ("crates/orders/src/reading.rs", imports, &decoded),
+                ("crates/orders/src/reading.rs", filled, consumer),
+                (
+                    "crates/orders/src/lib.rs",
+                    "Handlers::from([])",
+                    "Handlers::from([reading::handlers()])",
+                ),
+                (
+                    "crates/orders/Cargo.toml",
+                    "serde_json.workspace = true\n",
+                    "serde_json.workspace = true\ncommon.workspace = true\nquick-xml.workspace = \
+                     true\n",
+                ),
+            ])],
+        );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &last).await.expect("the registered consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let entry = text(&project, "crates/orders/src/lib.rs");
+    let expected = format!(
+        "crates/orders/src/lib.rs:{}: `Handlers::from([..])` lists no part consuming the inbound \
+         stream the design lists (\"**Inbound stream (consumer)** — topic `order-placed` from \
+         `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`\")",
+        line_of(&entry, "Handlers::from(")
+    );
+    for carried in [
+        "the host runs a stem through its `handlers()` alone, and this slice is the last of its \
+         part, so the inbound stream the design's `## APIs and integrations` lists for the part \
+         is consumed by a registration in one of these stems now or never",
+        "never a route in its place, a `start` crate, or a requirement of the registration's own",
+        "the topic's constant at the end of `crates/common/src/topic.rs`, \
+         `.topic_with(topic::<NAME>, <handler>, decode)` in the part's `handlers()`",
+        "reading the XML payload the design says the stream carries — \
+         `quick_xml::de::from_reader(delivery.payload.as_slice())`, with `quick-xml.workspace = \
+         true` in the stem's `[dependencies]` — and `<part>::handlers(),` in the entry's array:",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(!correction.contains("Outbound stream"), "the producer's bullet is passed over");
+    assert!(
+        text(&project, "crates/orders/src/reading.rs").contains(registration),
+        "the consumer is registered"
+    );
+    assert!(entry.contains("reading::handlers()"), "the entry lists the part");
+
+    // an earlier slice of the part leaves the registration to a later one
+    let project = omnia_tree().await;
+    let mut first = slice();
+    first.design = design.to_owned();
+    first.count = 2;
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &first).await.expect("the first slice passes");
+    model.assert_exhausted();
+
+    // a design listing no stream asks for no registration
+    let project = omnia_tree().await;
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &slice()).await.expect("the function alone passes");
     model.assert_exhausted();
 }
 
