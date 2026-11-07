@@ -731,7 +731,9 @@ impl Fidelity {
             .collect();
 
         // the reference guest the case names, measured against the tree and
-        // its fixtures driven through the guest, for an omnia build alone
+        // its fixtures driven through the guest, for an omnia build alone;
+        // the harness's own output kept beside the run, since a harness that
+        // fails to compile says why there alone
         let reference =
             reference.filter(|_| matches!(target, Target::Omnia)).and_then(|reference| {
                 match reference.compare(&export) {
@@ -742,6 +744,11 @@ impl Fidelity {
                     }
                 }
             });
+        if let Some(comparison) = &reference
+            && !comparison.log().is_empty()
+        {
+            fs::write(project.join(format!("{tag}.oracle.log")), comparison.log())?;
+        }
         fs::remove_dir_all(&export)?;
 
         Ok(Self {

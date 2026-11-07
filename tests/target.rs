@@ -72,13 +72,17 @@ const OMNIA_TEST_FILLED: &str = "async fn an_order_is_returned_by_its_id() {\n  
                                  StatusCode::OK);\n}\n";
 // The lines the omnia slice adds to the seed's lists, each after the anchor
 // the seeded file holds: the topic table's constant at its end, the stem's
-// `handlers()` in the root router's array, and the stem's crate at the end
-// of the root manifest.
+// `handlers()` under the comment heading the root router's array, which
+// keeps the array one entry per line, and the stem's crate at the end of
+// the root manifest.
 const OMNIA_TABLE_LINE: &str =
     "\n/// An order was placed.\npub const ORDER_PLACED: &str = \"order-placed\";\n";
-const OMNIA_ROOT_ANCHOR: &str = "    Handlers::from([]).with_state(Client::new(provider))\n";
-const OMNIA_ROOT_LINE: &str =
-    "    Handlers::from([orders::handlers()]).with_state(Client::new(provider))\n";
+const OMNIA_ROOT_ANCHOR: &str = "    Handlers::from([\n        // one `<stem>::handlers(),` per \
+                                 stem, each added at the end\n    ])\n    \
+                                 .with_state(Client::new(provider))\n";
+const OMNIA_ROOT_LINE: &str = "    Handlers::from([\n        // one `<stem>::handlers(),` per \
+                               stem, each added at the end\n        orders::handlers(),\n    \
+                               ])\n    .with_state(Client::new(provider))\n";
 const OMNIA_PATH_CRATE_ANCHOR: &str = "omnia-sdk.workspace = true\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
@@ -926,7 +930,7 @@ async fn omnia_scaffold() {
     assert_eq!(
         text(&project, "src/lib.rs"),
         omnia_root_with_orders(),
-        "the root router's array lists the stem's handlers on its one line"
+        "the root router's array lists the stem's handlers under its comment"
     );
     assert_eq!(
         text(&project, "crates/common/src/topic.rs"),
@@ -1126,6 +1130,8 @@ async fn omnia_scaffold_keyed() {
                     "REQ-001 orders.read: the handler",
                     OMNIA_HANDLER_FILLED.trim_end(),
                 ),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 (
                     "crates/orders/tests/reading.rs",
                     "REQ-001 An order is returned by its id: arrange, act, assert",
@@ -1320,6 +1326,65 @@ async fn omnia_scaffold_held_stem() {
     }
 }
 
+// A stem's lines in the root lists are each one line added under the
+// list's anchor and nothing else of the seed changed, so two stems first
+// listed in one wave each add their line and the engine's union keeps both;
+// the router's array stays one entry per line under the comment that heads
+// it, however few entries it holds, and a second stem lands under the first.
+#[tokio::test]
+async fn omnia_scaffold_second_stem() {
+    let project = omnia_tree().await;
+    let seed = omnia_seed("src/lib.rs");
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first stem's turn");
+    first.assert_exhausted();
+    let after_orders = text(&project, "src/lib.rs");
+
+    let mut slice = slice_for("billing", &["billing.charge"]);
+    slice.requirements[0].trigger = Some(routed("POST", "/charges"));
+    slice.brief = vec!["Takes charges.".to_owned()];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the second stem's turn");
+    model.assert_exhausted();
+
+    let added = |held: &str, now: &str| -> Vec<String> {
+        now.lines().filter(|line| !held.lines().any(|kept| kept == *line)).map(str::to_owned).collect()
+    };
+    assert_eq!(
+        added(&seed, &after_orders),
+        ["        orders::handlers(),"],
+        "the first stem's entry is one line added to the seed's array"
+    );
+    let root = text(&project, "src/lib.rs");
+    assert_eq!(
+        added(&after_orders, &root),
+        ["        billing::handlers(),"],
+        "the second stem's entry is one line added under the first"
+    );
+    assert_eq!(
+        root,
+        omnia_root_with_orders()
+            .replace("        orders::handlers(),\n", "        orders::handlers(),\n        billing::handlers(),\n"),
+        "the array stays one entry per line under its comment"
+    );
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders().replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            &format!("{OMNIA_PATH_CRATE_ANCHOR}billing = {{ path = \"crates/billing\" }}\n")
+        ),
+        "the root manifest's list holds the second stem's line where it sorts"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "- `Cargo.toml`, `src/lib.rs`: the stem's lines added: `billing = { path = \
+             \"crates/billing\" }` in `Cargo.toml`, `billing::handlers()` in `src/lib.rs`."
+        ),
+        "the brief names the second stem's lines as added: {brief}"
+    );
+}
+
 // A handler whose scenarios state a status other than `200` answers the
 // `(StatusCode, Json<Output>)` pair, so the status is the handler's own
 // expression, and the brief's hint says which to answer; a design naming a
@@ -1468,12 +1533,16 @@ async fn omnia_settings_laid() {
                   \"retail\")];\n";
     let loaded = "    let settings = ReadingSettings::load(context.config()).await?;\n    let _ \
                   = (&id, &settings);\n    Ok(Json(ReadOutput {}))\n";
+    let scaffolded_use = "use omnia_sdk::{Capabilities, Result, Settings};\n";
+    let narrowed_use = "use omnia_sdk::{Capabilities, Config, Result, Settings};\n";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
     let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[
                 ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, loaded),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, "where\n    P: Config,\n"),
+                ("crates/orders/src/reading.rs", scaffolded_use, narrowed_use),
                 ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
             ])],
         )
@@ -1484,7 +1553,7 @@ async fn omnia_settings_laid() {
 
     let module = text(&project, "crates/orders/src/reading.rs");
     for carried in [
-        "use omnia_sdk::{Capabilities, Result, Settings};\n",
+        narrowed_use,
         "// The settings the part reads: `ORDERS_RATE_URL`, `ORDERS_TYPE`.\n#[derive(Debug, \
          Settings)]\n#[setting(prefix = \"ORDERS_\")]\npub(crate) struct ReadingSettings {\n    \
          rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n}\n",
@@ -2967,11 +3036,11 @@ async fn omnia_scenario_ignored() {
     let model = ScriptedModel::answering([first, first, repaired])
         .calling(
             0,
-            [edit_files(&[(
-                "crates/orders/src/reading.rs",
-                OMNIA_HANDLER_MARKER,
-                OMNIA_HANDLER_FILLED,
-            )])],
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+            ])],
         )
         .calling(
             1,
@@ -3034,6 +3103,8 @@ async fn omnia_scenario_unattributed() {
             0,
             [edit_files(&[
                 ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 ("crates/orders/tests/reading.rs", &attributed_marker, OMNIA_TEST_FILLED),
             ])],
         )
@@ -3089,6 +3160,8 @@ async fn omnia_scenario_placeholder_unfilled() {
             0,
             [edit_files(&[
                 ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, with_placeholder),
             ])],
         )
@@ -3616,6 +3689,61 @@ async fn omnia_broad_bounds() {
         module.replace(bound, narrowed),
         "the bound is narrowed and the rest stands"
     );
+}
+
+// The same bound is held at the slice's own build, so a filled handler
+// left `P: Capabilities` comes back on the report with the traits named,
+// while the slice's unfilled stubs pass; narrowing it is the repair.
+#[tokio::test]
+async fn omnia_broad_bounds_at_build() {
+    let project = omnia_tree().await;
+    let mut slice = omnia_slice();
+    slice.requirements.push(Requirement {
+        id: "REQ-002".to_owned(),
+        subject: "orders.list".to_owned(),
+        statement: vec!["Lists every order.".to_owned()],
+        scenarios: Vec::new(),
+        trigger: Some(routed("GET", "/orders")),
+    });
+    let bound = ") -> Result<Json<ReadOutput>>\nwhere\n    P: Capabilities,\n";
+    let narrowed = ") -> Result<Json<ReadOutput>>\nwhere\n    P: StateStore,\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", bound, narrowed),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+            ])],
+        );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the narrowed handler passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/reading.rs");
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: handler `read` is bounded `P: Capabilities` and reaches \
+         `StateStore`",
+        line_of(&module, "pub(crate) async fn read<P>")
+    );
+    assert!(
+        correction.contains("a filled handler is bounded on the traits its body reaches")
+            && correction.contains(&expected),
+        "the correction names the broad bound at its line: {correction}"
+    );
+    assert!(!correction.contains("handler `list`"), "a marker is no finding: {correction}");
+    assert!(module.contains(narrowed), "the bound is narrowed: {module}");
+    assert!(module.contains(OMNIA_BOUND), "the unfilled handler keeps its bound: {module}");
 }
 
 // A required setting read through `Config::get` under a `pub(crate) const`
@@ -5126,6 +5254,8 @@ async fn omnia_scaffold_serial_second_slice() {
         0,
         [edit_files(&[
             ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+            ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+            ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
             ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
         ])],
     );
@@ -5380,6 +5510,8 @@ async fn omnia_unregistered_handler_finding() {
             0,
             [edit_files(&[
                 ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 ("crates/orders/src/reading.rs", chained, unchained),
                 ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
             ])],
@@ -5445,7 +5577,7 @@ fn omnia_manifest_with_orders() -> String {
 }
 
 // The seed's root entry with the `orders` stem's handlers as the one entry
-// of the router's array, laid on the anchor's line as the formatter lays it.
+// of the router's array, under the comment that heads it.
 fn omnia_root_with_orders() -> String {
     omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
 }

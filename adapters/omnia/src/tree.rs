@@ -150,11 +150,11 @@ impl<'a> Tree<'a> {
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
         findings.extend(self.check_common()?);
-        findings.extend(self.broad_bounds());
-        findings.extend(self.old_settings());
         Ok(findings)
     }
 
+    // The rules both turns hold the tree to. A handler still holding its
+    // marker is unfilled, so a slice's stubs pass `broad_bounds`.
     fn check_common(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.unparsed());
@@ -171,6 +171,8 @@ impl<'a> Tree<'a> {
         findings.extend(self.response_wrappers());
         findings.extend(self.swallowed_rejections());
         findings.extend(self.format_settings());
+        findings.extend(self.broad_bounds());
+        findings.extend(self.old_settings());
         Ok(findings)
     }
 

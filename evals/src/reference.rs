@@ -956,7 +956,7 @@ async fn run() {
         let provider = provider(&config, MatchedHttp::default());
         let probed = topic.clone();
         let outcome = tokio::task::spawn_local(async move {
-            let router = __CRATE__::messaging_router(provider).await;
+            let router = __CRATE__::router(provider);
             router.handle(delivery(probed, Vec::new())).await
         })
         .await;
@@ -1082,7 +1082,7 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
     let outcome = {
         let _default = tracing::subscriber::set_default(logged.clone());
         tokio::task::spawn_local(async move {
-            let router = __CRATE__::messaging_router(provider).await;
+            let router = __CRATE__::router(provider);
             router.handle(delivery(topic, payload)).await
         })
         .await

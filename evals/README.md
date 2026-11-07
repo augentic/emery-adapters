@@ -192,8 +192,8 @@ Compares the generated workspace against the hand-written reference across six c
 Drives the reference guest's recorded replay and static fixtures (`crates/*/data/{static,replay}/`) through the generated guest:
 
 1. **Test injection:** Generates `tests/reference_oracle.rs` inside the exported workspace using `omnia_test::guest` doubles.
-2. **Execution:** Feeds each fixture's inbound XML message to `messaging_router`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
-3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture.
+2. **Execution:** Feeds each fixture's inbound XML message to the guest's `router(provider)`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
+3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture. The harness's own output (including a compile failure) is written to `run-N.oracle.log` beside the run.
 
 ### Standalone oracle mode (`--oracle`)
 

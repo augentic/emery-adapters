@@ -111,7 +111,7 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
 - Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
 - A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
 - Reach the host through the context's accessors: `context.state()`, `context.config()`, `context.http()`, `context.publish()`, `context.tables()`.
-  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound is a finding of the verify.
+  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound on a filled handler is a finding on your report.
 - A setting is a field of your part's `<Part>Settings` struct. Load it with `<Part>Settings::load(context.config()).await?` where the body needs it.
   Narrow each field from `String` to the type its value parses as.
 - A topic you publish is a constant of `common::topic`: `context.publish().send(topic::NAME, &Message::json(&value)?).await?`.
@@ -333,6 +333,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A stem's `handlers()` that the root's array does not list. A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
+- A filled handler still bounded `P: Capabilities`; the finding lists the traits its body reaches. A required setting read through `Config::get` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
 
 Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
 
