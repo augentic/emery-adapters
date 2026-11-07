@@ -36,10 +36,9 @@ impl Tree<'_> {
             return Ok(None);
         }
         Ok(Some(format!(
-            "the root manifest's path list names a crate the tree holds for each stem, and no \
+            "the root manifest's stem list names a crate the tree holds for each stem, and no \
              other: an entry whose `crates/<dir>/Cargo.toml` is missing wires nothing and stands \
-             by its shape alone; remove it and the stem's `<stem>.workspace = true` line through \
-             `edit_files`:\n{}",
+             by its shape alone; remove it through `edit_files`:\n{}",
             lines.join("\n")
         )))
     }
@@ -51,7 +50,6 @@ impl Tree<'_> {
             for (number, name) in Toml::read(manifest).dependencies() {
                 let ident = name.replace('-', "_");
                 if layout::STEM_DEPENDENCIES.contains(&name)
-                    || name == layout::PROBE_DEPENDENCY
                     || code.iter().any(|module| module.mentions.contains(&ident))
                 {
                     continue;
@@ -88,22 +86,13 @@ impl Tree<'_> {
         for module in &self.modules {
             let Some(stem) = module.entry_stem() else { continue };
             let ident = layout::package(stem).replace('-', "_");
-            if let Some(number) = module.exposes("router")
-                && !self.list_names(layout::ROUTES, &[&ident, "router"])
+            if let Some(number) = module.exposes("handlers")
+                && !self.list_names(layout::ENTRY, &[&ident, "handlers"])
             {
                 lines.push(format!(
-                    "{}:{number}: `{ident}::router()` is merged by no statement of `{}`",
+                    "{}:{number}: `{ident}::handlers()` is listed by no entry of `{}`",
                     module.path,
-                    layout::ROUTES
-                ));
-            }
-            if let Some(number) = module.exposes("topics")
-                && !self.list_names(layout::MESSAGING, &[&ident, "topics"])
-            {
-                lines.push(format!(
-                    "{}:{number}: `{ident}::topics(..)` is registered by no statement of `{}`",
-                    module.path,
-                    layout::MESSAGING
+                    layout::ENTRY
                 ));
             }
         }
@@ -112,13 +101,10 @@ impl Tree<'_> {
         }
         lines.sort();
         Some(format!(
-            "a stem's `router()` and `topics(..)` are reached through the root lists alone, and \
-             a stem the lists never merge compiles clean and serves nothing: add the stem's \
-             statement at the end of its list through `edit_files`, `let router = \
-             router.merge(<stem>::router());` in `{}` before `router.with_state(..)` and \
-             `let router = <stem>::topics(router, &env);` in `{}` before its trace:\n{}",
-            layout::ROUTES,
-            layout::MESSAGING,
+            "a stem's `handlers()` is reached through the root list alone, and a stem the list \
+             never merges compiles clean and serves nothing: add `<stem>::handlers(),` to the \
+             `Handlers::from([..])` array of `router()` in `{}` through `edit_files`:\n{}",
+            layout::ENTRY,
             lines.join("\n")
         ))
     }
@@ -149,7 +135,7 @@ impl Tree<'_> {
                     ));
                 }
             }
-            if entry.exposes("router").is_none() && entry.exposes("topics").is_none() {
+            if entry.exposes("handlers").is_none() {
                 continue;
             }
             for (number, head) in entry.own_items() {
@@ -172,7 +158,7 @@ impl Tree<'_> {
              folded in where its file was; add each missing line among the entry's `pub mod` \
              lines through `edit_files`, and put each item back in its part, \
              `crates/<stem>/src/<part>.rs`, declared by its `pub mod` line and named in the \
-             entry's arrays, through `write_files` and `edit_files`:\n{}",
+             entry's `handlers()` array, through `write_files` and `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
@@ -199,16 +185,17 @@ impl Tree<'_> {
         Some(format!(
             "a topic of the shared table is named by no module, so nothing publishes or \
              consumes it: a constant is added by the slice whose part publishes or consumes the \
-             topic, as `common::topic::<NAME>` qualified through `config::topic_for`, so name \
-             each topic in the part that publishes or consumes it, or remove its constant and \
-             its doc comment through `edit_files`:\n{}",
+             topic, as `topic::<NAME>` in the part's `.topic(..)` registration or its \
+             `context.publish().send(..)` call, so name each topic in the part that publishes \
+             or consumes it, or remove its constant and its doc comment through \
+             `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
 
-    // A stem is run through its `routes()` and `topics(..)` or through
-    // another stem's call, so a publishing part in a stem neither reaches is
-    // never run; the root lists name every stem and tell nothing.
+    // A stem is run through its `handlers()` or through another stem's
+    // call, so a publishing part in a stem neither reaches is never run; the
+    // root list names every stem and tells nothing.
     pub fn unreached_publishers(&self) -> Option<String> {
         let mut lines = Vec::new();
         for stem in self.stem_crates() {
@@ -237,15 +224,14 @@ impl Tree<'_> {
             return None;
         }
         Some(format!(
-            "the host runs a stem through its `routes()` and `topics(..)` alone, so a part that \
-             publishes in a stem no route or topic reaches, and no other stem calls, is never \
-             run: the trigger is the inbound stream the design's `## APIs and integrations` \
-             lists for the stem — its bullet spells the topic and names the requirement its \
-             deliveries set off — never a requirement at the registration, which the host owns; \
-             add it through `edit_files`: the topic's constant at the end of `{}`, \
-             `.route(config::topic_for(env, topic::<NAME>), messaging::consume_with(<handler>, \
-             <decode>))` in the part's `topics(..)` with the handler calling the earlier parts' \
-             functions, and `<part>::topics,` at the end of the entry's array:\n{}",
+            "the host runs a stem through its `handlers()` alone, so a part that publishes in a \
+             stem no route or topic reaches, and no other stem calls, is never run: the trigger \
+             is the inbound stream the design's `## APIs and integrations` lists for the stem — \
+             its bullet spells the topic and names the requirement its deliveries set off — \
+             never a requirement at the registration, which the host owns; add it through \
+             `edit_files`: the topic's constant at the end of `{}`, `.topic(topic::<NAME>, \
+             <handler>)` in the part's `handlers()` with the handler calling the earlier parts' \
+             functions, and `<part>::handlers(),` in the entry's array:\n{}",
             layout::TOPICS,
             lines.join("\n")
         ))
@@ -259,12 +245,12 @@ impl Module {
         (!stem.is_empty() && !stem.contains('/') && !self.is_common()).then_some(stem)
     }
 
-    // Whether the entry names a part's `routes()` or `topics`, as an array
-    // entry or a call; `common`'s own folds are not a part's.
+    // Whether the entry names a part's `handlers()` in its array; the
+    // `Handlers::from` it folds them with is no part's.
     fn registers(&self) -> bool {
         self.mentions.paths().any(|path| {
             let [.., head, last] = path else { return false };
-            head != "common" && (last == "routes" || last == "topics")
+            head != "Handlers" && head != "common" && last == "handlers"
         })
     }
 
@@ -279,21 +265,20 @@ impl Module {
     // The part this module is where it stands directly under `prefix`, the
     // stem's `src/`, as `<part>.rs`; the entry and a file deeper down are
     // none.
-    fn part_under<'m>(&'m self, prefix: &str) -> Option<&'m str> {
+    pub fn part_under<'m>(&'m self, prefix: &str) -> Option<&'m str> {
         let part = self.path.strip_prefix(prefix)?.strip_suffix(".rs")?;
         (!part.is_empty() && !part.contains('/') && part != "lib").then_some(part)
     }
 
     // Every item of an entry beyond its lists: a `mod` declaration, a `use`,
-    // and the two folds `router` and `topics` are the layout's, and anything
-    // else a part's.
+    // and the fold `handlers` are the layout's, and anything else a part's.
     fn own_items(&self) -> Vec<(usize, String)> {
         let Some(file) = self.file() else { return Vec::new() };
         file.items
             .iter()
             .filter(|item| match item {
                 syn::Item::Mod(item) => item.content.is_some(),
-                syn::Item::Fn(item) => item.sig.ident != "router" && item.sig.ident != "topics",
+                syn::Item::Fn(item) => item.sig.ident != "handlers",
                 _ => true,
             })
             .filter_map(syntax::item_head)

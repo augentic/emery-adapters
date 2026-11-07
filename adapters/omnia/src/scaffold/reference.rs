@@ -174,6 +174,7 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
 pub enum Idiom {
     Probe,
     CacheAside,
+    OptimisticLock,
 }
 
 // An idiom with the heading of its section and the words that select it.
@@ -213,6 +214,11 @@ const IDIOMS: &[IdiomSpec] = &[
             "invalidation",
             "ttl",
         ],
+    },
+    IdiomSpec {
+        idiom: Idiom::OptimisticLock,
+        heading: "A compare-and-swap update",
+        words: &["cas", "etag", "optimistic"],
     },
 ];
 
@@ -286,9 +292,11 @@ pub struct Needs {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Laid {
     Routes,
-    // A route function over `handle_with`, which spells the encoder.
-    Encoded,
+    // A handler answering a status of its own, since a scenario states one.
+    Status,
     Consumers,
+    // A settings struct over the keys the slice spells.
+    Settings,
     Tests,
     Types,
 }
@@ -417,15 +425,7 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
     if has(Laid::Routes)
         && let Some((heading, routing)) = section(api, "Routing")
     {
-        if let Some(plain) = before(routing, "The general constructor") {
-            passages.push(markdown(API, &heading, plain));
-        }
-        if has(Laid::Encoded)
-            && let Some(general) =
-                between(routing, "The general constructor", "The router is axum's")
-        {
-            passages.push(markdown(API, &heading, general));
-        }
+        passages.push(markdown(API, &heading, routing));
     }
     if has(Laid::Consumers)
         && let Some((heading, messaging)) = section(api, "Messaging")
@@ -451,8 +451,14 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
             .chain(reached(&roles, |capability| capability.trait_lead));
         passages.push(code(API, &heading, &paragraphs(fence, leads)));
     }
+    if has(Laid::Settings)
+        && let Some((heading, settings)) = section(api, "Settings")
+    {
+        passages.push(markdown(API, &heading, settings));
+    }
 
-    // the idioms the slice's text calls for, each its section whole
+    // the idioms the slice's text calls for, each its section whole, and
+    // the status shape where a handler answers one
     if let Some(handlers) = body(docs, HANDLERS) {
         for spec in IDIOMS {
             if needs.idioms.contains(&spec.idiom)
@@ -461,16 +467,27 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
                 passages.push(markdown(HANDLERS, &heading, idiom));
             }
         }
+        if has(Laid::Status)
+            && let Some((heading, status)) = section(handlers, "A status of its own")
+        {
+            passages.push(markdown(HANDLERS, &heading, status));
+        }
     }
 
-    // the doubles the tests arrange, `Provider` and `MapConfig` always
+    // the doubles the tests arrange, `Provider` and `MapConfig` always, and
+    // the calls the prelude makes through them
     if has(Laid::Tests) {
         if let Some((heading, doubles)) = section(api, "The doubles")
             && let Some(fence) = fence(doubles, 0)
         {
+            let calls = [
+                (has(Laid::Routes), "pub async fn send"),
+                (has(Laid::Consumers), "pub async fn deliver"),
+            ];
             let leads = ["pub struct Provider", "impl MapConfig"]
                 .into_iter()
-                .chain(reached(&roles, |capability| capability.double_lead));
+                .chain(reached(&roles, |capability| capability.double_lead))
+                .chain(calls.into_iter().filter(|(laid, _)| *laid).map(|(_, lead)| lead));
             passages.push(code(API, &heading, &paragraphs(fence, leads)));
         }
         if let Some(testing) = body(docs, TESTING)
@@ -486,30 +503,44 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
         }
     }
 
+    // the SQL query shape after doubles, so `Laid::Tests` never loses its
+    // doubles to the inline budget
+    if roles.contains(&Role::Table)
+        && let Some(handlers) = body(docs, HANDLERS)
+        && let Some((heading, sql_query)) = section(handlers, "A SQL query")
+    {
+        passages.push(markdown(HANDLERS, &heading, sql_query));
+    }
+
     // the translation of each role, and of the design types the slice owns
     if let Some(translation) = body(docs, TRANSLATION) {
-        if let Some((heading, table_section)) = section(translation, "The table") {
-            let mut leads: Vec<&str> = TRANSLATION_ROWS
-                .iter()
-                .filter(|(role, _)| roles.contains(role))
-                .map(|(_, lead)| *lead)
-                .collect();
-            if has(Laid::Types) {
-                leads.push("a design type");
-            }
-            let rows =
-                table(table_section, |first| leads.iter().any(|lead| first.starts_with(lead)));
-            if !rows.is_empty() {
-                passages.push(markdown(TRANSLATION, &heading, &rows));
-            }
-        }
-        if roles.contains(&Role::Schedule)
-            && let Some((heading, fragment)) = section(translation, "A reference table")
-        {
-            passages.push(markdown(TRANSLATION, &heading, fragment));
-        }
+        translation_passages(translation, &roles, has(Laid::Types), &mut passages);
     }
     passages
+}
+
+fn translation_passages(
+    translation: &str, roles: &BTreeSet<Role>, laid_types: bool, passages: &mut Vec<Passage>,
+) {
+    if let Some((heading, table_section)) = section(translation, "The table") {
+        let mut leads: Vec<&str> = TRANSLATION_ROWS
+            .iter()
+            .filter(|(role, _)| roles.contains(role))
+            .map(|(_, lead)| *lead)
+            .collect();
+        if laid_types {
+            leads.push("a design type");
+        }
+        let rows = table(table_section, |first| leads.iter().any(|lead| first.starts_with(lead)));
+        if !rows.is_empty() {
+            passages.push(markdown(TRANSLATION, &heading, &rows));
+        }
+    }
+    if roles.contains(&Role::Schedule)
+        && let Some((heading, fragment)) = section(translation, "A reference table")
+    {
+        passages.push(markdown(TRANSLATION, &heading, fragment));
+    }
 }
 
 // One lead of each capability block the roles reach, in the table's order.
@@ -575,20 +606,6 @@ fn section<'t>(text: &'t str, heading: &str) -> Option<(String, &'t str)> {
 
 fn title_of(line: &str) -> String {
     line.trim_start_matches('#').trim().to_owned()
-}
-
-// The section up to the line that starts with `stop`, exclusive.
-fn before<'t>(section: &'t str, stop: &str) -> Option<&'t str> {
-    let at = line_start(section, stop)?;
-    Some(section[..at].trim_end())
-}
-
-// The section from the line that starts with `from` to the line that starts
-// with `to`, exclusive.
-fn between<'t>(section: &'t str, from: &str, to: &str) -> Option<&'t str> {
-    let start = line_start(section, from)?;
-    let end = line_start(&section[start..], to).map_or(section.len(), |at| start + at);
-    Some(section[start..end].trim_end())
 }
 
 // The byte offset of the first line that starts with `lead`.

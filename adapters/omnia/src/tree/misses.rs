@@ -1,5 +1,5 @@
-//! Checks for empty cache misses on constant `StateStore` keys, single-field
-//! `data` response wrappers, refusals answered `Ok(())`, and format settings.
+//! Checks for empty cache misses on constant store keys, single-field `data`
+//! response wrappers, refusals answered `Ok(())`, and format settings.
 
 use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
@@ -111,9 +111,9 @@ impl Tree<'_> {
         Some(format!(
             "a format is the parser's syntax and never a deployment value: a date or time format \
              a criterion spells (`DD/MM/YYYY`) is a `const` of the module that parses with it, \
-             holding the parser's own syntax (`\"%d/%m/%Y\"`), and no setting read through \
-             `Config::get`; replace each setting named with that constant through \
-             `edit_files`:\n{}",
+             holding the parser's own syntax (`\"%d/%m/%Y\"`), and no field of a \
+             `#[derive(Settings)]` struct or setting read through `Config::get`; replace each \
+             setting named with that constant through `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
@@ -261,6 +261,8 @@ impl<'ast> Visit<'ast> for Swallowed<'_> {
     }
 }
 
+// The settings a module reads: a `const KEY: &str = "KEY"` and each field
+// of a `#[derive(Settings)]` struct, keyed as the derive spells it.
 #[derive(Default)]
 struct Settings {
     found: Vec<(usize, String)>,
@@ -271,8 +273,14 @@ impl Settings {
         let Expr::Lit(literal) = expr else { return };
         let Lit::Str(value) = &literal.lit else { return };
         let name = name.to_string();
-        if value.value() == name && name.split('_').any(|segment| segment == "FORMAT") {
-            self.found.push((line, name));
+        if value.value() == name {
+            self.key(line, name);
+        }
+    }
+
+    fn key(&mut self, line: usize, key: String) {
+        if key.split('_').any(|segment| segment == "FORMAT") {
+            self.found.push((line, key));
         }
     }
 }
@@ -287,6 +295,35 @@ impl<'ast> Visit<'ast> for Settings {
         self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
         visit::visit_impl_item_const(self, node);
     }
+
+    fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
+        if !derives(&node.attrs, "Settings") {
+            return;
+        }
+        let prefix = setting_attr(&node.attrs, "prefix").unwrap_or_default();
+        let Fields::Named(fields) = &node.fields else { return };
+        for field in &fields.named {
+            let Some(ident) = &field.ident else { continue };
+            let key = setting_attr(&field.attrs, "key")
+                .unwrap_or_else(|| format!("{prefix}{}", ident.to_string().to_ascii_uppercase()));
+            self.key(syntax::line(ident.span()), key);
+        }
+    }
+}
+
+// The `#[setting(<name> = "..")]` value among `attrs`.
+fn setting_attr(attrs: &[Attribute], name: &str) -> Option<String> {
+    attrs.iter().filter(|attr| attr.path().is_ident("setting")).find_map(|attr| {
+        let mut value = None;
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident(name) {
+                let lit: syn::LitStr = meta.value()?.parse()?;
+                value = Some(lit.value());
+            }
+            Ok(())
+        });
+        value
+    })
 }
 
 #[derive(Default)]
@@ -409,9 +446,13 @@ impl<'ast> Visit<'ast> for Misses<'_> {
     }
 
     // The receiver first, since a read defaulted where it is made,
-    // `StateStore::get(..).await?.unwrap_or_default()`, is the receiver.
+    // `context.state().get(KEY).await?.unwrap_or_default()`, is the
+    // receiver.
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         visit::visit_expr_method_call(self, node);
+        if let Some(line) = constant_keyed_method_read(node) {
+            self.read = Some(line);
+        }
         if self.read.is_some()
             && let Some(spelling) = defaulted(node)
         {
@@ -548,21 +589,55 @@ fn derives(attrs: &[Attribute], name: &str) -> bool {
     })
 }
 
-// A `StateStore::get(.., KEY)` under a constant key, and the line it reads at.
+// The reads of a store that answer `None` on a miss: the trait's method and
+// the extension's, each by the trait it is called through.
+const READS: &[&[&str]] = &[
+    &["StateStore", "get"],
+    &["StateStoreExt", "get_json"],
+    &["DocumentStore", "get"],
+    &["DocumentStoreExt", "get_as"],
+];
+// The accessors of the context the reads are made through.
+const STORES: [&str; 2] = ["state", "docs"];
+
+// A `StateStore::get(.., KEY)` under a constant key, and the line it reads
+// at.
 fn constant_keyed_read(call: &ExprCall) -> Option<usize> {
     let Expr::Path(func) = &*call.func else { return None };
-    if !path_ends(&func.path, &["StateStore", "get"]) {
+    if !READS.iter().any(|read| path_ends(&func.path, read)) {
         return None;
     }
-    let mut key = call.args.iter().nth(1)?;
+    let keyed = call.args.iter().skip(1).any(is_constant_key);
+    keyed.then(|| syntax::head_line(&call.func)).flatten()
+}
+
+// A `context.state().get(KEY)` or `.get_json(KEY)` under a constant key,
+// and the line it reads at.
+fn constant_keyed_method_read(call: &ExprMethodCall) -> Option<usize> {
+    let read = READS.iter().any(|read| read.last().is_some_and(|name| call.method == name));
+    let through_store = matches!(
+        &*call.receiver,
+        Expr::MethodCall(accessor)
+            if accessor.args.is_empty() && STORES.iter().any(|store| accessor.method == store)
+    );
+    if !read || !through_store || !call.args.iter().any(is_constant_key) {
+        return None;
+    }
+    syntax::head_line(&call.receiver)
+}
+
+// Whether the argument names a `SCREAMING_SNAKE` constant, behind any
+// borrows.
+fn is_constant_key(mut key: &Expr) -> bool {
     while let Expr::Reference(reference) = key {
         key = &reference.expr;
     }
-    let Expr::Path(key) = key else { return None };
-    let name = key.path.segments.last()?.ident.to_string();
-    let constant = name.chars().any(|ch| ch.is_ascii_uppercase())
-        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_');
-    constant.then(|| syntax::head_line(&call.func)).flatten()
+    let Expr::Path(key) = key else { return false };
+    let Some(name) = key.path.segments.last().map(|segment| segment.ident.to_string()) else {
+        return false;
+    };
+    name.chars().any(|ch| ch.is_ascii_uppercase())
+        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
 }
 
 // A `Some(..)` or `Ok(Some(..))` pattern, which the hit runs under.

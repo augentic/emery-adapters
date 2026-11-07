@@ -5,6 +5,7 @@ mod lists;
 mod names;
 mod reference;
 mod render;
+mod settings;
 mod stem;
 mod trigger;
 mod types;
@@ -70,8 +71,6 @@ impl Scaffold {
         let design_keys = types::design_keys(&slice.design);
         let idioms = reference::idioms(slice);
         let roles = reference::roles(slice);
-        let probing = idioms.contains(&Idiom::Probe);
-        let sql = probing || roles.contains(&Role::Table);
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
@@ -101,7 +100,7 @@ impl Scaffold {
             match plans.iter_mut().find(|plan| plan.stem.name == name) {
                 Some(plan) => plan.requirements.push(requirement),
                 None => plans.push(StemPlan {
-                    stem: Stem::new(&name, slice, probing, sql),
+                    stem: Stem::new(&name, slice),
                     requirements: vec![requirement],
                     owned: Vec::new(),
                 }),
@@ -124,8 +123,9 @@ impl Scaffold {
         let mut stems = Vec::new();
         for plan in plans {
             let mut stem = plan.stem;
+            stem.read(root, &plan.requirements)?;
             stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
-            stem.read(root)?;
+            stem.extend();
             stem.place_lines(root, &mut lists)?;
             stems.push(stem);
         }
@@ -176,15 +176,15 @@ impl Scaffold {
             .collect()
     }
 
-    // The design keys of the types laid into the modules the scaffold wrote,
-    // a marker among them, since its signature stands fenced in its doc; a
-    // held module holds whatever an earlier slice left, so its types are
-    // none.
+    // The design keys of the types laid into the modules the scaffold wrote
+    // or extended, a marker among them, since its signature stands fenced in
+    // its doc; a held module that was not extended holds whatever an earlier
+    // slice left, so its types are none.
     fn types(&self) -> Vec<String> {
         self.plan
             .stems
             .iter()
-            .filter(|stem| !stem.module.held)
+            .filter(|stem| stem.module.laid())
             .flat_map(|stem| stem.types.iter().map(|design_type| design_type.key.clone()))
             .collect()
     }
@@ -233,8 +233,15 @@ impl Plan {
         let mut written = Vec::new();
         for stem in &self.stems {
             for kind in Kind::ALL {
-                if let Some(file) = stem.file(kind).filter(|file| !file.held) {
+                let Some(file) = stem.file(kind) else { continue };
+                if !file.held {
                     create(root, &file.path, &stem.render(kind))?;
+                    written.push(file.path.clone());
+                } else if file.extended
+                    && let Some(text) = stem.text(kind)
+                {
+                    write_whole(root, &file.path, Standing::File, text.as_bytes())
+                        .map_err(|err| server_error!("writing `{}`: {err}", file.path))?;
                     written.push(file.path.clone());
                 }
             }

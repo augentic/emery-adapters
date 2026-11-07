@@ -7,6 +7,7 @@
 
 use std::fs::OpenOptions;
 use std::io::{ErrorKind, Write as _};
+use std::num::NonZeroU32;
 use std::path::Path;
 
 use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
@@ -46,6 +47,7 @@ impl TargetAdapter for Adapter {
         Metadata {
             rules: RULES,
             grants: &[NPM, NVM, VOLTA, FNM],
+            budget: NonZeroU32::new(12),
         }
     }
 

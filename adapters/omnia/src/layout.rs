@@ -11,34 +11,51 @@ use std::path::{Path, PathBuf};
 
 use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
+pub use omnia_template::{CRATE_LIST_ANCHOR, HANDLER_LIST_ANCHOR, insert_after};
 
 pub use self::manifest::Toml;
 use crate::syntax;
 
-// The root lists a stem's lines are added to, and the topic table.
-pub const ROUTES: &str = "src/routes.rs";
-pub const MESSAGING: &str = "src/messaging.rs";
+// The root list a stem's line is added to, and the topic table.
+pub const ENTRY: &str = "src/lib.rs";
 pub const TOPICS: &str = "crates/common/src/topic.rs";
 
-// The line of the root manifest the path list follows.
-pub const PATH_LIST_ANCHOR: &str = "common = { path = \"crates/common\" }";
-// The line each root list takes a stem's statement before.
-pub const ROUTE_LIST_ANCHOR: &str = "router.with_state(";
-pub const TOPIC_LIST_ANCHOR: &str = "tracing::debug!(";
-// The comment each array of a stem's entry opens under.
-pub const ROUTES_ARRAY_ANCHOR: &str = "// one entry per part with routes, each added at the end";
-pub const TOPICS_ARRAY_ANCHOR: &str = "// one entry per part with topics, each added at the end";
+// The stem's manifest before `[dependencies]`, as the layout reference
+// spells it: `[package]`, `[lints]`, `[target..dev-dependencies]`, and the
+// `[dependencies]` header itself. Every line outside `[dependencies]`'s
+// entries stands as scaffolded whichever slice's turn edits the manifest.
+pub const STEM_MANIFEST_HEADER: &str = r#"[package]
+name = "<package>"
+description = "The `<stem>` stem"
+publish.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+omnia-test = { workspace = true, features = ["guest"] }
+tokio.workspace = true
+
+# One line per crate the stem's files use, each added at the end.
+[dependencies]"#;
+
+// The stem's manifest header for `dir`, a crate directory under `crates/`.
+pub fn stem_manifest_header(dir: &str) -> String {
+    let stem = if dir == "common-stem" { "common" } else { dir };
+    STEM_MANIFEST_HEADER.replace("<package>", &package(stem)).replace("<stem>", stem)
+}
 
 // The crates every stem's manifest names, whether or not each module
-// reaches them.
-pub const STEM_DEPENDENCIES: [&str; 6] =
-    ["axum", "common", "omnia-sdk", "serde", "serde_json", "tracing"];
-// The crate a stem's manifest names beside them where the slice probes,
-// for the `Row` its tests arrange the store's answer with, or reaches a
-// SQL store, for the `TableStore` it queries through; laid by the scaffold
-// and held to no use, since a probe over the state store alone never
-// spells it.
-pub const PROBE_DEPENDENCY: &str = "omnia-wasi-sql";
+// reaches them: the router and its extractors, the SDK, and the codecs the
+// handlers' types and the tests' bodies go through.
+pub const STEM_DEPENDENCIES: [&str; 4] = ["axum", "omnia-sdk", "serde", "serde_json"];
+// The crate a stem's manifest names beside them where a part names a
+// topic, for the table's constant.
+pub const TOPIC_DEPENDENCY: &str = "common";
 
 // The topic table as a tree holds it: every `pub const` of the table, its
 // topic where the value is a string literal.

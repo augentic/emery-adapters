@@ -85,18 +85,28 @@ impl<'a> Toml<'a> {
         })
     }
 
-    // Whether the manifest inherits the workspace's lints, as `[lints]`
-    // holding `workspace = true` or a top-level `lints.workspace = true`.
-    pub fn inherits_workspace_lints(&self) -> bool {
-        self.keys.iter().any(|key| {
-            key.value == "true"
-                && matches!((key.table, key.name), ("lints", "workspace") | ("", "lints.workspace"))
-        })
-    }
-
     // Whether `[workspace.dependencies]` pins a crate named `name`.
     pub fn pins(&self, name: &str) -> bool {
         self.keys.iter().any(|key| key.table == "workspace.dependencies" && key.name == name)
+    }
+
+    // The lines of a stem manifest outside `[dependencies]`: every line
+    // through `[dependencies]` itself, plus any line from the next `[table]`
+    // header onward.
+    pub fn lines_outside_dependencies(text: &'a str) -> Vec<&'a str> {
+        let mut out = Vec::new();
+        let mut in_dependencies = false;
+        for line in text.lines() {
+            let trimmed = uncommented(line).trim();
+            if trimmed.starts_with('[') {
+                let table = trimmed.trim_start_matches('[').trim_end_matches(']').trim();
+                in_dependencies = table == "dependencies";
+                out.push(line);
+            } else if !in_dependencies {
+                out.push(line);
+            }
+        }
+        out
     }
 }
 

@@ -1,5 +1,6 @@
 //! Holds the lent tree to the layout's rules before a report or verdict is accepted.
 
+mod bounds;
 mod lists;
 mod misses;
 mod process;
@@ -13,7 +14,7 @@ use emery_sdk::Error;
 use emery_sdk::target::Report;
 use omnia_template::Manifest;
 use syn::visit::{self, Visit};
-use syn::{ItemFn, Macro};
+use syn::{Expr, ExprLit, ItemFn, Lit, Local, Macro};
 
 use crate::layout::{self, Toml, TopicTable};
 use crate::scaffold::Scaffold;
@@ -85,7 +86,7 @@ impl<'ast> Visit<'ast> for Markers {
 }
 
 // The Rust files of a tree, read once: the stems' sources, the stems' tests,
-// and the root lists the tree holds, with the crates under `crates/` and
+// and the root list the tree holds, with the crates under `crates/` and
 // the manifest of each that holds one.
 pub struct Tree<'a> {
     root: &'a Path,
@@ -121,11 +122,9 @@ impl<'a> Tree<'a> {
             }
         }
         let mut lists = Vec::new();
-        for path in [layout::ROUTES, layout::MESSAGING] {
-            let file = root.join(path);
-            if file.is_file() {
-                lists.push(Module::read(root, &file)?);
-            }
+        let file = root.join(layout::ENTRY);
+        if file.is_file() {
+            lists.push(Module::read(root, &file)?);
         }
         Ok(Self {
             root,
@@ -143,6 +142,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
+        findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -150,6 +150,8 @@ impl<'a> Tree<'a> {
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
         findings.extend(self.check_common()?);
+        findings.extend(self.broad_bounds());
+        findings.extend(self.old_settings());
         Ok(findings)
     }
 
@@ -159,7 +161,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.manifest_drift()?);
         findings.extend(self.dangling_entries()?);
         findings.extend(self.simulated_process()?);
-        findings.extend(self.unlinted_stems());
+        findings.extend(self.stem_manifest_drift());
         findings.extend(self.unused_dependencies());
         findings.extend(self.unmerged_stems());
         findings.extend(self.undeclared_parts());
@@ -308,7 +310,7 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement is implemented, so no marker of its stands: fill each \
              `todo!(\"REQ-..\")` the adapter scaffolded for a covered requirement through \
-             `edit_files` — a handler's body in place of its `let _ = (&input, &context);` line \
+             `edit_files` — a handler's body in place of its `let _ = (&context, ..);` borrow \
              and the marker, a function's body — or leave the requirement out of `covered`:\n{}",
             lines.join("\n")
         ))
@@ -318,6 +320,7 @@ impl<'a> Tree<'a> {
     // unread here.
     fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
         let mut lines = Vec::new();
+        let mut seeded: Vec<&str> = Vec::new();
         for expected in scaffold
             .expected_tests()
             .filter(|expected| covered.iter().any(|covered| covered == expected.id))
@@ -325,6 +328,16 @@ impl<'a> Tree<'a> {
             let test = match self.module(expected.path) {
                 Some(module) => {
                     let Some(file) = module.file() else { continue };
+                    if !seeded.contains(&expected.path) {
+                        seeded.push(expected.path);
+                        for (line, lit) in provider_placeholders(file) {
+                            lines.push(format!(
+                                "{}:{line}: {} is covered and `provider()` seeds the placeholder \
+                                 `\"{lit}\"`",
+                                expected.path, expected.id
+                            ));
+                        }
+                    }
                     test_of(file, expected.test)
                 }
                 None => None,
@@ -356,6 +369,15 @@ impl<'a> Tree<'a> {
                     expected.path, expected.id, expected.test, expected.scenario
                 ));
             }
+            if !found.ignored {
+                for (line, lit) in &found.placeholders {
+                    lines.push(format!(
+                        "{}:{line}: {} is covered and the test `{}` of its scenario `{}` leaves \
+                         the placeholder `\"{lit}\"` unfilled",
+                        expected.path, expected.id, expected.test, expected.scenario
+                    ));
+                }
+            }
         }
         if lines.is_empty() {
             return None;
@@ -363,29 +385,74 @@ impl<'a> Tree<'a> {
         Some(format!(
             "a covered requirement's scenarios are tests that run and pass: each scenario of a \
              covered requirement is the `#[tokio::test]` the adapter scaffolded for it in the \
-             part's test file, filled, its `#[tokio::test]` line kept and its `#[ignore = ..]` \
-             line removed, since a function without the attribute is no test; fill each through \
-             `edit_files`, or leave the requirement out of `covered`:\n{}",
+             part's test file, filled, its `#[tokio::test]` line kept, its `#[ignore = ..]` \
+             line removed, any `\"<param>\"` path-parameter placeholder replaced with a \
+             concrete value, since a function without the attribute is no test and `<` in a \
+             request path panics with `InvalidUriChar`, and each `\"<value>\"` the file's \
+             `provider()` seeds a setting with replaced with the value the scenarios run \
+             under; fill each through `edit_files`, or leave the requirement out of \
+             `covered`:\n{}",
             lines.join("\n")
         ))
     }
 
-    // The workspace's lints are the host boundary, and they reach a crate
-    // through its `[lints]` table alone.
-    fn unlinted_stems(&self) -> Option<String> {
-        let lines: Vec<String> = self
-            .stem_manifests()
-            .filter(|(_, manifest)| !Toml::read(manifest).inherits_workspace_lints())
-            .map(|(dir, _)| format!("crates/{dir}/Cargo.toml"))
+    // A `pub(crate) async fn(<context>: Context<..>, ..)` handler in a part
+    // of the slice's stems that `handlers()` does not register is dead code
+    // the router never reaches.
+    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
+        let prefixes: Vec<String> = scaffold
+            .stems()
+            .map(|stem| format!("crates/{}/src/", layout::crate_dir(stem)))
             .collect();
+        let mut lines = Vec::new();
+        for module in &self.modules {
+            if !prefixes.iter().any(|prefix| module.part_under(prefix).is_some()) {
+                continue;
+            }
+            let Some(file) = module.file() else { continue };
+            for (number, name) in syntax::unregistered_handlers(file) {
+                lines.push(format!(
+                    "{}:{number}: handler `{name}` is registered by no call of `handlers()`",
+                    module.path
+                ));
+            }
+        }
         if lines.is_empty() {
             return None;
         }
+        lines.sort();
         Some(format!(
-            "a stem's manifest carries `[lints]` with `workspace = true`, since the workspace's \
-             lints are the host boundary and reach a crate through that table alone; add the \
-             table through `edit_files`:\n{}",
+            "every `pub(crate) async fn` handler in a part is registered in its `handlers()` \
+             chain, `.route(PATH, get(handler))` for a route and `.topic(topic::NAME, handler)` \
+             for a topic, since an unregistered handler is dead code the router never reaches: \
+             register each handler named in `handlers()` through `edit_files`:\n{}",
             lines.join("\n")
+        ))
+    }
+
+    // Every line of a stem's manifest outside `[dependencies]` stands as
+    // the adapter scaffolded it: `[package]`, `[lints]`, and
+    // `[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]`.
+    fn stem_manifest_drift(&self) -> Option<String> {
+        let mut files = Vec::new();
+        for (dir, manifest) in self.stem_manifests() {
+            let expected = layout::stem_manifest_header(dir);
+            let expected_lines: Vec<&str> = expected.lines().collect();
+            let actual_lines = Toml::lines_outside_dependencies(manifest);
+            let lines = diff_lines(&expected_lines, &actual_lines);
+            if !lines.is_empty() {
+                files.push(format!("`crates/{dir}/Cargo.toml`:\n{}", lines.join("\n")));
+            }
+        }
+        if files.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "a stem's manifest changes only inside `[dependencies]`: `[package]`, `[lints]` with \
+             `workspace = true`, and `[target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies]` \
+             stand as the adapter scaffolded them, so put the `-` lines back and drop the `+` \
+             lines through `edit_files`:\n{}",
+            files.join("\n")
         ))
     }
 
@@ -430,13 +497,13 @@ impl<'a> Tree<'a> {
         let finding = if self.lacks(Manifest::PATH) {
             format!(
                 "the tree lacks the root `{}`; write it whole through `write_files` as the \
-                 template spells it, then add each stem's line to its two lists:\n{}",
+                 template spells it, then add each stem's line to its list:\n{}",
                 Manifest::PATH,
                 layout::template(Manifest::PATH)?
             )
         } else {
             format!(
-                "the root `{}` changed outside its two stem lists; the pins, the lints, the `host` \
+                "the root `{}` changed outside its stem list; the pins, the lints, the `host` \
                  feature, and the target tables stand as the template spells them, so put the `-` \
                  lines back and drop the `+` lines through `edit_files`:\n{drift}",
                 Manifest::PATH
@@ -474,11 +541,70 @@ struct Found {
     attributed: bool,
     ignored: bool,
     marker: Option<usize>,
+    placeholders: Vec<(usize, String)>,
+}
+
+#[derive(Default)]
+struct Placeholders {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Placeholders {
+    fn visit_local(&mut self, node: &'ast Local) {
+        if let Some(init) = &node.init
+            && let Expr::Lit(ExprLit {
+                lit: Lit::Str(lit), ..
+            }) = &*init.expr
+        {
+            let value = lit.value();
+            if is_placeholder(&value) {
+                self.found.push((syntax::line(lit.span()), value));
+            }
+        }
+        visit::visit_local(self, node);
+    }
+}
+
+fn is_placeholder(value: &str) -> bool {
+    let Some(inner) = value.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else {
+        return false;
+    };
+    !inner.is_empty()
+        && inner.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+}
+
+// Every `"<value>"` placeholder the test file's `provider()` seeds a
+// setting with, at its line.
+fn provider_placeholders(file: &syn::File) -> Vec<(usize, String)> {
+    #[derive(Default)]
+    struct Seeds {
+        found: Vec<(usize, String)>,
+    }
+
+    impl<'ast> Visit<'ast> for Seeds {
+        fn visit_lit_str(&mut self, node: &'ast syn::LitStr) {
+            let value = node.value();
+            if is_placeholder(&value) {
+                self.found.push((syntax::line(node.span()), value));
+            }
+        }
+    }
+
+    let mut seeds = Seeds::default();
+    for item in &file.items {
+        if let syn::Item::Fn(item) = item
+            && item.sig.ident == "provider"
+        {
+            seeds.visit_block(&item.block);
+        }
+    }
+    seeds.found
 }
 
 // The test `name` declares in a test file: its line, whether a `test` and
-// an `#[ignore]` attribute stand among its attributes, and the line of a
-// marker left in its body.
+// an `#[ignore]` attribute stand among its attributes, the line of a
+// marker left in its body, and any `let <param> = "<param>";` placeholder
+// bindings.
 fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     struct Test<'n, 'ast> {
         name: &'n str,
@@ -503,6 +629,8 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     let item = test.found?;
     let mut markers = Markers::default();
     markers.visit_block(&item.block);
+    let mut placeholders = Placeholders::default();
+    placeholders.visit_block(&item.block);
     Some(Found {
         line: syntax::line(item.sig.fn_token.span),
         attributed: item
@@ -511,7 +639,40 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
             .any(|attr| attr.path().segments.last().is_some_and(|segment| segment.ident == "test")),
         ignored: item.attrs.iter().any(|attr| attr.path().is_ident("ignore")),
         marker: markers.found.first().map(|(line, _)| *line),
+        placeholders: placeholders.found,
     })
+}
+
+fn diff_lines(expected: &[&str], actual: &[&str]) -> Vec<String> {
+    let (n, m) = (expected.len(), actual.len());
+    let mut common = vec![vec![0_usize; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            common[i][j] = if expected[i] == actual[j] {
+                common[i + 1][j + 1] + 1
+            } else {
+                common[i + 1][j].max(common[i][j + 1])
+            };
+        }
+    }
+
+    let mut drift = Vec::new();
+    let (mut i, mut j) = (0, 0);
+    while i < n && j < m {
+        if expected[i] == actual[j] {
+            i += 1;
+            j += 1;
+        } else if common[i + 1][j] >= common[i][j + 1] {
+            drift.push(format!("- {}", expected[i]));
+            i += 1;
+        } else {
+            drift.push(format!("+ {}", actual[j]));
+            j += 1;
+        }
+    }
+    drift.extend(expected[i..].iter().map(|line| format!("- {line}")));
+    drift.extend(actual[j..].iter().map(|line| format!("+ {line}")));
+    drift
 }
 
 // The requirement ids a marker names: its text up to the colon, one
