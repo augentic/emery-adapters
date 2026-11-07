@@ -1,0 +1,35 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/api/customers/{customer}/tier",
+        "body": {
+          "tier": "gold"
+        }
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "error": "invalid-request"
+        }
+      }
+    }
+  ]
+}

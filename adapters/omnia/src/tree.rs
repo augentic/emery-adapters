@@ -143,6 +143,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.unregistered_handlers(scaffold));
+        findings.extend(self.default_decoders(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -401,16 +402,21 @@ impl<'a> Tree<'a> {
     // A `pub(crate) async fn(<context>: Context<..>, ..)` handler in a part
     // of the slice's stems that `handlers()` does not register is dead code
     // the router never reaches.
-    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
+    // The parts under the slice's stems' crates, which the slice's turn
+    // writes.
+    fn parts_of(&self, scaffold: &Scaffold) -> impl Iterator<Item = &Module> {
         let prefixes: Vec<String> = scaffold
             .stems()
             .map(|stem| format!("crates/{}/src/", layout::crate_dir(stem)))
             .collect();
+        self.modules
+            .iter()
+            .filter(move |module| prefixes.iter().any(|prefix| module.part_under(prefix).is_some()))
+    }
+
+    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
         let mut lines = Vec::new();
-        for module in &self.modules {
-            if !prefixes.iter().any(|prefix| module.part_under(prefix).is_some()) {
-                continue;
-            }
+        for module in self.parts_of(scaffold) {
             let Some(file) = module.file() else { continue };
             for (number, name) in syntax::unregistered_handlers(file) {
                 lines.push(format!(
@@ -429,6 +435,45 @@ impl<'a> Tree<'a> {
              for a topic, since an unregistered handler is dead code the router never reaches: \
              register each handler named in `handlers()` through `edit_files`:\n{}",
             lines.join("\n")
+        ))
+    }
+
+    // The design says the slice's inbound stream carries no JSON, so a
+    // `.topic(..)` registration in one of its parts, whose decoder is the
+    // SDK's JSON one, refuses every delivery. The wire is the slice's, read
+    // once from the design, so every filled registration of the slice is
+    // held to it; one whose handler still holds its marker is the scaffold's
+    // stub, which the brief tells the turn to register through `topic_with`.
+    fn default_decoders(&self, scaffold: &Scaffold) -> Option<String> {
+        let wire = scaffold.wire()?;
+        let mut lines = Vec::new();
+        for module in self.parts_of(scaffold) {
+            let Some(file) = module.file() else { continue };
+            for number in syntax::json_registrations(file) {
+                lines.push(format!(
+                    "{}:{number}: `{}` decodes the delivery as JSON, and the design says the \
+                     inbound stream carries {}",
+                    module.path,
+                    module.line(number),
+                    wire.name()
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "`.topic(topic::<NAME>, <handler>)` registers the SDK's decoder, which reads each \
+             delivery as JSON and refuses a payload of any other format as malformed; the \
+             design says this slice's inbound stream carries {wire}, so register the consumer \
+             through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn \
+             decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the \
+             part that reads the payload through the format's `serde` reader{reader}, as the \
+             translation's consumed-message row spells it, through `edit_files`:\n{lines}",
+            wire = wire.name(),
+            reader = wire.reader(),
+            lines = lines.join("\n")
         ))
     }
 

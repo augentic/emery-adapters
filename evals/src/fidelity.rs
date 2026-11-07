@@ -976,7 +976,10 @@ fn listed(f: &mut fmt::Formatter<'_>, heading: &str, what: &str, paths: &[String
 }
 
 // One command of the host's toolchain run in `at`, its stdout and stderr
-// read together for the note.
+// read together for the note. Cargo builds into the tree's own `target/`
+// whatever the environment names, since an exported tree carries its
+// commit's timestamps and a target directory shared with an earlier export
+// would answer that export's artefacts as fresh.
 #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
 pub fn host_check(at: &Path, command: &'static str, args: &[&str]) -> HostCheck {
     let mut words = command.split(' ');
@@ -985,6 +988,7 @@ pub fn host_check(at: &Path, command: &'static str, args: &[&str]) -> HostCheck 
         .args(words)
         .args(args)
         .current_dir(at)
+        .env("CARGO_TARGET_DIR", at.join("target"))
         .env_remove("CURSOR_API_KEY")
         .output();
     match output {

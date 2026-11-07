@@ -1,0 +1,22 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "vip@example.nz",
+          "name": "Very Important",
+          "tier": "vip"
+        }
+      },
+      "expect": {
+        "status": 201,
+        "body": {
+          "email": "vip@example.nz",
+          "tier": "vip"
+        }
+      }
+    }
+  ]
+}

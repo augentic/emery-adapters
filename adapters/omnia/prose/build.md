@@ -184,7 +184,8 @@ The design's `## APIs and integrations` lists an inbound stream whose bullet cit
 Or the stream's deliveries are what its scenario's `when` describes.
 
 - Make it a `pub(crate) async fn(context: Context<P>, input: <Input>) -> Result<()>`.
-- Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`.
+- Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`, which decodes each delivery as JSON.
+- Where the stream's bullet, or the design elsewhere, says the payload is XML, CSV, or bytes, register `.topic_with(topic::<NAME>, <handler>, decode)` instead, over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part that reads the payload through the format's `serde` reader — `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML, with `quick-xml.workspace = true` in your stem's `[dependencies]` — as the [translation](references/translation.md)'s consumed-message row spells it. A `.topic(..)` over such a stream refuses every delivery as malformed JSON.
 - Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it, and `common.workspace = true` at the end of your stem's `[dependencies]` where it lacks the line.
 
 A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `context.publish()`.

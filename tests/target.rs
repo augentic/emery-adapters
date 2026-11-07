@@ -1348,7 +1348,10 @@ async fn omnia_scaffold_second_stem() {
     model.assert_exhausted();
 
     let added = |held: &str, now: &str| -> Vec<String> {
-        now.lines().filter(|line| !held.lines().any(|kept| kept == *line)).map(str::to_owned).collect()
+        now.lines()
+            .filter(|line| !held.lines().any(|kept| kept == *line))
+            .map(str::to_owned)
+            .collect()
     };
     assert_eq!(
         added(&seed, &after_orders),
@@ -1363,8 +1366,10 @@ async fn omnia_scaffold_second_stem() {
     );
     assert_eq!(
         root,
-        omnia_root_with_orders()
-            .replace("        orders::handlers(),\n", "        orders::handlers(),\n        billing::handlers(),\n"),
+        omnia_root_with_orders().replace(
+            "        orders::handlers(),\n",
+            "        orders::handlers(),\n        billing::handlers(),\n"
+        ),
         "the array stays one entry per line under its comment"
     );
     assert_eq!(
@@ -2949,19 +2954,14 @@ async fn omnia_scaffold_topic_declared() {
 // `.topic(..)` with no decoder, and the brief says how a payload that is
 // not JSON is taken instead: the part's own `decode` under `.topic_with(..)`
 // named for the consumer, with the messaging passage carrying the
-// registration's signature and the decoder's error.
+// registration's signature and the decoder's error. Where the slice's own
+// scenario says the delivery is XML, the brief says so, with the reader the
+// seed pins, in place of the conditional.
 #[tokio::test]
 async fn omnia_non_json_consumer_hint() {
     let project = omnia_tree().await;
     let mut slice = slice_for("shipments-dispatching", &["shipments.dispatch"]);
     slice.requirements[0].trigger = Some(Trigger::Message("shipments.dispatched".to_owned()));
-    slice.requirements[0].scenarios = vec![Scenario {
-        name: "A dispatch is recorded".to_owned(),
-        given: vec!["a shipment 42".to_owned()],
-        when: "an XML dispatch notice for it is delivered".to_owned(),
-        then: "the dispatch is recorded".to_owned(),
-        and: Vec::new(),
-    }];
     let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -2990,6 +2990,234 @@ async fn omnia_non_json_consumer_hint() {
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
+    assert!(
+        !brief.contains("The design says the inbound stream's payload is"),
+        "a slice naming no format is told nothing of one: {brief}"
+    );
+
+    // the scenario names the delivery's format
+    let project = omnia_tree().await;
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "A dispatch is recorded".to_owned(),
+        given: vec!["a shipment 42".to_owned()],
+        when: "an XML dispatch notice for it is delivered".to_owned(),
+        then: "the dispatch is recorded".to_owned(),
+        and: Vec::new(),
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/shipments/src/dispatching.rs");
+    assert!(
+        module.contains("    Handlers::new().topic(topic::SHIPMENTS_DISPATCHED, on_dispatch)\n"),
+        "the decoder is the turn's to write: {module}"
+    );
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "The design says the payload is XML, so register it through \
+         `.topic_with(topic::SHIPMENTS_DISPATCHED, on_dispatch, decode)` instead, over a `fn \
+         decode(delivery: &Delivery) -> std::result::Result<OnDispatchInput, DecodeError>` of \
+         the part — `quick_xml::de::from_reader(delivery.payload.as_slice())`, with \
+         `quick-xml.workspace = true` in the stem's `[dependencies]`.",
+        "The design says the inbound stream's payload is XML: a consumer this slice registers \
+         goes through `.topic_with(topic::<NAME>, <handler>, decode)`",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert!(
+        !brief.contains("Where the payload is not JSON"),
+        "the format known, the conditional is gone: {brief}"
+    );
+}
+
+// The wire format is read from the design's `## APIs and integrations` and
+// `## Technical logic` paragraphs that speak to the slice and from its own
+// words: a sentence naming a format beside an inbound word decides, a
+// format named of an export or in another slice's paragraph does not, and a
+// design naming none leaves the slice JSON's with no word of a format.
+#[tokio::test]
+async fn omnia_wire_read() {
+    let told = "The design says the inbound stream's payload is";
+    let cases: [(&str, Option<&str>); 9] = [
+        (
+            "## APIs and integrations\n\n**Message broker (inbound consumer)** — Endpoints \
+             default to `kafka.example.com:9092` from `KAFKA_HOSTS`. Wire payload is XML; \
+             decoding uses `x2js` before `ta-json` deserialisation under the configured root \
+             element. Deliveries drive order processing (REQ-001).\n",
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
+             Technical logic\n\nXML deserialization uses `xml2js` under the root element from \
+             `Config.rootElement`, then `TypedJSON.deserialize` into `Message`.\n",
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\n**Message broker (inbound consumer)** — topic \
+             `order-placed` from `KAFKA_SOURCE_TOPIC`. A nightly CSV export is written to the \
+             blob store. Deliveries drive order processing (REQ-001).\n",
+            None,
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
+             payload XML read through `x2js`; deliveries set off REQ-001.\n",
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
+             Technical logic\n\n**Deserialisation** — the incoming message parses as CSV, one \
+             record per line.\n",
+            Some("CSV"),
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed` \
+             carries protobuf frames (REQ-001).\n\n**Outbound stream (producer)** — topic \
+             `order-events`, JSON (REQ-001).\n",
+            Some("protobuf"),
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
+             JSON (REQ-001). **Export** — a nightly XML export is written to the blob store \
+             (REQ-001).\n",
+            None,
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `shipments`, XML \
+             notices (REQ-007 through REQ-009).\n",
+            None,
+        ),
+        ("## Overview\n\nThe program consumes XML train updates.\n", None),
+    ];
+    for (design, wire) in cases {
+        let project = omnia_tree().await;
+        let mut slice = slice();
+        slice.design = format!("# Design\n\n{design}");
+        let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+        OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+        model.assert_exhausted();
+
+        let brief = &model.seen()[0].messages[0];
+        match wire {
+            Some(wire) => assert!(
+                brief.contains(&format!("{told} {wire}: ")),
+                "the brief names {wire} for the design {design:?}: {brief}"
+            ),
+            None => assert!(
+                !brief.contains(told),
+                "no wire is read from the design {design:?}: {brief}"
+            ),
+        }
+    }
+}
+
+// The design says the slice's inbound stream carries XML, so a consumer the
+// turn registers through `.topic(..)`, whose decoder is the SDK's JSON one,
+// comes back on the report at its line with `topic_with` over the part's
+// `decode` and the `quick-xml` line named, and the repair is accepted; the
+// same registration under a design naming no format is no finding.
+#[tokio::test]
+async fn omnia_default_decoder() {
+    let design = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                  `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`; \
+                  deliveries set off REQ-001.\n";
+    let function = "/// The behaviour `orders.get-id.return-order` states.\n///\n/// # \
+                    Errors\n///\n/// As the requirement states.\npub fn get_id_return_order() -> \
+                    Result<()> {\n    todo!(\"REQ-001 orders.get-id.return-order: the \
+                    behaviour\")\n}\n";
+    let consumer = "/// A delivery of `order-placed`.\n#[derive(Debug, Deserialize)]\npub struct \
+                    OnPlacedInput {\n    /// The order's id.\n    pub id: \
+                    String,\n}\n\npub(crate) async fn on_placed<P: StateStore>(context: \
+                    Context<P>, input: OnPlacedInput) -> Result<()> {\n    \
+                    context.state().set(&format!(\"orders/{}\", input.id), b\"placed\").await?;\n    \
+                    Ok(())\n}\n";
+    let imports = "use omnia_sdk::Result;\n";
+    let json = "use common::topic;\nuse omnia_sdk::api::{Context, Handlers};\nuse \
+                omnia_sdk::{Capabilities, Result, StateStore};\nuse \
+                serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> \
+                {\n    Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n";
+    let registration = "    Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n";
+    let decoded = "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, \
+                   decode)\n}\n\nfn decode(delivery: &Delivery) -> \
+                   std::result::Result<OnPlacedInput, DecodeError> {\n    \
+                   quick_xml::de::from_reader(delivery.payload.as_slice())\n        \
+                   .map_err(|error| DecodeError::new(error.to_string()))\n}\n";
+    let edits = |project: &Scratch| {
+        project.write(
+            "crates/common/src/topic.rs",
+            format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs")),
+        );
+        edit_files(&[
+            ("crates/orders/src/reading.rs", imports, json),
+            ("crates/orders/src/reading.rs", function, consumer),
+            (
+                "crates/orders/src/lib.rs",
+                "Handlers::from([])",
+                "Handlers::from([reading::handlers()])",
+            ),
+            (
+                "crates/orders/Cargo.toml",
+                "serde_json.workspace = true\n",
+                "serde_json.workspace = true\ncommon.workspace = true\n",
+            ),
+        ])
+    };
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/lib.rs", "crates/orders/Cargo.toml"]}"#;
+
+    // the JSON decoder under an XML stream is refused, and `topic_with` repairs it
+    let project = omnia_tree().await;
+    let mut xml = slice();
+    xml.design = design.to_owned();
+    let model = ScriptedModel::answering([report, report]).calling(0, [edits(&project)]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", registration, decoded),
+            (
+                "crates/orders/src/reading.rs",
+                "use omnia_sdk::api::{Context, Handlers};\n",
+                "use omnia_sdk::api::{Context, DecodeError, Delivery, Handlers};\n",
+            ),
+            (
+                "crates/orders/Cargo.toml",
+                "common.workspace = true\n",
+                "common.workspace = true\nquick-xml.workspace = true\n",
+            ),
+        ])],
+    );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &xml).await.expect("the decoded consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/reading.rs");
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: `Handlers::new().topic(topic::ORDER_PLACED, on_placed)` \
+         decodes the delivery as JSON, and the design says the inbound stream carries XML",
+        line_of(&module, "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, decode)")
+    );
+    for carried in [
+        "`.topic(topic::<NAME>, <handler>)` registers the SDK's decoder, which reads each \
+         delivery as JSON and refuses a payload of any other format as malformed; the design \
+         says this slice's inbound stream carries XML, so register the consumer through \
+         `.topic_with(topic::<NAME>, <handler>, decode)`",
+        "`quick_xml::de::from_reader(delivery.payload.as_slice())`, with `quick-xml.workspace = \
+         true` in the stem's `[dependencies]`",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(module.contains(decoded), "the registration is repaired: {module}");
+
+    // a design naming no format leaves the JSON decoder unremarked
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([report]).calling(0, [edits(&project)]);
+
+    OMNIA.build_slice(&project, &model, &slice()).await.expect("the JSON consumer passes");
+    model.assert_exhausted();
 }
 
 // A turn that covers a requirement whose marker still stands is refused

@@ -11,8 +11,8 @@ use emery_sdk::{Doc, INLINE_BYTES};
 
 use super::lists::{Line, Placement};
 use super::names::escape;
-use super::reference::{self, Laid, Needs};
-use super::stem::{Handler, Kind, Stem};
+use super::reference::{self, Laid, Needs, Wire};
+use super::stem::{Consumer, Handler, Kind, Stem};
 use super::{Scaffold, render};
 use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
 
@@ -69,7 +69,19 @@ impl Scaffold {
         let mut text = String::new();
         for stem in &self.plan.stems {
             stem.brief_files(budget, &mut text);
-            stem.brief_markers(&mut text);
+            stem.brief_markers(&mut text, self.plan.wire);
+        }
+        if let Some(wire) = self.plan.wire {
+            let _ = writeln!(
+                text,
+                "The design says the inbound stream's payload is {wire}: a consumer this slice \
+                 registers goes through `.topic_with(topic::<NAME>, <handler>, decode)` over a \
+                 `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of \
+                 the part that reads the payload through the format's `serde` reader{reader}, \
+                 since `.topic(..)` decodes JSON and refuses every delivery of another format.\n",
+                wire = wire.name(),
+                reader = wire.reader()
+            );
         }
         if !self.plan.start.is_empty() {
             let _ = write!(
@@ -408,7 +420,7 @@ impl Stem {
         );
     }
 
-    fn brief_markers(&self, text: &mut String) {
+    fn brief_markers(&self, text: &mut String, wire: Option<Wire>) {
         self.brief_types(text);
         self.brief_settings(text);
         if !self.module.laid() || self.tests.as_ref().is_some_and(|tests| !tests.laid()) {
@@ -462,18 +474,14 @@ impl Stem {
                 "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
                  part's `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, \
                  then replace this block with the body, narrowing `P: Capabilities` to the \
-                 traits the body reaches. Where the payload is not JSON, register it through \
-                 `.topic_with(topic::{}, {}, decode)` instead, over a `fn decode(delivery: \
-                 &Delivery) -> std::result::Result<{}, DecodeError>` of the part.\n\n{}",
+                 traits the body reaches. {}\n\n{}",
                 consumer.name,
                 consumer.topic,
                 self.module.path,
                 consumer.marker,
                 consumer.constant,
                 consumer.input,
-                consumer.constant,
-                consumer.name,
-                consumer.input,
+                consumer.decoder_hint(wire),
                 render::fenced("rust", &consumer.stub())
             );
         }
@@ -508,6 +516,35 @@ impl Stem {
         if count == 0 {
             text.push_str("None: the slice states no requirement under this stem.\n\n");
         }
+    }
+}
+
+impl Consumer {
+    // The clause of the consumer's entry on its decoder: the format the
+    // design names with the reader for it, else the conditional.
+    fn decoder_hint(&self, wire: Option<Wire>) -> String {
+        wire.map_or_else(
+            || {
+                format!(
+                    "Where the payload is not JSON, register it through `.topic_with(topic::{}, \
+                     {}, decode)` instead, over a `fn decode(delivery: &Delivery) -> \
+                     std::result::Result<{}, DecodeError>` of the part.",
+                    self.constant, self.name, self.input
+                )
+            },
+            |wire| {
+                format!(
+                    "The design says the payload is {}, so register it through \
+                     `.topic_with(topic::{}, {}, decode)` instead, over a `fn decode(delivery: \
+                     &Delivery) -> std::result::Result<{}, DecodeError>` of the part{}.",
+                    wire.name(),
+                    self.constant,
+                    self.name,
+                    self.input,
+                    wire.reader()
+                )
+            },
+        )
     }
 }
 

@@ -344,9 +344,11 @@ async fn emery_omnia() {
     );
     assert!(
         text("src/lib.rs").contains(
-            "    Handlers::from([orders::handlers()]).with_state(Client::new(provider))\n"
+            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
+             the end\n        orders::handlers(),\n    ])\n    \
+             .with_state(Client::new(provider))\n"
         ),
-        "the seeded root router holds the stem's entry the guest added"
+        "the seeded root router holds the stem's entry the guest added under its comment"
     );
     let seeded = |path: &str| {
         omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.as_bytes()

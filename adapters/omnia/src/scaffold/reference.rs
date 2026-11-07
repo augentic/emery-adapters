@@ -222,6 +222,113 @@ const IDIOMS: &[IdiomSpec] = &[
     },
 ];
 
+// The wire format of the inbound stream's payload where the design says it
+// is no JSON, the SDK's default decoder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Wire {
+    Xml,
+    Csv,
+    Protobuf,
+    Avro,
+}
+
+impl Wire {
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Xml => "XML",
+            Self::Csv => "CSV",
+            Self::Protobuf => "protobuf",
+            Self::Avro => "Avro",
+        }
+    }
+
+    // The clause naming the reader a decoder of the wire goes through,
+    // where the seed pins one; empty where the turn chooses.
+    pub const fn reader(self) -> &'static str {
+        match self {
+            Self::Xml => {
+                " — `quick_xml::de::from_reader(delivery.payload.as_slice())`, with \
+                 `quick-xml.workspace = true` in the stem's `[dependencies]`"
+            }
+            Self::Csv | Self::Protobuf | Self::Avro => "",
+        }
+    }
+}
+
+const WIRE_WORDS: &[(Wire, &[&str])] = &[
+    (Wire::Xml, &["xml"]),
+    (Wire::Csv, &["csv"]),
+    (Wire::Protobuf, &["protobuf", "proto"]),
+    (Wire::Avro, &["avro"]),
+];
+
+// The words a sentence spells of a delivery being read, so a format named
+// beside one is the inbound payload's and not an export's.
+const INBOUND_WORDS: &[&str] = &[
+    "consume",
+    "consumed",
+    "consumer",
+    "consumers",
+    "consumes",
+    "consuming",
+    "decode",
+    "decoded",
+    "decodes",
+    "decoding",
+    "deliver",
+    "delivered",
+    "deliveries",
+    "delivers",
+    "delivery",
+    "deserialisation",
+    "deserialise",
+    "deserialised",
+    "deserialises",
+    "deserialising",
+    "deserialization",
+    "deserialize",
+    "deserialized",
+    "deserializes",
+    "deserializing",
+    "inbound",
+    "incoming",
+    "parse",
+    "parsed",
+    "parses",
+    "received",
+    "receives",
+    "subscribe",
+    "subscribed",
+    "subscriber",
+    "subscribers",
+    "subscribes",
+    "subscription",
+];
+
+// The words a sentence spells of a message leaving, so a format named
+// alone in the inbound stream's bullet is not read from its export clause.
+const OUTBOUND_WORDS: &[&str] = &[
+    "emits",
+    "emitted",
+    "export",
+    "exported",
+    "exports",
+    "outbound",
+    "outgoing",
+    "producer",
+    "producers",
+    "publish",
+    "published",
+    "publishes",
+    "publishing",
+    "response",
+    "responses",
+    "sends",
+    "sent",
+    "writes",
+    "written",
+];
+
 // The translation table's row for each role, by the words its first cell
 // opens with.
 const TRANSLATION_ROWS: &[(Role, &str)] = &[
@@ -333,6 +440,79 @@ pub fn roles(slice: &Slice) -> BTreeSet<Role> {
         .collect()
 }
 
+// The wire format of the inbound stream the slice consumes, where the design
+// says it is no JSON: the first paragraph naming one decides, read from the
+// design's `## APIs and integrations` and `## Technical logic` paragraphs
+// that speak to the slice, as `roles` reads them, then from the slice's own
+// text. None means JSON, the default decoder's. The wire is the slice's, not
+// a topic's: a slice consuming two streams of two formats is told the first
+// found.
+pub fn wire(slice: &Slice) -> Option<Wire> {
+    let ids: Vec<&str> =
+        slice.requirements.iter().map(|requirement| requirement.id.as_str()).collect();
+    let mut texts: Vec<&str> = Vec::new();
+    for heading in ["APIs and integrations", "Technical logic"] {
+        if let Some((_, section)) = section(&slice.design, heading) {
+            for paragraph in section.split("\n\n") {
+                let cited = cited(paragraph);
+                if cited.is_empty() || cited.iter().any(|id| ids.contains(&id.as_str())) {
+                    texts.push(paragraph);
+                }
+            }
+        }
+    }
+    texts.extend(own_texts(slice));
+    texts.iter().find_map(|text| wire_in(text))
+}
+
+// The wire a paragraph names: a sentence spelling a format beside an inbound
+// word, or, where the paragraph's lead spells one (the inbound stream's own
+// bullet), a sentence spelling the format alone, with no word of a message
+// leaving.
+fn wire_in(paragraph: &str) -> Option<Wire> {
+    let mut sentences = sentences(paragraph).peekable();
+    let inbound = sentences.peek().is_some_and(|lead| spells(lead, INBOUND_WORDS));
+    sentences.find_map(|sentence| {
+        let wire = wire_of(sentence)?;
+        (spells(sentence, INBOUND_WORDS) || (inbound && !spells(sentence, OUTBOUND_WORDS)))
+            .then_some(wire)
+    })
+}
+
+// The wire one sentence spells, whatever stands beside it.
+fn wire_of(sentence: &str) -> Option<Wire> {
+    WIRE_WORDS.iter().find(|(_, words)| spells(sentence, words)).map(|(wire, _)| *wire)
+}
+
+fn spells(text: &str, words: &[&str]) -> bool {
+    let mut spelled = BTreeSet::new();
+    spell(text, &mut spelled);
+    words.iter().any(|word| spelled.contains(*word))
+}
+
+// The sentences of `text`: each line cut after a full stop, a semicolon, a
+// question mark, or an exclamation mark that a space or the line's end
+// follows, so a dot within a path or a version continues its sentence.
+fn sentences(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().flat_map(|line| {
+        let mut sentences = Vec::new();
+        let mut start = 0;
+        let bytes = line.as_bytes();
+        for (at, byte) in bytes.iter().enumerate() {
+            if matches!(byte, b'.' | b';' | b'?' | b'!')
+                && bytes.get(at + 1).is_none_or(u8::is_ascii_whitespace)
+            {
+                sentences.push(&line[start..=at]);
+                start = at + 1;
+            }
+        }
+        if start < line.len() {
+            sentences.push(&line[start..]);
+        }
+        sentences
+    })
+}
+
 // The idioms the slice's own text calls for.
 pub fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
     let spelled = own_words(slice);
@@ -343,29 +523,32 @@ pub fn idioms(slice: &Slice) -> BTreeSet<Idiom> {
         .collect()
 }
 
-// Every word the slice's own text spells: its requirements, their
-// scenarios, and its brief.
+// Every word the slice's own text spells.
 fn own_words(slice: &Slice) -> BTreeSet<String> {
     let mut spelled = BTreeSet::new();
-    for requirement in &slice.requirements {
-        spell(&requirement.subject, &mut spelled);
-        for paragraph in &requirement.statement {
-            spell(paragraph, &mut spelled);
-        }
-        for scenario in &requirement.scenarios {
-            let lines = iter::once(&scenario.name)
-                .chain(&scenario.given)
-                .chain([&scenario.when, &scenario.then])
-                .chain(&scenario.and);
-            for line in lines {
-                spell(line, &mut spelled);
-            }
-        }
-    }
-    for paragraph in &slice.brief {
-        spell(paragraph, &mut spelled);
+    for text in own_texts(slice) {
+        spell(text, &mut spelled);
     }
     spelled
+}
+
+// The slice's own texts: its requirements' subjects and statements, their
+// scenarios' lines, and its brief.
+fn own_texts(slice: &Slice) -> Vec<&str> {
+    let mut texts = Vec::new();
+    for requirement in &slice.requirements {
+        texts.push(requirement.subject.as_str());
+        texts.extend(requirement.statement.iter().map(String::as_str));
+        for scenario in &requirement.scenarios {
+            texts.push(scenario.name.as_str());
+            texts.extend(scenario.given.iter().map(String::as_str));
+            texts.push(scenario.when.as_str());
+            texts.push(scenario.then.as_str());
+            texts.extend(scenario.and.iter().map(String::as_str));
+        }
+    }
+    texts.extend(slice.brief.iter().map(String::as_str));
+    texts
 }
 
 // Adds every word `text` spells, lowercased: each run of ASCII

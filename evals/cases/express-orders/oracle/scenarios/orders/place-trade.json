@@ -1,0 +1,70 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 600
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "trade@example.nz",
+          "name": "Trade Co",
+          "tier": "trade"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          },
+          "courierNote": "Leave at the loading dock"
+        }
+      },
+      "capture": {
+        "order": "id"
+      },
+      "expect": {
+        "status": 201,
+        "body": {
+          "courierNote": "Leave at the loading dock",
+          "state": "pending",
+          "subtotalCents": 3000,
+          "discountCents": 300,
+          "shippingCents": 700,
+          "gstCents": 510,
+          "totalCents": 3910
+        }
+      }
+    }
+  ]
+}

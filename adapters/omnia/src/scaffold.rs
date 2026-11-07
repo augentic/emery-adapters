@@ -17,6 +17,7 @@ use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
 use emery_sdk::{Error, Standing, push_unique, server_error, unique, write_whole};
 
 use self::lists::{Lists, Placement, Topics};
+pub use self::reference::Wire;
 use self::reference::{Idiom, Role};
 use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
@@ -32,6 +33,7 @@ pub struct Plan {
     lists: Lists,
     roles: BTreeSet<Role>,
     idioms: BTreeSet<Idiom>,
+    wire: Option<Wire>,
 }
 
 // A slice's skeleton as written, which the turn fills and the check holds
@@ -71,6 +73,7 @@ impl Scaffold {
         let design_keys = types::design_keys(&slice.design);
         let idioms = reference::idioms(slice);
         let roles = reference::roles(slice);
+        let wire = reference::wire(slice);
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
@@ -137,6 +140,7 @@ impl Scaffold {
             lists,
             roles,
             idioms,
+            wire,
         })
     }
 
@@ -202,6 +206,12 @@ impl Scaffold {
 
     pub const fn existing(&self) -> &BTreeSet<String> {
         &self.plan.existing
+    }
+
+    // The wire format the design says the slice's inbound stream carries,
+    // where it is no JSON.
+    pub const fn wire(&self) -> Option<Wire> {
+        self.plan.wire
     }
 
     pub fn expected_tests(&self) -> impl Iterator<Item = ExpectedTest<'_>> {

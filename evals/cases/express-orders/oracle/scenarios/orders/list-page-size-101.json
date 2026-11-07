@@ -1,0 +1,16 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/orders?pageSize=101"
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "error": "invalid-request"
+        }
+      }
+    }
+  ]
+}

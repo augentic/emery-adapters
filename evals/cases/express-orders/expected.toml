@@ -1,6 +1,13 @@
 # An Express orders API over pg and Redis with zod validation, a `tsconfig`
 # `paths` alias (`@app/*`), and a postcode table that carries the kept tree
 # past the SDK's inline budget, so the tree is surveyed and mined by surface.
+# Beside the source sits `oracle/`, the service's behaviour recorded as 57
+# HTTP scenarios (each a sequence of requests with the status, headers, and
+# body fields the Express service answers, the totals recomputed from
+# `pricing.ts`), which a `--build --target omnia` run drives through the
+# built guest over an in-memory table store seeded from `schema.sql`.
+
+reference = "evals/cases/express-orders/oracle"
 
 [[source]]
 adapter = "typescript"

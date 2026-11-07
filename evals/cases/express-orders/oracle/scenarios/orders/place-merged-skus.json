@@ -1,0 +1,86 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 2100
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 1
+            },
+            {
+              "sku": "GAD-002",
+              "quantity": 1
+            },
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "order": "id"
+      },
+      "expect": {
+        "status": 201,
+        "body": {
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 3,
+              "unitCents": 1500
+            },
+            {
+              "sku": "GAD-002",
+              "quantity": 1,
+              "unitCents": 2500
+            }
+          ],
+          "subtotalCents": 7000,
+          "discountCents": 0,
+          "shippingCents": 700,
+          "gstCents": 1155,
+          "totalCents": 8855
+        }
+      }
+    }
+  ]
+}

@@ -6,8 +6,8 @@ use std::mem;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprLit, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList, Path, Type, UseTree,
-    Visibility,
+    Expr, ExprLit, ExprMethodCall, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList,
+    Path, Type, UseTree, Visibility,
 };
 
 // Where `syn` refused a file, and why.
@@ -396,6 +396,70 @@ fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
         current_line += 1;
     }
     (current_line == line && column == 0).then_some(offset)
+}
+
+// Every `.topic(..)` registration of the top-level `fn handlers` in `file`
+// whose handler is filled, at its line: the registration that leaves the
+// decoder the SDK's, JSON. One whose handler still holds its marker is a
+// stub the scaffold laid, left to the turn.
+pub fn json_registrations(file: &syn::File) -> Vec<usize> {
+    let stubs: BTreeSet<String> = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Fn(item) if holds_marker(&item.block) => Some(item.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    let mut found = JsonRegistrations {
+        stubs: &stubs,
+        lines: Vec::new(),
+    };
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            found.visit_block(&item.block);
+        }
+    }
+    found.lines
+}
+
+struct JsonRegistrations<'s> {
+    stubs: &'s BTreeSet<String>,
+    lines: Vec<usize>,
+}
+
+impl<'ast> Visit<'ast> for JsonRegistrations<'_> {
+    fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
+        if call.method == "topic" {
+            let handler = call.args.iter().nth(1).and_then(|arg| match arg {
+                Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
+                _ => None,
+            });
+            if !handler.is_some_and(|handler| self.stubs.contains(&handler)) {
+                self.lines.push(line(call.method.span()));
+            }
+        }
+        visit::visit_expr_method_call(self, call);
+    }
+}
+
+// Whether `block` holds a `todo!("REQ-..")` marker, so the item is a stub
+// the scaffold laid and the turn has not filled.
+pub fn holds_marker(block: &syn::Block) -> bool {
+    struct Markers(bool);
+
+    impl<'ast> Visit<'ast> for Markers {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= todo_marker(node).is_some();
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut markers = Markers(false);
+    markers.visit_block(block);
+    markers.0
 }
 
 // Every `pub(crate) async fn(<context>: Context<..>, ..)` handler in

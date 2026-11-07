@@ -227,11 +227,16 @@ impl Tree<'_> {
             "the host runs a stem through its `handlers()` alone, so a part that publishes in a \
              stem no route or topic reaches, and no other stem calls, is never run: the trigger \
              is the inbound stream the design's `## APIs and integrations` lists for the stem — \
-             its bullet spells the topic and names the requirement its deliveries set off — \
-             never a requirement at the registration, which the host owns; add it through \
-             `edit_files`: the topic's constant at the end of `{}`, `.topic(topic::<NAME>, \
-             <handler>)` in the part's `handlers()` with the handler calling the earlier parts' \
-             functions, and `<part>::handlers(),` in the entry's array:\n{}",
+             its bullet spells the topic, the payload's wire format, and the requirement its \
+             deliveries set off — never a requirement at the registration, which the host owns; \
+             add it through `edit_files`: the topic's constant at the end of `{}`, \
+             `.topic(topic::<NAME>, <handler>)` in the part's `handlers()` with the handler \
+             calling the earlier parts' functions — `.topic_with(topic::<NAME>, <handler>, \
+             decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, \
+             DecodeError>` of the part where the payload is XML, CSV, or bytes rather than JSON, \
+             `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML under \
+             `quick-xml.workspace = true` in the stem's `[dependencies]` — and \
+             `<part>::handlers(),` in the entry's array:\n{}",
             layout::TOPICS,
             lines.join("\n")
         ))

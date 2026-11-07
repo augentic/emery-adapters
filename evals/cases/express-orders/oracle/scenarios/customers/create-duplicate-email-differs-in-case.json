@@ -1,0 +1,36 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "Ada@Example.NZ",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ADA@EXAMPLE.NZ",
+          "name": "Ada Again"
+        }
+      },
+      "expect": {
+        "status": 409,
+        "body": {
+          "error": "conflict"
+        }
+      }
+    }
+  ]
+}

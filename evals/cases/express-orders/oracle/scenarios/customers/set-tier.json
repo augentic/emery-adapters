@@ -1,0 +1,49 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/api/customers/{customer}/tier",
+        "body": {
+          "tier": "trade"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "id": "{customer}",
+          "email": "ada@example.nz",
+          "tier": "trade"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/customers/{customer}"
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "tier": "trade"
+        }
+      }
+    }
+  ]
+}

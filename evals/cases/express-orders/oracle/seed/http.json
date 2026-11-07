@@ -1,0 +1,8 @@
+{
+  "/rates": {
+    "quotes": [
+      { "courier": "nzcouriers", "service": "overnight", "price_cents": 700, "eta_days": 1 },
+      { "courier": "aramex", "service": "economy", "price_cents": 1200, "eta_days": 3 }
+    ]
+  }
+}
