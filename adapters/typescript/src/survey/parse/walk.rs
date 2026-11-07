@@ -1,7 +1,5 @@
 //! Walks one module's syntax tree into its `Module`.
 
-use std::borrow::Cow;
-
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{
     self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, Dynamic,
@@ -718,24 +716,25 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_import_declaration(&mut self, it: &ImportDeclaration<'a>) {
-        let specifier = it.source.value.to_string();
-        let type_only = it.import_kind == ImportOrExportKind::Type;
-        match &it.specifiers {
-            None => self.import("", &specifier, Imported::Effect, false),
-            Some(specifiers) => {
-                for specifier_node in specifiers {
-                    match specifier_node {
-                        ImportDeclarationSpecifier::ImportSpecifier(s) => self.import(
-                            &s.local.name,
-                            &specifier,
-                            Imported::Named(s.imported.name().to_string()),
-                            type_only || s.import_kind == ImportOrExportKind::Type,
-                        ),
-                        ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
-                            self.import(&s.local.name, &specifier, Imported::Default, type_only);
-                        }
-                        ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
-                            self.import(&s.local.name, &specifier, Imported::Whole, type_only);
+        if let Some(specifier) = it.source.value.as_str() {
+            let type_only = it.import_kind == ImportOrExportKind::Type;
+            match &it.specifiers {
+                None => self.import("", specifier, Imported::Effect, false),
+                Some(specifiers) => {
+                    for specifier_node in specifiers {
+                        match specifier_node {
+                            ImportDeclarationSpecifier::ImportSpecifier(s) => self.import(
+                                &s.local.name,
+                                specifier,
+                                Imported::Named(s.imported.name().to_string()),
+                                type_only || s.import_kind == ImportOrExportKind::Type,
+                            ),
+                            ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
+                                self.import(&s.local.name, specifier, Imported::Default, type_only);
+                            }
+                            ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
+                                self.import(&s.local.name, specifier, Imported::Whole, type_only);
+                            }
                         }
                     }
                 }
@@ -773,27 +772,31 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_export_from_declaration(&mut self, it: &ExportFromDeclaration<'a>) {
-        let names = it
-            .specifiers
-            .iter()
-            .map(|s| (s.local.name().to_string(), s.exported.name().to_string()))
-            .collect();
-        self.module.reexports.push(Reexport {
-            specifier: it.source.value.to_string(),
-            names: Some(names),
-            type_only: it.export_kind == ImportOrExportKind::Type,
-            target: None,
-        });
+        if let Some(specifier) = it.source.value.as_str() {
+            let names = it
+                .specifiers
+                .iter()
+                .map(|s| (s.local.name().to_string(), s.exported.name().to_string()))
+                .collect();
+            self.module.reexports.push(Reexport {
+                specifier: specifier.to_owned(),
+                names: Some(names),
+                type_only: it.export_kind == ImportOrExportKind::Type,
+                target: None,
+            });
+        }
         walk::walk_export_from_declaration(self, it);
     }
 
     fn visit_export_all_declaration(&mut self, it: &ExportAllDeclaration<'a>) {
-        self.module.reexports.push(Reexport {
-            specifier: it.source.value.to_string(),
-            names: None,
-            type_only: it.export_kind == ImportOrExportKind::Type,
-            target: None,
-        });
+        if let Some(specifier) = it.source.value.as_str() {
+            self.module.reexports.push(Reexport {
+                specifier: specifier.to_owned(),
+                names: None,
+                type_only: it.export_kind == ImportOrExportKind::Type,
+                target: None,
+            });
+        }
         walk::walk_export_all_declaration(self, it);
     }
 
@@ -1169,9 +1172,9 @@ fn head_path(expr: &Expression<'_>) -> Option<Vec<String>> {
 
 fn string_value(expr: &Expression<'_>) -> Option<String> {
     match bare(expr) {
-        Expression::StringLiteral(literal) => Some(literal.value.to_string()),
+        Expression::StringLiteral(literal) => literal.value.as_str().map(str::to_owned),
         Expression::TemplateLiteral(template) => {
-            template.single_quasi().map(|quasi| quasi.to_string())
+            template.single_quasi().and_then(|quasi| quasi.as_str().map(str::to_owned))
         }
         _ => None,
     }
@@ -1241,7 +1244,7 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
             let [head] = template.expressions.as_slice() else { return None };
             let [lead, tail] = template.quasis.as_slice() else { return None };
             (is_module_dir(head) && lead.value.cooked.is_some_and(|lead| lead.is_empty()))
-                .then(|| tail.value.cooked.map(|tail| tail.to_string()))
+                .then(|| tail.value.cooked.and_then(|tail| tail.as_str().map(str::to_owned)))
                 .flatten()
         }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
@@ -1254,7 +1257,7 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
 fn literal_head(expr: &Expression<'_>) -> Option<String> {
     let lead = match bare(expr) {
         Expression::TemplateLiteral(template) => {
-            template.quasis.first()?.value.cooked.map(|lead| lead.to_string())?
+            template.quasis.first()?.value.cooked?.as_str()?.to_owned()
         }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
             string_value(&binary.left)?
@@ -1327,7 +1330,7 @@ fn pattern_name(pattern: &BindingPattern<'_>) -> Option<String> {
 fn key_name(key: &PropertyKey<'_>) -> Option<String> {
     match key {
         PropertyKey::PrivateIdentifier(id) => Some(format!("#{}", id.name)),
-        other => other.static_name().map(Cow::into_owned),
+        other => other.static_name().and_then(|name| name.as_str().map(str::to_owned)),
     }
 }
 

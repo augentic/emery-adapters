@@ -497,13 +497,13 @@ impl<'a> Tree<'a> {
         let finding = if self.lacks(Manifest::PATH) {
             format!(
                 "the tree lacks the root `{}`; write it whole through `write_files` as the \
-                 template spells it, then add each stem's line to its two lists:\n{}",
+                 template spells it, then add each stem's line to its list:\n{}",
                 Manifest::PATH,
                 layout::template(Manifest::PATH)?
             )
         } else {
             format!(
-                "the root `{}` changed outside its two stem lists; the pins, the lints, the `host` \
+                "the root `{}` changed outside its stem list; the pins, the lints, the `host` \
                  feature, and the target tables stand as the template spells them, so put the `-` \
                  lines back and drop the `+` lines through `edit_files`:\n{drift}",
                 Manifest::PATH

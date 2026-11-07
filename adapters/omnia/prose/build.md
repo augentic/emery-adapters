@@ -24,9 +24,9 @@ Other slices of the wave build beside you from the same commit. Your files merge
 Work in this order. Do not skip ahead.
 
 1. Read the brief whole. It carries the text of every file the adapter wrote or extended for you. Do not read those files again.
-2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it. When the brief names a module or test file as **held, extended** (a later slice of a part at `index > 1`), the adapter has already appended your new markers, test stubs, and route registrations to the held file: fill only your new markers through `edit_files` and never rewrite or delete the types, handlers, functions, or tests that earlier slices of the part built.
+2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it. When the brief names a module or test file as **held, extended** (a later slice of a part at `index > 1`), the adapter has already appended your new markers, test stubs, and registrations to the held file: fill only your new markers through `edit_files` and never rewrite or delete the types, handlers, functions, or tests that earlier slices of the part built.
 3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit: its `find` the key the brief quotes beside the marker, alone, and its `replace` the whole text that takes the quoted block's place, indented as the block is.
-4. Add the list lines and any unanchored route or topic registrations the brief says are yours to add, through `edit_files`.
+4. Add the list lines and any unanchored registrations the brief says are yours to add, through `edit_files`.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
@@ -43,24 +43,25 @@ Write through this call's two tools alone.
 ## What the adapter scaffolded
 
 The [layout](references/layout.md) is the one shape every slice follows.
-The root package is the guest. `common` holds what every stem shares.
-Each stem is a crate under `crates/` whose entry composes its parts' routes and topics. The root lists merge the stems.
+The root package is the guest. `common` holds the topic table every stem shares.
+Each stem is a crate under `crates/` whose entry composes its parts' `handlers()` into one `Handlers`. The root's `router()` composes the stems' the same way.
 
 The adapter laid your slice's place in it before this turn, from the requirements and types the slice carries:
 
 - The stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them.
 - Your part, `crates/<stem>/src/<part>.rs`:
-  - a path constant and a `.route(..)` per route your requirements carry;
-  - a handler per route, over an input struct and an output struct;
-  - a `topics(..)` and a consumer per message they carry, with its constant in the topic table;
+  - a path constant and a `.route(..)` in its `handlers()` per route your requirements carry;
+  - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body;
+  - a `.topic(..)` and a consumer per message they carry, with its constant in the topic table;
+  - a `<Part>Settings` struct over the settings your slice spells, where it spells any;
   - a `pub fn` per requirement carrying neither;
   - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable.
-- A route function, `<name>_route`, over `handle_with`, for a `POST` handler and for a handler whose scenarios spell a status other than `200`.
-  Its encoder spells `StatusCode::OK`; change that token for a `201` or a `503` on an `Ok`, or declare `<name>_route` as the marker says where the scaffold laid a verb.
+- A handler answers `Result<Json<Output>>`, or `Result<(StatusCode, Json<Output>)>` where a scenario spells a status other than `200`.
+  Answer the status the outcome earns: `StatusCode::CREATED` for a creation, `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down.
   An error status, a `404`, is the error the handler returns.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
   Each test already sends the request or the delivery its requirement carries.
-- Your lines in every list: the stem's four at the root and the part's in the entry.
+- Your lines in every list: the stem's at the root, `<stem>::handlers()` in `src/lib.rs` and `<stem> = { path = "crates/<stem>" }` in `Cargo.toml`, and the part's in the entry.
 
 Each place your code goes is a marker: `todo!("REQ-.. <subject>: ..")` in a body, or `{}` on a type.
 The brief quotes every marker with its key, the one block to replace, and the file it stands in.
@@ -105,13 +106,15 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
 
 Fill the handler as the [handlers](references/handlers.md) reference spells it.
 
-- Fill `<Name>Input` with one field per path parameter, which the adapter scaffolded, query parameter, or body field.
+- Fill `<Name>Input`, where the route carries a body, with the body's fields; a path parameter is already a `Path` extractor on the handler.
 - Fill `<Name>Output` with the response's fields.
-- Replace the block the brief quotes, the `let _ = (&input, &context);` line and the `todo!`, with the body.
-- A handler's `Ok` is answered `200` as JSON. Another status is changed in the route function, as said above.
-- Reach the host through `context.provider()` alone.
-- A setting is a `pub(crate) const` of your part whose value is its name. Read it through `Config::get` at use.
-- A topic you publish is a constant of `common::topic`, qualified through `config::topic`.
+- Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
+- A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
+- Reach the host through the context's accessors: `context.state()`, `context.config()`, `context.http()`, `context.publish()`, `context.tables()`.
+  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound is a finding of the verify.
+- A setting is a field of your part's `<Part>Settings` struct. Load it with `<Part>Settings::load(context.config()).await?` where the body needs it.
+  Narrow each field from `String` to the type its value parses as.
+- A topic you publish is a constant of `common::topic`: `context.publish().send(topic::NAME, &Message::json(&value)?).await?`.
 - Every failure is a classified `omnia_sdk::Error`, propagated with `?`: a fetch that errors, a status that is not success, a body that does not parse.
   Never catch one and answer `Ok(())` or an empty collection.
 - One handler serves every requirement its marker names. Two requirements at one method and path are one route.
@@ -124,7 +127,7 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
     {
       "path": "crates/orders/src/reading.rs",
       "find": "REQ-030 orders.get-id.return-order: the handler",
-      "replace": "    let raw = StateStore::get(context.provider(), &input.id).await?\n        .ok_or_else(|| not_found!(\"order `{}`\", input.id))?;\n    Ok(serde_json::from_slice(&raw)?)"
+      "replace": "    let order = context\n        .state()\n        .get_json(&order_key(&id))\n        .await?\n        .ok_or_else(|| not_found!(\"order `{id}`\"))?;\n    Ok(Json(order))"
     }
   ]
 }
@@ -133,12 +136,13 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
 ### A consumer
 
 A requirement carrying a message, its `Message:` line, is a consumer the adapter scaffolded.
-It is `<Name>Input` over the delivery and a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>`.
-It is registered in your part's `topics(..)` under the table's constant for the topic.
-The adapter declared the constant at the end of `crates/common/src/topic.rs` where no slice had, and added the `<part>::topics,` entry to the stem's entry.
+It is `<Name>Input` over the delivery and a `pub(crate) async fn(context, input) -> Result<()>`.
+It is registered in your part's `handlers()` under the table's constant for the topic, `.topic(topic::<NAME>, <handler>)`.
+The adapter declared the constant at the end of `crates/common/src/topic.rs` where no slice had, and added `common.workspace = true` to the stem's manifest.
 
 - Fill the input with the delivery's fields.
 - Write the body as a handler's. A rejected delivery is `Err(bad_request!(..))`, never `Ok(())`.
+- Where the payload is not JSON, register it through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part.
 - The registration itself is never a requirement. The host registers and acknowledges.
 
 ```json
@@ -147,7 +151,7 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
     {
       "path": "crates/orders/src/fulfilment.rs",
       "find": "REQ-032 orders.on-placed.count-lines: the consumer",
-      "replace": "    let delta = i64::from(input.lines);\n    StateStore::increment(context.provider(), LINES_PLACED, delta).await?;\n    Ok(())"
+      "replace": "    let delta = i64::from(input.lines);\n    context.state().increment(LINES_PLACED, delta).await?;\n    Ok(())"
     }
   ]
 }
@@ -169,7 +173,7 @@ A requirement carrying neither a route nor a message is a `pub fn` with a marker
     {
       "path": "crates/orders/src/reading.rs",
       "find": "REQ-033 orders.within-limit: the behaviour",
-      "replace": "pub fn within_limit(n: usize, max: usize) -> omnia_sdk::Result<()> {\n    if n > max {\n        return Err(bad_request!(\"{n} > {max}\"));\n    }\n    Ok(())\n}"
+      "replace": "pub fn within_limit(n: usize, max: usize) -> Result<()> {\n    if n > max {\n        return Err(bad_request!(\"{n} > {max}\"));\n    }\n    Ok(())\n}"
     }
   ]
 }
@@ -179,12 +183,11 @@ Where such a requirement consumes a topic that no `Message:` line carries, the f
 The design's `## APIs and integrations` lists an inbound stream whose bullet cites it or another requirement of your stem.
 Or the stream's deliveries are what its scenario's `when` describes.
 
-- Make it a `pub(crate) async fn(input, context) -> omnia_sdk::Result<()>`.
-- Add a `pub(crate) fn topics(router, env)` to your part: `router.route(config::topic_for(env, topic::<NAME>), messaging::consume(<handler>))`.
-- Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it.
-- Add one `<part>::topics,` entry at the end of the array in the entry's `topics(..)`.
+- Make it a `pub(crate) async fn(context: Context<P>, input: <Input>) -> Result<()>`.
+- Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`.
+- Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it, and `common.workspace = true` at the end of your stem's `[dependencies]` where it lacks the line.
 
-A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `config::topic`.
+A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `context.publish()`.
 The slice that ends a pipeline registers the consumer where no part of the stem has. That is the slice that publishes, or that `depends-on` the stem's other slices.
 Its handler calls the earlier parts' functions in the pipeline's order.
 A part that publishes in a stem no route or topic reaches, and no other stem calls, is a finding on your report. Nothing ever runs it.
@@ -193,13 +196,14 @@ A part that publishes in a stem no route or topic reaches, and no other stem cal
 
 Each scenario is a `#[tokio::test]` named by it, under `#[ignore = "<id> <scenario>: unfilled"]`.
 The adapter laid its act from the requirement's route or message:
-a request through `send(provider(), request)`, a delivery through `deliver(provider(), topic::<NAME>, payload)`, or `provider()` alone.
+a request through `call(&provider, request)`, a delivery through `deliver(&router(&provider), topic::<NAME>, payload)`, or `provider()` alone.
 Replace the block the brief quotes with the filled test, as [testing](references/testing.md) spells it.
 
 - The `#[ignore = ..]` line goes.
 - The arrangement is over the doubles of `omnia_test::guest`. A service the tree does not run is a double handed to the provider, never a live connection.
 - The act stays as laid, with the parameter, the body, or the payload the scenario states in place of the placeholders.
 - The assertions are the scenario's: the status, the body, and what the doubles hold after.
+- Where your part has settings, the prelude's `provider()` seeds each key with a `"<value>"` placeholder. Replace each with the value the scenarios run under.
 - A scenario the specification gives you is a test. Invent none. Delete none.
 - A scenario you cannot yet satisfy keeps its ignored test as scaffolded. Its requirement stays out of `covered`.
 
@@ -217,13 +221,13 @@ Replace the block the brief quotes with the filled test, as [testing](references
 
 ### A list line
 
-The adapter added the stem's line in each root list, the part's `pub mod` line and its `routes()` and `topics,` entries in the entry, and the constant of each topic your requirements carry.
+The adapter added the stem's line in each root list, the part's `pub mod` line and its `<part>::handlers()` entry in the entry, and the constant of each topic your requirements carry.
 The brief says `added` or `already held` for each.
 What the adapter does not derive is yours to add, at the end of its list, where the layout's table says:
 
-- The constant of a topic you publish to.
-- A `<part>::topics,` entry for a consumer no `Message:` line carried.
-- One `<crate>.workspace = true` line at the end of your stem's `[dependencies]` for each crate your code uses beyond the six the manifest holds.
+- The constant of a topic you publish to, and the `common.workspace = true` line of your stem's manifest where it lacks one.
+- A `.topic(..)` registration for a consumer no `Message:` line carried.
+- One `<crate>.workspace = true` line at the end of your stem's `[dependencies]` for each crate your code uses beyond the four the manifest holds.
   A crate the root manifest does not pin carries its version instead.
 - A line the brief says was not added, because the file lacked its anchor.
 
@@ -235,13 +239,13 @@ The merge keeps every form it is given, and the verify then has two.
   "edits": [
     {
       "path": "crates/orders/Cargo.toml",
-      "find": "tracing.workspace = true\n",
-      "replace": "tracing.workspace = true\nchrono.workspace = true\n"
+      "find": "serde_json.workspace = true\n",
+      "replace": "serde_json.workspace = true\nchrono.workspace = true\n"
     },
     {
       "path": "crates/common/src/topic.rs",
-      "find": "pub const ORDER_PLACED: &str = \"orders-placed.v1\";\n",
-      "replace": "pub const ORDER_PLACED: &str = \"orders-placed.v1\";\n/// An order was read.\npub const ORDER_READ: &str = \"orders-read.v1\";\n"
+      "find": "pub const ORDER_PLACED: &str = \"order-placed\";\n",
+      "replace": "pub const ORDER_PLACED: &str = \"order-placed\";\n/// An order was read.\npub const ORDER_READ: &str = \"order-read\";\n"
     }
   ]
 }
@@ -252,11 +256,11 @@ The merge keeps every form it is given, and the verify then has two.
 - No crate. Your stem's is scaffolded, one word whatever its hyphens: `crates/order-items/` for `order-items`.
   A crate written under any other name is a finding.
 - No `crates/start/`. Never add `start` to `Cargo.toml`. The seed and the host are the program's start.
-- No `mount`, no router of your own beyond your part's `routes()`, no change to `src/lib.rs`, and no edit to another stem's crate.
-  The host runs a stem through its `routes()` and `topics(..)` alone.
-- No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock` is the exemplar's guest template, scaffolded when the repository was initialised.
+- No `mount`, no router of your own beyond your part's `handlers()`, no change to `src/lib.rs` outside its array, and no edit to another stem's crate.
+  The host runs a stem through its `handlers()` alone.
+- No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock`, the root `Cargo.toml`'s list, and `src/lib.rs`'s array is the exemplar's guest template, scaffolded when the repository was initialised.
   Read one where you need its text. Write or report none.
-- No change to the root `Cargo.toml` outside its two stem lists. A pin, a lint, or a feature changed there is a finding with the lines named.
+- No change to the root `Cargo.toml` outside its stem list. A pin, a lint, or a feature changed there is a finding with the lines named.
 - No scaffolded file written whole without what its skeleton holds. Edit it, or send it whole with every marker and name kept.
 - No file left behind by a check or a test, beside your files and `Cargo.lock`. Remove such a stray through `delete`.
 
@@ -267,8 +271,8 @@ Where your slice carries requirements under `start` beside its own stem's, read 
 - A `start` requirement carrying a route is laid under the crate of the stem its route's resource names: `GET /health/live` in `crates/health/`.
   The brief says so. Fill it as any handler.
 - A `start` requirement carrying no route gets nothing scaffolded. The seed and the host satisfy what it states, or nothing does.
-- Cover one the seed and the host satisfy: the component answers HTTP and deliveries, the routers reach every handler, the settings come from the host.
-- A deployment setting a handler reads is a `pub(crate) const` of the part that reads it, written by that part's slice.
+- Cover one the seed and the host satisfy: the component answers HTTP and deliveries, the router reaches every handler, the settings come from the host.
+- A deployment setting a handler reads is a field of the `Settings` struct of the part that reads it, written by that part's slice.
 - Credential validation or rotation, client construction, table prefetch, a flag that decided whether a consumer ran, signals, periodic jobs, and lifecycle types:
   write nothing, and leave them out of `covered`.
 - A slice of `start` requirements alone, none carrying a route, is never put to you.
@@ -280,7 +284,7 @@ Where your slice carries requirements under `start` beside its own stem's, read 
 - Where integrating your slice exposes a defect in the earlier part, an outer XML root wrapper, a missing wire field, a filter mismatch, fix that part through `edit_files`.
   Keep every test under `crates/<stem>/tests/` passing.
 - A test of yours that compensates for the earlier part has found that defect. Repair the part. Let the test state the wire as the fixture spells it.
-- Where your slice depends on another stem, depend on its crate as `<other>.workspace = true` if the tree holds it.
+- Where your slice depends on another stem, depend on its crate as `<other> = { path = "../<other>" }` in your stem's `[dependencies]` if the tree holds it.
   Else implement against the design's types in your own module.
 - A requirement, a scenario, or a design type that names the source's platform is read for the behaviour behind it: a broker and its consumer, a vault, an agent, a timer, a server.
   It lands as the [translation](references/translation.md) says: the capability that plays the role, the mechanism's own parts written nowhere.
@@ -295,12 +299,12 @@ Once your edits are in, run it in `$WORKSPACE` as the brief spells it. It stops 
 
 - `clippy` is your crate and its tests under the workspace's lints: `pedantic` and `nursery`, every `pub` item documented, no `unsafe`, and the host boundary.
   The [guardrails](references/guardrails.md) spell the boundary. A `disallowed` method, type, or macro names the capability to reach instead. The repair is that capability.
-  No `allow` or `expect` lifts a lint. A handler `routes()` does not name, or a part the entry does not list, is dead code here.
+  No `allow` or `expect` lifts a lint. A handler `handlers()` does not register, or a part the entry does not list, is dead code here.
 - The first run resolves the workspace and writes `Cargo.lock`, which stays, and `target/`, which `.gitignore` keeps out.
 - A failure in a crate not yours is a type the design names and your module misuses, or a crate that is not there yet. Work around it in yours.
 - `test` is your crate's tests. They fail only for what your module does not yet do. A test still ignored is one you have not filled.
 - `check` is every crate for the guest. A crate that reaches past the component fails here, and the module that named it is the one to change.
-- `fmt` names a file to reformat through `edit_files`, as it reports. The formatter may wrap a list statement over several lines, which is still one entry.
+- `fmt` names a file to reformat through `edit_files`, as it reports. The formatter may lay an array over several lines, which is still one entry per line.
 - Where `fmt` alone fails because no nightly toolchain is installed, the steps before it passed and the check is done.
 
 Repair what it reports, through `edit_files` within a file, or `write_files` for a file of your own. Run it again until it passes.
@@ -319,15 +323,16 @@ The report is held to the tree before it is accepted. Each rule the tree breaks 
 The rules are the layout's. The [handlers](references/handlers.md), [testing](references/testing.md), and [translation](references/translation.md) references spell the shapes that keep them.
 
 - A marker of a covered requirement stands, or a scenario of one is still ignored, still a `todo!`, or missing. Fill it, or leave the id out of `covered`.
-- A `pub(crate) async fn` handler in your part is registered by neither `routes()` nor `topics(..)`. Register it in the router chain.
+- A test of a covered requirement leaves a `"<param>"` placeholder in its act, or the prelude's `provider()` seeds a setting with `"<value>"`. Fill each with the value the scenario runs under.
+- A `pub(crate) async fn` handler in your part is registered by no call of `handlers()`. Register it in the chain.
 - A file stands beside your stems' crates and `Cargo.lock` that the tree did not hold before your turn. Remove it through `delete`.
 - A crate is written for a stem your requirements do not lead with, or for a stem split at a hyphen.
 - A module is the process: a function that starts, runs, listens, or shuts down, or a `Main`, `App`, or `Server` type. A file under `crates/start/`.
-- The root `Cargo.toml` differs from the seed outside its two stem lists, or an entry of its path list names a crate the tree lacks. A stem's `Cargo.toml` differs from the scaffolded manifest outside `[dependencies]`.
+- The root `Cargo.toml` differs from the seed outside its stem list, or an entry of its list names a crate the tree lacks. A stem's `Cargo.toml` differs from the scaffolded manifest outside `[dependencies]`.
 - A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
-- A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself. Declare the module, or move the item into its part.
+- A stem's `handlers()` that the root's array does not list. A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
-- A refusal answered `Ok(())` from inside a catch. A setting whose name spells `FORMAT`.
+- A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
 
 Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
 
