@@ -145,6 +145,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.default_decoders(scaffold));
         findings.extend(self.unconsumed_streams(scaffold));
+        findings.extend(self.refused_skips(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }

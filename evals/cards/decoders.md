@@ -160,3 +160,32 @@ Six runs, all `composer-2.5` over `train` on the rebuilt component: arm A the ca
 - **The rest, 1 of 6 each:** no `key` header (B1, whose specification dropped the key clause from its publish requirement, as `19-26-01Z` run 2's did: 2 of 6 fresh specifications across the two rounds); `static/0010` published where a refusal was recorded and `replay/4145` refused as before the minimum delay (B1, the delay computation).
 
 Follow-ups, in this order: the `refused_skips` check and the `## A skipped message` passage; the scenario `when` precedence at the engine's spec-draft turn; the wire key of a field assigned on an imported class in the typescript adapter's `excerpt`; the two rules of the round above stand as built.
+
+## The skipped message
+
+The first follow-up of the round above, built in the build-quality round ([scenarios.md](scenarios.md#the-next-arm) carries that round's express-orders arm; this section is its `train` arm). A skip answered as a refusal was 2 of 6 there: REQ-008, REQ-009, and REQ-010 say the message `produces no vehicle events and increments a not-relevant-… counter`, and two consumers returned `Err(bad_request!(..))` for them, which the host reads as a rejected delivery and may redeliver, where the reference answers `Ok(())` after the counter with nothing published.
+
+- **Check.** `refused_skips`, at a build, over the stems of the slice that register a consumer or whose part the design lists an inbound stream for: a requirement of the slice whose statement says the message produces no events, or is skipped, ignored, or discarded, and names no refusal (`rejected`, `refused`, `invalid`, `malformed`, `fails`, `error`), is read from its `// REQ-…` line to the next marker or the item's end, and an `Err(..)`, a `bad_request!`-family macro, or an `Error::bad_request(..)` within that window is one finding at its line, the header naming the repair: the `tracing` counter event, `Ok(())`, nothing published. Keyed on the statement rather than the `skip-` id, since `skip-after-validation-failure` names a refusal's consequence and its `Err` is right.
+- **Passage.** `## A skipped message` in `handlers.md`, selected by a new idiom over the slice's own words (`skip`, `skipped`, `ignored`, `irrelevant`, `relevant`): a delivery the rules set aside answers `Ok(())` after its counter and publishes nothing, `Err` being the malformed or invalid delivery's alone.
+
+The arm is the revision of `18-14-21Z` rebuilt three times, each a card of its own, on the component carrying the check and the three levers of the express-orders arm:
+
+```bash
+CURSOR_MODEL=composer-2.5 cargo run -p evals -- --rebuild 2026-11-07T18-14-21Z --target omnia train
+```
+
+Its control is arm A of the round above (22, 12, 7 of 22 on the same revision), the two rules of that round standing as built.
+
+### Predictions
+
+- **S1, no skip is refused.** No run's `run-N.oracle.log` records a fixture refused under `not_relevant_station`, `not_relevant_type`, `no_vehicles`, or `no_stop_info`; the five fixtures A3 refused (`static/0003`, `0004`, `0005`, `replay/0049`, `4247`) answer `0 events` and pass on every run. `refused_skips` is seen at most once per run (a `candidate rejected` carrying its header in `run-N.build.stderr`), at the slice whose consumer is filled, and on no run twice.
+- **S2, the floor holds.** Every run is driven, registers the consumer through `.topic_with` over `quick_xml` (`unconsumed_streams` at most once per run, as before), and passes at least 11 of 22.
+- **S3, the other classes are counted, not moved.** `gpsAccuracy` absent (2 of 6 above, the base design's gap) recurs on the runs whose turn guesses the key; the registration number for the external id and the departure overwrite stay at or under 1 of 3 each; no `no_actual_update` on this revision's replay fixtures.
+
+### Decision rule
+
+- **The arm holds** when S1 and S2 hold on all three runs; the check and the passage stand.
+- **S1 fails with the check never seen:** the statement words missed the revision's phrasing; the three statements are read from `run-1.spec.json` against the word list before anything else.
+- **S1 fails with the check seen and the fixture still refused:** the repair was made elsewhere than the skip's path (a refusal moved into the decoder, or the counter answered `Err`); the header is the lever.
+- **S2's floor fails:** the per-fixture failures are logic defects recorded against the build turn, counted across the three runs with the six above, and a check is proposed only for one that recurs on two or more of these three.
+- **S3:** a class at 2 of 3 is a check proposed; `gpsAccuracy` stays the specify-side follow-up whatever its count, since the base design spells no key.

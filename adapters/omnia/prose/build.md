@@ -51,7 +51,7 @@ The adapter laid your slice's place in it before this turn, from the requirement
 - The stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them.
 - Your part, `crates/<stem>/src/<part>.rs`:
   - a path constant and a `.route(..)` in its `handlers()` per route your requirements carry;
-  - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body;
+  - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body and the route's requirements or scenarios state one;
   - a `.topic(..)` and a consumer per message they carry, with its constant in the topic table;
   - a `<Part>Settings` struct over the settings your slice spells, where it spells any;
   - a `pub fn` per requirement carrying neither;
@@ -106,7 +106,7 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
 
 Fill the handler as the [handlers](references/handlers.md) reference spells it.
 
-- Fill `<Name>Input`, where the route carries a body, with the body's fields; a path parameter is already a `Path` extractor on the handler.
+- Fill `<Name>Input`, where the route's requirements state a body, with the body's fields; a path parameter is already a `Path` extractor on the handler. A `POST` whose requirements state no body was laid with no input struct and its tests send none: leave it bodiless, since a `Json` extractor refuses a bodiless request with `415`, unless a scenario's wire carries a body, and then add the struct, the extractor, and the body to its tests together.
 - Fill `<Name>Output` with the response's fields.
 - Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
 - A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
@@ -277,6 +277,7 @@ Where your slice carries requirements under `start` beside its own stem's, read 
 - Credential validation or rotation, client construction, table prefetch, a flag that decided whether a consumer ran, signals, periodic jobs, and lifecycle types:
   write nothing, and leave them out of `covered`.
 - A slice of `start` requirements alone, none carrying a route, is never put to you.
+- A rule every route obeys that the plan or the design says `start` applies — a gate on the request, a mapping of failures to wire codes — reaches your slice through the scaffold section of the brief, with the design's paragraphs on it and the functions the stems already in the tree export for it; it is your part's to apply, since no `start` crate does.
 
 ## Reuse, and the platform's names
 

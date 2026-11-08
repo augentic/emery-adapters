@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 use std::iter;
 
-use emery_sdk::target::Slice;
+use emery_sdk::target::{Requirement, Slice};
 use emery_sdk::{Doc, body, push_unique, words};
 
 const API: &str = "references/omnia-api.md";
@@ -175,6 +175,7 @@ pub enum Idiom {
     Probe,
     CacheAside,
     OptimisticLock,
+    Skip,
 }
 
 // An idiom with the heading of its section and the words that select it.
@@ -220,7 +221,70 @@ const IDIOMS: &[IdiomSpec] = &[
         heading: "A compare-and-swap update",
         words: &["cas", "etag", "optimistic"],
     },
+    IdiomSpec {
+        idiom: Idiom::Skip,
+        heading: "A skipped message",
+        words: &[
+            "ignored",
+            "ignores",
+            "irrelevant",
+            "relevant",
+            "skip",
+            "skipped",
+            "skipping",
+            "skips",
+        ],
+    },
 ];
+
+// The words a requirement's statement spells a message that produces
+// nothing by, each matched as a prefix (`skips`, `ignoring`, `discarded`).
+const SKIP_LEADS: &[&str] = &["skip", "ignor", "discard"];
+
+// The words that make a statement a refusal rather than a skip.
+const REFUSAL_WORDS: &[&str] = &[
+    "rejected",
+    "rejects",
+    "rejection",
+    "refused",
+    "refuses",
+    "refusal",
+    "invalid",
+    "malformed",
+    "fails",
+    "failure",
+    "failed",
+    "error",
+];
+
+// How many words past `no` an `event` makes the statement a skip.
+const NO_EVENT_REACH: usize = 4;
+
+// Whether the requirement's statement says the message produces no events:
+// it skips, ignores, or discards the message, or says `no .. event(s)`, and
+// names no refusal, since a refused message is `Err` and a skipped one
+// `Ok(())`.
+pub fn skips(requirement: &Requirement) -> bool {
+    let words: Vec<String> = requirement
+        .statement
+        .iter()
+        .flat_map(|line| line.split(|ch: char| !ch.is_ascii_alphanumeric()))
+        .filter(|word| !word.is_empty())
+        .map(str::to_ascii_lowercase)
+        .collect();
+    if words.iter().any(|word| REFUSAL_WORDS.contains(&word.as_str())) {
+        return false;
+    }
+    let leads = words.iter().any(|word| SKIP_LEADS.iter().any(|lead| word.starts_with(lead)));
+    let no_event = words.iter().enumerate().any(|(at, word)| {
+        word == "no"
+            && words[at + 1..]
+                .iter()
+                .take(NO_EVENT_REACH)
+                .any(|next| next == "event" || next == "events")
+    });
+    leads || no_event
+}
 
 // The wire format of the inbound stream's payload where the design says it
 // is no JSON, the SDK's default decoder.
@@ -352,6 +416,20 @@ const OUTBOUND_WORDS: &[&str] = &[
     "writes",
     "written",
 ];
+
+// The words a paragraph spells of a gate on the requests every route takes.
+const GATE_WORDS: &[&str] = &[
+    "authenticate",
+    "authenticated",
+    "authenticates",
+    "authenticating",
+    "authentication",
+    "unauthorised",
+    "unauthorized",
+];
+
+// The statuses a mapping of failures to wire codes spells two or more of.
+const STATUSES: &[&str] = &["400", "401", "403", "404", "409", "422", "500", "502", "503"];
 
 // The translation table's row for each role, by the words its first cell
 // opens with.
@@ -529,6 +607,77 @@ pub fn inbound(slice: &Slice) -> Option<Inbound> {
             stems,
         })
     })
+}
+
+// The rules every route obeys that the design or the part's plan entry
+// speaks of: what the design says of them, and whether the plan's brief
+// names `start` as where they come from.
+pub struct Rules {
+    pub paragraphs: Vec<String>,
+    pub start_named: bool,
+}
+
+impl Rules {
+    // The design's paragraphs on the rules every route obeys, in the
+    // design's order: a gate on the requests, named by a gate word, or a
+    // mapping of failures to wire codes, named by `error` beside two or
+    // more statuses; a heading or a `Type:` block is none. Beside them,
+    // whether the plan's brief for the part spells `start`.
+    pub fn read(slice: &Slice) -> Self {
+        let paragraphs = blocks(&slice.design)
+            .into_iter()
+            .filter(|block| {
+                !(block.starts_with('#') || block.starts_with("Type: ") || block.starts_with("```"))
+            })
+            .filter(|block| is_rule(block))
+            .map(str::to_owned)
+            .collect();
+        let start_named = slice.brief.iter().any(|paragraph| spells(paragraph, &["start"]));
+        Self {
+            paragraphs,
+            start_named,
+        }
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.paragraphs.is_empty() && !self.start_named
+    }
+}
+
+fn is_rule(paragraph: &str) -> bool {
+    let mut spelled = BTreeSet::new();
+    spell(paragraph, &mut spelled);
+    if GATE_WORDS.iter().any(|word| spelled.contains(*word)) {
+        return true;
+    }
+    (spelled.contains("error") || spelled.contains("errors"))
+        && STATUSES.iter().filter(|status| spelled.contains(**status)).count() >= 2
+}
+
+// The blocks of `text`: the runs of lines between blank lines outside a
+// fence, so a signature's blank lines stay within its block.
+pub fn blocks(text: &str) -> Vec<&str> {
+    let mut blocks = Vec::new();
+    let mut in_fence = false;
+    let mut start: Option<usize> = None;
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        if line.starts_with("```") {
+            in_fence = !in_fence;
+        }
+        if line.trim().is_empty() && !in_fence {
+            if let Some(from) = start.take() {
+                blocks.push(text[from..at].trim_end());
+            }
+        } else if start.is_none() {
+            start = Some(at);
+        }
+        at += line.len();
+    }
+    if let Some(from) = start {
+        blocks.push(text[from..].trim_end());
+    }
+    blocks
 }
 
 // The requirement ids of the part the slice is cut from: its own and those

@@ -1020,11 +1020,13 @@ fn assert_omnia_scaffold_brief(brief: &str) {
         "a message is consumed",
         "under \"A probe\"",
         "under \"A cache-aside read\"",
+        "The rules every route obeys",
     ] {
         assert!(
             !scaffolded.contains(absent),
             "no `{absent}` for a routed slice with no `start` id, no consumer, no status, no \
-             setting, a design naming no store, and text calling for no idiom: {scaffolded}"
+             setting, a design naming no store or rule, and text calling for no idiom: \
+             {scaffolded}"
         );
     }
     assert!(
@@ -1244,7 +1246,8 @@ async fn omnia_scaffold_held_stem() {
     let mut slice = omnia_slice();
     slice.name = "orders-paying".to_owned();
     slice.requirements[0].subject = "orders.pay".to_owned();
-    slice.requirements[0].statement = vec!["Settles the order.".to_owned()];
+    slice.requirements[0].statement =
+        vec!["Settles the order from the payment in the body.".to_owned()];
     slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/pay"));
     slice.requirements[0].scenarios[0].name = "An order is paid".to_owned();
     slice.types = Vec::new();
@@ -1390,6 +1393,71 @@ async fn omnia_scaffold_second_stem() {
     );
 }
 
+// A rule every route obeys that the plan's brief hands to `start`, or the
+// design states as a gate or an error mapping, is the slice's to apply, so
+// the brief says so, quotes the design's paragraphs on it, and lists the
+// `pub fn`s the stems already in the tree export for it; a heading, a type
+// block, and a paragraph naming a bearer alone are no rule.
+#[tokio::test]
+async fn omnia_start_rules_in_brief() {
+    let project = omnia_tree().await;
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first stem's turn");
+    first.assert_exhausted();
+    let module_edited = format!(
+        "{OMNIA_MODULE}\n/// Checks the bearer against the deployment's token.\n///\n/// # \
+         Errors\n///\n/// `unauthorized` for a bearer the deployment does not hold.\npub fn \
+         authenticate<P: Config>(\n    context: &Context<P>, bearer: Option<&str>,\n) -> \
+         Result<()> {{\n    let _ = (context, bearer);\n    Ok(())\n}}\n\nfn \
+         private_helper() {{}}\n"
+    );
+    project.write("crates/orders/src/reading.rs", module_edited.as_bytes());
+
+    let mut slice = slice_for("payments", &["payments.charge"]);
+    slice.requirements[0].trigger = Some(routed("POST", "/charges"));
+    slice.brief = vec![
+        "Takes charges. Assumes bearer authentication and the error mapping from `start`."
+            .to_owned(),
+    ];
+    slice.design = "# Design\n\n## Authentication\n\nEvery route authenticates the request by \
+                    its bearer before it reads the body.\n\n## Errors\n\nAn error answers \
+                    `invalid-request` as 400, `not-found` as 404, and `conflict` as 409.\n\n## \
+                    Data types\n\nType: payments.Charge\n```\ninterface Charge {\n  // an error \
+                    here is 400 or 409\n  amount: number;\n}\n```\n\n## Transport\n\nThe bearer \
+                    is read from the `Authorization` header.\n"
+        .to_owned();
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the second stem's turn");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "The rules every route obeys are this part's to apply: there is no `start` crate, so a \
+         gate on the request or a mapping of failures to wire codes that the plan or the design \
+         says `start` applies to this part's routes is written here. A gate is one `pub fn` of \
+         the first stem that needs it, called at the top of each handler it guards; a later \
+         stem depends on that crate (`<stem> = { path = \"../<stem>\" }` under its \
+         `[dependencies]`) and calls it rather than writing its own.",
+        "`Error::bad_request(\"<code>\", ..)` over the macro, which spells the default; a \
+         status the host's `Error` lacks (`401`) is the part's own error type",
+        "since axum's own rejection answers `422`, or a plain `400`, for a field that is missing \
+         or malformed.\n\nThe design says of them:\n\n> Every route authenticates the request by \
+         its bearer before it reads the body.\n\n> An error answers `invalid-request` as 400, \
+         `not-found` as 404, and `conflict` as 409.\n\nExported by the stems already in the \
+         tree, to call rather than write again:\n\n- `orders::reading::authenticate` \
+         (`crates/orders/src/reading.rs:",
+        "): `pub fn authenticate<P: Config>( context: &Context<P>, bearer: Option<&str>, ) -> \
+         Result<()>` — Checks the bearer against the deployment's token.\n\nThe check:",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    for absent in
+        ["> ## ", "> Type: ", "> interface Charge", "> The bearer is read", "private_helper"]
+    {
+        assert!(!brief.contains(absent), "no `{absent}` among the rules: {brief}");
+    }
+}
+
 // A handler whose scenarios state a status other than `200` answers the
 // `(StatusCode, Json<Output>)` pair, so the status is the handler's own
 // expression, and the brief's hint says which to answer; a design naming a
@@ -1468,7 +1536,7 @@ async fn omnia_stated_status_return_type() {
     slice.requirements[0].scenarios = vec![Scenario {
         name: "An order is created".to_owned(),
         given: vec!["no order".to_owned()],
-        when: "POST /orders is called".to_owned(),
+        when: "POST /orders is called with the order in the body".to_owned(),
         then: "the order is created".to_owned(),
         and: vec!["the status is 201".to_owned()],
     }];
@@ -1808,24 +1876,34 @@ async fn omnia_scaffold_roles_scoped() {
 // names is left out of the design's cut.
 #[tokio::test]
 async fn omnia_scaffold_idioms() {
-    for (subject, statement, carried, absent) in [
+    for (subject, statement, carried, absent, fenced) in [
         (
             "health.ready",
             "Answers whether the store answers a probe within its deadline.",
             "A probe",
             "A cache-aside read",
+            "use axum::Json;",
         ),
         (
             "orders.read",
             "Answers the order from the cache, else from the store, caching it under a TTL.",
             "A cache-aside read",
             "A probe",
+            "use axum::Json;",
         ),
         (
             "orders.amend",
             "Amends the order under optimistic concurrency, refusing a concurrent write.",
             "A compare-and-swap update",
             "A probe",
+            "use axum::Json;",
+        ),
+        (
+            "orders.on-position",
+            "A position for a station the service does not track is skipped.",
+            "A skipped message",
+            "A probe",
+            "use omnia_sdk::api::Context;",
         ),
     ] {
         let project = omnia_tree().await;
@@ -1847,7 +1925,7 @@ async fn omnia_scaffold_idioms() {
             "`{subject}` carries the `{carried}` idiom whole: {brief}"
         );
         assert!(
-            brief.contains("```rust\nuse axum::Json;\n"),
+            brief.contains(&format!("```rust\n{fenced}\n")),
             "the idiom's fence is quoted: {brief}"
         );
         assert!(
@@ -2153,7 +2231,7 @@ async fn omnia_scaffold_types() {
             "orders.Order",
             "export interface Order {\n  customerId: string;\n  lines: OrderLine[];\n  shipTo: \
              Address;\n  courierNote?: string;\n  subtotalCents: number;\n  weightKg: number;\n  \
-             meta: Record<string, unknown>;\n}",
+             weightGrams: number;\n  meta: Record<string, unknown>;\n}",
         ),
         (
             "orders.OrderLine",
@@ -2189,8 +2267,9 @@ async fn omnia_scaffold_types() {
          The `courierNote` field.\n    #[serde(rename = \"courierNote\")]\n    pub courier_note: \
          Option<String>,\n    /// The `subtotalCents` field.\n    #[serde(rename = \
          \"subtotalCents\")]\n    pub subtotal_cents: i64,\n    /// The `weightKg` field.\n    \
-         #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `meta` field.\n    \
-         pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
+         #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `weightGrams` \
+         field.\n    #[serde(rename = \"weightGrams\")]\n    pub weight_grams: i64,\n    /// The \
+         `meta` field.\n    pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
         "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct OrderLine {\n    \
          /// The `codigoSku` field.\n    #[serde(rename = \"codigoSku\")]\n    #[serde(default)]\n    \
          pub sku: String,\n    /// The `quantity` field.\n    pub \
@@ -2223,6 +2302,48 @@ async fn omnia_scaffold_types() {
         brief.contains(design),
         "the laid types are pointed at and the one a laid field carries stands: {brief}"
     );
+}
+
+// A `number` field is laid as the design spells it before its name decides
+// it: a schema column `INTEGER` makes it an `i64` whatever its last word,
+// `NUMERIC` an `f64` though the word counts, another signature's typed
+// declaration of the field decides it, and a sentence calling the field an
+// integer does too; a name the design spells both ways falls back to its
+// last word.
+#[tokio::test]
+async fn omnia_scaffold_spelled_numbers() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.design = "# Design\n\n## Data\n\nThe `weight` is read in grams, as an integer; the \
+                    `tax` is an integer too.\n\nType: orders.Order\n```\n```\n\nType: \
+                    orders.Row\n```rust\npub struct Row {\n    pub rate: f64,\n    pub \
+                    discount: i64,\n}\n```\n\n## Schema\n\n```sql\nCREATE TABLE orders (\n  id \
+                    BIGSERIAL PRIMARY KEY,\n  weight INTEGER NOT NULL,\n  total NUMERIC(10,2) \
+                    NOT NULL,\n  discount DECIMAL(5,2)\n);\n```\n"
+        .to_owned();
+    slice.types = vec![DesignType {
+        key: "orders.Order".to_owned(),
+        signature: "export interface Order {\n  weight: number;\n  total: number;\n  rate: \
+                    number;\n  discount: number;\n  tax: number;\n  depth: number;\n}"
+            .to_owned(),
+    }];
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        part.contains(
+            "#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]\npub struct Order {\n    \
+             /// The `weight` field.\n    pub weight: i64,\n    /// The `total` field.\n    pub \
+             total: f64,\n    /// The `rate` field.\n    pub rate: f64,\n    /// The `discount` \
+             field.\n    pub discount: f64,\n    /// The `tax` field.\n    pub tax: i64,\n    \
+             /// The `depth` field.\n    pub depth: f64,\n}\n"
+        ),
+        "the schema, the typed signature, and the prose decide each number: {part}"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
 }
 
 // A default is read whole past the first `=`: a string default spelling
@@ -2612,7 +2733,8 @@ async fn omnia_scaffold_link_on_the_way() {
 async fn omnia_route_typed() {
     let project = omnia_tree().await;
     let mut slice = slice_for("orders-items", &["orders.items", "orders.lines", "orders.sum"]);
-    slice.requirements[0].statement = vec!["Adding an item appends it to the order.".to_owned()];
+    slice.requirements[0].statement =
+        vec!["Adding an item from the body appends it to the order.".to_owned()];
     slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/items"));
     slice.requirements[0].scenarios = vec![Scenario {
         name: "An item is added".to_owned(),
@@ -2647,6 +2769,85 @@ async fn omnia_route_typed() {
     for absent in ["ORDERS_ORDER_ID_LINES_LINE_ID", "ORDERS_ID_SUM", "patch("] {
         assert!(!module.contains(absent), "`{absent}` is read from no text: {module}");
     }
+}
+
+// A `POST` whose requirements and scenarios state no body is laid with no
+// input struct and no `Json` extractor, its test sending an empty body with
+// no content type, and the brief saying where a body goes if a scenario's
+// wire carries one; a `POST` beside it whose scenario states a payload keeps
+// its input and its test's JSON body.
+#[tokio::test]
+async fn omnia_scaffold_bodiless_post() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-settling", &["orders.pay", "orders.amend"]);
+    slice.requirements[0].statement = vec!["Settles the order by its id.".to_owned()];
+    slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/pay"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "An order is paid".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "POST /orders/42/pay is called".to_owned(),
+        then: "the order is paid".to_owned(),
+        and: Vec::new(),
+    }];
+    slice.requirements[1].statement = vec!["Amends the order's lines.".to_owned()];
+    slice.requirements[1].trigger = Some(routed("POST", "/orders/{id}/amend"));
+    slice.requirements[1].scenarios = vec![Scenario {
+        name: "An order is amended".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "POST /orders/42/amend is called with the lines as its payload".to_owned(),
+        then: "the lines are replaced".to_owned(),
+        and: Vec::new(),
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/settling.rs");
+    for carried in [
+        "use serde::{Deserialize, Serialize};\n",
+        "pub(crate) async fn pay<P>(context: Context<P>, Path(id): Path<String>) -> \
+         Result<Json<PayOutput>>\nwhere\n    P: Capabilities,\n{\n    let _ = (&context, \
+         &id);\n",
+        "/// The input of `POST /orders/{id}/amend`.\n#[derive(Debug, Deserialize)]\npub struct \
+         AmendInput {}\n",
+        "pub(crate) async fn amend<P>(\n    context: Context<P>, Path(id): Path<String>, \
+         Json(input): Json<AmendInput>,\n) -> Result<Json<AmendOutput>>\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    assert!(!module.contains("PayInput"), "no input is laid for the bodiless route: {module}");
+    let tests = text(&project, "crates/orders/tests/settling.rs");
+    for carried in [
+        "use axum::http::header::CONTENT_TYPE;\n",
+        "    let request = Request::post(format!(\"/orders/{id}/pay\")).body(Body::empty())\
+         .expect(\"request\");\n",
+        "    let request = Request::post(format!(\"/orders/{id}/amend\"))\n        \
+         .header(CONTENT_TYPE, \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
+         .expect(\"request\");\n",
+    ] {
+        assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
+    }
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "key `REQ-001 orders.pay: the handler`: fill `PayOutput` with the wire's fields, then \
+         replace this block with the body.",
+        "No input struct was laid, since no requirement or scenario of `POST /orders/{id}/pay` \
+         states a body, and its tests send none: a bodiless `POST` takes no `Json` extractor, \
+         which would refuse the request with `415`; where a scenario's wire does carry a body, \
+         add a `#[derive(Debug, Deserialize)]` input struct and the `Json(input): Json<..>` \
+         extractor, and send it from the test with `CONTENT_TYPE` set.",
+        "key `REQ-002 orders.amend: the handler`: fill `AmendInput` and `AmendOutput` with the \
+         wire's fields",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert_eq!(
+        brief.matches("No input struct was laid").count(),
+        1,
+        "the hint is the bodiless handler's alone: {brief}"
+    );
 }
 
 // A route of several parameters extracts them as one `Path` tuple of
@@ -3355,6 +3556,114 @@ async fn omnia_unconsumed_stream() {
         ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
 
     OMNIA.build_slice(&project, &model, &slice()).await.expect("the function alone passes");
+    model.assert_exhausted();
+}
+
+// A requirement whose statement says the message produces no events is a
+// skip, so a consumer that refuses it under its marker is refused with the
+// refusal's line named and the repair spelled, answers `Ok(())` after its
+// counter, and is accepted; a statement naming `invalid` is a refusal's and
+// keeps its `Err`, and a skip under a stem laying no consumer, with no
+// inbound stream listed, is held to nothing.
+#[tokio::test]
+async fn omnia_refused_skip() {
+    let project = omnia_tree().await;
+    let mut consuming = slice_for(
+        "orders-positions",
+        &["orders.skip-station", "orders.skip-after-validation-failure"],
+    );
+    consuming.requirements[0].statement =
+        vec!["A position for a station the service does not track is skipped.".to_owned()];
+    consuming.requirements[0].trigger = Some(Trigger::Message("positions".to_owned()));
+    consuming.requirements[1].statement = vec![
+        "A position whose payload is invalid is skipped once the failure is counted.".to_owned(),
+    ];
+    consuming.requirements[1].trigger = Some(Trigger::Message("validation-failures".to_owned()));
+    let refusing = "        return Err(bad_request!(\"station `{}` is not tracked\", \
+                    input.station));\n";
+    let skipping = "        tracing::info!(station = %input.station, \"position skipped: no stop \
+                    tracked\");\n        return Ok(());\n";
+    let station_stub = "where\n    P: Capabilities,\n{\n    let _ = (&context, &input);\n    \
+                        todo!(\"REQ-001 orders.skip-station: the consumer\")\n}\n";
+    let station_filled = format!(
+        "where\n    P: StateStore,\n{{\n    if \
+         context.state().get(&format!(\"stations/{{}}\", input.station)).await?.is_none() \
+         {{\n{refusing}    }}\n    Ok(())\n}}\n"
+    );
+    let failure_stub = "where\n    P: Capabilities,\n{\n    let _ = (&context, &input);\n    \
+                        todo!(\"REQ-002 orders.skip-after-validation-failure: the consumer\")\n}\n";
+    let failure_filled = "where\n    P: StateStore,\n{\n    if input.reason.is_empty() {\n        \
+                          return Err(bad_request!(\"invalid payload\"));\n    }\n    \
+                          context.state().increment(\"orders/validation-failures\", 1).await?;\n    \
+                          Ok(())\n}\n";
+    let report =
+        r#"{"covered": ["REQ-001", "REQ-002"], "written": ["crates/orders/src/positions.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                (
+                    "crates/orders/src/positions.rs",
+                    "use omnia_sdk::{Capabilities, Result};\n",
+                    "use omnia_sdk::{Capabilities, Result, StateStore, bad_request};\n",
+                ),
+                ("crates/orders/src/positions.rs", station_stub, &station_filled),
+                ("crates/orders/src/positions.rs", failure_stub, failure_filled),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/positions.rs", refusing, skipping)])]);
+
+    let accepted = OMNIA
+        .build_slice(&project, &model, &consuming)
+        .await
+        .expect("the skipping consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001", "REQ-002"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/positions.rs");
+    let expected = format!(
+        "crates/orders/src/positions.rs:{}: REQ-001 orders.skip-station answers a refusal \
+         (`Err(..)`) where its statement says the message produces no events",
+        line_of(&module, "tracing::info!(station")
+    );
+    for carried in [
+        "a requirement whose statement says the message produces no events is a skip, not a \
+         refusal: the consumer answers `Ok(())` after its `tracing` counter event and publishes \
+         nothing, since an `Err` is recorded by the host as a rejected delivery; `Err` is the \
+         malformed or invalid delivery's alone, as the handlers reference shows under \"A \
+         skipped message\"",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/orders/src/positions.rs:").count(),
+        1,
+        "the statement naming `invalid` is a refusal's: {correction}"
+    );
+    assert!(
+        module.contains(skipping)
+            && module.contains("return Err(bad_request!(\"invalid payload\"))"),
+        "the skip is repaired and the refusal stands: {module}"
+    );
+
+    // a skip under a stem laying no consumer, with no stream listed, is unchecked
+    let project = omnia_tree().await;
+    let mut functional = slice();
+    functional.requirements[0].statement =
+        vec!["An order older than the window is skipped and produces no events.".to_owned()];
+    let refused = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([refused]).calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            OMNIA_FUNCTION_MARKER,
+            "    Err(omnia_sdk::bad_request!(\"stale\"))\n",
+        )])],
+    );
+
+    OMNIA.build_slice(&project, &model, &functional).await.expect("a function's refusal passes");
     model.assert_exhausted();
 }
 

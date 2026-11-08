@@ -222,7 +222,7 @@ impl Stem {
     // its reserved name; the settings last, once every constant the keys
     // are told from is named.
     pub fn plan(
-        &mut self, owned: &[&DesignType], requirements: &[&Requirement], design_keys: &[String],
+        &mut self, owned: &[&DesignType], requirements: &[&Requirement], design: &types::Design,
         topics: &mut Topics,
     ) {
         let mut namespaces = Namespaces::default();
@@ -260,7 +260,7 @@ impl Stem {
                 namespaces.types.reserve(&pascal(declared), &suffix)
             })
             .collect();
-        let bodies = types::lay(&parsed, &names, design_keys, &mut namespaces.values);
+        let bodies = types::lay(&parsed, &names, design, &mut namespaces.values);
         for ((design_type, name), body) in owned.iter().zip(names).zip(bodies) {
             self.types.push(Type {
                 name,
@@ -335,7 +335,7 @@ impl Stem {
             self.paths.push((constant.clone(), route.path.clone()));
             constant
         };
-        let input = trigger::carries_body(&route.method)
+        let input = (trigger::carries_body(&route.method) && states_body(group))
             .then(|| namespaces.types.reserve(&format!("{title}Input"), &suffix));
         let stated = stated_of(group);
         self.handlers.push(Handler {
@@ -349,6 +349,15 @@ impl Stem {
             marker: format!("{}: the handler", named(&stated)),
             stated,
         });
+    }
+
+    // Whether the request a test sends at `route` carries a body: what the
+    // handler laid for the route takes, else what its method carries.
+    pub fn sends_body(&self, route: &Route) -> bool {
+        self.handlers
+            .iter()
+            .find(|handler| handler.route == *route)
+            .map_or_else(|| trigger::carries_body(&route.method), |handler| handler.input.is_some())
     }
 
     // One consumer for the requirements that consume `topic`, under the
@@ -825,6 +834,28 @@ fn states_status(group: &[&Requirement]) -> bool {
                 && word.starts_with(|ch| matches!(ch, '1'..='5'))
                 && word.bytes().all(|byte| byte.is_ascii_digit())
         })
+}
+
+// The words a requirement or a scenario spells a request body with.
+const BODY_WORDS: &[&str] = &["body", "bodies", "payload", "payloads"];
+
+// Whether the group's requirements state a request body: a body word in a
+// statement or a scenario line, so a `POST` whose text states none takes
+// no `Json` extractor, which axum would refuse a bodiless request through.
+fn states_body(group: &[&Requirement]) -> bool {
+    group
+        .iter()
+        .flat_map(|requirement| {
+            requirement.statement.iter().chain(requirement.scenarios.iter().flat_map(|scenario| {
+                std::iter::once(&scenario.name)
+                    .chain(&scenario.given)
+                    .chain(std::iter::once(&scenario.when))
+                    .chain(std::iter::once(&scenario.then))
+                    .chain(&scenario.and)
+            }))
+        })
+        .flat_map(|line| line.split(|ch: char| !ch.is_ascii_alphanumeric()))
+        .any(|word| BODY_WORDS.iter().any(|body| body.eq_ignore_ascii_case(word)))
 }
 
 fn shared_lead<'a>(tails: &[Vec<&'a str>]) -> Vec<&'a str> {

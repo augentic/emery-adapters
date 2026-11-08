@@ -125,7 +125,7 @@ fn slice() -> Slice {
         requirements: vec![Requirement {
             id: "REQ-001".to_owned(),
             subject: "orders.create".to_owned(),
-            statement: vec!["Creates an order from at least one item.".to_owned()],
+            statement: vec!["Creates an order from at least one item in the body.".to_owned()],
             scenarios: vec![Scenario {
                 name: "An order is created".to_owned(),
                 given: vec!["an item".to_owned()],
@@ -141,7 +141,7 @@ fn slice() -> Slice {
         }],
         brief: vec!["Create an order from its items.".to_owned()],
         spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nPOST /orders \
-               creates an order from at least one item.\n"
+               creates an order from at least one item in the body.\n"
             .to_owned(),
         design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\

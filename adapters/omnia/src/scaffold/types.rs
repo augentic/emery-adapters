@@ -4,14 +4,27 @@ mod python;
 mod rust;
 mod typescript;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::names::{Names, escape, pascal, snake};
+use super::reference::blocks;
 
 // The last word of a `number` field's name that makes it an integer: a
-// count, an id, a position, a size, a sum, or a whole duration.
-const COUNTED: &[&str] =
-    &["cents", "count", "id", "index", "page", "size", "total", "quantity", "seconds", "millis"];
+// count, an id, a position, a size, a sum, or a whole measure.
+const COUNTED: &[&str] = &[
+    "cents", "count", "id", "index", "page", "size", "total", "quantity", "seconds", "millis",
+    "grams", "days", "ms", "bytes", "units",
+];
+
+// The SQL column types a schema in the design declares a whole number by.
+const SQL_INTEGERS: &[&str] = &["integer", "int", "bigint", "smallint", "serial", "bigserial"];
+
+// The SQL column types a schema in the design declares a fraction by.
+const SQL_FLOATS: &[&str] =
+    &["numeric", "decimal", "real", "double", "float", "float4", "float8", "money"];
+
+// How many words either side of `integer` a prose sentence names the field in.
+const INTEGER_REACH: usize = 3;
 
 // Clippy's `max-struct-bools`: a struct of more flags carries the
 // expectation the lint would otherwise raise.
@@ -189,18 +202,138 @@ struct Refs<'a> {
     owned: &'a [(String, String)],
     parsed: &'a [Parsed],
     params: &'a [String],
-    design: &'a [String],
+    design: &'a Design,
     // The type whose fields are being laid, so a shared declared name resolves
     // to itself rather than the first slice type that declared it.
     at: usize,
 }
 
+// What the slice's design says of its types beyond the signature being
+// laid: every key it declares, and the kind of each number field it
+// spells as a whole number or a fraction.
+pub struct Design {
+    pub keys: Vec<String>,
+    numbers: BTreeMap<String, Scalar>,
+}
+
+impl Design {
+    // Reads the design and the signatures the slice owns once: the keys of
+    // the `Type:` blocks, and each number field's kind from a typed
+    // declaration in any signature (`i64`, `int`, `float`), a column of a
+    // SQL schema the design holds (`weight INTEGER`, `total NUMERIC`), or
+    // the word `integer` beside a number field's name in the design's
+    // prose. A name the sources spell both ways is dropped, so the field's
+    // name decides it.
+    pub fn read<'a>(design: &'a str, owned: impl IntoIterator<Item = &'a str>) -> Self {
+        let keys = design_keys(design);
+        let mut spelled: BTreeMap<String, Option<Scalar>> = BTreeMap::new();
+        let mut spell = |name: &str, scalar: Scalar| {
+            let name = snake(name);
+            spelled
+                .entry(name)
+                .and_modify(|held| {
+                    if *held != Some(scalar) {
+                        *held = None;
+                    }
+                })
+                .or_insert(Some(scalar));
+        };
+
+        // the typed declarations, and the number fields left for the prose
+        let mut undecided = BTreeSet::new();
+        let signatures = blocks(design).into_iter().filter_map(fenced_signature).chain(owned);
+        for signature in signatures {
+            let Shape::Struct(declared) = read(signature).shape else { continue };
+            for field in &declared.fields {
+                match field.ty.declared_scalar() {
+                    Some(Declared::Int) => spell(&field.name, Scalar::Int),
+                    Some(Declared::Float) => spell(&field.name, Scalar::Float),
+                    Some(Declared::Number) => {
+                        undecided.insert(snake(&field.name));
+                    }
+                    None => {}
+                }
+            }
+        }
+
+        // the schema's columns
+        for line in design.lines() {
+            let tokens: Vec<&str> = line
+                .split(|ch: char| ch.is_whitespace() || matches!(ch, ',' | '(' | ')'))
+                .collect();
+            for pair in tokens.windows(2) {
+                let name = pair[0].trim_matches(|ch| matches!(ch, '"' | '`' | '[' | ']'));
+                if !is_identifier(name) {
+                    continue;
+                }
+                let column = pair[1].to_ascii_lowercase();
+                if SQL_INTEGERS.contains(&column.as_str()) {
+                    spell(name, Scalar::Int);
+                } else if SQL_FLOATS.contains(&column.as_str()) {
+                    spell(name, Scalar::Float);
+                }
+            }
+        }
+
+        // the prose, for a number field a sentence calls an integer
+        for block in blocks(design) {
+            if block.starts_with("```") || block.starts_with("Type: ") || block.starts_with('#') {
+                continue;
+            }
+            let words: Vec<String> = block
+                .split(|ch: char| !(ch.is_ascii_alphanumeric() || ch == '_'))
+                .filter(|word| !word.is_empty())
+                .map(snake)
+                .collect();
+            for (at, word) in words.iter().enumerate() {
+                if word != "integer" && word != "integers" {
+                    continue;
+                }
+                let from = at.saturating_sub(INTEGER_REACH);
+                let to = (at + INTEGER_REACH + 1).min(words.len());
+                for near in &words[from..to] {
+                    if undecided.contains(near) {
+                        spell(near, Scalar::Int);
+                    }
+                }
+            }
+        }
+
+        Self {
+            keys,
+            numbers: spelled
+                .into_iter()
+                .filter_map(|(name, scalar)| Some((name, scalar?)))
+                .collect(),
+        }
+    }
+
+    // The kind of the number field `wire` names, where the design spells
+    // it, else by the name's last word.
+    fn number(&self, wire: &str) -> Scalar {
+        match self.numbers.get(&snake(wire)) {
+            Some(scalar) => *scalar,
+            None if counted(wire) => Scalar::Int,
+            None => Scalar::Float,
+        }
+    }
+}
+
 // The scalar a field's laid type is, where it is one.
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum Scalar {
     Int,
     Float,
     Bool,
     Text,
+}
+
+// What a signature declares a numeric field as: a whole number, a
+// fraction, or TypeScript's `number`, which says neither.
+enum Declared {
+    Int,
+    Float,
+    Number,
 }
 
 // A default spelled as the value its fn answers, or as serde's own where
@@ -237,7 +370,7 @@ pub fn read(signature: &str) -> Parsed {
 }
 
 // The key of every type the design declares, data and mechanism alike.
-pub fn design_keys(design: &str) -> Vec<String> {
+fn design_keys(design: &str) -> Vec<String> {
     design
         .lines()
         .filter_map(|line| line.trim().strip_prefix("Type: "))
@@ -245,12 +378,28 @@ pub fn design_keys(design: &str) -> Vec<String> {
         .collect()
 }
 
+// The signature a `Type:` block fences, where it is one.
+fn fenced_signature(block: &str) -> Option<&str> {
+    let (first, rest) = block.split_once('\n')?;
+    if !first.starts_with("Type: ") {
+        return None;
+    }
+    let (_, fenced) = rest.split_once('\n')?;
+    if !rest.starts_with("```") {
+        return None;
+    }
+    Some(fenced.rsplit_once("```").map_or(fenced, |(signature, _)| signature))
+}
+
+fn is_identifier(word: &str) -> bool {
+    word.starts_with(|ch: char| ch.is_ascii_alphabetic())
+        && word.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+}
+
 // The bodies of the slice's types, each named as `names` has it, the
 // fields referencing one another by those names and `Eq` dropped wherever
 // a float reaches.
-pub fn lay(
-    parsed: &[Parsed], names: &[String], design: &[String], values: &mut Names,
-) -> Vec<Body> {
+pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Names) -> Vec<Body> {
     let owned: Vec<(String, String)> = parsed
         .iter()
         .zip(names)
@@ -461,7 +610,7 @@ impl Literal {
     // source's literal does not fit the type.
     fn spell(&self, ty: &Type, wire: &str, refs: &Refs<'_>) -> Option<Spelled> {
         let mut constant = true;
-        let text = match (self, ty.scalar(wire)) {
+        let text = match (self, ty.scalar(wire, refs)) {
             (Self::Int(digits), Some(Scalar::Int)) => grouped(digits),
             (Self::Int(digits), Some(Scalar::Float)) => format!("{}.0", grouped(digits)),
             (Self::Float(text), Some(Scalar::Float)) => {
@@ -558,7 +707,7 @@ impl Refs<'_> {
         {
             return Ref::Owned(rust, at);
         }
-        if let Some(key) = self.design.iter().find(|key| DesignKey::parse(key).name == name) {
+        if let Some(key) = self.design.keys.iter().find(|key| DesignKey::parse(key).name == name) {
             return Ref::Design(key);
         }
         Ref::Foreign
@@ -585,14 +734,13 @@ impl Type {
                 laying.float = true;
                 "f64".to_owned()
             }
-            Self::Number => {
-                if counted(wire) {
-                    "i64".to_owned()
-                } else {
+            Self::Number => match refs.design.number(wire) {
+                Scalar::Int => "i64".to_owned(),
+                Scalar::Float | Scalar::Bool | Scalar::Text => {
                     laying.float = true;
                     "f64".to_owned()
                 }
-            }
+            },
             Self::Bytes => "Vec<u8>".to_owned(),
             Self::Any => "serde_json::Value".to_owned(),
             Self::Array(inner) => format!("Vec<{}>", inner.rust(wire, refs, laying)),
@@ -628,11 +776,11 @@ impl Type {
         }
     }
 
-    fn scalar(&self, wire: &str) -> Option<Scalar> {
+    fn scalar(&self, wire: &str, refs: &Refs<'_>) -> Option<Scalar> {
         match self {
             Self::Int => Some(Scalar::Int),
             Self::Float => Some(Scalar::Float),
-            Self::Number => Some(if counted(wire) { Scalar::Int } else { Scalar::Float }),
+            Self::Number => Some(refs.design.number(wire)),
             Self::Bool => Some(Scalar::Bool),
             Self::Text | Self::Date => Some(Scalar::Text),
             Self::Bytes
@@ -640,6 +788,24 @@ impl Type {
             | Self::Array(_)
             | Self::Map(_)
             | Self::Nullable(_)
+            | Self::Named(..) => None,
+        }
+    }
+
+    // What the signature declares a numeric field as, through an option.
+    fn declared_scalar(&self) -> Option<Declared> {
+        match self {
+            Self::Int => Some(Declared::Int),
+            Self::Float => Some(Declared::Float),
+            Self::Number => Some(Declared::Number),
+            Self::Nullable(inner) => inner.declared_scalar(),
+            Self::Text
+            | Self::Date
+            | Self::Bool
+            | Self::Bytes
+            | Self::Any
+            | Self::Array(_)
+            | Self::Map(_)
             | Self::Named(..) => None,
         }
     }

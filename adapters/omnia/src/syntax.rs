@@ -210,6 +210,47 @@ const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
+// A bare `pub fn` among the items of a file: its name, the lines its
+// signature runs over (`pub` to the body's opening brace), and the first
+// line of its doc where it carries one.
+pub struct Exported {
+    pub name: String,
+    pub from: usize,
+    pub to: usize,
+    pub doc: Option<String>,
+}
+
+pub fn exported_fns(file: &syn::File) -> Vec<Exported> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Fn(item) = item else { return None };
+            let Visibility::Public(pub_token) = &item.vis else { return None };
+            let doc = item.attrs.iter().find_map(|attr| {
+                if !attr.path().is_ident("doc") {
+                    return None;
+                }
+                let syn::Meta::NameValue(pair) = &attr.meta else { return None };
+                let Expr::Lit(ExprLit {
+                    lit: Lit::Str(text), ..
+                }) = &pair.value
+                else {
+                    return None;
+                };
+                let text = text.value();
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_owned())
+            });
+            Some(Exported {
+                name: item.sig.ident.to_string(),
+                from: line(pub_token.span),
+                to: line(item.block.brace_token.span.open()),
+                doc,
+            })
+        })
+        .collect()
+}
+
 // The modules `file` declares from files beside it, `pub mod reading;`, by
 // name; one with a body inline declares no file.
 pub fn mods(file: &syn::File) -> Vec<String> {

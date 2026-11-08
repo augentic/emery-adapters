@@ -13,7 +13,7 @@ use super::lists::{Line, Placement};
 use super::names::escape;
 use super::reference::{self, Laid, Needs, Wire};
 use super::stem::{Consumer, Handler, Kind, Stem};
-use super::{Scaffold, render};
+use super::{Scaffold, render, trigger};
 use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
@@ -93,6 +93,7 @@ impl Scaffold {
             );
             text.push_str("\n\n");
         }
+        self.brief_rules(&mut text);
         for relaid in &self.plan.relaid {
             let _ = writeln!(
                 text,
@@ -112,6 +113,57 @@ impl Scaffold {
             self.check()
         );
         text.trim_end().to_owned()
+    }
+
+    // The rules every route obeys, where the slice lays a handler and the
+    // design or the part's plan entry speaks of them: that they are this
+    // part's since no `start` crate applies them, the design's paragraphs on
+    // them, and the functions other stems export for them.
+    fn brief_rules(&self, text: &mut String) {
+        let lays_handlers = self.plan.stems.iter().any(|stem| !stem.handlers.is_empty());
+        if !lays_handlers || self.plan.rules.is_empty() {
+            return;
+        }
+        text.push_str(
+            "The rules every route obeys are this part's to apply: there is no `start` crate, so \
+             a gate on the request or a mapping of failures to wire codes that the plan or the \
+             design says `start` applies to this part's routes is written here. A gate is one \
+             `pub fn` of the first stem that needs it, called at the top of each handler it \
+             guards; a later stem depends on that crate (`<stem> = { path = \"../<stem>\" }` under \
+             its `[dependencies]`) and calls it rather than writing its own. An error answers \
+             the wire code the design's mapping spells, `Error::bad_request(\"<code>\", ..)` \
+             over the macro, which spells the default; a status the host's `Error` lacks (`401`) \
+             is the part's own error type, as the handlers reference shows under \"A status of \
+             its own\". A refusal the specification codes is checked by the handler over \
+             optional fields, since axum's own rejection answers `422`, or a plain `400`, for a \
+             field that is missing or malformed.\n\n",
+        );
+        if !self.plan.rules.paragraphs.is_empty() {
+            text.push_str("The design says of them:\n\n");
+            for paragraph in &self.plan.rules.paragraphs {
+                for line in paragraph.lines() {
+                    let _ = writeln!(text, "> {line}");
+                }
+                text.push('\n');
+            }
+        }
+        if !self.plan.exports.is_empty() {
+            text.push_str(
+                "Exported by the stems already in the tree, to call rather than write again:\n\n",
+            );
+            for export in &self.plan.exports {
+                let _ = write!(
+                    text,
+                    "- `{}` (`{}:{}`): `{}`",
+                    export.path, export.file, export.line, export.signature
+                );
+                if let Some(doc) = &export.doc {
+                    let _ = write!(text, " — {doc}");
+                }
+                text.push('\n');
+            }
+            text.push('\n');
+        }
     }
 
     // The one shell command the turn checks the tree with: the slice's
@@ -454,9 +506,9 @@ impl Stem {
             let _ = writeln!(
                 text,
                 "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill {} with the wire's \
-                 fields, then replace this block with the body. {}{} Narrow `P: Capabilities` to \
-                 the traits the body reaches through the context, `P: StateStore + Config` for \
-                 `context.state()` and `context.config()`.\n\n{}",
+                 fields, then replace this block with the body. {}{}{} Narrow `P: Capabilities` \
+                 to the traits the body reaches through the context, `P: StateStore + Config` \
+                 for `context.state()` and `context.config()`.\n\n{}",
                 handler.name,
                 handler.route,
                 self.module.path,
@@ -464,6 +516,7 @@ impl Stem {
                 handler.filled(),
                 handler.status_hint(),
                 handler.params_hint(),
+                handler.body_hint(),
                 render::fenced("rust", &handler.stub())
             );
         }
@@ -549,6 +602,22 @@ impl Consumer {
 }
 
 impl Handler {
+    // Where the method carries a body the requirements state none of, that
+    // no input was laid and where one goes if a scenario's wire needs it.
+    fn body_hint(&self) -> String {
+        if self.input.is_some() || !trigger::carries_body(&self.route.method) {
+            return String::new();
+        }
+        format!(
+            " No input struct was laid, since no requirement or scenario of `{}` states a body, \
+             and its tests send none: a bodiless `{}` takes no `Json` extractor, which would \
+             refuse the request with `415`; where a scenario's wire does carry a body, add a \
+             `#[derive(Debug, Deserialize)]` input struct and the `Json(input): Json<..>` \
+             extractor, and send it from the test with `CONTENT_TYPE` set.",
+            self.route, self.route.method
+        )
+    }
+
     // The types the turn fills with the wire's fields: the input where the
     // method carries a body, and the output.
     fn filled(&self) -> String {

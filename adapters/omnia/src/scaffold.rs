@@ -17,11 +17,14 @@ use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
 use emery_sdk::{Error, Standing, push_unique, server_error, unique, write_whole};
 
 use self::lists::{Lists, Placement, Topics};
-use self::reference::{Idiom, Role};
+use self::reference::{Idiom, Role, Rules};
 pub use self::reference::{Inbound, Wire};
 use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
-use crate::layout;
+use crate::{layout, syntax};
+
+// How many exported functions of other stems the brief lists.
+const MAX_EXPORTS: usize = 24;
 
 // A slice's skeleton as read against the tree and not yet written: each
 // stem's files, held or to scaffold, and each line placed in its list.
@@ -37,6 +40,28 @@ pub struct Plan {
     inbound: Option<Inbound>,
     // Whether the slice is the last of its part's cut.
     last: bool,
+    rules: Rules,
+    exports: Vec<Export>,
+    skips: Vec<Skip>,
+}
+
+// A requirement of the slice whose statement says the message it handles
+// produces no events, under the stem whose crate handles it.
+pub struct Skip {
+    pub stem: String,
+    pub id: String,
+    pub subject: String,
+}
+
+// A `pub fn` a stem already in the tree exports, which a slice of another
+// stem calls rather than writing again.
+struct Export {
+    // The function's path from the crate root, `customers::customers::authenticate`.
+    path: String,
+    file: String,
+    line: usize,
+    signature: String,
+    doc: Option<String>,
 }
 
 // A slice's skeleton as written, which the turn fills and the check holds
@@ -73,17 +98,22 @@ impl Scaffold {
     pub fn plan(slice: &Slice, root: &Path) -> Result<Plan, Error> {
         let existing: BTreeSet<String> = layout::crates(root)?.into_iter().collect();
         let mut topics = Topics::read(root)?;
-        let design_keys = types::design_keys(&slice.design);
+        let design = types::Design::read(
+            &slice.design,
+            slice.types.iter().map(|design_type| design_type.signature.as_str()),
+        );
         let idioms = reference::idioms(slice);
         let roles = reference::roles(slice);
         let wire = reference::wire(slice);
         let inbound = reference::inbound(slice);
+        let route_rules = Rules::read(slice);
 
         // each requirement to its stem: `start` set aside, unless a typed
         // route names the resource whose crate serves it
         let mut plans: Vec<StemPlan> = Vec::new();
         let mut start = Vec::new();
         let mut relaid = Vec::new();
+        let mut skips = Vec::new();
         for requirement in &slice.requirements {
             let own = requirement.stem();
             let name = if layout::is_start_stem(own) {
@@ -104,6 +134,13 @@ impl Scaffold {
             } else {
                 own.to_owned()
             };
+            if reference::skips(requirement) {
+                skips.push(Skip {
+                    stem: name.clone(),
+                    id: requirement.id.clone(),
+                    subject: requirement.subject.clone(),
+                });
+            }
             match plans.iter_mut().find(|plan| plan.stem.name == name) {
                 Some(plan) => plan.requirements.push(requirement),
                 None => plans.push(StemPlan {
@@ -131,11 +168,17 @@ impl Scaffold {
         for plan in plans {
             let mut stem = plan.stem;
             stem.read(root, &plan.requirements)?;
-            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
+            stem.plan(&plan.owned, &plan.requirements, &design, &mut topics);
             stem.extend();
             stem.place_lines(root, &mut lists)?;
             stems.push(stem);
         }
+        let exports =
+            if stems.iter().any(|stem| !stem.handlers.is_empty()) && !route_rules.is_empty() {
+                exports(root, &existing, &stems)?
+            } else {
+                Vec::new()
+            };
         Ok(Plan {
             stems,
             start,
@@ -147,6 +190,9 @@ impl Scaffold {
             wire,
             inbound,
             last: slice.index == slice.count,
+            rules: route_rules,
+            exports,
+            skips,
         })
     }
 
@@ -232,6 +278,17 @@ impl Scaffold {
         self.plan.last
     }
 
+    // The requirements of the slice whose statements say the message
+    // produces no events.
+    pub fn skips(&self) -> &[Skip] {
+        &self.plan.skips
+    }
+
+    // Whether the slice lays a consumer under `stem`.
+    pub fn consumes(&self, stem: &str) -> bool {
+        self.plan.stems.iter().any(|laid| laid.name == stem && !laid.consumers.is_empty())
+    }
+
     pub fn expected_tests(&self) -> impl Iterator<Item = ExpectedTest<'_>> {
         self.plan
             .stems
@@ -294,6 +351,53 @@ impl Plan {
             listing,
         })
     }
+}
+
+// The `pub fn`s the stem crates already in the tree export from their
+// modules, in crate and path order, up to `MAX_EXPORTS`: those of a stem
+// the slice lays are its own and left out, and a file `syn` refuses is
+// passed over, since the checks name it.
+fn exports(root: &Path, existing: &BTreeSet<String>, stems: &[Stem]) -> Result<Vec<Export>, Error> {
+    let mut exports = Vec::new();
+    for dir in existing.iter().filter(|dir| layout::is_stem_crate(dir)) {
+        if stems.iter().any(|stem| layout::crate_dir(&stem.name) == dir.as_str()) {
+            continue;
+        }
+        let stem = if dir == layout::crate_dir("common") { "common" } else { dir.as_str() };
+        let crate_ident = layout::package(stem).replace('-', "_");
+        for source in layout::sources(&root.join("crates").join(dir).join("src"))? {
+            let Some(module) = source.file_stem().and_then(|stem| stem.to_str()) else { continue };
+            if module == "lib" {
+                continue;
+            }
+            let text = layout::read(&source)?;
+            let Ok(file) = syntax::parse(&text) else { continue };
+            let relative = layout::relative(root, &source);
+            for exported in syntax::exported_fns(&file) {
+                if exported.name == "handlers" {
+                    continue;
+                }
+                let signature = text
+                    .lines()
+                    .skip(exported.from.saturating_sub(1))
+                    .take(exported.to.saturating_sub(exported.from) + 1)
+                    .map(str::trim)
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                exports.push(Export {
+                    path: format!("{crate_ident}::{module}::{}", exported.name),
+                    file: relative.clone(),
+                    line: exported.from,
+                    signature: signature.trim_end_matches('{').trim_end().to_owned(),
+                    doc: exported.doc,
+                });
+                if exports.len() == MAX_EXPORTS {
+                    return Ok(exports);
+                }
+            }
+        }
+    }
+    Ok(exports)
 }
 
 // Creates the file the plan found absent, its directories made one at a

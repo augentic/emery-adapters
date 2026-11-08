@@ -327,9 +327,10 @@ impl Stem {
     fn test_imports(&self) -> Uses {
         let sending = self.sending();
         let delivering = self.delivering();
-        let with_body = self.scenarios.iter().any(
-            |test| matches!(&test.act, Act::Route(route) if trigger::carries_body(&route.method)),
-        );
+        let with_body = self
+            .scenarios
+            .iter()
+            .any(|test| matches!(&test.act, Act::Route(route) if self.sends_body(route)));
         let mut uses = Uses::default();
         if sending {
             uses.add("axum::body", &["Body"]);
@@ -633,7 +634,7 @@ impl Test {
                     Expr::Macro(Call::new("format!", [format!("\"{}\"", escape(&format))]))
                 };
                 let mut calls = Vec::new();
-                if trigger::carries_body(&route.method) {
+                if stem.sends_body(route) {
                     calls.push(Call::new(".header", ["CONTENT_TYPE", "\"application/json\""]));
                     calls.push(Call::new(".body", ["Body::from(\"{}\")"]));
                 } else {
