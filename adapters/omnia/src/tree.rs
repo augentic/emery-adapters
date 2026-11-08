@@ -598,7 +598,10 @@ impl<'a> Tree<'a> {
             "a stem's manifest changes only inside `[dependencies]`: `[package]`, `[lints]` with \
              `workspace = true`, and `[target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies]` \
              stand as the adapter scaffolded them, so put the `-` lines back and drop the `+` \
-             lines through `edit_files`:\n{}",
+             lines through `edit_files`; a crate a test alone needs (`bytes`, `http`) is never a \
+             third dev-dependency but one `<crate>.workspace = true` line at the end of \
+             `[dependencies]`, so a `+` line of that shape moves there rather than being \
+             dropped:\n{}",
             files.join("\n")
         ))
     }

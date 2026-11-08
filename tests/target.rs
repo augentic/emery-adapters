@@ -1676,6 +1676,42 @@ async fn omnia_gate_laid() {
     );
 }
 
+// A design whose gate sentences name no path — the gate word in a preamble
+// sentence and in the error mapping — spells the prefix in its bearer
+// sentences, `bearer token checks on /api routes` and `bearer auth on
+// /api`, which the reader falls to, so the gate is laid under `/api` as
+// before, with no settings where those sentences spell no key.
+#[tokio::test]
+async fn omnia_gate_bearer_prefix() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = gated_slice();
+    slice.design = "# Design\n\nThe program is an HTTP service: health probes without API \
+                    authentication, bearer-protected order APIs, and a SQL store. The API layer \
+                    applies bearer token checks on `/api` routes (REQ-001, REQ-002).\n\n## \
+                    Technical logic\n\nHTTP middleware stack: health at /health without auth; \
+                    bearer auth on /api; order routers under /api; global error handler mapping \
+                    ValidationError to 400 invalid-request, UnauthorizedError to 401 \
+                    unauthorized, NotFoundError to 404 not-found.\n"
+        .to_owned();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let reading = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        OMNIA_GATE_ERROR,
+        "pub(crate) async fn read<P>(\n    context: Context<P>, headers: HeaderMap, Path(id): \
+         Path<String>,\n) -> std::result::Result<Json<ReadOutput>, GateError>\nwhere\n    P: \
+         Capabilities,\n{\n    authenticate(&context, &headers).await?;\n",
+    ] {
+        assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");
+    }
+    assert!(!reading.contains("GateSettings"), "no key is spelled, so no settings: {reading}");
+    let health = text(&project, "crates/health/src/orders_reading.rs");
+    assert!(!health.contains("authenticate"), "the gate stays under `/api`: {health}");
+}
+
 // The brief of a slice the gate is laid for says where the gate is and
 // what every handler under the prefix does, names the manifest lines, lists
 // the gate's marker first, and quotes the gate passage.
@@ -5410,6 +5446,54 @@ async fn omnia_stem_without_workspace_lints() {
         text(&project, "crates/orders/Cargo.toml"),
         OMNIA_MANIFEST,
         "the manifest inherits the lints as the adapter scaffolded it"
+    );
+}
+
+// A crate a test alone needs, added as a third dev-dependency, is refused
+// with the line named and the repair spelled: the line moves to the end of
+// `[dependencies]`, since the dev-dependency block stands as scaffolded. The
+// turn moves it and the report is accepted with the manifest carrying it
+// among the stem's dependencies.
+#[tokio::test]
+async fn omnia_stem_dev_dependency_added() {
+    let project = omnia_tree().await;
+    let doubles = "tokio.workspace = true\n";
+    let widened = "tokio.workspace = true\nbytes.workspace = true\n";
+    let fixed = "serde_json.workspace = true\n";
+    let moved = "serde_json.workspace = true\nbytes.workspace = true\n";
+    let using = "    let _ = bytes::Bytes::new();\n    Ok(())\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, using),
+                ("crates/orders/Cargo.toml", doubles, widened),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[
+                ("crates/orders/Cargo.toml", widened, doubles),
+                ("crates/orders/Cargo.toml", fixed, moved),
+            ])],
+        );
+
+    OMNIA.build(&project, &model).await.expect("the moved line is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a stem's manifest changes only inside `[dependencies]`",
+        "a crate a test alone needs (`bytes`, `http`) is never a third dev-dependency",
+        "`crates/orders/Cargo.toml`:\n+ bytes.workspace = true",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        format!("{OMNIA_MANIFEST}bytes.workspace = true\n"),
+        "the test's crate is the last `[dependencies]` line"
     );
 }
 

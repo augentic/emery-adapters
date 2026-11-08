@@ -465,6 +465,10 @@ const GATE_WORDS: &[&str] = &[
     "unauthorized",
 ];
 
+// The words a sentence spells of the bearer token a gate reads, which name
+// the gate's prefix where no gate word's sentence does.
+const BEARER_WORDS: &[&str] = &["bearer"];
+
 // The statuses a mapping of failures to wire codes spells two or more of.
 const STATUSES: &[&str] = &["400", "401", "403", "404", "409", "422", "500", "502", "503"];
 
@@ -698,33 +702,23 @@ impl Rules {
 
     // The gate on the requests the rule paragraphs spell, where their gate
     // sentences name the prefix it mounts under: the `/`-led path those
-    // sentences spell most often, the first on a tie; the keys they spell
-    // as its settings; and the code quoted beside `401` as what it refuses
-    // with, `unauthorized` where none is. A sentence is read rather than
-    // its paragraph, since a bootstrap paragraph names the gate beside the
+    // sentences spell most often, the first on a tie, or, where they spell
+    // none, the path the paragraphs' bearer sentences spell most often,
+    // since a design says `bearer auth on /api` as often as it says the
+    // gate authenticates `/api`; the keys the sentences read spell as its
+    // settings; and the code quoted beside `401` as what it refuses with,
+    // `unauthorized` where none is. A sentence is read rather than its
+    // paragraph, since a bootstrap paragraph names the gate beside the
     // store's settings and a store paragraph names authentication it lacks.
     pub fn gate(&self) -> Option<Gate> {
-        let sentences: Vec<&str> = self
-            .paragraphs
-            .iter()
-            .flat_map(|paragraph| sentences(paragraph))
-            .filter(|sentence| spells(sentence, GATE_WORDS))
-            .collect();
-        let mut counts: Vec<(String, usize)> = Vec::new();
-        for token in sentences.iter().flat_map(|sentence| sentence.split_whitespace()) {
-            let Some(path) = path_token(token) else { continue };
-            match counts.iter_mut().find(|(known, _)| *known == path) {
-                Some((_, count)) => *count += 1,
-                None => counts.push((path, 1)),
-            }
+        let mut sentences = self.sentences_spelling(GATE_WORDS);
+        let mut prefix = most_spelled_path(&sentences);
+        if prefix.is_none() {
+            let bearer = self.sentences_spelling(BEARER_WORDS);
+            prefix = most_spelled_path(&bearer);
+            sentences.extend(bearer);
         }
-        let mut prefix: Option<(String, usize)> = None;
-        for (path, count) in counts {
-            if prefix.as_ref().is_none_or(|(_, most)| count > *most) {
-                prefix = Some((path, count));
-            }
-        }
-        let (prefix, _) = prefix?;
+        let prefix = prefix?;
         let code = sentences
             .iter()
             .find_map(|sentence| quoted_after(sentence, "401"))
@@ -737,6 +731,34 @@ impl Rules {
             settings,
         })
     }
+
+    // The rule paragraphs' sentences spelling one of `words`, in order.
+    fn sentences_spelling(&self, words: &[&str]) -> Vec<&str> {
+        self.paragraphs
+            .iter()
+            .flat_map(|paragraph| sentences(paragraph))
+            .filter(|sentence| spells(sentence, words))
+            .collect()
+    }
+}
+
+// The `/`-led path `sentences` spell most often, the first on a tie.
+fn most_spelled_path(sentences: &[&str]) -> Option<String> {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for token in sentences.iter().flat_map(|sentence| sentence.split_whitespace()) {
+        let Some(path) = path_token(token) else { continue };
+        match counts.iter_mut().find(|(known, _)| *known == path) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((path, 1)),
+        }
+    }
+    let mut most: Option<(String, usize)> = None;
+    for (path, count) in counts {
+        if most.as_ref().is_none_or(|(_, known)| count > *known) {
+            most = Some((path, count));
+        }
+    }
+    most.map(|(path, _)| path)
 }
 
 // The gate on the requests the design's rules spell: the prefix it mounts
