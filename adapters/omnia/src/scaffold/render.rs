@@ -63,7 +63,7 @@ impl Stem {
             String::new(),
             format!("The `{}` stem.", self.name),
         ]));
-        source.push(Item::Mods(self.modules()));
+        source.push(Item::Mods(vec![self.part.clone()]));
         let mut uses = Uses::default();
         uses.add("omnia_sdk", &["Capabilities"]);
         uses.add("omnia_sdk::api", &["Handlers"]);
@@ -632,8 +632,8 @@ impl Type {
     // signature was not read.
     fn render(&self, source: &mut Source) {
         let name = self.name.as_str();
-        if let Body::Table { element, module, .. } = &self.body {
-            self.render_table(element, module, source);
+        if let Body::Table { element, .. } = &self.body {
+            self.render_table(element, source);
             return;
         }
         let fence = Fence::around(&self.signature);
@@ -702,15 +702,15 @@ impl Type {
         }
     }
 
-    // The fn reading a table's rows from its data module's constant into
+    // The fn compiling a table's data file in and reading its rows into
     // the element type, under the table's first line fenced in its doc;
-    // the rows themselves stand in the data module, never in the part.
-    fn render_table(&self, element: &str, module: &str, source: &mut Source) {
+    // the rows themselves stand in the file, never in the part.
+    fn render_table(&self, element: &str, source: &mut Source) {
         let first = self.signature.lines().next().unwrap_or_default().trim_end();
         let fence = Fence::around(first);
-        let constant = format!("crate::{module}::{DATA_CONSTANT}");
+        let file = data_file(&self.name);
         let docs = Doc::new([
-            format!("The design type `{}`, its rows the constant `{constant}`.", self.key),
+            format!("The design type `{}`, its rows the file `{file}`.", self.key),
             String::new(),
             format!("{fence}text"),
             first.to_owned(),
@@ -718,7 +718,7 @@ impl Type {
             String::new(),
             "# Errors".to_owned(),
             String::new(),
-            format!("A row of the constant that `{element}` does not read."),
+            format!("A row of the file that `{element}` does not read."),
         ]);
         source.push(
             Fn::new(&self.name)
@@ -726,7 +726,7 @@ impl Type {
                 .vis(Vis::Pub)
                 .returns(format!("Result<Vec<{element}>>"))
                 .body([
-                    format!("serde_json::from_str({constant})"),
+                    format!("serde_json::from_str(include_str!(\"../{file}\"))"),
                     format!(
                         "{}.map_err(|error| Error::server_error(\"data\", error.to_string()))",
                         pad(TAB)
@@ -736,22 +736,10 @@ impl Type {
     }
 }
 
-// The name of a data module's one constant, the table's rows as JSON.
-const DATA_CONSTANT: &str = "JSON";
-
-// A table's data module: the rows as one raw string constant, fenced with
-// enough hashes that no row closes it early, under a doc the lints ask of
-// a public item.
-pub fn data_module(key: &str, json: &str) -> String {
-    let mut hashes = String::from("#");
-    while json.contains(&format!("\"{hashes}")) {
-        hashes.push('#');
-    }
-    format!(
-        "//! The rows of the design type `{key}`.\n\n/// The rows of `{key}` as JSON, one object \
-         per line under the wire's keys.\npub const {DATA_CONSTANT}: &str = \
-         r{hashes}\"{json}\"{hashes};\n"
-    )
+// A table's data file, relative to the stem's crate: the rows the reader
+// of that name compiles in from beside the sources.
+pub fn data_file(reader: &str) -> String {
+    format!("data/{reader}.json")
 }
 
 impl Test {

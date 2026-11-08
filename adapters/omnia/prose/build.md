@@ -56,7 +56,7 @@ The adapter laid your slice's place in it before this turn, from the requirement
   - a `<Part>Settings` struct over the settings your slice spells, where it spells any;
   - a `pub fn` per requirement carrying neither;
   - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable;
-  - a design type that is a table of rows over a type you own, as the data module `crates/<stem>/src/<name>_data.rs` holding every row in one JSON constant and a `pub fn <name>() -> Result<Vec<<Element>>>` in your part reading it, as [a reference table](references/handlers.md) spells; both are finished;
+  - a design type that is a table of rows over a type you own, as the data file `crates/<stem>/data/<name>.json` holding every row and a `pub fn <name>() -> Result<Vec<<Element>>>` in your part compiling it in and reading it, as [a reference table](references/handlers.md) spells; both are finished;
   - where the design's rules gate the routes under a prefix and a route of yours falls under it, the gate as [a gate](references/handlers.md) spells it: `pub async fn authenticate(..)` with its `GateError` and `GateSettings` in the first stem under the prefix, or imported from the stem that holds it, and every handler under the prefix taking `headers: HeaderMap` and calling it first.
 - A handler answers `Result<Json<Output>>`, or `Result<(StatusCode, Json<Output>)>` where a scenario spells a status other than `200`.
   Answer the status the outcome earns: `StatusCode::CREATED` for a creation, `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down.
@@ -83,7 +83,7 @@ A design type the brief names as laid is finished: its fields and variants stand
 Each field is documented, the wire's names are kept through `#[serde(rename = "..")]`, and `Eq` is dropped where a float reaches it.
 Change a field only where a scenario's wire shape or the check requires it.
 A field the brief names as `serde_json::Value` stands for a type another slice declares; leave it, and read the value's fields where the behaviour needs them.
-A data module the brief names holds a table's rows as one constant, and the `pub fn` in your part reads them: call it where the behaviour needs the rows, and type no row again in code.
+A data file the brief names holds a table's rows, and the `pub fn` in your part compiles it in and reads them: call it where the behaviour needs the rows, and type no row again in code.
 
 A design type the brief lists among the markers, `pub struct <Type> {}` or `pub enum <Type> {}`, has a signature the scaffold could not lay.
 It becomes the type its doc's signature spells, as the [handlers](references/handlers.md) reference declares a design type.

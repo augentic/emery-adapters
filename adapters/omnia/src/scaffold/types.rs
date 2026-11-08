@@ -149,13 +149,10 @@ pub enum Body {
         variants: Vec<LaidVariant>,
         numeric: bool,
     },
-    // A reference table: the rows as the JSON constant of a data module of
-    // the stem's crate, and the fn reading them into the element type,
-    // since the seed's lints refuse a file compiled in.
+    // A reference table: the rows as a JSON file beside the stem's sources,
+    // and the fn compiling it in and reading it into the element type.
     Table {
         element: String,
-        // The data module's name.
-        module: String,
         json: String,
     },
     Marker {
@@ -430,7 +427,7 @@ pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Na
         let (body, laying) = match &item.shape {
             Shape::Opaque { is_enum } => (Body::Marker { is_enum: *is_enum }, Laying::default()),
             Shape::Enum(declared) => (declared.lay(), Laying::default()),
-            Shape::Table(table) => (table.lay(name, parsed, &owned), Laying::default()),
+            Shape::Table(table) => (table.lay(parsed, &owned), Laying::default()),
             Shape::Struct(declared) => {
                 let refs = Refs {
                     owned: &owned,
@@ -470,10 +467,6 @@ pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Na
     bodies
 }
 
-// The suffix of a table's data module after its reader's name, so the
-// module reads as the rows and never as a part.
-const DATA_MODULE_SUFFIX: &str = "_data";
-
 impl Table {
     // Whether the slice lays the table's element as a struct, so the rows
     // deserialise into a type the module declares.
@@ -484,10 +477,10 @@ impl Table {
         })
     }
 
-    // The data module and its reader where the slice lays the element type;
+    // The data file and its reader where the slice lays the element type;
     // the marker otherwise, since rows no laid type reads are rows the turn
     // would have to type itself.
-    fn lay(&self, name: &str, parsed: &[Parsed], owned: &[(String, String)]) -> Body {
+    fn lay(&self, parsed: &[Parsed], owned: &[(String, String)]) -> Body {
         let element = self
             .laid_over(parsed)
             .then(|| owned.iter().find(|(declared, _)| *declared == self.element))
@@ -497,7 +490,6 @@ impl Table {
         };
         Body::Table {
             element: element.clone(),
-            module: format!("{name}{DATA_MODULE_SUFFIX}"),
             json: self.json(),
         }
     }
