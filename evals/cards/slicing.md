@@ -45,11 +45,12 @@ The predictions and the decision rule were written before the live runs; the run
 
 ### Results
 
-Five cards on 2026-11-06, all `composer-2.5` from the working tree that became `#397` (`emery`) and `#197` (`emery-adapters`):
+Seven cards across 2026-11-06 and 2026-11-08, all `composer-2.5`:
 
-- **Arm A (`specify`, `EVAL_RUNS=3`):** `2026-11-06T04-25-50Z` over all four cases (`api-routes`, `express-orders`, `fastapi-routers`, `nestjs-pair`, 12 runs) and `2026-11-06T05-11-53Z` re-running `express-orders` and `fastapi-routers` 46 minutes later (6 runs, 18 `slicing` turns in all).
+- **Arm A (`specify`, `EVAL_RUNS=3`):** `2026-11-06T04-25-50Z` over all four cases (`api-routes`, `express-orders`, `fastapi-routers`, `nestjs-pair`, 12 runs) and `2026-11-06T05-11-53Z` re-running `express-orders` and `fastapi-routers` 46 minutes later (6 runs, 18 `slicing` turns in all), from the working tree that became `#397` (`emery`) and `#197` (`emery-adapters`).
 - **Arm B seed (`--build --target omnia --budget 12`):** `2026-11-06T05-28-13Z` over `express-orders` (`EVAL_RUNS=1`). `specify` sealed revision `44ac6b81d04c7ffe6d0a1cb635dc01e06d3095553e10c09096f51522d446ecde` (66 requirements, 26 criteria, 4 parts in 3 waves `1/2/1`), and `build` stopped at `0/4 verify-failed` in wave 1 (`65s`, exit `1`) because the seed's `common` crate required `omnia-sdk = "^0.38.0"` before `0.38.0` was published to crates.io. Its sealed revision `44ac6b81` is the base every Arm B rebuild runs over.
-- **Arm B `node` reading (`--rebuild 2026-11-06T05-28-13Z --target node`):** `2026-11-06T05-41-17Z` at `--budget 12` and `2026-11-06T05-50-46Z` at `--budget 6`, both over sealed revision `44ac6b81`.
+- **Arm B `node` reading (`--rebuild 2026-11-06T05-28-13Z --target node`):** `2026-11-06T05-41-17Z` at `--budget 12` and `2026-11-06T05-50-46Z` at `--budget 6`, both on 2026-11-06 over sealed revision `44ac6b81`.
+- **Arm B `omnia` reading (`--rebuild 2026-11-06T05-28-13Z --target omnia`):** `2026-11-08T21-05-11Z` at `--budget 12` and `2026-11-08T21-37-41Z` at `--budget 6`, both on 2026-11-08 over sealed revision `44ac6b81`.
 
 #### Arm A — `## Plan shape` across 18 `specify` runs
 
@@ -117,12 +118,91 @@ The sealed plan (`2026-11-06T05-28-13Z` run 1) has 4 parts (`PART-001` `start` R
 
 #### Omnia arm
 
-Pending.
+Over the same sealed revision `44ac6b81` of `2026-11-06T05-28-13Z` (`express-orders`), rebuilt through `omnia` at `--budget 12` (`2026-11-08T21-05-11Z`) and `--budget 6` (`2026-11-08T21-37-41Z`). `start`'s slices (`SLICE-001` at budget 12; `SLICE-001` and `SLICE-002` at budget 6, 12 untriggered requirements) lay no stem and are answered by `Plan::is_empty` with no turn (`0s`, `0` tokens), so `median turn` and `median input` list the active slice build turns first (`7` at budget 12, `10` at budget 6) and all scheduled slices in parentheses; `total input` lists the slice build turns first and all build and verify completions (`14` at budget 12, `21` at budget 6) in parentheses.
 
-#### Reading against C1–C5 (Arm A and the `node` reading of Arm B)
+| card | target | budget | slices | waves | widest | over budget | built | verified | build wall | covered | host checks | scenarios named | oracle | median turn | max turn | median input | total input |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `21-05-11Z` | `omnia` | 12 (flag) | 8 | 7 (`1/2/1/1/1/1/1`) | 2 | 0 | 8/8 | 7/7 | 1278s | 54/66 | ok 82/82 | 78/78 (100%) · 0 outside · 0 unreached · 0 probes | 29/57 (10 · 3 · 12 · 4) | 81s (80s) | 160s | 1.14M (1.04M) | 10.24M (16.93M) |
+| `21-37-41Z` | `omnia` | 6 (flag) | 12 | 11 (`1/1/2/1/1/1/1/1/1/1/1`) | 2 | 2 (`SLICE-008`, `SLICE-009`) | 12/12 | 11/11 | 1826s | 42/66 | ok 82/82 | 65/65 (100%) · 1 outside (`.tmp/before`) · 0 unreached · 0 probes | 28/57 (9 · 3 · 12 · 4) | 69s (61s) | 163s | 782k (713k) | 12.60M (23.10M) |
+
+`## Schedule` at `--budget 12` (`2026-11-08T21-05-11Z`):
+
+| slice | part | sub-stems | types laid | wave | req | scenarios | over budget | duration | input | cached | output |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `SLICE-001` `start` | `PART-001` | `start.require-database-url` .. `start.map-internal-error` (`REQ-001`–`REQ-012`, 12 untriggered) | 0 | 1 | 12 | 12 | no | 0s | 0 | 0 | 0 |
+| `SLICE-002` `customers` | `PART-002` | `customers.get-id`, `customers.post`, `customers.put-id-tier` (`REQ-013`–`REQ-020`) | 4 | 2 | 8 | 8 | no | 89s | 1385922 | 1302976 | 15243 |
+| `SLICE-003` `health` | `PART-003` | `health.get-live`, `health.get-ready` (`REQ-021`–`REQ-025`) | 0 | 2 | 5 | 5 | no | 64s | 687896 | 638336 | 8565 |
+| `SLICE-004` `orders` (1/5) | `PART-004` | `orders.get`, `orders.get-id` (`REQ-026`–`REQ-033`) | 14 | 3 | 8 | 14 | no | 111s | 1249083 | 1178816 | 22515 |
+| `SLICE-005` `orders` (2/5) | `PART-004` | `orders.post` (`REQ-034`–`REQ-043`) | 0 | 4 | 10 | 21 | no | 160s | 4427110 | 4324032 | 31777 |
+| `SLICE-006` `orders` (3/5) | `PART-004` | `orders.put-id-lines` (`REQ-044`–`REQ-053`) | 0 | 5 | 10 | 12 | no | 81s | 1144230 | 1071232 | 16006 |
+| `SLICE-007` `orders` (4/5) | `PART-004` | `orders.post-id-pay`, `orders.post-id-ship` (`REQ-054`–`REQ-061`) | 0 | 6 | 8 | 10 | no | 79s | 940716 | 861760 | 13554 |
+| `SLICE-008` `orders` (5/5) | `PART-004` | `orders.post-id-cancel` (`REQ-062`–`REQ-066`) | 0 | 7 | 5 | 8 | no | 59s | 409123 | 345216 | 8806 |
+
+`## Schedule` at `--budget 6` (`2026-11-08T21-37-41Z`):
+
+| slice | part | sub-stems | types laid | wave | req | scenarios | over budget | duration | input | cached | output |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `SLICE-001` `start` (1/2) | `PART-001` | `start.require-database-url` .. `start.unmatched-route` (`REQ-001`–`REQ-006`) | 0 | 1 | 6 | 6 | no | 0s | 0 | 0 | 0 |
+| `SLICE-002` `start` (2/2) | `PART-001` | `start.map-schema-validation` .. `start.map-internal-error` (`REQ-007`–`REQ-012`) | 0 | 2 | 6 | 6 | no | 0s | 0 | 0 | 0 |
+| `SLICE-003` `customers` (1/2) | `PART-002` | `customers.get-id`, `customers.post` (`REQ-013`–`REQ-017`) | 4 | 3 | 5 | 5 | no | 70s | 837564 | 777280 | 12860 |
+| `SLICE-004` `customers` (2/2) | `PART-002` | `customers.put-id-tier` (`REQ-018`–`REQ-020`) | 0 | 4 | 3 | 3 | no | 53s | 367027 | 318848 | 7581 |
+| `SLICE-005` `health` | `PART-003` | `health.get-live`, `health.get-ready` (`REQ-021`–`REQ-025`) | 0 | 3 | 5 | 5 | no | 54s | 473615 | 426112 | 9260 |
+| `SLICE-006` `orders` (1/7) | `PART-004` | `orders.get` (`REQ-026`–`REQ-030`) | 14 | 5 | 5 | 11 | no | 112s | 1738145 | 1656576 | 19849 |
+| `SLICE-007` `orders` (2/7) | `PART-004` | `orders.get-id` (`REQ-031`–`REQ-033`) | 0 | 6 | 3 | 3 | no | 68s | 725733 | 671424 | 8618 |
+| `SLICE-008` `orders` (3/7) | `PART-004` | `orders.post` (`REQ-034`–`REQ-043`) | 0 | 7 | 10 | 21 | yes | 163s | 4549851 | 4458112 | 33687 |
+| `SLICE-009` `orders` (4/7) | `PART-004` | `orders.put-id-lines` (`REQ-044`–`REQ-053`) | 0 | 8 | 10 | 12 | yes | 107s | 1267807 | 1187776 | 16930 |
+| `SLICE-010` `orders` (5/7) | `PART-004` | `orders.post-id-pay` (`REQ-054`–`REQ-057`) | 0 | 9 | 4 | 5 | no | 40s | 413217 | 351616 | 6610 |
+| `SLICE-011` `orders` (6/7) | `PART-004` | `orders.post-id-ship` (`REQ-058`–`REQ-061`) | 0 | 10 | 4 | 5 | no | 49s | 699556 | 623424 | 8785 |
+| `SLICE-012` `orders` (7/7) | `PART-004` | `orders.post-id-cancel` (`REQ-062`–`REQ-066`) | 0 | 11 | 5 | 8 | no | 103s | 1525895 | 1456256 | 13102 |
+
+Both `omnia` builds merged every serial slice into one logical module per part (`crates/customers/src/customers.rs`, `crates/health/src/health.rs`, `crates/orders/src/orders.rs`, `0` numbered modules, `0` unreached, `0` probes, 12 routes across the 3 modules). As a side reading on the 57-scenario reference oracle ([scenarios.md](scenarios.md#the-express-orders-scenario-oracle)), `21-05-11Z` (`--budget 12`) passed `29/57` (`10/10` customers, `3/3` health, `12/40` orders, `4/4` start) and `21-37-41Z` (`--budget 6`) passed `28/57` (`9/10` customers, `3/3` health, `12/40` orders, `4/4` start, `customers/set-tier-invalid` answering `422` over a Rust enum); because sealed revision `44ac6b81` predates `TABLE_BYTES`, its design carries no `Type: ZONES` fence and the 26 zone-dependent `orders` scenarios fail on the invented `AKL` zone on both builds, while `amend-unknown` and `get-unknown` fail on an invented `data` (`21-05-11Z`) or `payload` (`21-37-41Z`) column.
+
+#### Reading against C1–C5
 
 - **C1 holds.** Across 18 `slicing` turns on the two specify cards, `cap exhausted` is `0`, no run exited in `slicing`, 17 finished `ok` on the first attempt, and 1 was `corrected` (`04-25-50Z` `express-orders` run 2). The correction rate is `1/18` (`5.6%`), below the `8.8%` (`18/204`) baseline, and `slicing` finished `ok` first try on `>= 2/3` runs of every case (`api-routes` 3/3, `express-orders` 2/3 then 3/3, `fastapi-routers` 3/3 then 3/3, `nestjs-pair` 3/3).
-- **C2 is partial.** `merged stems` is `0` on `>= 2/3` runs of `api-routes` (3/3), `nestjs-pair` (2/3), and `fastapi-routers` (2/3 on `04-25-50Z`, 3/3 on `05-11-53Z`). On `express-orders`, `04-25-50Z` merged `health` into `start` on 3/3 runs and `05-11-53Z` on 1/3 (`6/18` plans across the round merged `health` + `start`, plus `1/18` merging `auth` + `users` on `nestjs-pair`), each time justifying the merge in the part's brief.
-- **C3 holds.** Over sealed revision `44ac6b81` of `express-orders` at `--budget 12`, `Schedule::new` cuts the 4 parts into `8` slices (within `8 ± 1`) across `7` waves (`1/2/1/1/1/1/1`) with `0` slices `over budget`.
-- **C4 is partial on the `node` reading (`omnia` unmeasured).** Under `node` at `--budget 6` (`05-50-46Z`), every slice build turn finished well under the `600 s` first-rung cap (max `107 s` on `SLICE-006` `orders` 1/7, carrying the part's 14 owned types; median `71.5 s` vs `58 s` at budget 12), and the two single-route groups exceeding 6 requirements (`SLICE-008` `orders.post` at 10 requirements / 21 scenarios in `92 s` and `SLICE-009` `orders.put-id-lines` at 10 requirements / 12 scenarios in `89 s`) were flagged `over budget: yes` and built, merged, and verified cleanly (`90/90` host checks, `90/90` scenarios named, `1` file outside `.verify-before`). However, the token clause moved the other way: median input tokens per turn rose from `410k` at `--budget 12` to `439k` at `--budget 6`, and total build input rose from `3.40M` across 8 turns to `5.41M` across 12 turns — halving the budget increased the slice turns without making individual turns cheaper. The `omnia`-specific clauses (`crates/orders/src/orders.rs`, `0` numbered modules, `outside` `0`, `unreached` `0`) await the `omnia` arm above.
-- **C5 holds on the schedule and edge baseline (`omnia` wall band unmeasured).** At `--budget 12`, total schedule waves are `7` (`<= 7`, `+1` over the 6-wave `2026-11-04` plan); under `node`, `7/7` waves verified, `host checks` passed (`ok 90/90`), and `build wall` was `566 s` (the `1564–1792 s` `composer-2.5` band is `omnia`'s and awaits the `omnia` arm). Across the 18 Arm A plans, `## Plan shape` records `10` type-backed edges against `71` unbacked edges, `33` of them `unbacked onto start`, meeting the C5 decision rule's trigger for Decision 5's hybrid follow-up.
+- **C2 holds with its justification clause.** `merged stems` is `0` on `>= 2/3` runs of `api-routes` (3/3), `nestjs-pair` (2/3), and `fastapi-routers` (2/3 on `04-25-50Z`, 3/3 on `05-11-53Z`). On `express-orders`, `04-25-50Z` merged `health` into `start` on 3/3 runs and `05-11-53Z` on 1/3 (`6/18` plans across the round merged `health` + `start`, plus `1/18` merging `auth` + `users` on `nestjs-pair`), and every merged part explicitly justified the merge in its brief as C2's exception clause allows.
+- **C3 holds.** Under both `omnia` (`21-05-11Z`) and `node` (`05-41-17Z`) at `--budget 12`, `Schedule::new` cuts sealed revision `44ac6b81`'s 4 parts into `8` slices (within `8 ± 1`) across `7` waves (`1/2/1/1/1/1/1`) with `0` slices `over budget`.
+- **C4 holds on turn duration, over-budget route handling, single-module layout, and `omnia` median input; partial on `outside` (`1` stray file at `--budget 6`) and `node` median input.** At `--budget 6`, every slice build turn finished well under the `600 s` first-rung cap on both targets: under `omnia` (`21-37-41Z`), max `163 s` (`SLICE-008` `orders.post`, corrected once on `stem_manifest_drift` and `empty_misses`) and median `69 s` across the 10 active slice turns (`61 s` across all 12 slices), against max `160 s` and median `81 s` (`80 s` across 8) at `--budget 12`; under `node` (`05-50-46Z`), max `107 s` (`SLICE-006` `orders` 1/7, laying 14 types) and median `71.5 s`, against max `90 s` and median `58 s` at `--budget 12`. On median input tokens per slice turn, `omnia` dropped from `1.14M` (7 active turns; `1.04M` across 8 slices) at `--budget 12` to `782k` (10 active turns; `713k` across 12 slices) at `--budget 6`, while total slice input rose from `10.24M` to `12.60M` (`16.93M` to `23.10M` across all build and verify completions); under `node`, median input rose from `410k` to `439k` and total input from `3.40M` to `5.41M`. On both targets, the two single-route groups exceeding 6 requirements (`SLICE-008` `orders.post` at 10 requirements / 21 scenarios and `SLICE-009` `orders.put-id-lines` at 10 requirements / 12 scenarios) were flagged `over budget: yes` and built, merged, and verified cleanly into one logical module per part (`crates/orders/src/orders.rs`, `0` numbered modules, `unreached` `0`, `probes` `0`, `host checks` `ok 82/82` on `omnia` and `ok 90/90` on `node`). `outside` was `0` at `--budget 12` on both targets and `1` at `--budget 6` on both (`.tmp/before` left by wave 5's verify turn on `omnia`, `.verify-before` on `node`). Each slice's `scenarios` count is recorded beside its `duration` in `## Schedule` above.
+- **C5 holds on the schedule, wave verification, host checks, and `build wall` at `--budget 12`, and triggers Decision 5 on the Arm A edge baseline.** At `--budget 12`, total schedule waves are `7` (`<= 7`, `+1` over the 6-wave `2026-11-04` plan); under `omnia` (`21-05-11Z`), `8/8` slices merged, `7/7` waves verified, `host checks` passed (`ok 82/82`, `0` outside, `0` unreached), and `build wall` was `1278 s` — `286 s` below the `1564–1792 s` `composer-2.5` band (`566 s` under `node`). Across the 18 Arm A plans, `## Plan shape` records `10` type-backed edges against `71` unbacked edges, `33` of them `unbacked onto start`, meeting C5's decision rule trigger for Decision 5.
+
+**Reading under the rule.** The arm holds across Arm A and both targets of Arm B: Option C (`Part` at `specify` with no requirement cap, deterministic `Schedule::new` cutting budget-sized `SLICE-NNN` slices at `build`) and `omnia`'s serial held-module extension stand as the baseline. On C2, all seven stem merges (`6/18` `health` + `start`, `1/18` `auth` + `users`) justified the merge in the part's brief, so `crates/engine/prose/slicing.md`'s merge rule is not tightened under the rule, and the `health` + `start` tendency is recorded. On Decision 1, halving `--budget` from `12` to `6` increased scheduled slices from `8` to `12` (`7` to `10` active turns on `omnia`), verify waves from `7` to `11`, total build input (`16.93M` → `23.10M` on `omnia`, `3.40M` → `5.41M` on `node`), and build wall (`1278 s` → `1826 s` on `omnia`, `566 s` → `1059 s` on `node`), while the heaviest single-route slice (`orders.post`, 10 requirements / 21 scenarios) stayed a single turn at both budgets (`160 s` / `4.43M` and `163 s` / `4.55M` on `omnia`, `90 s` / `735k` and `92 s` / `616k` on `node`); the adapter default budget stays at `12`. On C5, unbacked inter-part edges dominated Arm A (`71` unbacked vs `10` type-backed, `33` onto `start`, serialising `customers` and `health` behind a typeless `start` in wave 1 of `44ac6b81`), firing Decision 5's trigger: inter-part edges move from the model to the engine in the next round below.
+
+## Edges by code
+
+In the round above, the model answered `depends-on` by part name and `Floors::check` verified only that each named part existed and that the graph was acyclic. Across the 18 Arm A plans, `71` of `81` inter-part edges were unbacked by any shared data type (`10` type-backed), and `33` pointed onto `start` (or its bootstrap part), which owns no data types at all and whose slices `omnia` answers with no turn — adding a serial wave before `customers` and `health` can build.
+
+The arm moves inter-part edge construction from the model to the engine (`emery`, revision grammar `10`) and updates the runner's `## Plan shape` columns in this repository:
+
+- **Derived from ownership (`Types`).** `Types::of(&Design)` reads the design's `Role::Data` keys and their `signature` fences. Type `T` names type `U` when `U`'s declared identifier (the identifier after `interface`, `type`, `class`, `struct`, `enum`, `const`, or `def` in the signature, else the key's last segment) appears as a whole identifier token in `T`'s signature (never self, and never when two keys share one declared identifier). Part `P` depends on part `Q` when a type `P` owns names a type `Q` owns. On `express-orders`, `Order` names `Address`, so `orders` → `customers` derives by code; `start` owns no type, so no edge onto it can be derived.
+- **Named by the model (`uses`).** `Draft` drops `depends-on` and gains `uses: Vec<String>` (tightened to an `enum` over the design's `Role::Data` keys, `maxItems: 0` when none): design type keys this part's code compiles against without owning. The engine maps each `uses` key to the part that owns it for one more edge. A `uses` key not in the design, owned by the part itself, or owned by no part is a finding.
+- **Cycles are findings naming the types.** When derived or `uses`-backed edges form a cycle across parts, `Floors::check` refuses the candidate and quotes the type keys behind each edge in the cycle so the model places mutually referencing types under one owner.
+- **Stored and projected.** `Part` stores `uses: Vec<String>` in design order beside `types`; `depends_on: Vec<PartId>` stays on `Part` and is written by the engine from the derived and `uses` edges (`revision::EMERY = 10`, `Uses:` projected after `Types:`). On `amend`, `Pruned::assemble` and `PartAmend` prune `uses` to the design's keys and re-derive `depends_on` through `Types::owner_edges`, removing `spliced`.
+- **Known consequence for `omnia`.** Two `/api` stems sharing no type now build in the same wave, so each may lay its own `authenticate` gate; the build still verifies, and the duplication is recorded for the `omnia` programme rather than this round.
+- **The runner (`evals/`).** `## Plan shape` reads `uses` from the stored plan and reports `derived edges` (explained by an owned type's signature naming another part's type), `named edges` (explained by `uses` alone), and `onto typeless` (edges whose target owns no type, expected `0`).
+
+The round runs as Arm A (`specify`, `EVAL_RUNS=3`) under `CURSOR_MODEL` pinned to `composer-2.5` over the rebuilt `emery` binary:
+
+```bash
+CURSOR_MODEL=composer-2.5 cargo run -p evals -- express-orders fastapi-routers api-routes nestjs-pair
+```
+
+Followed by `emery show schedule --budget 12` over the `express-orders` `run-1` staged project to check the scheduled slice and wave count. The predictions and the decision rule are written before the engine or runner changes are built.
+
+### Predictions
+
+- **E1, no edge onto a typeless part.** `onto typeless` is `0` on every run across all four cases (code makes an edge onto a part that owns no type impossible; the clause guards the derivation and the runner's check).
+- **E2, the serialisation goes.** On `express-orders`, `health` and `customers` share wave 1 with `start` on `3/3` runs: plan `waves` becomes `3/1` (4 parts) or `2/1` (when `health` + `start` merge) rather than `1/2/1` or `1/1/1`, and `emery show schedule --budget 12` cuts `8 ± 1` slices in `<= 6` waves (against `7` on `44ac6b81`).
+- **E3, the type-backed edges stay.** `orders` → `customers` (`Address`) derives on `3/3` `express-orders` runs; across the four cases, the derived edges are a superset of the 10 type-backed edges the 2026-11-06 plans drew, read case by case.
+- **E4, the gate does not regress.** `slicing` finishes `ok` on the first attempt on `>= 2/3` runs per case (correction rate at or below `8.8%`), `cap exhausted` is `0`, and `uses` names at most `2` keys per part on `>= 2/3` runs (the model does not rebuild the old hub edges through `uses`).
+
+### Decision rule
+
+- **The arm holds** when E1–E4 hold across the 12 runs; engine-derived edges and `uses` then stand as grammar `10`.
+- **E1 or E3 fails:** the derivation rule in `Types` (`declared_name` or token matching over `signature`) missed or mis-matched a type; fix `crates/engine/src/specify/plan/types.rs` and re-run.
+- **E4 fails on the correction rate:** the `uses` contract or cycle finding in `crates/engine/prose/slicing.md` is ambiguous; inspect the `candidate rejected` findings in `run-N.stderr`, tighten the `uses` paragraph, and re-run.
+- **E4 fails on `uses` volume (`> 2` keys per part on `>= 2/3` runs):** inspect whether the named keys are genuine cross-part references or reconstructed hub edges, and reconsider whether `uses` stays alongside signature-derived edges.
+- **E2 fails with E1 and E3 holding:** read against the `merged stems` column and `uses` before changing code or prose.
+
+### Results
+
+Not yet run.
