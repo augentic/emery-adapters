@@ -55,10 +55,12 @@ The adapter laid your slice's place in it before this turn, from the requirement
   - a `.topic(..)` and a consumer per message they carry, with its constant in the topic table;
   - a `<Part>Settings` struct over the settings your slice spells, where it spells any;
   - a `pub fn` per requirement carrying neither;
-  - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable.
+  - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable;
+  - where the design's rules gate the routes under a prefix and a route of yours falls under it, the gate as [a gate](references/handlers.md) spells it: `pub async fn authenticate(..)` with its `GateError` and `GateSettings` in the first stem under the prefix, or imported from the stem that holds it, and every handler under the prefix taking `headers: HeaderMap` and calling it first.
 - A handler answers `Result<Json<Output>>`, or `Result<(StatusCode, Json<Output>)>` where a scenario spells a status other than `200`.
   Answer the status the outcome earns: `StatusCode::CREATED` for a creation, `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down.
   An error status, a `404`, is the error the handler returns.
+  A gated handler answers `std::result::Result<_, GateError>`, so the gate's refusal and the host's errors both reach the wire through `?`.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
   Each test already sends the request or the delivery its requirement carries.
 - Your lines in every list: the stem's at the root, `<stem>::handlers()` in `src/lib.rs` and `<stem> = { path = "crates/<stem>" }` in `Cargo.toml`, and the part's in the entry.
@@ -278,6 +280,7 @@ Where your slice carries requirements under `start` beside its own stem's, read 
   write nothing, and leave them out of `covered`.
 - A slice of `start` requirements alone, none carrying a route, is never put to you.
 - A rule every route obeys that the plan or the design says `start` applies — a gate on the request, a mapping of failures to wire codes — reaches your slice through the scaffold section of the brief, with the design's paragraphs on it and the functions the stems already in the tree export for it; it is your part's to apply, since no `start` crate does.
+  Where the design names the prefix the gate mounts under, the adapter laid the gate and its calls before this turn, as the brief says: fill the gate's marker where your stem holds it, and write no second gate.
 
 ## Reuse, and the platform's names
 

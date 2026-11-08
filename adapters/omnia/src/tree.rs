@@ -17,7 +17,7 @@ use syn::visit::{self, Visit};
 use syn::{Expr, ExprLit, ItemFn, Lit, Local, Macro};
 
 use crate::layout::{self, Toml, TopicTable};
-use crate::scaffold::Scaffold;
+use crate::scaffold::{Gate, Scaffold, registration};
 use crate::syntax::{self, Mentions, Unparsed};
 
 const MAX_DIFF_LINES: usize = 24;
@@ -70,6 +70,14 @@ impl Module {
             markers.visit_file(file);
         }
         markers.found
+    }
+
+    // The top-level fn named `name`, where the file declares one.
+    fn fn_item(&self, name: &str) -> Option<&syn::ItemFn> {
+        self.file()?.items.iter().find_map(|item| match item {
+            syn::Item::Fn(item) if item.sig.ident == name => Some(item),
+            _ => None,
+        })
     }
 }
 
@@ -141,6 +149,7 @@ impl<'a> Tree<'a> {
         findings.extend(self.split_stems(scaffold));
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
+        findings.extend(self.unfilled_gate(scaffold));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.default_decoders(scaffold));
@@ -321,6 +330,43 @@ impl<'a> Tree<'a> {
         ))
     }
 
+    // The gate's function still a stub while a handler of the slice that
+    // calls it is filled: every request under the prefix would then panic
+    // at the gate, so the gate is filled before any handler behind it
+    // answers. The gate's marker names no requirement, so `markers_left`
+    // never sees it.
+    fn unfilled_gate(&self, scaffold: &Scaffold) -> Option<String> {
+        let gatekeeper = scaffold.gatekeeper()?;
+        let filled = gatekeeper.callers.iter().any(|(path, name)| {
+            self.module(path)
+                .and_then(|module| module.fn_item(name))
+                .is_some_and(|item| !syntax::holds_marker(&item.block))
+        });
+        if !filled {
+            return None;
+        }
+        let gate = self.module(&gatekeeper.file)?.fn_item(Gate::FN)?;
+        if !syntax::holds_todo(&gate.block) {
+            return None;
+        }
+        let line = syntax::line(gate.sig.fn_token.span);
+        Some(format!(
+            "a handler under the gate's prefix is filled while the gate it calls first is \
+             still the scaffold's stub, so every request to it would panic at the gate: fill \
+             `{}` in `{}` through `edit_files` under its marker key, `{}: the gate under \
+             <prefix>`, with the rule the design states — the credential read from the \
+             headers, checked against the gate's settings, `Ok(())` where it is accepted and \
+             `Err({}::Unauthorized)` where it is missing or unknown:\n{}:{line}: `{}` holds \
+             its `todo!` while a handler calling it is filled",
+            Gate::FN,
+            gatekeeper.file,
+            Gate::FN,
+            Gate::ERROR,
+            gatekeeper.file,
+            Gate::FN
+        ))
+    }
+
     // A test file `syn` refuses is `unparsed`'s finding, its scenarios
     // unread here.
     fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
@@ -492,11 +538,8 @@ impl<'a> Tree<'a> {
         if !scaffold.last() {
             return None;
         }
-        let cited: Vec<&str> =
-            scaffold.stems().filter(|stem| inbound.stems.contains(*stem)).collect();
-        let stems = if cited.is_empty() { scaffold.stems().collect() } else { cited };
         let mut lines = Vec::new();
-        for stem in stems {
+        for stem in inbound.held(scaffold.stems()) {
             let prefix = format!("crates/{}/src/", layout::crate_dir(stem));
             let own: Vec<&Module> =
                 self.modules.iter().filter(|module| module.path.starts_with(&prefix)).collect();
@@ -529,7 +572,7 @@ impl<'a> Tree<'a> {
              trigger is the stream's deliveries setting off the requirements its bullet cites, \
              never a route in its place, a `start` crate, or a requirement of the registration's \
              own; {}:\n{}",
-            lists::registration(scaffold.wire()),
+            registration(scaffold.wire()),
             lines.join("\n")
         ))
     }

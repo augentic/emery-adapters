@@ -6,8 +6,10 @@ use std::path::Path;
 use emery_sdk::target::{DesignType, Marker, Requirement, Scenario, Slice};
 use emery_sdk::{Error, NoFollow, Route, Standing, bad_request, server_error, standing};
 
+use super::gate::{Gated, Gating};
 use super::lists::{Line, Lists, Place, Topics};
 use super::names::{Names, flat, number, pascal, screaming, snake};
+use super::reference::Gate;
 use super::render::{self, dependency_line, topic_constant};
 use super::settings::Settings;
 use super::trigger;
@@ -36,6 +38,9 @@ pub struct Stem {
     pub tests: Option<File>,
     pub paths: Vec<(String, String)>,
     pub settings: Option<Settings>,
+    // The gate the stem's handlers under its prefix call, where the design
+    // spells one and a handler falls under it.
+    pub gating: Option<Gating>,
     pub handlers: Vec<Handler>,
     pub consumers: Vec<Consumer>,
     pub functions: Vec<Function>,
@@ -81,6 +86,9 @@ pub struct Handler {
     // Whether a scenario states a status other than `200`, so the handler
     // answers its output under a status of its own.
     pub status: bool,
+    // Whether the handler takes the request's headers and calls the gate
+    // before anything else, its route falling under the gate's prefix.
+    pub gated: bool,
     pub stated: Vec<Stated>,
     pub marker: String,
 }
@@ -205,6 +213,7 @@ impl Stem {
             doc,
             paths: Vec::new(),
             settings: None,
+            gating: None,
             handlers: Vec::new(),
             consumers: Vec::new(),
             functions: Vec::new(),
@@ -346,9 +355,55 @@ impl Stem {
             params: route.params().map(|wire| Param { field: snake(wire) }).collect(),
             route: route.clone(),
             status: states_status(group),
+            gated: false,
             marker: format!("{}: the handler", named(&stated)),
             stated,
         });
+    }
+
+    // Whether a handler of the stem falls under the gate's prefix.
+    pub fn under(&self, gate: &Gate) -> bool {
+        self.handlers.iter().any(|handler| gate.under(&handler.route.path))
+    }
+
+    // Resolves where the stem's handlers under the prefix reach the gate,
+    // and marks each as calling it where the laid code can; a stem with no
+    // handler under the prefix reaches none.
+    pub fn gate(&mut self, gated: &Gated<'_>) {
+        if !self.under(gated.gate) {
+            return;
+        }
+        let held = self.held_fn(Gate::FN);
+        let gating = Gating::resolve(gated, &self.dir, &self.part, &self.module.path, held);
+        if let Some(gating) = &gating
+            && gating.calls()
+        {
+            for handler in &mut self.handlers {
+                handler.gated = gating.gate.under(&handler.route.path);
+            }
+        }
+        self.gating = gating;
+    }
+
+    // Whether the request a test sends at `route` carries the gate's
+    // header: what the handler laid for the route takes.
+    pub fn gates(&self, route: &Route) -> bool {
+        self.handlers.iter().any(|handler| handler.route == *route && handler.gated)
+    }
+
+    // The gate the stem lays in its module, where it lays one.
+    pub fn laid_gate(&self) -> Option<&Gate> {
+        self.gating.as_ref().filter(|gating| gating.lays()).map(|gating| &gating.gate)
+    }
+
+    // The keys the stem's tests seed: the part's settings and, where its
+    // handlers call the gate, the gate's.
+    pub fn seeded(&self) -> Vec<&str> {
+        let mut keys: Vec<&str> = self.settings.iter().flat_map(Settings::keys).collect();
+        if let Some(gating) = self.gating.as_ref().filter(|gating| gating.calls()) {
+            keys.extend(gating.gate.settings.iter().flat_map(Settings::keys));
+        }
+        keys
     }
 
     // Whether the request a test sends at `route` carries a body: what the
@@ -535,6 +590,13 @@ impl Stem {
         if let Some(settings) = &self.settings {
             tokens.push(format!("struct {}", settings.name));
         }
+        if let Some(gate) = self.laid_gate() {
+            tokens.push(format!("fn {}", Gate::FN));
+            tokens.push(format!("enum {}", Gate::ERROR));
+            if let Some(settings) = &gate.settings {
+                tokens.push(format!("struct {}", settings.name));
+            }
+        }
         if self.registers() {
             tokens.push("fn handlers".to_owned());
         }
@@ -568,6 +630,9 @@ impl Stem {
                 Marker::new(&design_type.key, format!("pub {} {{}}", design_type.declaration()))
             })
             .collect();
+        if let Some(gate) = self.laid_gate() {
+            markers.push(Marker::new(gate.marker(), render::gate_stub(gate).trim_end()));
+        }
         for handler in &self.handlers {
             markers.push(Marker::new(&handler.marker, handler.stub().trim_end()));
         }
@@ -617,12 +682,10 @@ impl Stem {
                 Place::FileEnd,
             ));
         }
-        if self.manifest.held && !self.consumers.is_empty() {
-            lines.push(Line::new(
-                &self.manifest.path,
-                dependency_line(TOPIC_DEPENDENCY),
-                Place::FileEnd,
-            ));
+        if self.manifest.held {
+            for dependency in self.dependencies() {
+                lines.push(Line::new(&self.manifest.path, dependency, Place::FileEnd));
+            }
         }
         if self.entry.held {
             lines.push(Line::new(
@@ -644,7 +707,31 @@ impl Stem {
     pub fn held_fn(&self, name: &str) -> bool {
         self.held_fns.contains(name)
     }
+
+    // The lines of the stem's `[dependencies]` beyond the fixed four: the
+    // topic table's crate where a part names a topic, the error crates
+    // where the stem lays the gate, and the gate's crate where it imports
+    // the gate from another.
+    pub fn dependencies(&self) -> Vec<String> {
+        let mut lines = Vec::new();
+        if !self.consumers.is_empty() {
+            lines.push(dependency_line(TOPIC_DEPENDENCY));
+        }
+        if let Some(gating) = &self.gating {
+            if gating.lays() {
+                lines.extend(GATE_DEPENDENCIES.iter().map(|name| dependency_line(name)));
+            }
+            if let Some(dependency) = gating.dependency() {
+                lines.push(dependency.line());
+            }
+        }
+        lines
+    }
 }
+
+// The crates the laid gate's error type uses beyond the fixed four, each
+// pinned by the root manifest.
+const GATE_DEPENDENCIES: [&str; 2] = ["anyhow", "thiserror"];
 
 impl File {
     const fn at(path: String) -> Self {

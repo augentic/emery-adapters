@@ -5,19 +5,19 @@ mod item;
 use std::fmt::Write as _;
 
 use self::item::{
-    BODY_WIDTH, Call, Chain, Const, Consts, Doc, Enum, Expr, Fence, Field, Fn, Item, Source,
+    BODY_WIDTH, Call, Chain, Const, Consts, Doc, Enum, Expr, Fence, Field, Fn, Impl, Item, Source,
     Struct, Uses, Variant, Vis, block,
 };
 pub use self::item::{MAX_WIDTH, TAB, pad};
+use super::gate::Gating;
 use super::lists::{Place, insert};
 use super::names::{escape, flat, snake};
+use super::reference::Gate;
 use super::settings::Settings;
 use super::stem::{Act, Consumer, Function, Handler, Kind, Stated, Stem, Test, Type};
 use super::trigger;
 use super::types::{Body, DefaultFn, LaidField, LaidVariant};
-use crate::layout::{
-    HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER, TOPIC_DEPENDENCY,
-};
+use crate::layout::{HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER};
 use crate::syntax;
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
@@ -40,14 +40,13 @@ impl Stem {
     }
 
     // The manifest: the header, then one line per crate the stem's files
-    // use, the topic table's crate among them where a part names a topic.
+    // use, sorted by crate: the topic table's where a part names a topic,
+    // the gate's where the stem lays or imports it.
     fn render_manifest(&self) -> String {
-        let mut names: Vec<&str> = STEM_DEPENDENCIES.to_vec();
-        if !self.consumers.is_empty() {
-            names.push(TOPIC_DEPENDENCY);
-        }
-        names.sort_unstable();
-        let dependencies: Vec<String> = names.iter().map(|name| dependency_line(name)).collect();
+        let mut dependencies: Vec<String> =
+            STEM_DEPENDENCIES.iter().map(|name| dependency_line(name)).collect();
+        dependencies.extend(self.dependencies());
+        dependencies.sort_by(|a, b| dependency_name(a).cmp(dependency_name(b)));
         format!(
             "{}\n{}\n",
             STEM_MANIFEST_HEADER.replace("<package>", &self.package).replace("<stem>", &self.name),
@@ -102,7 +101,10 @@ impl Stem {
             source.push(self.handlers_fn());
         }
         if let Some(settings) = &self.settings {
-            source.push(settings.render());
+            source.push(settings.render("part"));
+        }
+        if let Some(gate) = self.laid_gate() {
+            gate.render(&mut source);
         }
         for design_type in &self.types {
             design_type.render(&mut source);
@@ -133,7 +135,7 @@ impl Stem {
         )]));
         source.push(self.test_imports());
 
-        source.push(provider(self.settings.as_ref()));
+        source.push(provider(&self.seeded()));
         if sending || delivering {
             source.push(router(&ident));
         }
@@ -158,13 +160,22 @@ impl Stem {
         if self.types.iter().any(|design_type| design_type.body.uses_map()) {
             uses.add("std::collections", &["BTreeMap"]);
         }
+        let laying = self.laid_gate().is_some();
         if routed {
             uses.add("axum", &["Json"]);
             if self.handlers.iter().any(|handler| !handler.params.is_empty()) {
                 uses.add("axum::extract", &["Path"]);
             }
-            if self.handlers.iter().any(|handler| handler.status) {
-                uses.add("axum::http", &["StatusCode"]);
+            let mut http = Vec::new();
+            if self.handlers.iter().any(|handler| handler.gated) || laying {
+                http.push("HeaderMap");
+            }
+            if self.handlers.iter().any(|handler| handler.status) || laying {
+                http.push("StatusCode");
+            }
+            uses.add("axum::http", &http);
+            if laying {
+                uses.add("axum::response", &["IntoResponse", "Response"]);
             }
             let methods: Vec<&str> = self
                 .handlers
@@ -176,6 +187,9 @@ impl Stem {
         if consuming {
             uses.add("common", &["topic"]);
         }
+        if let Some(path) = self.gating.as_ref().and_then(Gating::imported) {
+            uses.add(path, &[Gate::ERROR, Gate::FN]);
+        }
         if routed || consuming {
             uses.add("omnia_sdk::api", &["Context", "Handlers"]);
         }
@@ -183,10 +197,13 @@ impl Stem {
         if routed || consuming {
             sdk.push("Capabilities");
         }
+        if laying {
+            sdk.push("Config");
+        }
         if routed || consuming || !self.functions.is_empty() {
             sdk.push("Result");
         }
-        if self.settings.is_some() {
+        if self.settings.is_some() || self.laid_gate().is_some_and(|gate| gate.settings.is_some()) {
             sdk.push("Settings");
         }
         uses.add("omnia_sdk", &sdk);
@@ -271,7 +288,10 @@ impl Stem {
             appended.push(self.handlers_fn());
         }
         if let Some(settings) = &self.settings {
-            appended.push(settings.render());
+            appended.push(settings.render("part"));
+        }
+        if let Some(gate) = self.laid_gate() {
+            gate.render(&mut appended);
         }
         for design_type in &self.types {
             design_type.render(&mut appended);
@@ -304,7 +324,7 @@ impl Stem {
         let ident = self.package.replace('-', "_");
         let mut appended = Source::default();
         if !self.held_fn("provider") {
-            appended.push(provider(self.settings.as_ref()));
+            appended.push(provider(&self.seeded()));
         }
         if (self.sending() || self.delivering()) && !self.held_fn("router") {
             appended.push(router(&ident));
@@ -331,12 +351,21 @@ impl Stem {
             .scenarios
             .iter()
             .any(|test| matches!(&test.act, Act::Route(route) if self.sends_body(route)));
+        let with_gate = self
+            .scenarios
+            .iter()
+            .any(|test| matches!(&test.act, Act::Route(route) if self.gates(route)));
         let mut uses = Uses::default();
         if sending {
             uses.add("axum::body", &["Body"]);
-            if with_body {
-                uses.add("axum::http::header", &["CONTENT_TYPE"]);
+            let mut headers = Vec::new();
+            if with_gate {
+                headers.push("AUTHORIZATION");
             }
+            if with_body {
+                headers.push("CONTENT_TYPE");
+            }
+            uses.add("axum::http::header", &headers);
             uses.add("axum::http", &["Request", "StatusCode"]);
         }
         if delivering {
@@ -346,7 +375,7 @@ impl Stem {
             uses.add("omnia_sdk::api", &["Client", "Router"]);
         }
         let mut doubles = vec!["Provider"];
-        if self.settings.is_some() {
+        if !self.seeded().is_empty() {
             doubles.push("MapConfig");
         }
         if sending {
@@ -391,6 +420,9 @@ impl Handler {
                 .vis(Vis::Pub),
         );
         let mut params = vec!["context: Context<P>".to_owned()];
+        if self.gated {
+            params.push("headers: HeaderMap".to_owned());
+        }
         match self.params.as_slice() {
             [] => {}
             [one] => params.push(format!("Path({}): Path<String>", one.field)),
@@ -408,6 +440,16 @@ impl Handler {
         } else {
             format!("Json<{}>", self.output)
         };
+        let returns = if self.gated {
+            format!("std::result::Result<{answered}, {}>", Gate::ERROR)
+        } else {
+            format!("Result<{answered}>")
+        };
+        let mut body = Vec::new();
+        if self.gated {
+            body.push(format!("{}(&context, &headers).await?;", Gate::FN));
+        }
+        body.extend(stub_lines(&self.borrowed(), &self.marker));
         source.push(
             Fn::new(&self.name)
                 .comments(stated(&self.stated))
@@ -415,11 +457,93 @@ impl Handler {
                 .asynchronous()
                 .generics("<P>")
                 .params(params)
-                .returns(format!("Result<{answered}>"))
+                .returns(returns)
                 .bounds([BOUND])
-                .body(stub_lines(&self.borrowed(), &self.marker)),
+                .body(body),
         );
     }
+}
+
+impl Gate {
+    // The gate as the module lays it: its settings where the design spells
+    // keys, its error answering the refusal under the design's code and
+    // passing the host's through, and the function every handler under the
+    // prefix calls first, its body the marker.
+    fn render(&self, source: &mut Source) {
+        if let Some(settings) = &self.settings {
+            source.push(settings.render("gate"));
+        }
+        source.push(
+            Enum::new(Self::ERROR)
+                .docs([format!("Why the gate under `{}` refused a request.", escape(&self.prefix))])
+                .attr("#[derive(Debug, thiserror::Error)]")
+                .vis(Vis::Pub)
+                .variants([
+                    Variant::new("Unauthorized")
+                        .docs(["The request carried no accepted credential."])
+                        .attrs([format!("#[error(\"{}\")]", escape(&self.code))]),
+                    Variant::new("Host")
+                        .docs(["The settings or a capability failed."])
+                        .attrs(["#[error(transparent)]"])
+                        .payload("#[from] omnia_sdk::Error"),
+                ]),
+        );
+        source.push(Impl::new(format!("impl From<anyhow::Error> for {}", Self::ERROR)).body([
+            "fn from(error: anyhow::Error) -> Self {",
+            "    Self::Host(error.into())",
+            "}",
+        ]));
+        source.push(Impl::new(format!("impl IntoResponse for {}", Self::ERROR)).body([
+            "fn into_response(self) -> Response {".to_owned(),
+            "    match self {".to_owned(),
+            "        Self::Unauthorized => {".to_owned(),
+            format!(
+                "            let body = serde_json::json!({{ \"error\": \"{}\" }});",
+                escape(&self.code)
+            ),
+            "            (StatusCode::UNAUTHORIZED, Json(body)).into_response()".to_owned(),
+            "        }".to_owned(),
+            "        Self::Host(inner) => inner.into_response(),".to_owned(),
+            "    }".to_owned(),
+            "}".to_owned(),
+        ]));
+        source.push(self.signature().docs([
+            format!(
+                "The gate every route under `{}` passes first, as the design's rules state it.",
+                escape(&self.prefix)
+            ),
+            String::new(),
+            "# Errors".to_owned(),
+            String::new(),
+            format!(
+                "[`{}::Unauthorized`] where the request carries no accepted credential.",
+                Self::ERROR
+            ),
+        ]));
+    }
+
+    fn signature(&self) -> Fn {
+        Fn::new(Self::FN)
+            .vis(Vis::Pub)
+            .asynchronous()
+            .generics("<P>")
+            .params(["context: &Context<P>", "headers: &HeaderMap"])
+            .returns(format!("std::result::Result<(), {}>", Self::ERROR))
+            .bounds(["P: Config"])
+            .body(gate_stub_lines(self))
+    }
+}
+
+// The body of the laid gate as the file holds it: the one block the turn
+// replaces.
+pub fn gate_stub(gate: &Gate) -> String {
+    block(gate_stub_lines(gate)).collect::<Vec<_>>().join("\n")
+}
+
+fn gate_stub_lines(gate: &Gate) -> Vec<String> {
+    let mut lines = vec!["let _ = (context, headers);".to_owned()];
+    lines.extend(marker_lines(&gate.marker()));
+    lines
 }
 
 impl Consumer {
@@ -477,10 +601,11 @@ impl Function {
 }
 
 impl Settings {
-    // The settings struct under the keys it reads: one `String` field per
-    // key, under the shared prefix where the keys have one, a key spelled
-    // on its field where the derive would not read it off the name.
-    fn render(&self) -> Struct {
+    // The settings struct under the keys `reader` (the part, the gate)
+    // reads: one `String` field per key, under the shared prefix where the
+    // keys have one, a key spelled on its field where the derive would not
+    // read it off the name.
+    fn render(&self, reader: &str) -> Struct {
         let keys: Vec<String> = self.keys().map(|key| format!("`{key}`")).collect();
         let fields = self.fields.iter().map(|field| {
             Field::new(&field.name, "String").attrs(
@@ -488,7 +613,7 @@ impl Settings {
             )
         });
         Struct::new(&self.name)
-            .comments([format!("The settings the part reads: {}.", keys.join(", "))])
+            .comments([format!("The settings the {reader} reads: {}.", keys.join(", "))])
             .attr("#[derive(Debug, Settings)]")
             .attrs(self.prefix.as_ref().map(|prefix| format!("#[setting(prefix = \"{prefix}\")]")))
             .vis(Vis::Crate)
@@ -628,12 +753,19 @@ impl Test {
                 for (wire, field) in &params {
                     lines.push(format!("let {field} = \"<{}>\";", escape(wire)));
                 }
+                let gated = stem.gates(route);
+                if gated {
+                    lines.push("let authorization = \"<authorization>\";".to_owned());
+                }
                 let target = if params.is_empty() {
                     Expr::from(format!("\"{}\"", escape(&route.path)))
                 } else {
                     Expr::Macro(Call::new("format!", [format!("\"{}\"", escape(&format))]))
                 };
                 let mut calls = Vec::new();
+                if gated {
+                    calls.push(Call::new(".header", ["AUTHORIZATION", "authorization"]));
+                }
                 if stem.sends_body(route) {
                     calls.push(Call::new(".header", ["CONTENT_TYPE", "\"application/json\""]));
                     calls.push(Call::new(".body", ["Body::from(\"{}\")"]));
@@ -680,6 +812,12 @@ pub fn dependency_line(name: &str) -> String {
     format!("{name}.workspace = true")
 }
 
+// The crate a `[dependencies]` line names, before its `.workspace` or its
+// ` =`.
+fn dependency_name(line: &str) -> &str {
+    line.split(['.', ' ', '=']).next().unwrap_or(line)
+}
+
 // The topic table's constant for `topic`, under its doc line, as the lines
 // added at the end of the table.
 pub fn topic_constant(constant: &str, topic: &str) -> String {
@@ -693,18 +831,18 @@ pub fn topic_constant(constant: &str, topic: &str) -> String {
 
 // The doubles every scenario starts from, each setting the part reads
 // seeded with a placeholder the turn fills.
-fn provider(settings: Option<&Settings>) -> Fn {
+fn provider(keys: &[&str]) -> Fn {
     let item = Fn::new("provider").returns("Provider");
-    let Some(settings) = settings else {
+    if keys.is_empty() {
         return item
             .comments([
                 "The doubles every scenario starts from: set a setting or a response on them in \
                  the arrangement.",
             ])
             .body(["Provider::default()"]);
-    };
+    }
     let seeds: Vec<String> =
-        settings.keys().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
+        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
     let inline = format!("[{}]", seeds.join(", "));
     let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
     let body = if joined.chars().count() <= BODY_WIDTH {

@@ -190,6 +190,102 @@ where
 
 Where every status the handler answers is a success or one of the four, no error type is needed: `Result<(StatusCode, Json<O>)>` over `omnia_sdk::Error` answers `201` and `404` alike, and the adapter scaffolds that shape where a scenario states a status.
 
+## A gate
+
+A rule every route under one prefix obeys before anything else, authentication under `/api`, is one function, not a layer and not a route: the host runs a stem through its `handlers()` alone, so there is no middleware to mount it on. Where the design's rules name the prefix, the adapter lays the gate in the first stem of the slice with a route under it, and every handler under the prefix is laid calling it first; a later stem imports it from that crate (`<stem> = { path = "../<stem>" }` under its `[dependencies]`) rather than writing a second. The fixture's `customers.rs`:
+
+```rust
+use axum::Json;
+use axum::extract::Path;
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{IntoResponse, Response};
+use omnia_sdk::api::Context;
+use omnia_sdk::{Config, Settings, StateStore, StateStoreExt as _, not_found};
+
+// The settings the gate reads: `API_TOKENS`, `BEARER_PREFIX`.
+#[derive(Debug, Settings)]
+pub(crate) struct GateSettings {
+    api_tokens: String,
+    bearer_prefix: String,
+}
+
+/// Why the gate under `/api` refused a request.
+#[derive(Debug, thiserror::Error)]
+pub enum GateError {
+    /// The request carried no accepted credential.
+    #[error("unauthorized")]
+    Unauthorized,
+    /// The settings or a capability failed.
+    #[error(transparent)]
+    Host(#[from] omnia_sdk::Error),
+}
+
+impl From<anyhow::Error> for GateError {
+    fn from(error: anyhow::Error) -> Self {
+        Self::Host(error.into())
+    }
+}
+
+impl IntoResponse for GateError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Unauthorized => {
+                let body = serde_json::json!({ "error": "unauthorized" });
+                (StatusCode::UNAUTHORIZED, Json(body)).into_response()
+            }
+            Self::Host(inner) => inner.into_response(),
+        }
+    }
+}
+
+/// The gate every route under `/api` passes first, as the design's rules state it.
+///
+/// # Errors
+///
+/// [`GateError::Unauthorized`] where the request carries no accepted credential.
+pub async fn authenticate<P>(
+    context: &Context<P>, headers: &HeaderMap,
+) -> std::result::Result<(), GateError>
+where
+    P: Config,
+{
+    let settings = GateSettings::load(context.config()).await?;
+    let bearer = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix(settings.bearer_prefix.as_str()))
+        .map(str::trim)
+        .ok_or(GateError::Unauthorized)?;
+    if settings.api_tokens.split(',').map(str::trim).any(|token| token == bearer) {
+        Ok(())
+    } else {
+        Err(GateError::Unauthorized)
+    }
+}
+
+// REQ-016 customers.read: Answers the customer by its id.
+pub(crate) async fn read<P>(
+    context: Context<P>, headers: HeaderMap, Path(id): Path<String>,
+) -> std::result::Result<Json<ReadOutput>, GateError>
+where
+    P: StateStore + Config,
+{
+    authenticate(&context, &headers).await?;
+    let customer: ReadOutput = context
+        .state()
+        .get_json(&customer_key(&id))
+        .await?
+        .ok_or_else(|| not_found!("customer `{id}`"))?;
+    Ok(Json(customer))
+}
+```
+
+- The gate's body is the rule as the design states it: the credential read from the headers, checked against `GateSettings`, `Ok(())` where it is accepted and `Err(GateError::Unauthorized)` where it is missing or unknown. The signature stays as laid, since every handler under the prefix calls it so.
+- A gated handler takes `headers: HeaderMap` after the context, calls the gate before it reads a body or reaches a capability, and answers `std::result::Result<_, GateError>`: the gate's refusal and the host's `omnia_sdk::Error` both reach the wire through `?`, the latter through the `Host` variant.
+- A route outside the prefix, `GET /health/live`, takes no `HeaderMap` and calls no gate; the design's rule names the prefix for that reason.
+- A test of a gated route sends the credential, `.header(AUTHORIZATION, authorization)` over a value the seeded `GateSettings` accept, and `provider()` seeds the gate's keys beside the part's. A scenario stating the refusal sends no header, or an unknown credential, and asserts `StatusCode::UNAUTHORIZED` and the body's `error` field.
+- One gate per prefix: a stem whose handlers fall under a prefix another stem's gate guards imports that gate and writes none of its own, and the adapter refuses a filled handler behind a gate still left as its stub.
+
 ## The capabilities
 
 Each capability is a trait on the provider, bounded where it is used and reached through the context's accessor; every call is `async`, and `?` carries its failure into the handler's error. The methods, their arguments, and the types they carry are in [the omnia API](omnia-api.md), one block per trait.

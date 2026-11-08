@@ -101,3 +101,76 @@ Three runs, each the `06-05-54Z` revision rebuilt under `composer-2.5` on the co
 - **The zone table: 3 of 3**, a different invented table per run (`akl-metro`, `metro`), as predicted, the specify-side lever outside this round.
 
 Follow-ups, in this order: the `ungated_routes` check or the scaffolded gate; the data table and the `excerpt` at specify; the row-read struct against the laid type if it recurs.
+
+### The gate by code
+
+The first follow-up of the arm above, built in the second build-quality round ([decoders.md](decoders.md#the-registration-before-the-turn) carries that round's `train` arm). The `/api` bearer gate was absent on three of three trees though every `customers` and `orders` slice was handed the design's `authenticate` and mapping paragraphs: the turns acted on the mapping (the code class 20 to 0) and not on the gate, whose requirements (REQ-006, REQ-007) are `start`'s and so no slice's to cover. The arm above proposed either `ungated_routes` or the gate laid by the scaffold. This arm lays it and proposes the check only on a recurrence, for a reason the rounds so far give: every lever that moved the oracle was the scaffold laying by code (the typed route, the laid types, the three levers above, 10 to 29), while the checks of the last two rounds found nothing (`default_decoders` 0, `refused_skips` 0) or spent the one correction round a turn has (`unconsumed_streams`, 9 of 9). A check corrects after the turn at the price of its round; a laid stub decides before it at none.
+
+What the scaffold lays, in `adapters/omnia/` alone:
+
+- **The reading.** `reference::gate(slice)` reads the gate paragraphs `Rules::read` already selects: the prefix is the `/`-led path token they spell most often (`gates /api:`, `under /api.` give `/api`), the settings the keys they spell (`API_TOKENS`, `BEARER_PREFIX`) through `Settings::spelled`, and the wire code the word quoted beside `401` (`unauthorized`). A gate paragraph spelling no prefix lays nothing, as today.
+- **The owner, from the tree.** The slice carries no schedule, so who lays the gate is decided from the working copy: where no existing stem crate exports a `pub fn` taking a `HeaderMap`, the slice's first stem with a route under the prefix lays it; where one does, it is imported and called, with `<stem> = { path = "../<stem>" }` in the manifest; a serial slice of the gating stem calls the one its held module declares. On this plan `customers` builds in wave 1 and lays it, `orders` in waves 2–6 calls it, and `health` is not under `/api`. Known limitation, recorded: two stems under the prefix in one wave each lay a gate.
+- **The shape.** In the gating module: `GateSettings` over the keys read; `GateError`, the part's own error type (`Unauthorized`, `Host(#[from] omnia_sdk::Error)`, `From<anyhow::Error>`, and `IntoResponse` answering `401 { "error": "unauthorized" }`), since `omnia_sdk::Error` has no 401 and `Handlers` has no layer; and `pub async fn authenticate<P: Config>(context: &Context<P>, headers: &HeaderMap) -> Result<(), GateError>` over a `todo!` marker the brief lists in fill order. Every scaffolded handler under the prefix takes `headers: HeaderMap`, calls `authenticate(&context, &headers).await?` as its first line above its marker block, and answers `Result<Json<O>, GateError>`; its scaffolded test seeds the gate's keys and sends `AUTHORIZATION` from a `"<authorization>"` placeholder the existing placeholder rule holds to being filled.
+- **The backstop.** The gate's marker is no `REQ-`, so `markers_left` gains one clause: the gate left `todo!` while a gated handler of the slice is filled is one finding at the gate's line. No `ungated_routes` this round.
+
+The arm is the baseline's revision rebuilt three times, each a card of its own, on the component carrying the gate and the `train` arm's statement:
+
+```bash
+CURSOR_MODEL=composer-2.5 cargo run -p evals -- --rebuild 2026-11-07T06-05-54Z --target omnia express-orders
+```
+
+Its control is the arm above (29, 28, 29 of 57; `start` 2/4 on three of three). The mask stands, so the ceiling with the gate is 31 of 57.
+
+#### Predictions
+
+- **G1, by group, on every run.** `start` 4/4 (`api-without-token` and `api-wrong-token` answer `401 unauthorized`, `health-without-token` and `unknown-path` as before); `health` 3/3; `customers` 10/10; `orders` 14/40, the fourteen of the arm above. Total 31/57 on three of three, the mask's ceiling.
+- **G2, the mask.** The 26 masked `orders` scenarios fail on the zone, the unseeded `/rates` fetch under an invented zone or a postcode zoned where the source has it unzoned, and none as a `500`.
+- **G3, the gate in the tree.** One `pub async fn authenticate` with `GateError` under `crates/customers/src/customers.rs`, filled, no `todo!` left in it; called at the top of every `/api` handler of `customers` and `orders`; `customers = { path = "../customers" }` in `crates/orders/Cargo.toml`; no second gate; `health`'s handlers take no `HeaderMap`.
+- **G4, the three levers above hold.** `weight_grams: i64`; `pay` and `ship` bodiless; 0 default codes outside the mask.
+- **G5, the build.** No slice past one correction round; the `start` slices answered with no turn; the `markers_left` gate clause seen on no run.
+
+#### Decision rule
+
+- **The arm holds** when G1–G5 hold on all three runs; the gate stands as laid.
+- **`start` under 4 on any run,** the tree read: the gate absent, `reference::gate` missed the paragraphs or the prefix, read against that run's `run-1.design.json`; present and the oracle's bearer refused, the gate body's reading of `API_TOKENS` (split on `,`) and `BEARER_PREFIX`, the brief's gate entry the lever; present and uncalled from a filled handler, `ungated_routes` proposed at 2 of 3 (a filled handler under the prefix whose body neither reads the `authorization` header nor calls a `HeaderMap`-taking fn) and recorded at 1 of 3.
+- **The `FromRow` struct against the laid `bool`** (1 of 3 above) on a second sighting: the check proposed.
+- **Anything else recurring on two of three runs** is counted and a check proposed; one occurrence is recorded. Totals alone decide nothing.
+
+#### Results
+
+Not yet run.
+
+### The data table
+
+The second lever of the baseline's four, pulled forward in the same round: it is the mask over 26 of the 40 `orders` scenarios, and the ceiling of every express-orders arm until it moves. The loss was traced to one line of the engine's SDK. The typescript survey's walk reads `ZONES` (`src/data/postcodes.ts#L24-L346`, 321 rows over 323 lines, 36 KB) as a module-level table, and `survey::types` elides a table over `TABLE_LINES` (120 lines) from its `type` claim; the `06-05-54Z` design holds `Type:` blocks for `TRANSITIONS` and `TERMINAL_STATES`, the small tables, each fenced with its rows, and none for `ZONES`, which reaches it as the `excerpt`'s sentence alone. The build fills the small tables from their fences (`Transitions::default()` carries the four rows) and invents the large one: `akl-metro` 1000–1999 and `wlg-metro` 6000–6999 on `02-11-02Z`, `metro` on `03-06-21Z`, where the oracle's seeded rates URL names `auckland-central-otahuhu` for postcode `1010`.
+
+Two changes, one in each repository:
+
+- **Engine, the cap.** `TABLE_LINES` becomes a byte budget, `TABLE_BYTES` at 64 KiB, the inline budget a turn already carries, applied to the module-level and the class-member table alike. A table within it reaches the design whole as its `Type:` fence, which the engine renders verbatim and no model copies. Pre-1.0, this repository's `emery-sdk` pin moves with the engine's commit.
+- **Adapter, the table laid as data.** The omnia scaffold reads a `const NAME: readonly T[] = [ {..}, .. ]` fence whose rows are object literals of scalars into a table, and, where `T` is a type the slice owns, lays `crates/<stem>/data/<snake>.json` (the rows under their wire keys, one object per line) and `pub fn <snake>() -> Result<Vec<T>>` reading it through `include_str!` and `serde_json`, the file guarded line for line so the turn cuts no row, and the brief naming it finished. A map (`Readonly<Record<..>>`), a table of an unowned element, or a row that is no object of scalars stays today's marker. The alternative, a 321-row marker for the turn to transcribe, asks the model to copy 36 KB faithfully, which the arm above shows it is never asked to and the small tables show it need not be.
+
+The arm is a fresh card over the rebuilt engine and both components, since the cap lives in the typescript component's SDK:
+
+```bash
+CURSOR_MODEL=composer-2.5 EVAL_RUNS=3 cargo run -p evals -- --build --target omnia express-orders
+```
+
+Its controls are `06-05-54Z`'s design (no `ZONES` fence) and the gate arm's trees above. A `--build` card seals three fresh revisions, so the plan and the specification vary with it, and the gate and the table ride together; the classes are read apart, never the total.
+
+#### Predictions
+
+- **D1, the design.** `Type: ZONES` fenced with its 321 rows in each run's design on three of three, `DeliveryZone` beside it, and no `excerpt` sentence summarising the table in its place.
+- **D2, the tree.** `crates/orders/data/zones.json` with 321 rows and `pub fn zones()` in the module that owns `DeliveryZone`, the file byte-identical from the scaffold to the seal (the turn edits it on no run), on three of three; no table of the turn's own (`ZoneRange`, `ZONE_RANGES`) beside it.
+- **D3, the zone class gone.** No `place-*` scenario fails on the zone: every placement fetches the seeded `GET /rates?zone=auckland-central-otahuhu&weight=…`, `place-unzoned-postcode` (postcode `1000`) answers `400 invalid-request`, and the three rates scenarios (`place-rates-503`, `place-rates-empty`, `place-unzoned-postcode`) pass on at least two of three.
+- **D4, the rest read, not predicted.** `start` 4/4, `customers` 10/10, `health` 3/3 carry from the gate arm where the fresh specification holds them; the `orders` count and the classes behind the lifted mask (the pricing paths, the totals, the cache-aside read, the transitions) are counted here for the first time and are the next round's levers.
+
+#### Decision rule
+
+- **D1 fails:** the SDK side is the lever; the run's evidence is read for the `ZONES` claim, present there and absent from the design pointing at the design-draft turn or its gate, absent pointing at the survey's walk or the cap.
+- **D2 fails with D1 holding:** the omnia reader missed the fence's shape; the fence is quoted in the card beside what the reader accepts.
+- **D3 fails with D1 and D2 holding:** the placement path is read for where the rows are not consulted; one occurrence recorded, two of three a check proposed.
+- **D4:** the classes counted; totals alone decide nothing.
+
+#### Results
+
+Not yet run.

@@ -8,7 +8,7 @@ use omnia_template::Manifest;
 
 use super::{Module, Tree};
 use crate::layout::{self, Toml};
-use crate::scaffold::Wire;
+use crate::scaffold::registration;
 use crate::syntax;
 
 impl Tree<'_> {
@@ -235,38 +235,6 @@ impl Tree<'_> {
             lines.join("\n")
         ))
     }
-}
-
-// How the turn registers the inbound stream's consumer: the three lines
-// added through `edit_files`, the registration decoding the wire where the
-// design names one, and naming the decoding registration where it does not.
-pub fn registration(wire: Option<Wire>) -> String {
-    let registered = wire.map_or_else(
-        || {
-            "`.topic(topic::<NAME>, <handler>)` in the part's `handlers()` with the handler \
-             calling the earlier parts' functions — `.topic_with(topic::<NAME>, <handler>, \
-             decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, \
-             DecodeError>` of the part where the payload is XML, CSV, or bytes rather than JSON, \
-             `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML under \
-             `quick-xml.workspace = true` in the stem's `[dependencies]`"
-                .to_owned()
-        },
-        |wire| {
-            format!(
-                "`.topic_with(topic::<NAME>, <handler>, decode)` in the part's `handlers()`, \
-                 with the handler calling the earlier parts' functions and `decode` a `fn \
-                 decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of \
-                 the part reading the {} payload the design says the stream carries{}",
-                wire.name(),
-                wire.reader()
-            )
-        },
-    );
-    format!(
-        "add it through `edit_files`: the topic's constant at the end of `{}`, {registered} — and \
-         `<part>::handlers(),` in the entry's array",
-        layout::TOPICS
-    )
 }
 
 impl Module {

@@ -251,6 +251,19 @@ pub fn exported_fns(file: &syn::File) -> Vec<Exported> {
         .collect()
 }
 
+// The signature of an exported fn as `text` spells it, its lines joined
+// on one and the body's opening brace dropped.
+pub fn signature(text: &str, exported: &Exported) -> String {
+    let joined = text
+        .lines()
+        .skip(exported.from.saturating_sub(1))
+        .take(exported.to.saturating_sub(exported.from) + 1)
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join(" ");
+    joined.trim_end_matches('{').trim_end().to_owned()
+}
+
 // The modules `file` declares from files beside it, `pub mod reading;`, by
 // name; one with a body inline declares no file.
 pub fn mods(file: &syn::File) -> Vec<String> {
@@ -544,6 +557,23 @@ pub fn holds_marker(block: &syn::Block) -> bool {
     let mut markers = Markers(false);
     markers.visit_block(block);
     markers.0
+}
+
+// Whether a block still holds a `todo!` of any text: the gate's stub,
+// whose marker names no requirement.
+pub fn holds_todo(block: &syn::Block) -> bool {
+    struct Todos(bool);
+
+    impl<'ast> Visit<'ast> for Todos {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= path_ends(&node.path, &["todo"]);
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut todos = Todos(false);
+    todos.visit_block(block);
+    todos.0
 }
 
 // Every `pub(crate) async fn(<context>: Context<..>, ..)` handler in

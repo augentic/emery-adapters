@@ -6,6 +6,9 @@ use std::iter;
 use emery_sdk::target::{Requirement, Slice};
 use emery_sdk::{Doc, body, push_unique, words};
 
+use super::settings::Settings;
+use crate::layout;
+
 const API: &str = "references/omnia-api.md";
 const HANDLERS: &str = "references/handlers.md";
 const TESTING: &str = "references/testing.md";
@@ -319,6 +322,40 @@ impl Wire {
     }
 }
 
+// How the turn registers the inbound stream's consumer: the three lines
+// added through `edit_files`, the registration decoding the wire where the
+// design names one, and naming the decoding registration where it does not.
+// The brief states it before the turn and the checks spell it after, so the
+// recipe is one.
+pub fn registration(wire: Option<Wire>) -> String {
+    let registered = wire.map_or_else(
+        || {
+            "`.topic(topic::<NAME>, <handler>)` in the part's `handlers()` with the handler \
+             calling the earlier parts' functions — `.topic_with(topic::<NAME>, <handler>, \
+             decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, \
+             DecodeError>` of the part where the payload is XML, CSV, or bytes rather than JSON, \
+             `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML under \
+             `quick-xml.workspace = true` in the stem's `[dependencies]`"
+                .to_owned()
+        },
+        |wire| {
+            format!(
+                "`.topic_with(topic::<NAME>, <handler>, decode)` in the part's `handlers()`, \
+                 with the handler calling the earlier parts' functions and `decode` a `fn \
+                 decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of \
+                 the part reading the {} payload the design says the stream carries{}",
+                wire.name(),
+                wire.reader()
+            )
+        },
+    );
+    format!(
+        "add it through `edit_files`: the topic's constant at the end of `{}`, {registered} — and \
+         `<part>::handlers(),` in the entry's array",
+        layout::TOPICS
+    )
+}
+
 const WIRE_WORDS: &[(Wire, &[&str])] = &[
     (Wire::Xml, &["xml"]),
     (Wire::Csv, &["csv"]),
@@ -506,6 +543,8 @@ pub enum Laid {
     Consumers,
     // A settings struct over the keys the slice spells.
     Settings,
+    // The gate under the design's prefix, laid or called by the handlers.
+    Gate,
     Tests,
     Types,
 }
@@ -575,6 +614,18 @@ pub struct Inbound {
     pub stems: BTreeSet<String>,
 }
 
+impl Inbound {
+    // The stems of the slice the bullet holds to a registration: those its
+    // requirements lead with, and every stem of the slice where it cites
+    // none of them.
+    pub fn held<'s>(&self, stems: impl Iterator<Item = &'s str>) -> Vec<&'s str> {
+        let stems: Vec<&str> = stems.collect();
+        let cited: Vec<&str> =
+            stems.iter().copied().filter(|stem| self.stems.contains(*stem)).collect();
+        if cited.is_empty() { stems } else { cited }
+    }
+}
+
 // The inbound stream the design's `## APIs and integrations` lists for the
 // part: the first paragraph whose lead sentence speaks of a stream and of a
 // delivery read, not of a message leaving, and which cites an id of the
@@ -642,6 +693,101 @@ impl Rules {
     pub const fn is_empty(&self) -> bool {
         self.paragraphs.is_empty() && !self.start_named
     }
+
+    // The gate on the requests the rule paragraphs spell, where their gate
+    // sentences name the prefix it mounts under: the `/`-led path those
+    // sentences spell most often, the first on a tie; the keys they spell
+    // as its settings; and the code quoted beside `401` as what it refuses
+    // with, `unauthorized` where none is. A sentence is read rather than
+    // its paragraph, since a bootstrap paragraph names the gate beside the
+    // store's settings and a store paragraph names authentication it lacks.
+    pub fn gate(&self) -> Option<Gate> {
+        let sentences: Vec<&str> = self
+            .paragraphs
+            .iter()
+            .flat_map(|paragraph| sentences(paragraph))
+            .filter(|sentence| spells(sentence, GATE_WORDS))
+            .collect();
+        let mut counts: Vec<(String, usize)> = Vec::new();
+        for token in sentences.iter().flat_map(|sentence| sentence.split_whitespace()) {
+            let Some(path) = path_token(token) else { continue };
+            match counts.iter_mut().find(|(known, _)| *known == path) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((path, 1)),
+            }
+        }
+        let mut prefix: Option<(String, usize)> = None;
+        for (path, count) in counts {
+            if prefix.as_ref().is_none_or(|(_, most)| count > *most) {
+                prefix = Some((path, count));
+            }
+        }
+        let (prefix, _) = prefix?;
+        let code = sentences
+            .iter()
+            .find_map(|sentence| quoted_after(sentence, "401"))
+            .unwrap_or_else(|| Gate::DEFAULT_CODE.to_owned());
+        let settings =
+            Settings::spelled(Gate::SETTINGS.to_owned(), sentences.iter().copied(), |_| false);
+        Some(Gate {
+            prefix,
+            code,
+            settings,
+        })
+    }
+}
+
+// The gate on the requests the design's rules spell: the prefix it mounts
+// under, the settings it reads, and the wire code it refuses with.
+#[derive(Clone)]
+pub struct Gate {
+    pub prefix: String,
+    pub code: String,
+    pub settings: Option<Settings>,
+}
+
+impl Gate {
+    pub const DEFAULT_CODE: &str = "unauthorized";
+    pub const ERROR: &str = "GateError";
+    pub const FN: &str = "authenticate";
+    pub const SETTINGS: &str = "GateSettings";
+
+    // Whether a route's path falls under the prefix: the prefix itself or a
+    // path beneath it, never one that merely begins with its letters.
+    pub fn under(&self, path: &str) -> bool {
+        path == self.prefix
+            || path.strip_prefix(&self.prefix).is_some_and(|rest| rest.starts_with('/'))
+    }
+
+    // The marker the laid gate's body holds until the turn fills it.
+    pub fn marker(&self) -> String {
+        format!("{}: the gate under {}", Self::FN, self.prefix)
+    }
+}
+
+// A word of a sentence that is a path: `/`-led, with any backticks and
+// trailing punctuation dropped, and more than the slash.
+fn path_token(word: &str) -> Option<String> {
+    let path = word
+        .trim_matches(|ch: char| ch == '`' || ch == '(' || ch == ')' || ch == '"')
+        .trim_end_matches(['.', ',', ':', ';', '!', '?']);
+    let rest = path.strip_prefix('/')?;
+    (!rest.is_empty()
+        && rest.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '/' | '-' | '_' | '{' | '}' | '*' | '.')
+        }))
+    .then(|| path.to_owned())
+}
+
+// The first `"<word>"` after `lead` in the sentence, where the word is one
+// a wire code is spelled as.
+fn quoted_after(sentence: &str, lead: &str) -> Option<String> {
+    let (_, after) = sentence.split_once(lead)?;
+    let (_, opened) = after.split_once('"')?;
+    let (word, _) = opened.split_once('"')?;
+    (!word.is_empty()
+        && word.chars().all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_')))
+    .then(|| word.to_owned())
 }
 
 fn is_rule(paragraph: &str) -> bool {
@@ -875,7 +1021,12 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
                 passages.push(markdown(HANDLERS, &heading, idiom));
             }
         }
-        if has(Laid::Status)
+        if has(Laid::Gate)
+            && let Some((heading, gate)) = section(handlers, "A gate")
+        {
+            passages.push(markdown(HANDLERS, &heading, gate));
+        }
+        if (has(Laid::Status) || has(Laid::Gate))
             && let Some((heading, status)) = section(handlers, "A status of its own")
         {
             passages.push(markdown(HANDLERS, &heading, status));

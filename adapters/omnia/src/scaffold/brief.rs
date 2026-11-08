@@ -9,11 +9,12 @@ use std::fmt::Write as _;
 use emery_sdk::target::{self, Guarded};
 use emery_sdk::{Doc, INLINE_BYTES};
 
+use super::gate::{self, Gating};
 use super::lists::{Line, Placement};
 use super::names::escape;
-use super::reference::{self, Laid, Needs, Wire};
+use super::reference::{self, Gate, Laid, Needs, Wire};
 use super::stem::{Consumer, Handler, Kind, Stem};
-use super::{Scaffold, render, trigger};
+use super::{Scaffold, registration, render, trigger};
 use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
@@ -83,6 +84,7 @@ impl Scaffold {
                 reader = wire.reader()
             );
         }
+        self.brief_inbound(&mut text);
         if !self.plan.start.is_empty() {
             let _ = write!(
                 text,
@@ -94,6 +96,7 @@ impl Scaffold {
             text.push_str("\n\n");
         }
         self.brief_rules(&mut text);
+        self.brief_gate(&mut text);
         for relaid in &self.plan.relaid {
             let _ = writeln!(
                 text,
@@ -113,6 +116,58 @@ impl Scaffold {
             self.check()
         );
         text.trim_end().to_owned()
+    }
+
+    // The inbound stream the design lists for the part, at the part's last
+    // slice, since no later slice of the part registers anything: the stems
+    // the bullet holds to a registration and the recipe, and, for a stem
+    // whose crate already registers a topic, that the stream is consumed
+    // there. A stem whose scaffold lays a consumer registers through it and
+    // is told nothing.
+    fn brief_inbound(&self, text: &mut String) {
+        let Some(inbound) = &self.plan.inbound else { return };
+        if !self.plan.last {
+            return;
+        }
+        let mut open = Vec::new();
+        let mut consumed = Vec::new();
+        for stem in inbound.held(self.plan.stems.iter().map(|stem| stem.name.as_str())) {
+            if self.consumes(stem) {
+                continue;
+            }
+            if self.plan.consumed.contains(stem) {
+                consumed.push(stem);
+            } else {
+                open.push(stem);
+            }
+        }
+        if !open.is_empty() {
+            let crates: Vec<String> =
+                open.iter().map(|stem| format!("`crates/{}/`", crate_dir(stem))).collect();
+            let _ = writeln!(
+                text,
+                "The design lists an inbound stream for this part (\"{lead}\"), and this slice \
+                 is the part's last, so the stream is consumed by a registration in {crates} now \
+                 or never: the host runs a stem through its `handlers()` alone, and a stem \
+                 registering no topic is never run. The trigger is the stream's deliveries \
+                 setting off the requirements the bullet cites, never a route in its place, a \
+                 `start` crate, or a requirement of the registration's own; {registration}, the \
+                 constant spelling the topic the bullet names for the stream.\n",
+                lead = inbound.lead,
+                crates = crates.join(" or "),
+                registration = registration(self.plan.wire)
+            );
+        }
+        for stem in consumed {
+            let _ = writeln!(
+                text,
+                "The inbound stream the design lists for this part (\"{lead}\") is consumed \
+                 already by a registration in `crates/{dir}/src/`: register no second one, and \
+                 reach its deliveries through the consumer that stands.\n",
+                lead = inbound.lead,
+                dir = crate_dir(stem)
+            );
+        }
     }
 
     // The rules every route obeys, where the slice lays a handler and the
@@ -166,6 +221,99 @@ impl Scaffold {
         }
     }
 
+    // The gate the design's rules spell, where they spell one: for each stem
+    // with a handler under its prefix, where the gate stands and that the
+    // handlers call it as laid; for a slice with no route under it, that
+    // none applies.
+    fn brief_gate(&self, text: &mut String) {
+        let Some(gate) = &self.plan.gate else { return };
+        let mut gated = false;
+        for stem in &self.plan.stems {
+            let Some(gating) = &stem.gating else { continue };
+            gated = true;
+            let prefix = escape(&gate.prefix);
+            let calling = format!(
+                "every handler of this slice under `{prefix}` takes `headers: HeaderMap` after \
+                 the context, calls `{}(&context, &headers).await?` before anything else, and \
+                 answers `std::result::Result<_, {}>`, as laid; its tests send `AUTHORIZATION` \
+                 from `let authorization = \"<authorization>\";`, which you fill with a \
+                 credential the seeded settings accept",
+                Gate::FN,
+                Gate::ERROR
+            );
+            match &gating.source {
+                gate::Source::Laid => {
+                    let settings = gate.settings.as_ref().map_or_else(String::new, |settings| {
+                        let keys: Vec<String> =
+                            settings.keys().map(|key| format!("`{key}`")).collect();
+                        format!(
+                            " and `{}` over {}, which `provider()` seeds in every test file \
+                             under `{prefix}`",
+                            settings.name,
+                            listed(&keys)
+                        )
+                    });
+                    let _ = writeln!(
+                        text,
+                        "The gate under `{prefix}` the design's rules spell is laid in `{}`: `pub \
+                         async fn {}<P: Config>(context: &Context<P>, headers: &HeaderMap) -> \
+                         std::result::Result<(), {error}>` beside `{error}` (its `Unauthorized` \
+                         answering `401 {{\"error\": \"{}\"}}`, its `Host` passing the host's \
+                         error through){settings}. Fill the gate's marker, listed under the \
+                         stem, with the rule as the design states it, `Err({error}::Unauthorized)` \
+                         where the credential is missing or unknown, and {calling}. Write no \
+                         second gate: a later stem imports this one.\n",
+                        stem.module.path,
+                        Gate::FN,
+                        escape(&gate.code),
+                        error = Gate::ERROR,
+                    );
+                }
+                gate::Source::Held => {
+                    let _ = writeln!(
+                        text,
+                        "The gate under `{prefix}` stands in `{}` from an earlier slice, and \
+                         {calling}. Write no second gate.\n",
+                        gating.file
+                    );
+                }
+                gate::Source::Imported { path, dependency } => {
+                    let dependency = dependency.as_ref().map_or_else(String::new, |dependency| {
+                        format!(", `{}` under its `[dependencies]`", dependency.line())
+                    });
+                    let _ = writeln!(
+                        text,
+                        "The gate under `{prefix}` is `{path}::{}` in `{}`, imported into `{}`{dependency}, and \
+                         {calling}. Write no second gate.\n",
+                        Gate::FN,
+                        gating.file,
+                        stem.module.path,
+                    );
+                }
+                gate::Source::Named { path } => {
+                    let _ = writeln!(
+                        text,
+                        "The tree already holds a function taking the request's headers, \
+                         `{path}` in `{}`, outside the laid shape, so no gate was laid and the \
+                         handlers of this slice under `{prefix}` take no `HeaderMap` yet: give \
+                         each `headers: HeaderMap` after the context and call it before \
+                         anything else, send `AUTHORIZATION` from each test under `{prefix}`, \
+                         and write no second gate.\n",
+                        gating.file
+                    );
+                }
+            }
+        }
+        if !gated && self.plan.stems.iter().any(|stem| !stem.handlers.is_empty()) {
+            let _ = writeln!(
+                text,
+                "The gate under `{}` the design's rules spell guards none of this slice's \
+                 routes, so none is laid here and no handler of this slice calls one.\n",
+                escape(&gate.prefix)
+            );
+        }
+    }
+
     // The one shell command the turn checks the tree with: the slice's
     // packages under clippy and their tests, then the guest check and the
     // formatter over the workspace.
@@ -196,6 +344,9 @@ impl Scaffold {
             }
             if stem.settings.is_some() {
                 laid.insert(Laid::Settings);
+            }
+            if stem.gating.as_ref().is_some_and(Gating::calls) {
+                laid.insert(Laid::Gate);
             }
             if stem.tests.is_some() {
                 laid.insert(Laid::Tests);
@@ -244,7 +395,7 @@ impl Stem {
              does not pin carries its version instead.",
             self.manifest.path,
             self.manifest.origin(),
-            self.brief_topic_dependency(),
+            self.brief_dependencies(),
             self.brief_dependency_count()
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
@@ -310,25 +461,45 @@ impl Stem {
     // The clause after the manifest's origin naming the topic table's crate
     // laid among its dependencies and what for, or nothing for a part that
     // names no topic.
-    fn brief_topic_dependency(&self) -> String {
-        if self.consumers.is_empty() {
+    // The stem's `[dependencies]` lines beyond the fixed four, each with how
+    // the manifest came to hold it and what for.
+    fn brief_dependencies(&self) -> String {
+        let lines = self.dependencies();
+        if lines.is_empty() {
             return String::new();
         }
-        let line = render::dependency_line(TOPIC_DEPENDENCY);
-        let how = match self.lines.iter().find(|held| held.path == self.manifest.path) {
-            None => "among",
-            Some(laid) if laid.placement == Placement::Held => "already held among",
-            Some(_) => "added at the end of",
-        };
-        format!(", `{line}` {how} its `[dependencies]` for the topic table's constants")
+        let spelled: Vec<String> = lines
+            .iter()
+            .map(|line| {
+                let placed = self
+                    .lines
+                    .iter()
+                    .find(|held| held.path == self.manifest.path && held.text == *line);
+                let how = match placed {
+                    None => "among",
+                    Some(laid) if laid.placement == Placement::Held => "already held among",
+                    Some(_) => "added at the end of",
+                };
+                let purpose = if *line == render::dependency_line(TOPIC_DEPENDENCY) {
+                    "the topic table's constants"
+                } else if line.contains("path = ") {
+                    "the gate it imports"
+                } else {
+                    "the gate's error type"
+                };
+                format!("`{line}` {how} its `[dependencies]` for {purpose}")
+            })
+            .collect();
+        format!(", {}", listed(&spelled))
     }
 
     // How many crates the manifest names as scaffolded, in words.
     fn brief_dependency_count(&self) -> &'static str {
-        let count = STEM_DEPENDENCIES.len() + usize::from(!self.consumers.is_empty());
-        match count {
+        match STEM_DEPENDENCIES.len() + self.dependencies().len() {
             4 => "four",
             5 => "five",
+            6 => "six",
+            7 => "seven",
             _ => "several",
         }
     }
@@ -501,6 +672,10 @@ impl Stem {
                 if design_type.body.is_enum() { "enum" } else { "struct" }
             );
         }
+        if let Some(gate) = self.laid_gate() {
+            count += 1;
+            self.brief_gate_marker(gate, count, text);
+        }
         for handler in &self.handlers {
             count += 1;
             let _ = writeln!(
@@ -569,6 +744,28 @@ impl Stem {
         if count == 0 {
             text.push_str("None: the slice states no requirement under this stem.\n\n");
         }
+    }
+
+    // The gate's entry among the markers: its body to fill, its signature
+    // to keep.
+    fn brief_gate_marker(&self, gate: &Gate, count: usize, text: &mut String) {
+        let loaded = gate.settings.as_ref().map_or_else(
+            || "the context's config".to_owned(),
+            |settings| format!("`{}::load(context.config()).await?`", settings.name),
+        );
+        let _ = writeln!(
+            text,
+            "{count}. The gate `{}` in `{}`, key `{}`: replace this block with the body, the rule \
+             as the design states it over {loaded} and the request's headers, `Ok(())` for an \
+             accepted credential and `Err({}::Unauthorized)` for a missing or unknown one; keep \
+             the signature, which every handler under `{}` calls.\n\n{}",
+            Gate::FN,
+            self.module.path,
+            gate.marker(),
+            Gate::ERROR,
+            escape(&gate.prefix),
+            render::fenced("rust", &render::gate_stub(gate))
+        );
     }
 }
 

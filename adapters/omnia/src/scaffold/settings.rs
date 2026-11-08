@@ -6,6 +6,7 @@ use super::names::snake;
 
 // The settings struct a part loads: one field per key the slice spells,
 // under the prefix every key shares where one does.
+#[derive(Clone)]
 pub struct Settings {
     pub name: String,
     pub prefix: Option<String>,
@@ -14,6 +15,7 @@ pub struct Settings {
 
 // One setting: its field, its key, and whether the key must be spelled on
 // the field because the derive would not read it off the field's name.
+#[derive(Clone)]
 pub struct Field {
     pub name: String,
     pub key: String,

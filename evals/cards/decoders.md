@@ -207,3 +207,40 @@ Three runs, each the `18-14-21Z` revision rebuilt under `composer-2.5` on the co
 **Reading under the rule.** S1 holds, so the check and the passage stand; the check is a backstop that this arm did not need. S2 fails on `02-35-01Z` with no logic defect to count: the failure is the correction budget, spent on `unconsumed_streams` first on every run. The registration is something the plan knows before the turn (`Scaffold::inbound()` and `Scaffold::last()` are read at `plan`), so the lever is to put it in the brief's scaffold section at the part's last slice, the recipe `tree/lists.rs`'s `registration(wire)` already spells for the finding, or to lay the `.topic_with(..)` registration and its `decode` stub by the scaffold where the stream's requirements carry no `Trigger::Message`; the rule stays as the check behind either. Recurring on 3 of 3, proposed, not built in this round. The `DATE_FORMAT` setting is 1 of 3 and already a rule's; nothing more.
 
 Follow-ups, in this order: the inbound registration stated in the brief before the turn, or laid by the scaffold; the scenario `when` precedence and the wire key of a field assigned on an imported class, both at specify, as above.
+
+## The registration before the turn
+
+The first follow-up of the round above, built in the second build-quality round ([scenarios.md](scenarios.md#the-gate-by-code) carries that round's express-orders arm; this section is its `train` arm). Every first SLICE-002 candidate of the `18-14-21Z` revision has registered nothing, 9 of 9 across the two rounds above, `unconsumed_streams` corrected each, and on `02-35-01Z` a second finding on the corrected candidate (`format_settings`) had no round left, so the build exited 1. The registration is a fact the plan holds before the turn: `Scaffold::inbound()` is the stream's bullet, `Scaffold::last()` says the slice is the part's last, `Scaffold::wire()` the payload's format, and `registration(wire)` the recipe the finding's header already spells.
+
+The round above left the choice between stating the registration and laying it. This arm states it, for one reason: a laid `.topic_with(..)` needs a topic constant, and nothing gives code one. The source reads its topic from a setting (`KAFKA_SOURCE_TOPIC`), the survey derived no `Trigger::Message` for any requirement of the revision, and the design's `dev-realtime-train.v1` is the model's rendering of the source's fallback, not a literal the survey bound. Laying would be the scaffold inventing a trigger the survey never derived, which the engine's rule refuses: code decides what code can, and the `Trigger` variant is closed. So the brief's scaffold section states it at the part's last slice, and the component changes in `adapters/omnia/` alone:
+
+- **The recipe shared.** `registration(wire)` moves from `tree/lists.rs` to sit beside `Wire` in `scaffold/reference.rs`, so the brief and the two checks that name it (`unconsumed_streams`, `unreached_publishers`) spell one recipe.
+- **The statement.** Where the plan holds an inbound stream and the slice is the part's last, the brief names, for each stem the bullet's requirements lead with (every stem of the slice where it cites none), the bullet's lead sentence, that this slice is the part's last so the registration is written now or never, the recipe over the wire the plan read (`.topic_with(..)` over the part's `decode` for XML, `.topic(..)` where the wire is JSON or unknown), the handler calling the part's functions in the order the requirements state, and the topic as the design names it for the stream. A stem whose scaffold lays a consumer is skipped, since the registration is laid. A stem whose crate already registers a topic, read at `plan` from the crate's modules, gets the sentence that the stream is consumed there and no second registration is wanted.
+- **The check stays.** `unconsumed_streams` is the backstop behind the statement, unchanged.
+
+The arm is the revision of `18-14-21Z` rebuilt three times, each a card of its own, on the component carrying the statement and the express-orders arm's gate:
+
+```bash
+CURSOR_MODEL=composer-2.5 cargo run -p evals -- --rebuild 2026-11-07T18-14-21Z --target omnia train
+```
+
+Its control is the round above (12, 12, and one build lost on the same revision; 9 of 9 first candidates registering nothing across the two rounds).
+
+### Predictions
+
+- **T1, the first candidate registers.** `unconsumed_streams` is seen on no run (0 of 3, against 9 of 9 first SLICE-002 candidates above); every first SLICE-002 candidate registers the consumer through `.topic_with` over `quick_xml`.
+- **T2, the floor holds.** Every run is driven and passes 12 of 22, the base design's `locationData` gap capping it where it capped the two driven runs above; no fixture is refused under `not_relevant_station`, `not_relevant_type`, `no_vehicles`, or `no_stop_info`; `refused_skips` is seen on no run.
+- **T3, no build is lost.** No run exits on the correction budget; at most one rejection per run, and none of them `unconsumed_streams`.
+- **T4, the other classes are counted, not moved.** `gpsAccuracy` absent stays the base design's gap on every driven run; the registration number for the external id and the departure overwrite stay at or under 1 of 3 each; a `format_settings` or other rule's rejection is recorded where seen.
+
+### Decision rule
+
+- **The arm holds** when T1–T3 hold on all three runs; the statement stands and the check is its backstop.
+- **T1 fails with the first candidate still registering nothing:** the turn did not act on the statement; laying is proposed, with the topic read from the design's clause beside the setting, and not built in this round.
+- **T1 fails with a registration under `.topic(..)`:** the wire paragraph is the lever, read against `default_decoders`.
+- **T3 fails on a second rule in series:** that rule's lever, named in the results.
+- **T2's floor fails on a driven run:** logic defects, counted across the three runs with the driven runs above; a check is proposed only for one recurring on two of these three.
+
+### Results
+
+Not yet run.
