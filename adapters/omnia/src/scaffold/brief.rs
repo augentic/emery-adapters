@@ -70,6 +70,7 @@ impl Scaffold {
         let mut text = String::new();
         for stem in &self.plan.stems {
             stem.brief_files(budget, &mut text);
+            self.brief_data(stem, &mut text);
             stem.brief_markers(&mut text, self.plan.wire);
         }
         if let Some(wire) = self.plan.wire {
@@ -116,6 +117,21 @@ impl Scaffold {
             self.check()
         );
         text.trim_end().to_owned()
+    }
+
+    // Each table's data file the scaffold wrote or found for the stem, and
+    // the fn reading it, so the rows are read and never typed again.
+    fn brief_data(&self, stem: &Stem, text: &mut String) {
+        for data in stem.data.iter().filter(|_| stem.module.laid()) {
+            let origin = if self.written.contains(&data.path) { "scaffolded" } else { "held" };
+            let _ = writeln!(
+                text,
+                "- `{}`: {origin}, every row of the design type `{}` as the wire spells it, read \
+                 into `Vec<_>` by `{}()` in `{}`, which is finished. Read the rows through it \
+                 where the behaviour needs them, and never type a row again in code.\n",
+                data.path, data.key, data.reader, stem.module.path
+            );
+        }
     }
 
     // The inbound stream the design lists for the part, at the part's last
@@ -354,6 +370,9 @@ impl Scaffold {
             if !stem.types.is_empty() {
                 laid.insert(Laid::Types);
             }
+            if !stem.data.is_empty() {
+                laid.insert(Laid::Data);
+            }
         }
         let needs = Needs {
             laid,
@@ -577,7 +596,7 @@ impl Stem {
         let laid: Vec<String> = self
             .types
             .iter()
-            .filter(|design_type| !design_type.body.is_marker())
+            .filter(|design_type| !design_type.body.is_marker() && !design_type.body.is_table())
             .map(|design_type| format!("`{}` (`{}`)", design_type.name, design_type.key))
             .collect();
         if laid.is_empty() {

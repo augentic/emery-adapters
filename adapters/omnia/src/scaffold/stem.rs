@@ -45,6 +45,9 @@ pub struct Stem {
     pub consumers: Vec<Consumer>,
     pub functions: Vec<Function>,
     pub types: Vec<Type>,
+    // The data files of the tables among the types, each read by a fn of
+    // the module.
+    pub data: Vec<Data>,
     pub scenarios: Vec<Test>,
     pub lines: Vec<Line>,
     // Registrations in a held module's `handlers()` whose chain could not
@@ -124,6 +127,15 @@ pub struct Type {
     pub key: String,
     pub signature: String,
     pub body: types::Body,
+}
+
+// A table's data file: its path from the tree's root and its rows as JSON.
+pub struct Data {
+    pub path: String,
+    pub text: String,
+    // The design key of the table the file holds, and the fn reading it.
+    pub key: String,
+    pub reader: String,
 }
 
 pub struct Test {
@@ -218,6 +230,7 @@ impl Stem {
             consumers: Vec::new(),
             functions: Vec::new(),
             types: Vec::new(),
+            data: Vec::new(),
             scenarios: Vec::new(),
             lines: Vec::new(),
             unanchored_registrations: Vec::new(),
@@ -262,15 +275,29 @@ impl Stem {
         let names: Vec<String> = owned
             .iter()
             .zip(&parsed)
-            .map(|(design_type, parsed)| {
+            .map(|(design_type, item)| {
                 let key = DesignKey::parse(&design_type.key);
-                let declared = parsed.name.as_deref().unwrap_or(key.name);
+                let declared = item.name.as_deref().unwrap_or(key.name);
+                if let types::Shape::Table(table) = &item.shape
+                    && table.laid_over(&parsed)
+                {
+                    let suffix = key.stem.map_or_else(|| "2".to_owned(), snake);
+                    return namespaces.values.reserve(&snake(declared), &format!("_{suffix}"));
+                }
                 let suffix = key.stem.map_or_else(|| "2".to_owned(), pascal);
                 namespaces.types.reserve(&pascal(declared), &suffix)
             })
             .collect();
         let bodies = types::lay(&parsed, &names, design, &mut namespaces.values);
         for ((design_type, name), body) in owned.iter().zip(names).zip(bodies) {
+            if let types::Body::Table { file, json, .. } = &body {
+                self.data.push(Data {
+                    path: format!("crates/{}/{file}", self.dir),
+                    text: json.clone(),
+                    key: design_type.key.clone(),
+                    reader: name.clone(),
+                });
+            }
             self.types.push(Type {
                 name,
                 key: design_type.key.clone(),
@@ -814,9 +841,16 @@ impl Consumer {
 }
 
 impl Type {
-    // `struct Order` or `enum Status`, as the marker declares it.
+    // `struct Order` or `enum Status`, as the marker declares it, or `fn
+    // zones` for a table's reader.
     pub fn declaration(&self) -> String {
-        let keyword = if self.body.is_enum() { "enum" } else { "struct" };
+        let keyword = if self.body.is_table() {
+            "fn"
+        } else if self.body.is_enum() {
+            "enum"
+        } else {
+            "struct"
+        };
         format!("{keyword} {}", self.name)
     }
 }

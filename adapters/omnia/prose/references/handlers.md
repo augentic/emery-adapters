@@ -603,6 +603,36 @@ where
 
 The test for the skip delivers the message over a provider seeded with no stop, asserts the delivery is accepted, and asserts nothing was published; the test for the refusal delivers a malformed payload and asserts the `Err`.
 
+## A reference table
+
+A design type that is a constant array of rows — delivery zones by postcode range, rates by code, stations by id — is data the service reads, not code it runs. The adapter lays it as a JSON file beside the stem's sources, `crates/<stem>/data/<name>.json`, every row as the source spells it under the wire's keys, and one `pub fn` in the part that reads the file into the element type the slice owns:
+
+```rust
+/// The design type `orders.ZONES`, its rows in `data/zones.json`.
+///
+/// # Errors
+///
+/// A row of the file that `DeliveryZone` does not read.
+pub fn zones() -> Result<Vec<DeliveryZone>> {
+    let rows = include_str!("../data/zones.json");
+    serde_json::from_str(rows).map_err(|error| Error::server_error("data", error.to_string()))
+}
+```
+
+Both are finished. A handler that needs a row calls the function and searches the rows it answers:
+
+```rust
+let zone = zones()?
+    .into_iter()
+    .find(|zone| zone.from.as_str() <= postcode && postcode <= zone.to.as_str())
+    .ok_or_else(|| not_found!("no delivery zone covers postcode `{postcode}`"))?;
+```
+
+- The file is the rows' one home. Never type a row again in code, in a `const`, a `vec![..]`, or a test fixture: a test that needs a row reads it through the function.
+- The file keeps every row it was laid with. A row the scenarios add goes through `edit_files`, at the end of the array.
+- A lookup over the rows is the handler's, or a `pub(crate) fn` of the part where two handlers share it. The function reads the file once per call, which is the cost of `serde_json::from_str` over the compiled-in text; a hot path caches the parsed rows in a `std::sync::OnceLock` of the part.
+- A table whose element type the slice does not own, or whose rows nest objects, is laid as an empty struct with its signature in the doc, as any design type the scaffold could not lay: lay its rows the same way yourself, a data file and a reader, rather than a struct holding them.
+
 ## Ids and time
 
 An id the design leaves to the program is `uuid::Uuid::new_v4().to_string()`, and a timestamp is `chrono::Utc::now()`, both from crates the root manifest pins and the stem's manifest names with `.workspace = true`. A key in the state store joins the stem and the id, `format!("orders/order/{id}")`, through one key function the module's readers and writers share, `pub(crate)` within the stem and `pub` where another stem reads the same entries.

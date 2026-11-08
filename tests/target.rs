@@ -90,6 +90,35 @@ const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo tes
 const OMNIA_PIN: &str = "omnia-sdk = \"0.38.0\"\n";
 const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.39.0\"\n";
 
+// A reference table's element type and the table itself as a TypeScript
+// source declares them, the table's third row spelled in single quotes
+// with an apostrophe escaped.
+const OMNIA_ZONE_SIGNATURE: &str = "export interface DeliveryZone {\n  from: string;\n  to: \
+                                     string;\n  zone: string;\n  courier: string;\n  minDays: \
+                                     number;\n  rural: boolean;\n}";
+const OMNIA_ZONES_TABLE: &str = "export const ZONES: readonly DeliveryZone[] = [\n  { from: \
+                                 \"0110\", to: \"0139\", zone: \"northland-kerikeri\", courier: \
+                                 \"nzpost\", minDays: 2, rural: false },\n  { from: \"0140\", to: \
+                                 \"0149\", zone: \"northland-warkworth\", courier: \"nzpost\", \
+                                 minDays: 3, rural: true },\n  { from: '0150', to: '0199', zone: \
+                                 'o\\'hara', courier: \"nzpost\", minDays: 3, rural: true },\n];";
+// The table's rows as the adapter lays them, one object per line.
+const OMNIA_ZONES_JSON: &str = "[\n  {\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+                                \"northland-kerikeri\", \"courier\": \"nzpost\", \"minDays\": 2, \
+                                \"rural\": false},\n  {\"from\": \"0140\", \"to\": \"0149\", \
+                                \"zone\": \"northland-warkworth\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true},\n  {\"from\": \"0150\", \"to\": \
+                                \"0199\", \"zone\": \"o'hara\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true}\n]\n";
+// The fn reading the table, as the adapter lays it.
+const OMNIA_ZONES_READER: &str = "/// The design type `orders.ZONES`, its rows in \
+                                  `data/zones.json`.\n///\n/// ```text\n/// export const ZONES: \
+                                  readonly DeliveryZone[] = [\n/// ```\n///\n/// # \
+                                  Errors\n///\n/// A row of the file that `DeliveryZone` does \
+                                  not read.\npub fn zones() -> Result<Vec<DeliveryZone>> {\n    \
+                                  let rows = include_str!(\"../data/zones.json\");\n    \
+                                  serde_json::from_str(rows).map_err(|error| \
+                                  Error::server_error(\"data\", error.to_string()))\n}\n";
 // A consumer of `order-placed` as a turn fills one, writing the delivery's
 // order under its id.
 const OMNIA_PLACED_CONSUMER: &str = "/// A delivery of `order-placed`.\n#[derive(Debug, \
@@ -3021,6 +3050,150 @@ async fn omnia_scaffold_type_fallbacks() {
     ] {
         assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
     }
+}
+
+// The design types of a slice owning a reference table: the element type
+// and the constant array of its rows.
+fn tabled_slice() -> Slice {
+    let mut slice = slice();
+    slice.types = [
+        ("orders.DeliveryZone", OMNIA_ZONE_SIGNATURE),
+        ("orders.ZONES", OMNIA_ZONES_TABLE),
+        (
+            "orders.RATES",
+            "export const RATES: readonly Rate[] = [\n  { code: \"std\", cents: 650 },\n];",
+        ),
+        (
+            "orders.NESTED",
+            "export const NESTED: readonly DeliveryZone[] = [\n  { from: \"0\", to: \"1\", zone: { \
+             name: \"x\" } },\n];",
+        ),
+        ("orders.LIMITS", "export const LIMITS: Readonly<Record<string, number>> = { a: 1 };"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+    slice
+}
+
+// A constant array of object literals typed over a type the slice owns is
+// a reference table: its rows are laid as a JSON data file beside the
+// crate's sources, one object per line under the wire's keys with each
+// string's escapes read, and the module gains a `pub fn` reading the file
+// into the element type under the table's first line; a table whose
+// element the slice does not own, one whose row nests an object, and a
+// read-only map stay the marker; and the brief names the file and the
+// reader as finished.
+#[tokio::test]
+async fn omnia_table_laid() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        "use omnia_sdk::{Error, Result};\n",
+        "pub struct DeliveryZone {\n    /// The `from` field.\n    pub from: String,\n    /// The \
+         `to` field.\n    pub to: String,\n    /// The `zone` field.\n    pub zone: String,\n    \
+         /// The `courier` field.\n    pub courier: String,\n    /// The `minDays` field.\n    \
+         #[serde(rename = \"minDays\")]\n    pub min_days: i64,\n    /// The `rural` field.\n    \
+         pub rural: bool,\n}\n",
+        OMNIA_ZONES_READER,
+        "pub struct Rates {}\n",
+        "pub struct Nested {}\n",
+        "pub struct Limits {}\n",
+    ] {
+        assert!(part.contains(carried), "the part carries `{carried}`: {part}");
+    }
+    assert!(!part.contains("northland"), "no row stands in the module: {part}");
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_JSON);
+    assert!(project.read("crates/orders/data/rates.json").is_none(), "no file for a marker");
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+
+    let brief = &model.seen()[0].messages[0];
+    for cited in [
+        "- `crates/orders/data/zones.json`: scaffolded, every row of the design type \
+         `orders.ZONES` as the wire spells it, read into `Vec<_>` by `zones()` in \
+         `crates/orders/src/reading.rs`, which is finished. Read the rows through it where the \
+         behaviour needs them, and never type a row again in code.\n",
+        "The design types `DeliveryZone` (`orders.DeliveryZone`) in `crates/orders/src/reading.rs` \
+         are scaffolded as their signatures spell",
+        "1. `pub struct Rates {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.RATES`, whose signature the scaffold could not lay",
+        "2. `pub struct Nested {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.NESTED`, whose signature the scaffold could not lay",
+    ] {
+        assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
+    }
+    assert!(!brief.contains("`zones` (`orders.ZONES`)"), "the table is no struct: {brief}");
+    assert!(
+        brief.contains("From `references/handlers.md`, under \"A reference table\":\n\n")
+            && brief.contains("The file is the rows' one home"),
+        "the passage on a reference table is selected: {brief}"
+    );
+}
+
+// A data file already standing where a table's goes is kept as it stands
+// and named held, and a whole write of the file that drops a row is
+// refused as a write of any scaffolded file is, the file's lines its keeps.
+#[tokio::test]
+async fn omnia_table_held() {
+    let project = omnia_tree().await;
+    project.write("crates/orders/data/zones.json", "[\n  {\"from\": \"0000\"}\n]\n");
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    assert_eq!(
+        text(&project, "crates/orders/data/zones.json"),
+        "[\n  {\"from\": \"0000\"}\n]\n",
+        "the held file stands"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains("- `crates/orders/data/zones.json`: held, every row of the design type"),
+        "the brief names the file held: {brief}"
+    );
+
+    // a whole write dropping a row is refused, and one keeping every row passes
+    let project = omnia_tree().await;
+    let cut = "[\n  {\"from\": \"0110\", \"to\": \"0139\"}\n]\n";
+    let report = r#"{"covered": [], "written": ["crates/orders/data/zones.json"]}"#;
+    let model = ScriptedModel::answering([report]).calling(
+        0,
+        [
+            write_files(&[("crates/orders/data/zones.json", cut)]),
+            write_files(&[("crates/orders/data/zones.json", OMNIA_ZONES_JSON)]),
+        ],
+    );
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("the kept rows pass");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_JSON);
+    let writes: Vec<_> = model
+        .exchanges()
+        .into_iter()
+        .filter(|exchange| exchange.tool == "write_files")
+        .map(|exchange| exchange.outcome)
+        .collect();
+    let [Err(refused), Ok(_)] = writes.as_slice() else {
+        panic!("the cut is refused and the whole passes: {writes:?}");
+    };
+    assert!(
+        refused.contains(
+            "`crates/orders/data/zones.json` was scaffolded before this turn and this content \
+             drops what the skeleton holds: `{\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+             \"northland-kerikeri\""
+        ),
+        "the refusal names the rows dropped: {refused}"
+    );
 }
 
 // A Rust declaration is laid as the TypeScript one is: a doc line kept, a

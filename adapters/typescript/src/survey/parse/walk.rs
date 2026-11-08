@@ -2,18 +2,19 @@
 
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{
-    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, Dynamic,
-    EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind,
-    Property, Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
+    self, Arg, Assigned, Assignment, Binding, BindingKind, Call, Callee, ClassDecl, Decision,
+    Decorated, Dynamic, EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link,
+    Member, MemberKind, Property, Reexport, Reference, Scalar, Scope, TypeDecl, TypeKind, Use,
 };
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    Argument, AwaitExpression, BinaryOperator, BindingPattern, CallExpression, CatchClause,
-    ChainElement, Class, ClassElement, ComputedMemberExpression, ConditionalExpression,
-    Declaration, Decorator, ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
-    ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
-    ExpressionStatement, FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
+    Argument, AssignmentExpression, AssignmentOperator, AssignmentTarget, AwaitExpression,
+    BinaryOperator, BindingPattern, CallExpression, CatchClause, ChainElement, Class, ClassElement,
+    ComputedMemberExpression, ConditionalExpression, Declaration, Decorator, ExportAllDeclaration,
+    ExportDeclaration, ExportDefaultDeclaration, ExportDefaultDeclarationKind,
+    ExportFromDeclaration, ExportNamedDeclaration, Expression, ExpressionStatement,
+    FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
     ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, MethodDefinition,
     MethodDefinitionKind, NewExpression, ObjectExpression, ObjectPropertyKind, PropertyDefinition,
     PropertyKey, ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility,
@@ -528,6 +529,23 @@ impl<'a> Visit<'a> for Walker<'_> {
         self.positions.pop();
     }
 
+    fn visit_assignment_expression(&mut self, it: &AssignmentExpression<'a>) {
+        if it.operator == AssignmentOperator::Assign
+            && let AssignmentTarget::StaticMemberExpression(target) = &it.left
+            && let Expression::Identifier(object) = bare(&target.object)
+        {
+            let lines = self.lines(it.span);
+            self.module.assignments.push(Assignment {
+                object: object.name.to_string(),
+                member: target.property.name.to_string(),
+                value: assigned(&it.right),
+                frames: self.frames.iter().map(|frame| frame.id).collect(),
+                lines,
+            });
+        }
+        walk::walk_assignment_expression(self, it);
+    }
+
     fn visit_expression_statement(&mut self, it: &ExpressionStatement<'a>) {
         self.discarded = match core(&it.expression) {
             Core::Call(call) => Some(call.span),
@@ -982,6 +1000,41 @@ fn literal(expr: &Expression<'_>) -> bool {
         }
         Expression::CallExpression(call) => wraps(call),
         _ => false,
+    }
+}
+
+fn assigned(expr: &Expression<'_>) -> Assigned {
+    if let Some(scalar) = scalar(expr) {
+        return Assigned::Literal(scalar);
+    }
+    match core(expr) {
+        Core::New(new) => head_path(&new.callee).map_or(Assigned::Other, Assigned::Construction),
+        Core::Other(other @ (Expression::Identifier(_) | Expression::StaticMemberExpression(_))) => {
+            head_path(other).map_or(Assigned::Other, Assigned::Read)
+        }
+        Core::Call(_) | Core::Other(_) => Assigned::Other,
+    }
+}
+
+// The kind of a literal, a negated or signed number and a template with no
+// substitution among them.
+fn scalar(expr: &Expression<'_>) -> Option<Scalar> {
+    match bare(expr) {
+        Expression::NumericLiteral(number) => {
+            Some(if number.value.fract() == 0.0 { Scalar::Integer } else { Scalar::Float })
+        }
+        Expression::BigIntLiteral(_) => Some(Scalar::Integer),
+        Expression::StringLiteral(_) => Some(Scalar::String),
+        Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
+            Some(Scalar::String)
+        }
+        Expression::BooleanLiteral(_) => Some(Scalar::Boolean),
+        Expression::UnaryExpression(unary)
+            if matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus) =>
+        {
+            scalar(&unary.argument).filter(|kind| matches!(kind, Scalar::Integer | Scalar::Float))
+        }
+        _ => None,
     }
 }
 

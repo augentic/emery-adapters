@@ -547,6 +547,8 @@ pub enum Laid {
     Gate,
     Tests,
     Types,
+    // A reference table's data file and the fn reading it.
+    Data,
 }
 
 // One passage of a reference: Markdown quoted verbatim, or code the brief
@@ -1030,6 +1032,11 @@ pub fn passages(docs: &[Doc], needs: &Needs) -> Vec<Passage> {
             && let Some((heading, status)) = section(handlers, "A status of its own")
         {
             passages.push(markdown(HANDLERS, &heading, status));
+        }
+        if has(Laid::Data)
+            && let Some((heading, table)) = section(handlers, "A reference table")
+        {
+            passages.push(markdown(HANDLERS, &heading, table));
         }
     }
 

@@ -15,7 +15,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
-use emery_sdk::{Error, Standing, push_unique, server_error, unique, write_whole};
+use emery_sdk::{
+    Error, NoFollow, Standing, bad_request, push_unique, server_error, standing, unique,
+    write_whole,
+};
 
 use self::lists::{Lists, Placement, Topics};
 pub use self::reference::{Gate, Inbound, Wire, registration};
@@ -255,10 +258,11 @@ impl Scaffold {
     // Every file the scaffold wrote or found and every list it holds a line
     // in, each with what a whole write of it must keep, sorted by path: a
     // module its requirement ids and the items the scaffold named, a test
-    // file its ids and its tests, and a manifest, an entry, or a list every
-    // line it holds, so a list is added to and never cut; and, for a module
-    // or a test file the scaffold wrote, each marker it laid under the key
-    // the brief quotes, so the turn fills a marker by naming it.
+    // file its ids and its tests, and a manifest, an entry, a list, or a
+    // table's data file every line it holds, so a list is added to and
+    // never cut; and, for a module or a test file the scaffold wrote, each
+    // marker it laid under the key the brief quotes, so the turn fills a
+    // marker by naming it.
     fn guarded(&self) -> Vec<Guarded> {
         let mut keeps: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         let mut markers: BTreeMap<&str, Vec<Marker>> = BTreeMap::new();
@@ -267,6 +271,9 @@ impl Scaffold {
                 let Some(file) = stem.file(kind) else { continue };
                 keeps.entry(&file.path).or_default().extend(stem.keeps(kind));
                 markers.entry(&file.path).or_default().extend(stem.markers(kind));
+            }
+            for data in stem.data.iter().filter(|_| stem.module.laid()) {
+                keeps.entry(&data.path).or_default().extend(lines_of(&data.text));
             }
             for line in stem.lines.iter().filter(|line| line.placement != Placement::Unanchored) {
                 let tokens =
@@ -400,6 +407,24 @@ impl Plan {
                     write_whole(root, &file.path, Standing::File, text.as_bytes())
                         .map_err(|err| server_error!("writing `{}`: {err}", file.path))?;
                     written.push(file.path.clone());
+                }
+            }
+            for data in stem.data.iter().filter(|_| stem.module.laid()) {
+                match standing(root, &data.path) {
+                    Ok(Standing::Absent) => {
+                        create(root, &data.path, &data.text)?;
+                        written.push(data.path.clone());
+                    }
+                    Ok(Standing::File) => {}
+                    Err(NoFollow::Io { path, source }) => {
+                        return Err(server_error!("reading `{path}`: {source}"));
+                    }
+                    Err(err) => {
+                        return Err(bad_request!(
+                            "`{}` {err}, where the slice's scaffold writes a data file",
+                            data.path
+                        ));
+                    }
                 }
             }
         }

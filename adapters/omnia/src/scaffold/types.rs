@@ -50,8 +50,17 @@ pub struct Parsed {
 pub enum Shape {
     Struct(Struct),
     Enum(Enum),
+    Table(Table),
     // A signature the reader cannot lay whole; the marker stands for it.
     Opaque { is_enum: bool },
+}
+
+// A constant array of object literals: a reference table the code reads,
+// each row the scalars it spells under the wire's keys.
+pub struct Table {
+    // The declared name of the element type each row is one of.
+    pub element: String,
+    pub rows: Vec<Vec<(String, Literal)>>,
 }
 
 pub struct Struct {
@@ -139,6 +148,14 @@ pub enum Body {
     Enum {
         variants: Vec<LaidVariant>,
         numeric: bool,
+    },
+    // A reference table: the rows as a JSON data file beside the crate's
+    // sources, and the fn reading them into the element type.
+    Table {
+        element: String,
+        // The data file's path from the crate's root.
+        file: String,
+        json: String,
     },
     Marker {
         is_enum: bool,
@@ -412,6 +429,7 @@ pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Na
         let (body, laying) = match &item.shape {
             Shape::Opaque { is_enum } => (Body::Marker { is_enum: *is_enum }, Laying::default()),
             Shape::Enum(declared) => (declared.lay(), Laying::default()),
+            Shape::Table(table) => (table.lay(name, parsed, &owned), Laying::default()),
             Shape::Struct(declared) => {
                 let refs = Refs {
                     owned: &owned,
@@ -449,6 +467,75 @@ pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Na
         }
     }
     bodies
+}
+
+impl Table {
+    // Whether the slice lays the table's element as a struct, so the rows
+    // deserialise into a type the module declares.
+    pub fn laid_over(&self, parsed: &[Parsed]) -> bool {
+        parsed.iter().any(|item| {
+            item.name.as_deref() == Some(self.element.as_str())
+                && matches!(item.shape, Shape::Struct(_))
+        })
+    }
+
+    // The data file and its reader where the slice lays the element type;
+    // the marker otherwise, since a file no laid type reads is a file the
+    // turn would have to type itself.
+    fn lay(&self, name: &str, parsed: &[Parsed], owned: &[(String, String)]) -> Body {
+        let element = self
+            .laid_over(parsed)
+            .then(|| owned.iter().find(|(declared, _)| *declared == self.element))
+            .flatten();
+        let Some((_, element)) = element else {
+            return Body::Marker { is_enum: false };
+        };
+        Body::Table {
+            element: element.clone(),
+            file: format!("data/{name}.json"),
+            json: self.json(),
+        }
+    }
+
+    // The rows as a JSON array, one object per line under the wire's keys
+    // in the order the source spells them.
+    fn json(&self) -> String {
+        let mut text = String::from("[\n");
+        let count = self.rows.len();
+        for (at, row) in self.rows.iter().enumerate() {
+            let cells: Vec<String> = row
+                .iter()
+                .map(|(key, cell)| format!("{}: {}", json_string(key), cell.json()))
+                .collect();
+            text.push_str("  {");
+            text.push_str(&cells.join(", "));
+            text.push('}');
+            if at + 1 < count {
+                text.push(',');
+            }
+            text.push('\n');
+        }
+        text.push_str("]\n");
+        text
+    }
+}
+
+impl Literal {
+    // The cell as JSON spells it; a default no table cell is reads as
+    // `null`, since the reader admits none.
+    fn json(&self) -> String {
+        match self {
+            Self::Int(text) | Self::Float(text) => text.clone(),
+            Self::Bool(flag) => flag.to_string(),
+            Self::Str(text) => json_string(text),
+            Self::Empty | Self::Default | Self::Member(..) => "null".to_owned(),
+        }
+    }
+}
+
+// `text` as a JSON string literal.
+fn json_string(text: &str) -> String {
+    emery_sdk::serde_json::to_string(text).unwrap_or_else(|_| "\"\"".to_owned())
 }
 
 impl Enum {
@@ -837,12 +924,16 @@ impl Body {
         match self {
             Self::Enum { .. } => true,
             Self::Marker { is_enum } => *is_enum,
-            Self::Struct { .. } => false,
+            Self::Struct { .. } | Self::Table { .. } => false,
         }
     }
 
     pub const fn is_marker(&self) -> bool {
         matches!(self, Self::Marker { .. })
+    }
+
+    pub const fn is_table(&self) -> bool {
+        matches!(self, Self::Table { .. })
     }
 
     pub const fn uses_map(&self) -> bool {
@@ -854,7 +945,7 @@ impl Body {
     pub fn carried(&self) -> impl Iterator<Item = (&str, &str)> {
         let fields: &[LaidField] = match self {
             Self::Struct { fields, .. } => fields,
-            Self::Enum { .. } | Self::Marker { .. } => &[],
+            Self::Enum { .. } | Self::Table { .. } | Self::Marker { .. } => &[],
         };
         fields.iter().filter_map(|field| Some((field.name.as_str(), field.carried.as_deref()?)))
     }

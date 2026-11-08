@@ -2485,6 +2485,99 @@ async fn typescript_types() {
     assert_eq!(model.seen().len(), 3, "the survey, one seam over the tree, one over the value");
 }
 
+// A class a package provides, constructed with `new` and assigned members
+// on, is a `type` claim spelling the class as the code assigns it — each
+// member annotated from its value: the literal's kind, the class a
+// construction or a constructed name carries, `unknown` for a read or a
+// call — anchored from the first assignment to the last; a class the tree
+// declares keeps its declaration's claim and gets no assigned one.
+#[tokio::test]
+async fn typescript_assigned_types() {
+    let project = scratch();
+    modules(
+        &project,
+        &[
+            ("package.json", "{\"name\":\"converter\",\"main\":\"dist/index.js\"}\n"),
+            ("src/index.ts", "export { Converter } from \"./converter\";\n"),
+            ("src/update.ts", "export class Update {\n  label = \"\";\n}\n"),
+            (
+                "src/converter.ts",
+                "import { EventData, LocationData, VehicleEvent } from \"connector-common\";\n\
+                 import { Update } from \"./update\";\n\nexport class Converter {\n  \
+                 convert(label: string, station: { lat: number; lon: number }): VehicleEvent {\n    \
+                 const event = new VehicleEvent();\n    event.eventType = \"Location\";\n    \
+                 event.receivedAt = new Date();\n    event.eventData = new EventData();\n    \
+                 const location = new LocationData();\n    location.gpsAccuracy = 0;\n    \
+                 location.latitude = station.lat;\n    location.speed = -1.5;\n    \
+                 location.rural = `yes`;\n    event.locationData = location;\n    \
+                 const update = new Update();\n    update.label = label;\n    return event;\n  \
+                 }\n}\n",
+            ),
+        ],
+    );
+    let survey = inventory(&[("Converter", "src/converter.ts#L4-L20", "converter")], &[
+        "src/index.ts",
+    ]);
+    let answered = serde_json::json!({
+        "claims": [
+            { "kind": "requirement", "id": "converter.convert", "statement": "Converts an update." }
+        ]
+    })
+    .to_string();
+    let model = ScriptedModel::answering([&survey, &answered]);
+
+    let evidence = TYPESCRIPT.accepted(&workspace(&project), &model).await;
+
+    check_evidence(&evidence);
+    model.assert_exhausted();
+    let types: Vec<(&str, Option<&str>, Option<&str>, &str)> = evidence
+        .claims
+        .iter()
+        .filter(|claim| claim.kind == ClaimKind::Type)
+        .map(|claim| {
+            (
+                claim.type_name().expect("named"),
+                claim.path.as_deref(),
+                claim.synopsis.as_deref(),
+                claim.signature().expect("spelled"),
+            )
+        })
+        .collect();
+    assert_eq!(
+        types,
+        [
+            (
+                "Converter",
+                Some("src/converter.ts#L4-L20"),
+                Some("exported class"),
+                "class Converter {\n  convert(label: string, station: { lat: number; lon: number \
+                 }): VehicleEvent { .. }\n}"
+            ),
+            (
+                "VehicleEvent",
+                Some("src/converter.ts#L7-L15"),
+                Some("imported class, as assigned"),
+                "class VehicleEvent {\n  eventType: string;\n  receivedAt: Date;\n  eventData: \
+                 EventData;\n  locationData: LocationData;\n}"
+            ),
+            (
+                "LocationData",
+                Some("src/converter.ts#L11-L14"),
+                Some("imported class, as assigned"),
+                "class LocationData {\n  gpsAccuracy: number;\n  latitude: unknown;\n  speed: \
+                 number;\n  rural: string;\n}"
+            ),
+            (
+                "Update",
+                Some("src/update.ts#L1-L3"),
+                Some("exported class"),
+                "class Update {\n  label;\n}"
+            ),
+        ],
+        "the tree's declarations, then the package's classes as assigned"
+    );
+}
+
 // A surface registered by a verb serves a typed route: the verb uppercase,
 // the path under its mount, each parameter `{name}` however the framework
 // spelled it, anchored at the registration under the surface's id; the

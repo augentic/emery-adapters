@@ -193,6 +193,7 @@ impl Stem {
         if routed || consuming {
             uses.add("omnia_sdk::api", &["Context", "Handlers"]);
         }
+        let tabled = self.types.iter().any(|design_type| design_type.body.is_table());
         let mut sdk = Vec::new();
         if routed || consuming {
             sdk.push("Capabilities");
@@ -200,7 +201,10 @@ impl Stem {
         if laying {
             sdk.push("Config");
         }
-        if routed || consuming || !self.functions.is_empty() {
+        if tabled {
+            sdk.push("Error");
+        }
+        if routed || consuming || tabled || !self.functions.is_empty() {
             sdk.push("Result");
         }
         if self.settings.is_some() || self.laid_gate().is_some_and(|gate| gate.settings.is_some()) {
@@ -627,6 +631,11 @@ impl Type {
     // `serde(default)` names after it, or the empty marker where the
     // signature was not read.
     fn render(&self, source: &mut Source) {
+        let name = self.name.as_str();
+        if let Body::Table { element, file, .. } = &self.body {
+            self.render_table(element, file, source);
+            return;
+        }
         let fence = Fence::around(&self.signature);
         let mut docs = Doc::new([
             format!("The design type `{}`.", self.key),
@@ -637,7 +646,6 @@ impl Type {
             docs.push(line.trim_end());
         }
         docs.push(fence.to_string());
-        let name = self.name.as_str();
         match &self.body {
             Body::Struct {
                 generics,
@@ -690,7 +698,39 @@ impl Type {
                         .vis(Vis::Pub),
                 );
             }
+            Body::Table { .. } => {}
         }
+    }
+
+    // The fn reading a table's rows from its data file into the element
+    // type, under the table's first line fenced in its doc; the rows
+    // themselves stand in the file, never in the module.
+    fn render_table(&self, element: &str, file: &str, source: &mut Source) {
+        let first = self.signature.lines().next().unwrap_or_default().trim_end();
+        let fence = Fence::around(first);
+        let docs = Doc::new([
+            format!("The design type `{}`, its rows in `{file}`.", self.key),
+            String::new(),
+            format!("{fence}text"),
+            first.to_owned(),
+            fence.to_string(),
+            String::new(),
+            "# Errors".to_owned(),
+            String::new(),
+            format!("A row of the file that `{element}` does not read."),
+        ]);
+        source.push(
+            Fn::new(&self.name)
+                .docs(docs)
+                .vis(Vis::Pub)
+                .returns(format!("Result<Vec<{element}>>"))
+                .body([
+                    format!("let rows = include_str!(\"../{file}\");"),
+                    "serde_json::from_str(rows).map_err(|error| Error::server_error(\"data\", \
+                     error.to_string()))"
+                        .to_owned(),
+                ]),
+        );
     }
 }
 
