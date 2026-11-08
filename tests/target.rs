@@ -104,23 +104,20 @@ const OMNIA_ZONES_TABLE: &str = "export const ZONES: readonly DeliveryZone[] = [
                                  'o\\'hara', courier: \"nzpost\", minDays: 3, rural: true },\n];";
 // The table's data module as the adapter lays it, the rows one object per
 // line in one constant.
-const OMNIA_ZONES_DATA: &str = "//! The rows of the design type `orders.ZONES`.\n\n/// The rows \
-                                of `orders.ZONES` as JSON, one object per line under the wire's \
-                                keys.\npub const JSON: &str = r#\"[\n  {\"from\": \"0110\", \
-                                \"to\": \"0139\", \"zone\": \"northland-kerikeri\", \
-                                \"courier\": \"nzpost\", \"minDays\": 2, \"rural\": \
-                                false},\n  {\"from\": \"0140\", \"to\": \"0149\", \"zone\": \
-                                \"northland-warkworth\", \"courier\": \"nzpost\", \"minDays\": \
-                                3, \"rural\": true},\n  {\"from\": \"0150\", \"to\": \"0199\", \
-                                \"zone\": \"o'hara\", \"courier\": \"nzpost\", \"minDays\": 3, \
-                                \"rural\": true}\n]\"#;\n";
+const OMNIA_ZONES_DATA: &str = "[\n  {\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+                                \"northland-kerikeri\", \"courier\": \"nzpost\", \"minDays\": 2, \
+                                \"rural\": false},\n  {\"from\": \"0140\", \"to\": \"0149\", \
+                                \"zone\": \"northland-warkworth\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true},\n  {\"from\": \"0150\", \"to\": \
+                                \"0199\", \"zone\": \"o'hara\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true}\n]\n";
 // The fn reading the table, as the adapter lays it.
-const OMNIA_ZONES_READER: &str = "/// The design type `orders.ZONES`, its rows the constant \
-                                  `crate::zones_data::JSON`.\n///\n/// ```text\n/// export const \
-                                  ZONES: readonly DeliveryZone[] = [\n/// ```\n///\n/// # \
-                                  Errors\n///\n/// A row of the constant that `DeliveryZone` \
-                                  does not read.\npub fn zones() -> Result<Vec<DeliveryZone>> {\n    \
-                                  serde_json::from_str(crate::zones_data::JSON)\n        \
+const OMNIA_ZONES_READER: &str = "/// The design type `orders.ZONES`, its rows the file \
+                                  `data/zones.json`.\n///\n/// ```text\n/// export const ZONES: \
+                                  readonly DeliveryZone[] = [\n/// ```\n///\n/// # \
+                                  Errors\n///\n/// A row of the file that `DeliveryZone` does \
+                                  not read.\npub fn zones() -> Result<Vec<DeliveryZone>> {\n    \
+                                  serde_json::from_str(include_str!(\"../data/zones.json\"))\n        \
                                   .map_err(|error| Error::server_error(\"data\", \
                                   error.to_string()))\n}\n";
 // A consumer of `order-placed` as a turn fills one, writing the delivery's
@@ -3151,32 +3148,26 @@ async fn omnia_table_laid() {
         assert!(part.contains(carried), "the part carries `{carried}`: {part}");
     }
     assert!(!part.contains("northland"), "no row stands in the part: {part}");
-    assert_eq!(text(&project, "crates/orders/src/zones_data.rs"), OMNIA_ZONES_DATA);
-    assert!(project.read("crates/orders/src/rates_data.rs").is_none(), "no module for a marker");
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_DATA);
+    assert!(project.read("crates/orders/data/rates.json").is_none(), "no file for a marker");
+    assert!(project.read("crates/orders/src/zones_data.rs").is_none(), "no module holds the rows");
     let entry = text(&project, "crates/orders/src/lib.rs");
     assert!(
-        entry.contains("pub mod reading;\npub mod zones_data;\n"),
-        "the entry declares the data module after the part: {entry}"
+        entry.contains("pub mod reading;\n") && !entry.contains("zones"),
+        "the entry declares the part alone: {entry}"
     );
-    assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/src/zones_data.rs"]);
-    let rows: Vec<serde_json::Value> = serde_json::from_str(
-        OMNIA_ZONES_DATA
-            .split_once("r#\"")
-            .and_then(|(_, rest)| rest.rsplit_once("\"#"))
-            .map(|(json, _)| json)
-            .expect("the constant's raw string"),
-    )
-    .expect("the constant parses as JSON");
-    assert_eq!(rows.len(), 3, "every row is in the constant: {rows:?}");
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let rows: Vec<serde_json::Value> =
+        serde_json::from_str(OMNIA_ZONES_DATA).expect("the file parses as JSON");
+    assert_eq!(rows.len(), 3, "every row is in the file: {rows:?}");
 
     let brief = &model.seen()[0].messages[0];
     for cited in [
-        "- `crates/orders/src/zones_data.rs`: scaffolded, every row of the design type \
-         `orders.ZONES` as the wire spells it, one JSON constant read into `Vec<_>` by `zones()` \
-         in `crates/orders/src/reading.rs`, which is finished. Read the rows through it where \
-         the behaviour needs them, and never type a row again in code.\n",
-        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` and `pub mod zones_data;` \
-         in its list.",
+        "- `crates/orders/data/zones.json`: scaffolded, every row of the design type \
+         `orders.ZONES` as the wire spells it, one JSON array compiled in and read into `Vec<_>` \
+         by `zones()` in `crates/orders/src/reading.rs`, which is finished. Read the rows \
+         through it where the behaviour needs them, and never type a row again in code.\n",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` in its list.",
         "The design types `DeliveryZone` (`orders.DeliveryZone`) in `crates/orders/src/reading.rs` \
          are scaffolded as their signatures spell",
         "1. `pub struct Rates {}` in `crates/orders/src/reading.rs`: the design type \
@@ -3189,51 +3180,46 @@ async fn omnia_table_laid() {
     assert!(!brief.contains("`zones` (`orders.ZONES`)"), "the table is no struct: {brief}");
     assert!(
         brief.contains("From `references/handlers.md`, under \"A reference table\":\n\n")
-            && brief.contains("The constant is the rows' one home"),
+            && brief.contains("The file is the rows' one home"),
         "the passage on a reference table is selected: {brief}"
     );
 }
 
-// A data module already standing where a table's goes is kept as it stands
-// and named held, and a whole write of the module that drops a row is
-// refused as a write of any scaffolded file is, the module's lines its
-// keeps.
+// A data file already standing where a table's goes is kept as it stands
+// and named held, and a whole write of the file that drops a row is
+// refused as a write of any scaffolded file is, the file's lines its keeps.
 #[tokio::test]
 async fn omnia_table_held() {
     let project = omnia_tree().await;
-    project.write("crates/orders/src/zones_data.rs", "pub const JSON: &str = r#\"[]\"#;\n");
+    project.write("crates/orders/data/zones.json", "[]\n");
     let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
-    assert_eq!(
-        text(&project, "crates/orders/src/zones_data.rs"),
-        "pub const JSON: &str = r#\"[]\"#;\n",
-        "the held module stands"
-    );
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), "[]\n", "the held file stands");
     let brief = &model.seen()[0].messages[0];
     assert!(
-        brief.contains("- `crates/orders/src/zones_data.rs`: held, every row of the design type"),
-        "the brief names the module held: {brief}"
+        brief.contains("- `crates/orders/data/zones.json`: held, every row of the design type"),
+        "the brief names the file held: {brief}"
     );
 
     // a whole write dropping a row is refused, and one keeping every row passes
     let project = omnia_tree().await;
-    let cut = "pub const JSON: &str = r#\"[\n  {\"from\": \"0110\", \"to\": \"0139\"}\n]\"#;\n";
-    let report = r#"{"covered": [], "written": ["crates/orders/src/zones_data.rs"]}"#;
+    let cut = "[\n  {\"from\": \"0110\", \"to\": \"0139\"}\n]\n";
+    let report = r#"{"covered": [], "written": ["crates/orders/data/zones.json"]}"#;
     let model = ScriptedModel::answering([report]).calling(
         0,
         [
-            write_files(&[("crates/orders/src/zones_data.rs", cut)]),
-            write_files(&[("crates/orders/src/zones_data.rs", OMNIA_ZONES_DATA)]),
+            write_files(&[("crates/orders/data/zones.json", cut)]),
+            write_files(&[("crates/orders/data/zones.json", OMNIA_ZONES_DATA)]),
         ],
     );
 
     OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("the kept rows pass");
     model.assert_exhausted();
 
-    assert_eq!(text(&project, "crates/orders/src/zones_data.rs"), OMNIA_ZONES_DATA);
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_DATA);
     let writes: Vec<_> = model
         .exchanges()
         .into_iter()
@@ -3245,8 +3231,9 @@ async fn omnia_table_held() {
     };
     assert!(
         refused.contains(
-            "`crates/orders/src/zones_data.rs` was scaffolded before this turn and this content \
-             drops what the skeleton holds: `//! The rows of the design type `orders.ZONES`.`"
+            "`crates/orders/data/zones.json` was scaffolded before this turn and this content \
+             drops what the skeleton holds: `{\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+             \"northland-kerikeri\", \"courier\": \"nzpost\", \"minDays\": 2, \"rural\": false},`"
         ),
         "the refusal names the rows dropped: {refused}"
     );

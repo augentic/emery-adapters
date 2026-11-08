@@ -240,3 +240,31 @@ Three fresh runs over `express-orders` under `composer-2.5`, the card `2026-11-0
   - **Rejections** 1, 1, 0.
 
 **Reading under the rule.** D1–D3 hold on three of three, so the data table stands: the rows reach the design whole and the tree as a constant no turn rewrites, and the zone mask is gone. `start` holds on the design the first arm's reader missed. With the mask lifted the classes separate: the default code recurs at 5 of 9 and gets its check; the error class a claim drops (`UpstreamError` to `rejects`), the default a schema declares, and the rounding a statement omits are three specify-side losses of one kind, a fact the code states and the claim paraphrases, in the store's shape's company.
+
+#### The file again, under the lifted ban
+
+The exemplar lifted the `include_str!` / `include_bytes!` entries from the seed's `clippy.toml` (`omnia-exemplar` `2555e25f`, the pin moved in `Cargo.lock`; the host-boundary entries stand). The ban was a data-placement policy the lints carried, and it was the one reason the first arm's file shape became the data module: with it gone, the layout goes back to the file the first arm laid, since a JSON file is the rows as the source spells them and a Rust module of one raw string is the same rows behind a hash fence, a `pub mod` line, and a path the turn must spell. The scaffold lays `crates/<stem>/data/<snake>.json` (the rows under their wire keys, one object per line, the array alone) and the reader `serde_json::from_str(include_str!("../data/<snake>.json"))` in the part; the entry's list gains no line, the brief names the file and the reader finished, and the file is guarded row for row as the module was (`omnia_table_laid`, `omnia_table_held`). The rule the ban stated moves into the prose: a reference table is embedded, a per-deployment value is a setting, a secret is read at use, and a document that changes at runtime is `DocumentStore`'s. A tree initialised under the old seed carries the old `clippy.toml`, which `static_drift` reports at its next verify as the template's drift; a fresh `--build` starts from the new seed.
+
+The arm is the second arm's again, three fresh `--build` runs over `express-orders` under `composer-2.5` on both components rebuilt from the working tree, with the `16-40-02Z` trees as the control:
+
+```bash
+CURSOR_MODEL=composer-2.5 EVAL_RUNS=3 cargo run -p evals -- --build --target omnia express-orders
+```
+
+##### Predictions
+
+- **D1, the design.** As before: `Type: ZONES` fenced with its 321 rows on three of three.
+- **D2, the tree.** `crates/orders/data/zones.json` with 321 rows, byte-identical from the scaffold to the seal, and `pub fn zones()` reading it through `include_str!("../data/zones.json")` as laid, on three of three; no `_data.rs` module, no raw-string constant, no `DocumentStore` read, and no `disallowed_macros` finding in any slice's loop (`run-N.build.stderr`).
+- **D3, the zone class.** Gone on every run that reaches the lookup, as on the second arm.
+- **D4, the rest read, not predicted.** The classes behind the mask counted as the second arm's were; `start` 4/4 where the gate's prefix is read.
+
+##### Decision rule
+
+- **D2 fails on a `disallowed_macros` finding:** the seed the arm built over is not `2555e25f`'s; the staged project's `clippy.toml` is read and the pin checked before anything else is read.
+- **D2 fails with the reader rewritten and no finding:** the turn moved the rows for a reason of its own; the rewrite quoted beside the brief's sentence on the file, and the file shape stands unless the rewrite recurs on two of three.
+- **D1 or D3 moves against the second arm:** read as a fresh-revision variance first (each run seals its own revision), the design and the specification compared before the tree.
+- **D4:** the classes counted; totals alone decide nothing.
+
+##### Results
+
+Not yet run.
