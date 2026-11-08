@@ -1,0 +1,7 @@
+[
+  { "sku": "WID-001", "description": "Widget", "unit_cents": 1500, "weight_grams": 300, "active": true },
+  { "sku": "GAD-002", "description": "Gadget", "unit_cents": 2500, "weight_grams": 1200, "active": true },
+  { "sku": "BLT-003", "description": "Bolt", "unit_cents": 100, "weight_grams": 20, "active": true },
+  { "sku": "WSH-004", "description": "Washer", "unit_cents": 10, "weight_grams": 5, "active": true },
+  { "sku": "OLD-999", "description": "Retired gizmo", "unit_cents": 900, "weight_grams": 100, "active": false }
+]

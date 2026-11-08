@@ -85,7 +85,7 @@ The rules are:
   A stem the array does not name compiles clean and serves nothing, which no check sees.
   The repair adds the stem's entry at the end of the array through `edit_files` and rewrites no other.
   The static text around the array stands as the seed spells it, and every entry of the array is one stem, once.
-  Two slices that each rewrote the seed's one-line array leave a merge conflict there: the repair is one array holding both entries.
+  The array is laid one `<stem>::handlers(),` per line under the comment that heads it, which stays: the repair is one line added before the closing `])`, never the array folded onto one line.
 - **Every part is declared, and the entry holds nothing of its own.** Every `crates/<stem>/src/<part>.rs` is listed by a `pub mod <part>;` line of the stem's `src/lib.rs`.
   A module nothing declares is compiled by nothing and serves nothing, which the checks pass over.
   An entry that exposes `handlers()` holds its `pub mod` lines, its `use` lines, and the one fold, and no handler, type, constant, or inline module.
@@ -165,8 +165,8 @@ A repair is one `edit_files` call. Its `find` is the text as the file holds it. 
   "edits": [
     {
       "path": "src/lib.rs",
-      "find": "    Handlers::from([health::handlers()]).with_state(Client::new(provider))\n",
-      "replace": "    Handlers::from([health::handlers(), orders::handlers()]).with_state(Client::new(provider))\n"
+      "find": "        health::handlers(),\n    ])\n",
+      "replace": "        health::handlers(),\n        orders::handlers(),\n    ])\n"
     }
   ]
 }

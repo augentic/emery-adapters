@@ -1085,7 +1085,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#77ccf23fec0ed868de3d2246e1cb1d77f8fc6ba6"
+source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1137,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "emery-lexicon"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#77ccf23fec0ed868de3d2246e1cb1d77f8fc6ba6"
+source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
 
 [[package]]
 name = "emery-node"
@@ -1159,7 +1159,7 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#77ccf23fec0ed868de3d2246e1cb1d77f8fc6ba6"
+source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
 
 [[package]]
 name = "emery-python"
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "emery-sdk"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#77ccf23fec0ed868de3d2246e1cb1d77f8fc6ba6"
+source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -2653,7 +2653,7 @@ dependencies = [
 [[package]]
 name = "omnia-template"
 version = "0.1.0"
-source = "git+https://github.com/augentic/omnia-exemplar#49a5e276950f444af8193a0696b34ae56e294ae1"
+source = "git+https://github.com/augentic/omnia-exemplar#9b323008d33c05933b0fcd40f9e702620ae02749"
 
 [[package]]
 name = "omnia-test"

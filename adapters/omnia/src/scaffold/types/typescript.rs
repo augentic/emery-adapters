@@ -1,8 +1,8 @@
 //! Reads a TypeScript declaration: an interface, a type alias, a class, or an enum.
 
 use super::{
-    Enum, Field, Literal, Parsed, Shape, Struct, Type, Variant, between, is_ident, literal, number,
-    param_name, sentence, split_once_top, split_top,
+    Enum, Field, Literal, Parsed, Shape, Struct, Table, Type, Variant, between, is_ident, literal,
+    number, param_name, sentence, split_once_top, split_top,
 };
 
 // A declaration led by one of these is TypeScript's.
@@ -48,6 +48,11 @@ pub fn read(signature: &str) -> Option<Parsed> {
     }
     for keyword in ["const ", "let ", "var ", "function ", "async function "] {
         if let Some(rest) = head.strip_prefix(keyword) {
+            if keyword == "const "
+                && let Some(parsed) = table(rest)
+            {
+                return Some(parsed);
+            }
             return Some(Parsed {
                 name: ident_head(rest),
                 shape: Shape::Opaque { is_enum: false },
@@ -55,6 +60,127 @@ pub fn read(signature: &str) -> Option<Parsed> {
         }
     }
     None
+}
+
+// `NAME: readonly T[] = [{ k: v, .. }, ..]` read as a table: an array typed
+// over one named element whose every row is an object literal of strings,
+// numbers, and booleans. An untyped array, a row spelling anything else, or
+// an empty array is none.
+fn table(rest: &str) -> Option<Parsed> {
+    let (head, value) = split_once_top(rest, '=')?;
+    let name = ident_head(head)?;
+    let (_, declared) = head.split_once(':')?;
+    let Type::Array(element) = parse(declared) else { return None };
+    let Type::Named(element, args) = *element else { return None };
+    if !args.is_empty() {
+        return None;
+    }
+    let value = value.trim().trim_end_matches(';').trim_end();
+    if !value.starts_with('[') {
+        return None;
+    }
+    let (body, after) = between(value, '[', ']')?;
+    if !after.trim().is_empty() {
+        return None;
+    }
+    let mut rows = Vec::new();
+    for entry in split_top(body, ',').map(str::trim).filter(|entry| !entry.is_empty()) {
+        rows.push(row(entry)?);
+    }
+    if rows.is_empty() {
+        return None;
+    }
+    Some(Parsed {
+        name: Some(name),
+        shape: Shape::Table(Table { element, rows }),
+    })
+}
+
+// One row, `{ k: v, .. }`, as its keys and scalar cells in order.
+fn row(entry: &str) -> Option<Vec<(String, Literal)>> {
+    if !entry.starts_with('{') {
+        return None;
+    }
+    let (body, after) = between(entry, '{', '}')?;
+    if !after.trim().is_empty() {
+        return None;
+    }
+    let mut cells = Vec::new();
+    for pair in split_top(body, ',').map(str::trim).filter(|pair| !pair.is_empty()) {
+        let (key, value) = split_once_top(pair, ':')?;
+        let key = key.trim();
+        let key = match string(key) {
+            Some(quoted) => quoted,
+            None if is_ident(key) => key.to_owned(),
+            None => return None,
+        };
+        cells.push((key, cell(value.trim())?));
+    }
+    (!cells.is_empty()).then_some(cells)
+}
+
+// A cell's scalar: a string with its escapes read, a number JSON spells,
+// or a boolean.
+fn cell(value: &str) -> Option<Literal> {
+    if let Some(text) = string(value) {
+        return Some(Literal::Str(text));
+    }
+    match value {
+        "true" => return Some(Literal::Bool(true)),
+        "false" => return Some(Literal::Bool(false)),
+        _ => {}
+    }
+    let found = number(value)?;
+    let (Literal::Int(text) | Literal::Float(text)) = &found else { return None };
+    text.parse::<emery_sdk::serde_json::Number>().ok()?;
+    Some(found)
+}
+
+// The text of a string literal, in double, single, or back quotes, with
+// its escapes read; a template with a substitution, an unescaped quote
+// within, or an escape the reader does not know is none.
+fn string(value: &str) -> Option<String> {
+    let quote = value.chars().next().filter(|ch| matches!(ch, '"' | '\'' | '`'))?;
+    let inner = value.strip_prefix(quote)?.strip_suffix(quote)?;
+    if quote == '`' && inner.contains("${") {
+        return None;
+    }
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(ch) = chars.next() {
+        if ch == quote {
+            return None;
+        }
+        if ch != '\\' {
+            out.push(ch);
+            continue;
+        }
+        match chars.next()? {
+            'n' => out.push('\n'),
+            'r' => out.push('\r'),
+            't' => out.push('\t'),
+            'b' => out.push('\u{8}'),
+            'f' => out.push('\u{c}'),
+            'v' => out.push('\u{b}'),
+            '0' => out.push('\0'),
+            'u' => {
+                let code: String = if chars.as_str().starts_with('{') {
+                    chars.next();
+                    chars.by_ref().take_while(|ch| *ch != '}').collect()
+                } else {
+                    chars.by_ref().take(4).collect()
+                };
+                out.push(char::from_u32(u32::from_str_radix(&code, 16).ok()?)?);
+            }
+            'x' => {
+                let code: String = chars.by_ref().take(2).collect();
+                out.push(char::from_u32(u32::from_str_radix(&code, 16).ok()?)?);
+            }
+            quoted @ ('\\' | '\'' | '"' | '`' | '/') => out.push(quoted),
+            _ => return None,
+        }
+    }
+    Some(out)
 }
 
 // Whether a class head opens a braced body, as TypeScript writes one and

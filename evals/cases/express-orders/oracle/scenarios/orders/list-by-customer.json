@@ -1,0 +1,152 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 600
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "a@example.nz",
+          "name": "Customer A"
+        }
+      },
+      "capture": {
+        "a": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "b@example.nz",
+          "name": "Customer B"
+        }
+      },
+      "capture": {
+        "b": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{a}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "first": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{a}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "second": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{b}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "third": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/orders?customerId={a}"
+      },
+      "expect": {
+        "status": 200,
+        "headers": {
+          "x-total-count": "2"
+        },
+        "body": {
+          "total": 2,
+          "items": [
+            {
+              "customerId": "{a}"
+            },
+            {
+              "customerId": "{a}"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -36,7 +36,7 @@ The `start` stem is where a specification read from a process keeps what that pr
 | ran a periodic job — a poller, a scheduler, a cron | nothing, unless a requirement states a route or a topic the host calls for it, which is that requirement's handler | left uncovered otherwise |
 | declared a lifecycle type — a `Main`, an `App` with a `started` flag, a `Server` struct with `start` and `stop` | nothing: the type is not declared, whatever the design calls it, and no `StateStore` key stands in for its flags | left uncovered |
 | answered a health or readiness route a requirement states by method and path | that route in its own stem's crate (`crates/health/`), never under `crates/start/` | covered by the slice that owns that stem |
-| enforced a rule every route obeys — authentication, a body limit, a request log | a `pub fn` of the stem that owns the rule, called at the top of the handlers it guards | covered, with the handlers' tests |
+| enforced a rule every route obeys — authentication, a body limit, a request log | a `pub fn` of the stem that owns the rule, called at the top of the handlers it guards; where the design names the prefix a gate mounts under, the adapter lays that function and the calls, as [a gate](handlers.md) shows | covered, with the handlers' tests |
 
 So a slice under `start` never writes `crates/start/` and never adds `start` to `Cargo.toml`: it covers the rows that say so over the seed and the host, leaving credential retrievers, rotation watchers, client construction, table prefetch, signals, periodic jobs, and lifecycle types out of `covered` with no module written, and a setting it names is declared by the part that reads it, in that part's slice.
 

@@ -1,0 +1,95 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 600
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "order": "id"
+      },
+      "expect": {
+        "status": 201,
+        "headers": {
+          "location": "/api/orders/{order}"
+        },
+        "body": {
+          "id": "{uuid}",
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "description": "Widget",
+              "quantity": 2,
+              "unitCents": 1500,
+              "weightGrams": 300
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          },
+          "state": "pending",
+          "subtotalCents": 3000,
+          "discountCents": 0,
+          "shippingCents": 700,
+          "gstCents": 555,
+          "totalCents": 4255,
+          "transitions": [
+            {
+              "state": "pending",
+              "at": "{timestamp}"
+            }
+          ],
+          "createdAt": "{timestamp}",
+          "updatedAt": "{timestamp}"
+        }
+      }
+    }
+  ]
+}

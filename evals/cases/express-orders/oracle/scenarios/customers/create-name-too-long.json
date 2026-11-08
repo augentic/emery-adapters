@@ -1,0 +1,20 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "long@example.nz",
+          "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "error": "invalid-request"
+        }
+      }
+    }
+  ]
+}

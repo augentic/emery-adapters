@@ -1,6 +1,7 @@
 //! Scaffolds a slice's skeleton before its turn: the stem's crate, the part, its tests, and its lines in every list.
 
 mod brief;
+mod gate;
 mod lists;
 mod names;
 mod reference;
@@ -14,13 +15,20 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
-use emery_sdk::{Error, Standing, push_unique, server_error, unique, write_whole};
+use emery_sdk::{
+    Error, NoFollow, Standing, bad_request, push_unique, server_error, standing, unique,
+    write_whole,
+};
 
 use self::lists::{Lists, Placement, Topics};
-use self::reference::{Idiom, Role};
+pub use self::reference::{Gate, Inbound, Wire, registration};
+use self::reference::{Idiom, Role, Rules};
 use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
-use crate::layout;
+use crate::{layout, syntax};
+
+// How many exported functions of other stems the brief lists.
+const MAX_EXPORTS: usize = 24;
 
 // A slice's skeleton as read against the tree and not yet written: each
 // stem's files, held or to scaffold, and each line placed in its list.
@@ -32,6 +40,46 @@ pub struct Plan {
     lists: Lists,
     roles: BTreeSet<Role>,
     idioms: BTreeSet<Idiom>,
+    wire: Option<Wire>,
+    inbound: Option<Inbound>,
+    // Whether the slice is the last of its part's cut.
+    last: bool,
+    // The stems the inbound stream holds to a registration whose crate
+    // already registers a topic, at the part's last slice.
+    consumed: BTreeSet<String>,
+    // The gate the design's rules spell, whether or not a route of the
+    // slice falls under it.
+    gate: Option<Gate>,
+    rules: Rules,
+    exports: Vec<Export>,
+    skips: Vec<Skip>,
+}
+
+// The gate's function as the slice reaches it: the module that holds it
+// and the handlers of the slice, each by its module and name, that call it
+// first.
+pub struct Gatekeeper {
+    pub file: String,
+    pub callers: Vec<(String, String)>,
+}
+
+// A requirement of the slice whose statement says the message it handles
+// produces no events, under the stem whose crate handles it.
+pub struct Skip {
+    pub stem: String,
+    pub id: String,
+    pub subject: String,
+}
+
+// A `pub fn` a stem already in the tree exports, which a slice of another
+// stem calls rather than writing again.
+struct Export {
+    // The function's path from the crate root, `customers::customers::authenticate`.
+    path: String,
+    file: String,
+    line: usize,
+    signature: String,
+    doc: Option<String>,
 }
 
 // A slice's skeleton as written, which the turn fills and the check holds
@@ -64,19 +112,23 @@ struct Relaid {
     stem: String,
 }
 
-impl Scaffold {
-    pub fn plan(slice: &Slice, root: &Path) -> Result<Plan, Error> {
-        let existing: BTreeSet<String> = layout::crates(root)?.into_iter().collect();
-        let mut topics = Topics::read(root)?;
-        let design_keys = types::design_keys(&slice.design);
-        let idioms = reference::idioms(slice);
-        let roles = reference::roles(slice);
+// The slice's requirements and owned types sorted to their stems.
+struct Sorted<'s> {
+    plans: Vec<StemPlan<'s>>,
+    start: Vec<String>,
+    relaid: Vec<Relaid>,
+    skips: Vec<Skip>,
+}
 
-        // each requirement to its stem: `start` set aside, unless a typed
-        // route names the resource whose crate serves it
+impl<'s> Sorted<'s> {
+    // Each requirement to its stem, `start` set aside unless a typed route
+    // names the resource whose crate serves it, and each owned type to the
+    // stem its key leads with, else the first.
+    fn of(slice: &'s Slice) -> Self {
         let mut plans: Vec<StemPlan> = Vec::new();
         let mut start = Vec::new();
         let mut relaid = Vec::new();
+        let mut skips = Vec::new();
         for requirement in &slice.requirements {
             let own = requirement.stem();
             let name = if layout::is_start_stem(own) {
@@ -97,6 +149,13 @@ impl Scaffold {
             } else {
                 own.to_owned()
             };
+            if reference::skips(requirement) {
+                skips.push(Skip {
+                    stem: name.clone(),
+                    id: requirement.id.clone(),
+                    subject: requirement.subject.clone(),
+                });
+            }
             match plans.iter_mut().find(|plan| plan.stem.name == name) {
                 Some(plan) => plan.requirements.push(requirement),
                 None => plans.push(StemPlan {
@@ -106,8 +165,6 @@ impl Scaffold {
                 }),
             }
         }
-
-        // each owned type to the stem its key leads with, else the first
         for design_type in &slice.types {
             let stem = DesignKey::parse(&design_type.key).stem;
             let at = plans
@@ -118,17 +175,62 @@ impl Scaffold {
                 plans[at].owned.push(design_type);
             }
         }
+        Self {
+            plans,
+            start,
+            relaid,
+            skips,
+        }
+    }
+}
+
+impl Scaffold {
+    pub fn plan(slice: &Slice, root: &Path) -> Result<Plan, Error> {
+        let existing: BTreeSet<String> = layout::crates(root)?.into_iter().collect();
+        let mut topics = Topics::read(root)?;
+        let design = types::Design::read(
+            &slice.design,
+            slice.types.iter().map(|design_type| design_type.signature.as_str()),
+        );
+        let idioms = reference::idioms(slice);
+        let roles = reference::roles(slice);
+        let wire = reference::wire(slice);
+        let inbound = reference::inbound(slice);
+        let route_rules = Rules::read(slice);
+        let Sorted {
+            plans,
+            start,
+            relaid,
+            skips,
+        } = Sorted::of(slice);
 
         let mut lists = Lists::default();
         let mut stems = Vec::new();
         for plan in plans {
             let mut stem = plan.stem;
             stem.read(root, &plan.requirements)?;
-            stem.plan(&plan.owned, &plan.requirements, &design_keys, &mut topics);
-            stem.extend();
-            stem.place_lines(root, &mut lists)?;
+            stem.plan(&plan.owned, &plan.requirements, &design, &mut topics);
             stems.push(stem);
         }
+        let gate = route_rules.gate();
+        if let Some(gate) = &gate {
+            resolve_gate(root, &existing, gate, &mut stems)?;
+        }
+        for stem in &mut stems {
+            stem.extend();
+            stem.place_lines(root, &mut lists)?;
+        }
+        let exports =
+            if stems.iter().any(|stem| !stem.handlers.is_empty()) && !route_rules.is_empty() {
+                exports(root, &existing, &stems)?
+            } else {
+                Vec::new()
+            };
+        let last = slice.index == slice.count;
+        let consumed = match &inbound {
+            Some(inbound) if last => consumed(root, inbound, &stems)?,
+            _ => BTreeSet::new(),
+        };
         Ok(Plan {
             stems,
             start,
@@ -137,6 +239,14 @@ impl Scaffold {
             lists,
             roles,
             idioms,
+            wire,
+            inbound,
+            last,
+            consumed,
+            gate,
+            rules: route_rules,
+            exports,
+            skips,
         })
     }
 
@@ -148,10 +258,11 @@ impl Scaffold {
     // Every file the scaffold wrote or found and every list it holds a line
     // in, each with what a whole write of it must keep, sorted by path: a
     // module its requirement ids and the items the scaffold named, a test
-    // file its ids and its tests, and a manifest, an entry, or a list every
-    // line it holds, so a list is added to and never cut; and, for a module
-    // or a test file the scaffold wrote, each marker it laid under the key
-    // the brief quotes, so the turn fills a marker by naming it.
+    // file its ids and its tests, and a manifest, an entry, a list, or a
+    // table's data file every line it holds, so a list is added to and
+    // never cut; and, for a module or a test file the scaffold wrote, each
+    // marker it laid under the key the brief quotes, so the turn fills a
+    // marker by naming it.
     fn guarded(&self) -> Vec<Guarded> {
         let mut keeps: BTreeMap<&str, Vec<String>> = BTreeMap::new();
         let mut markers: BTreeMap<&str, Vec<Marker>> = BTreeMap::new();
@@ -160,6 +271,9 @@ impl Scaffold {
                 let Some(file) = stem.file(kind) else { continue };
                 keeps.entry(&file.path).or_default().extend(stem.keeps(kind));
                 markers.entry(&file.path).or_default().extend(stem.markers(kind));
+            }
+            for data in stem.data.iter().filter(|_| stem.module.laid()) {
+                keeps.entry(&data.path).or_default().extend(lines_of(&data.text));
             }
             for line in stem.lines.iter().filter(|line| line.placement != Placement::Unanchored) {
                 let tokens =
@@ -204,6 +318,56 @@ impl Scaffold {
         &self.plan.existing
     }
 
+    // The wire format the design says the slice's inbound stream carries,
+    // where it is no JSON.
+    pub const fn wire(&self) -> Option<Wire> {
+        self.plan.wire
+    }
+
+    // The inbound stream the design lists for the slice's part, where it
+    // lists one.
+    pub const fn inbound(&self) -> Option<&Inbound> {
+        self.plan.inbound.as_ref()
+    }
+
+    // Whether the slice is the last of its part's cut, after which no slice
+    // of the part registers anything.
+    pub const fn last(&self) -> bool {
+        self.plan.last
+    }
+
+    // The gate the slice's handlers under its prefix call, where the design
+    // spells one and the laid code calls it: the module holding its
+    // function and each handler of the slice that calls it.
+    pub fn gatekeeper(&self) -> Option<Gatekeeper> {
+        let mut callers = Vec::new();
+        let mut file = None;
+        for stem in &self.plan.stems {
+            let Some(gating) = stem.gating.as_ref().filter(|gating| gating.calls()) else {
+                continue;
+            };
+            file.get_or_insert_with(|| gating.file.clone());
+            callers.extend(
+                stem.handlers
+                    .iter()
+                    .filter(|handler| handler.gated)
+                    .map(|handler| (stem.module.path.clone(), handler.name.clone())),
+            );
+        }
+        Some(Gatekeeper { file: file?, callers })
+    }
+
+    // The requirements of the slice whose statements say the message
+    // produces no events.
+    pub fn skips(&self) -> &[Skip] {
+        &self.plan.skips
+    }
+
+    // Whether the slice lays a consumer under `stem`.
+    pub fn consumes(&self, stem: &str) -> bool {
+        self.plan.stems.iter().any(|laid| laid.name == stem && !laid.consumers.is_empty())
+    }
+
     pub fn expected_tests(&self) -> impl Iterator<Item = ExpectedTest<'_>> {
         self.plan
             .stems
@@ -245,6 +409,24 @@ impl Plan {
                     written.push(file.path.clone());
                 }
             }
+            for data in stem.data.iter().filter(|_| stem.module.laid()) {
+                match standing(root, &data.path) {
+                    Ok(Standing::Absent) => {
+                        create(root, &data.path, &data.text)?;
+                        written.push(data.path.clone());
+                    }
+                    Ok(Standing::File) => {}
+                    Err(NoFollow::Io { path, source }) => {
+                        return Err(server_error!("reading `{path}`: {source}"));
+                    }
+                    Err(err) => {
+                        return Err(bad_request!(
+                            "`{}` {err}, where the slice's scaffold writes a data module",
+                            data.path
+                        ));
+                    }
+                }
+            }
         }
 
         let mut touched: Vec<&str> = Vec::new();
@@ -266,6 +448,88 @@ impl Plan {
             listing,
         })
     }
+}
+
+// The `pub fn`s the stem crates already in the tree export from their
+// modules, in crate and path order, up to `MAX_EXPORTS`: those of a stem
+// the slice lays are its own and left out, and a file `syn` refuses is
+// passed over, since the checks name it.
+fn exports(root: &Path, existing: &BTreeSet<String>, stems: &[Stem]) -> Result<Vec<Export>, Error> {
+    let mut exports = Vec::new();
+    for dir in existing.iter().filter(|dir| layout::is_stem_crate(dir)) {
+        if stems.iter().any(|stem| layout::crate_dir(&stem.name) == dir.as_str()) {
+            continue;
+        }
+        let stem = if dir == layout::crate_dir("common") { "common" } else { dir.as_str() };
+        let crate_ident = layout::package(stem).replace('-', "_");
+        for source in layout::sources(&root.join("crates").join(dir).join("src"))? {
+            let Some(module) = source.file_stem().and_then(|stem| stem.to_str()) else { continue };
+            if module == "lib" {
+                continue;
+            }
+            let text = layout::read(&source)?;
+            let Ok(file) = syntax::parse(&text) else { continue };
+            let relative = layout::relative(root, &source);
+            for exported in syntax::exported_fns(&file) {
+                if exported.name == "handlers" {
+                    continue;
+                }
+                exports.push(Export {
+                    path: format!("{crate_ident}::{module}::{}", exported.name),
+                    file: relative.clone(),
+                    line: exported.from,
+                    signature: syntax::signature(&text, &exported),
+                    doc: exported.doc,
+                });
+                if exports.len() == MAX_EXPORTS {
+                    return Ok(exports);
+                }
+            }
+        }
+    }
+    Ok(exports)
+}
+
+// Resolves the gate for every stem with a handler under its prefix: the
+// one the tree holds, else the one the first such stem lays, read once and
+// handed to each stem.
+fn resolve_gate(
+    root: &Path, existing: &BTreeSet<String>, gate: &Gate, stems: &mut [Stem],
+) -> Result<(), Error> {
+    let own: Vec<String> = stems.iter().map(|stem| stem.module.path.clone()).collect();
+    let found = gate::Found::scan(root, existing, &own)?;
+    let first = stems.iter().find(|stem| stem.under(gate)).map(|stem| gate::Laying {
+        module: stem.part.clone(),
+        dir: stem.dir.clone(),
+    });
+    let gated = gate::Gated {
+        gate,
+        found: found.as_ref(),
+        first: first.as_ref(),
+    };
+    for stem in stems.iter_mut() {
+        stem.gate(&gated);
+    }
+    Ok(())
+}
+
+// The stems the inbound stream holds to a registration whose crate already
+// registers a topic in one of its modules, so the brief asks for no second
+// registration there; a file `syn` refuses registers nothing.
+fn consumed(root: &Path, inbound: &Inbound, stems: &[Stem]) -> Result<BTreeSet<String>, Error> {
+    let mut consumed = BTreeSet::new();
+    for stem in inbound.held(stems.iter().map(|stem| stem.name.as_str())) {
+        let sources = root.join("crates").join(layout::crate_dir(stem)).join("src");
+        for source in layout::sources(&sources)? {
+            let text = layout::read(&source)?;
+            if syntax::parse(&text).is_ok_and(|file| !syntax::topic_registrations(&file).is_empty())
+            {
+                consumed.insert(stem.to_owned());
+                break;
+            }
+        }
+    }
+    Ok(consumed)
 }
 
 // Creates the file the plan found absent, its directories made one at a

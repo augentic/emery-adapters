@@ -51,14 +51,17 @@ The adapter laid your slice's place in it before this turn, from the requirement
 - The stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them.
 - Your part, `crates/<stem>/src/<part>.rs`:
   - a path constant and a `.route(..)` in its `handlers()` per route your requirements carry;
-  - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body;
+  - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body and the route's requirements or scenarios state one;
   - a `.topic(..)` and a consumer per message they carry, with its constant in the topic table;
   - a `<Part>Settings` struct over the settings your slice spells, where it spells any;
   - a `pub fn` per requirement carrying neither;
-  - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable.
+  - each design type you own, laid from its signature, or an empty `{}` where the signature is not readable;
+  - a design type that is a table of rows over a type you own, as the data module `crates/<stem>/src/<name>_data.rs` holding every row in one JSON constant and a `pub fn <name>() -> Result<Vec<<Element>>>` in your part reading it, as [a reference table](references/handlers.md) spells; both are finished;
+  - where the design's rules gate the routes under a prefix and a route of yours falls under it, the gate as [a gate](references/handlers.md) spells it: `pub async fn authenticate(..)` with its `GateError` and `GateSettings` in the first stem under the prefix, or imported from the stem that holds it, and every handler under the prefix taking `headers: HeaderMap` and calling it first.
 - A handler answers `Result<Json<Output>>`, or `Result<(StatusCode, Json<Output>)>` where a scenario spells a status other than `200`.
   Answer the status the outcome earns: `StatusCode::CREATED` for a creation, `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down.
   An error status, a `404`, is the error the handler returns.
+  A gated handler answers `std::result::Result<_, GateError>`, so the gate's refusal and the host's errors both reach the wire through `?`.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
   Each test already sends the request or the delivery its requirement carries.
 - Your lines in every list: the stem's at the root, `<stem>::handlers()` in `src/lib.rs` and `<stem> = { path = "crates/<stem>" }` in `Cargo.toml`, and the part's in the entry.
@@ -80,6 +83,7 @@ A design type the brief names as laid is finished: its fields and variants stand
 Each field is documented, the wire's names are kept through `#[serde(rename = "..")]`, and `Eq` is dropped where a float reaches it.
 Change a field only where a scenario's wire shape or the check requires it.
 A field the brief names as `serde_json::Value` stands for a type another slice declares; leave it, and read the value's fields where the behaviour needs them.
+A data module the brief names holds a table's rows as one constant, and the `pub fn` in your part reads them: call it where the behaviour needs the rows, and type no row again in code.
 
 A design type the brief lists among the markers, `pub struct <Type> {}` or `pub enum <Type> {}`, has a signature the scaffold could not lay.
 It becomes the type its doc's signature spells, as the [handlers](references/handlers.md) reference declares a design type.
@@ -106,12 +110,12 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
 
 Fill the handler as the [handlers](references/handlers.md) reference spells it.
 
-- Fill `<Name>Input`, where the route carries a body, with the body's fields; a path parameter is already a `Path` extractor on the handler.
+- Fill `<Name>Input`, where the route's requirements state a body, with the body's fields; a path parameter is already a `Path` extractor on the handler. A `POST` whose requirements state no body was laid with no input struct and its tests send none: leave it bodiless, since a `Json` extractor refuses a bodiless request with `415`, unless a scenario's wire carries a body, and then add the struct, the extractor, and the body to its tests together.
 - Fill `<Name>Output` with the response's fields.
 - Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
 - A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
 - Reach the host through the context's accessors: `context.state()`, `context.config()`, `context.http()`, `context.publish()`, `context.tables()`.
-  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound is a finding of the verify.
+  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound on a filled handler is a finding on your report.
 - A setting is a field of your part's `<Part>Settings` struct. Load it with `<Part>Settings::load(context.config()).await?` where the body needs it.
   Narrow each field from `String` to the type its value parses as.
 - A topic you publish is a constant of `common::topic`: `context.publish().send(topic::NAME, &Message::json(&value)?).await?`.
@@ -184,7 +188,8 @@ The design's `## APIs and integrations` lists an inbound stream whose bullet cit
 Or the stream's deliveries are what its scenario's `when` describes.
 
 - Make it a `pub(crate) async fn(context: Context<P>, input: <Input>) -> Result<()>`.
-- Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`.
+- Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`, which decodes each delivery as JSON.
+- Where the stream's bullet, or the design elsewhere, says the payload is XML, CSV, or bytes, register `.topic_with(topic::<NAME>, <handler>, decode)` instead, over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part that reads the payload through the format's `serde` reader — `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML, with `quick-xml.workspace = true` in your stem's `[dependencies]` — as the [translation](references/translation.md)'s consumed-message row spells it. A `.topic(..)` over such a stream refuses every delivery as malformed JSON.
 - Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it, and `common.workspace = true` at the end of your stem's `[dependencies]` where it lacks the line.
 
 A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `context.publish()`.
@@ -276,6 +281,8 @@ Where your slice carries requirements under `start` beside its own stem's, read 
 - Credential validation or rotation, client construction, table prefetch, a flag that decided whether a consumer ran, signals, periodic jobs, and lifecycle types:
   write nothing, and leave them out of `covered`.
 - A slice of `start` requirements alone, none carrying a route, is never put to you.
+- A rule every route obeys that the plan or the design says `start` applies — a gate on the request, a mapping of failures to wire codes — reaches your slice through the scaffold section of the brief, with the design's paragraphs on it and the functions the stems already in the tree export for it; it is your part's to apply, since no `start` crate does.
+  Where the design names the prefix the gate mounts under, the adapter laid the gate and its calls before this turn, as the brief says: fill the gate's marker where your stem holds it, and write no second gate.
 
 ## Reuse, and the platform's names
 
@@ -333,6 +340,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A stem's `handlers()` that the root's array does not list. A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
+- A filled handler still bounded `P: Capabilities`; the finding lists the traits its body reaches. A required setting read through `Config::get` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
 
 Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
 

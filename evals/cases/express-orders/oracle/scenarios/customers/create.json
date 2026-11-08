@@ -1,0 +1,30 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "Ada@Example.NZ",
+          "name": "  Ada Lovelace  "
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201,
+        "headers": {
+          "location": "/api/customers/{customer}"
+        },
+        "body": {
+          "id": "{uuid}",
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace",
+          "tier": "standard",
+          "createdAt": "{timestamp}"
+        }
+      }
+    }
+  ]
+}

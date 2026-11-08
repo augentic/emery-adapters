@@ -1,7 +1,7 @@
 //! TypeScript and JavaScript dialect configuration.
 
 use emery_sdk::survey::route::Spelling;
-use emery_sdk::survey::{ClassSyntax, Dialect};
+use emery_sdk::survey::{Annotations, ClassSyntax, Dialect};
 
 pub static DIALECT: Dialect = Dialect {
     self_name: "this",
@@ -108,6 +108,13 @@ pub static DIALECT: Dialect = Dialect {
     env_object: Some("process.env"),
     enum_bases: &[],
     class_syntax: ClassSyntax::BRACED,
+    annotations: Annotations {
+        integer: "number",
+        float: "number",
+        string: "string",
+        boolean: "boolean",
+        unknown: "unknown",
+    },
     described: "a case's title under its suites'",
     route: Spelling {
         pattern: &['*', '{', '(', '['],

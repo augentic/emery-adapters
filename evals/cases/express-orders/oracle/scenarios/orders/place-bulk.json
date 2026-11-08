@@ -1,0 +1,66 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 480
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "BLT-003",
+              "quantity": 24
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "order": "id"
+      },
+      "expect": {
+        "status": 201,
+        "body": {
+          "subtotalCents": 2400,
+          "discountCents": 120,
+          "shippingCents": 700,
+          "gstCents": 447,
+          "totalCents": 3427
+        }
+      }
+    }
+  ]
+}

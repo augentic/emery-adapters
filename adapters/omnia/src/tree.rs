@@ -17,7 +17,7 @@ use syn::visit::{self, Visit};
 use syn::{Expr, ExprLit, ItemFn, Lit, Local, Macro};
 
 use crate::layout::{self, Toml, TopicTable};
-use crate::scaffold::Scaffold;
+use crate::scaffold::{Gate, Scaffold, registration};
 use crate::syntax::{self, Mentions, Unparsed};
 
 const MAX_DIFF_LINES: usize = 24;
@@ -70,6 +70,14 @@ impl Module {
             markers.visit_file(file);
         }
         markers.found
+    }
+
+    // The top-level fn named `name`, where the file declares one.
+    fn fn_item(&self, name: &str) -> Option<&syn::ItemFn> {
+        self.file()?.items.iter().find_map(|item| match item {
+            syn::Item::Fn(item) if item.sig.ident == name => Some(item),
+            _ => None,
+        })
     }
 }
 
@@ -141,8 +149,12 @@ impl<'a> Tree<'a> {
         findings.extend(self.split_stems(scaffold));
         findings.extend(self.strays(scaffold)?);
         findings.extend(self.markers_left(&report.covered));
+        findings.extend(self.unfilled_gate(scaffold));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.unregistered_handlers(scaffold));
+        findings.extend(self.default_decoders(scaffold));
+        findings.extend(self.unconsumed_streams(scaffold));
+        findings.extend(self.refused_skips(scaffold));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -150,11 +162,11 @@ impl<'a> Tree<'a> {
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
         findings.extend(self.check_common()?);
-        findings.extend(self.broad_bounds());
-        findings.extend(self.old_settings());
         Ok(findings)
     }
 
+    // The rules both turns hold the tree to. A handler still holding its
+    // marker is unfilled, so a slice's stubs pass `broad_bounds`.
     fn check_common(&self) -> Result<Vec<String>, Error> {
         let mut findings = Vec::new();
         findings.extend(self.unparsed());
@@ -171,6 +183,8 @@ impl<'a> Tree<'a> {
         findings.extend(self.response_wrappers());
         findings.extend(self.swallowed_rejections());
         findings.extend(self.format_settings());
+        findings.extend(self.broad_bounds());
+        findings.extend(self.old_settings());
         Ok(findings)
     }
 
@@ -316,6 +330,43 @@ impl<'a> Tree<'a> {
         ))
     }
 
+    // The gate's function still a stub while a handler of the slice that
+    // calls it is filled: every request under the prefix would then panic
+    // at the gate, so the gate is filled before any handler behind it
+    // answers. The gate's marker names no requirement, so `markers_left`
+    // never sees it.
+    fn unfilled_gate(&self, scaffold: &Scaffold) -> Option<String> {
+        let gatekeeper = scaffold.gatekeeper()?;
+        let filled = gatekeeper.callers.iter().any(|(path, name)| {
+            self.module(path)
+                .and_then(|module| module.fn_item(name))
+                .is_some_and(|item| !syntax::holds_marker(&item.block))
+        });
+        if !filled {
+            return None;
+        }
+        let gate = self.module(&gatekeeper.file)?.fn_item(Gate::FN)?;
+        if !syntax::holds_todo(&gate.block) {
+            return None;
+        }
+        let line = syntax::line(gate.sig.fn_token.span);
+        Some(format!(
+            "a handler under the gate's prefix is filled while the gate it calls first is \
+             still the scaffold's stub, so every request to it would panic at the gate: fill \
+             `{}` in `{}` through `edit_files` under its marker key, `{}: the gate under \
+             <prefix>`, with the rule the design states — the credential read from the \
+             headers, checked against the gate's settings, `Ok(())` where it is accepted and \
+             `Err({}::Unauthorized)` where it is missing or unknown:\n{}:{line}: `{}` holds \
+             its `todo!` while a handler calling it is filled",
+            Gate::FN,
+            gatekeeper.file,
+            Gate::FN,
+            Gate::ERROR,
+            gatekeeper.file,
+            Gate::FN
+        ))
+    }
+
     // A test file `syn` refuses is `unparsed`'s finding, its scenarios
     // unread here.
     fn untested_scenarios(&self, scaffold: &Scaffold, covered: &[String]) -> Option<String> {
@@ -399,16 +450,21 @@ impl<'a> Tree<'a> {
     // A `pub(crate) async fn(<context>: Context<..>, ..)` handler in a part
     // of the slice's stems that `handlers()` does not register is dead code
     // the router never reaches.
-    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
+    // The parts under the slice's stems' crates, which the slice's turn
+    // writes.
+    fn parts_of(&self, scaffold: &Scaffold) -> impl Iterator<Item = &Module> {
         let prefixes: Vec<String> = scaffold
             .stems()
             .map(|stem| format!("crates/{}/src/", layout::crate_dir(stem)))
             .collect();
+        self.modules
+            .iter()
+            .filter(move |module| prefixes.iter().any(|prefix| module.part_under(prefix).is_some()))
+    }
+
+    fn unregistered_handlers(&self, scaffold: &Scaffold) -> Option<String> {
         let mut lines = Vec::new();
-        for module in &self.modules {
-            if !prefixes.iter().any(|prefix| module.part_under(prefix).is_some()) {
-                continue;
-            }
+        for module in self.parts_of(scaffold) {
             let Some(file) = module.file() else { continue };
             for (number, name) in syntax::unregistered_handlers(file) {
                 lines.push(format!(
@@ -426,6 +482,97 @@ impl<'a> Tree<'a> {
              chain, `.route(PATH, get(handler))` for a route and `.topic(topic::NAME, handler)` \
              for a topic, since an unregistered handler is dead code the router never reaches: \
              register each handler named in `handlers()` through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
+    // The design says the slice's inbound stream carries no JSON, so a
+    // `.topic(..)` registration in one of its parts, whose decoder is the
+    // SDK's JSON one, refuses every delivery. The wire is the slice's, read
+    // once from the design, so every filled registration of the slice is
+    // held to it; one whose handler still holds its marker is the scaffold's
+    // stub, which the brief tells the turn to register through `topic_with`.
+    fn default_decoders(&self, scaffold: &Scaffold) -> Option<String> {
+        let wire = scaffold.wire()?;
+        let mut lines = Vec::new();
+        for module in self.parts_of(scaffold) {
+            let Some(file) = module.file() else { continue };
+            for number in syntax::json_registrations(file) {
+                lines.push(format!(
+                    "{}:{number}: `{}` decodes the delivery as JSON, and the design says the \
+                     inbound stream carries {}",
+                    module.path,
+                    module.line(number),
+                    wire.name()
+                ));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "`.topic(topic::<NAME>, <handler>)` registers the SDK's decoder, which reads each \
+             delivery as JSON and refuses a payload of any other format as malformed; the \
+             design says this slice's inbound stream carries {wire}, so register the consumer \
+             through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn \
+             decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the \
+             part that reads the payload through the format's `serde` reader{reader}, as the \
+             translation's consumed-message row spells it, through `edit_files`:\n{lines}",
+            wire = wire.name(),
+            reader = wire.reader(),
+            lines = lines.join("\n")
+        ))
+    }
+
+    // The design lists an inbound stream for the part, and its deliveries
+    // are the trigger of the requirements the bullet cites, so a stem of
+    // those requirements whose crate registers no topic is never run. The
+    // rule waits for the part's last slice, since an earlier slice may leave
+    // the registration to the one that builds the consumer, and reads the
+    // crate whole, since the registration may stand in a part an earlier
+    // slice wrote. A bullet citing none of the slice's own requirements
+    // holds every stem of the slice to it.
+    fn unconsumed_streams(&self, scaffold: &Scaffold) -> Option<String> {
+        let inbound = scaffold.inbound()?;
+        if !scaffold.last() {
+            return None;
+        }
+        let mut lines = Vec::new();
+        for stem in inbound.held(scaffold.stems()) {
+            let prefix = format!("crates/{}/src/", layout::crate_dir(stem));
+            let own: Vec<&Module> =
+                self.modules.iter().filter(|module| module.path.starts_with(&prefix)).collect();
+            let consumes = own.iter().any(|module| {
+                module.file().is_some_and(|file| !syntax::topic_registrations(file).is_empty())
+            });
+            if consumes {
+                continue;
+            }
+            let entry = format!("{prefix}lib.rs");
+            let number = own
+                .iter()
+                .find(|module| module.path == entry)
+                .and_then(|module| module.file())
+                .and_then(syntax::handlers_from)
+                .unwrap_or(1);
+            lines.push(format!(
+                "{entry}:{number}: `Handlers::from([..])` lists no part consuming the inbound \
+                 stream the design lists (\"{}\")",
+                inbound.lead
+            ));
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        Some(format!(
+            "the host runs a stem through its `handlers()` alone, and this slice is the last of \
+             its part, so the inbound stream the design's `## APIs and integrations` lists for \
+             the part is consumed by a registration in one of these stems now or never: the \
+             trigger is the stream's deliveries setting off the requirements its bullet cites, \
+             never a route in its place, a `start` crate, or a requirement of the registration's \
+             own; {}:\n{}",
+            registration(scaffold.wire()),
             lines.join("\n")
         ))
     }
@@ -451,7 +598,10 @@ impl<'a> Tree<'a> {
             "a stem's manifest changes only inside `[dependencies]`: `[package]`, `[lints]` with \
              `workspace = true`, and `[target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies]` \
              stand as the adapter scaffolded them, so put the `-` lines back and drop the `+` \
-             lines through `edit_files`:\n{}",
+             lines through `edit_files`; a crate a test alone needs (`bytes`, `http`) is never a \
+             third dev-dependency but one `<crate>.workspace = true` line at the end of \
+             `[dependencies]`, so a `+` line of that shape moves there rather than being \
+             dropped:\n{}",
             files.join("\n")
         ))
     }

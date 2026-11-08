@@ -44,13 +44,13 @@ Five files hold a list slices add lines to, and hold nothing a slice has any oth
 | List | File | One entry is | Added |
 | --- | --- | --- | --- |
 | the topic table | `crates/common/src/topic.rs` | `/// <doc>` and `pub const <NAME>: &str = "<topic>";` | at the end of the file |
-| the root router | `src/lib.rs`, the array in `router()` | `<stem>::handlers()` | in the `Handlers::from([..])` array, as the formatter lays it |
+| the root router | `src/lib.rs`, the array in `router()` | `<stem>::handlers(),` | one per line under the comment heading the `Handlers::from([..])` array, at the end |
 | the guest's crates | `Cargo.toml`, `[dependencies]` | `<stem> = { path = "crates/<stem>" }` | after `omnia-sdk.workspace = true`, at the end of the file |
 | a stem's parts | `crates/<stem>/src/lib.rs` | `pub mod <part>;` | among the `pub mod` lines, where the formatter sorts it |
 | a stem's handlers | `crates/<stem>/src/lib.rs`, the array in `handlers()` | `<part>::handlers()` | in the `Handlers::from([..])` array, as the formatter lays it |
 | a stem's crates | `crates/<stem>/Cargo.toml`, `[dependencies]` | `<crate>.workspace = true` | at the end of the file |
 
-`<stem>` in the root router is the stem's package as Rust spells it, `payment_methods::handlers()` for `payment-methods`. An array entry sits on the anchor's own line while the array fits the width, `Handlers::from([orders::handlers()])`, and one entry per line under it once it does not, as the formatter lays it; a stem whose handlers are all parts with none is still listed, so a stem that gains a route in a later wave changes nothing at the root. The root's `src/lib.rs`, with its list empty:
+`<stem>` in the root router is the stem's package as Rust spells it, `payment_methods::handlers()` for `payment-methods`. The root's array is laid one entry per line from the seed on: the comment that heads it keeps the formatter from folding it onto one line however few entries it holds, so a stem's entry is one line added at the end and never a rewrite of the line before it, and two stems first listed in one wave each add their line; a stem whose handlers are all parts with none is still listed, so a stem that gains a route in a later wave changes nothing at the root. The root's `src/lib.rs`, with its list empty:
 
 ```rust
 //! # guest
@@ -68,11 +68,16 @@ use omnia_sdk::api::{Client, Handlers, Router, http, messaging};
 /// Omnia creates one component instance per request or delivery, so the
 /// router and the client are built inside each call. The list holds one
 /// `<stem>::handlers(),` per stem, each added at the end, in the array
-/// form a stem lists its parts in. Merging panics where two stems serve
-/// one path under one method or consume one topic, so the rungs under
-/// `tests/` hold the list to one handler apiece.
+/// form a stem lists its parts in; the comment heading the array keeps it
+/// one entry per line, so two stems added at once merge as two lines.
+/// Merging panics where two stems serve one path under one method or
+/// consume one topic, so the rungs under `tests/` hold the list to one
+/// handler apiece.
 pub fn router<P: Capabilities>(provider: P) -> Router<P> {
-    Handlers::from([]).with_state(Client::new(provider))
+    Handlers::from([
+        // one `<stem>::handlers(),` per stem, each added at the end
+    ])
+    .with_state(Client::new(provider))
 }
 
 http::export!(router);
@@ -82,12 +87,21 @@ messaging::export!(router);
 The list with one stem added, and with three:
 
 ```rust
-    Handlers::from([orders::handlers()]).with_state(Client::new(provider))
+    Handlers::from([
+        // one `<stem>::handlers(),` per stem, each added at the end
+        orders::handlers(),
+    ])
+    .with_state(Client::new(provider))
 ```
 
 ```rust
-    Handlers::from([billing::handlers(), orders::handlers(), payments::handlers()])
-        .with_state(Client::new(provider))
+    Handlers::from([
+        // one `<stem>::handlers(),` per stem, each added at the end
+        orders::handlers(),
+        billing::handlers(),
+        payments::handlers(),
+    ])
+    .with_state(Client::new(provider))
 ```
 
 A stem the list does not name compiles clean and serves nothing, which the adapter refuses with the entry named.
@@ -252,4 +266,4 @@ The engine merges each slice's commit into the integrated tree under these rules
 | `crates/*/src/lib.rs` | both sides' lines kept | a stem's entry: its `pub mod` list and its array |
 | everything else | the model combines both sides | the slice re-merges with the result |
 
-A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own modules never conflict. The rest of the seed outside the lists is under no rule on purpose: no slice edits them once scaffolded, so two slices changing one at once is handed to the model rather than merged line by line, and the adapter puts them back as the template spells them before a wave's checks and holds them after. The rules keep lines; they do not reconcile edits, and a rule is a file's, not a line's: the root `Cargo.toml` is kept as a union for its list, and what its union would also keep, a pin or a lint one slice changed, the adapter puts back itself, as the static files above say; a stem's entry is kept as a union for its two lists, and what two slices lay outside them is the one text above, the same on both sides, so the union keeps it once. An array laid on one line is one line to the union: two stems first listed in one wave each rewrite the root's `Handlers::from([])` line, and the union keeps both rewrites, one under the other, for the wave's check to catch and the verify to repair into one array; a slice that finds the line already rewritten adds its entry to the array as the table says. A slice that changes a static line of a list file, or another slice's module, is the one conflict the layout leaves possible: the file is handed to a model turn to combine, and one it cannot combine ends the run, so it is the slice's to avoid.
+A path one slice alone changed takes that slice's change under no rule, so two slices that keep to their own modules never conflict. The rest of the seed outside the lists is under no rule on purpose: no slice edits them once scaffolded, so two slices changing one at once is handed to the model rather than merged line by line, and the adapter puts them back as the template spells them before a wave's checks and holds them after. The rules keep lines; they do not reconcile edits, and a rule is a file's, not a line's: the root `Cargo.toml` is kept as a union for its list, and what its union would also keep, a pin or a lint one slice changed, the adapter puts back itself, as the static files above say; a stem's entry is kept as a union for its two lists, and what two slices lay outside them is the one text above, the same on both sides, so the union keeps it once. An array laid on one line is one line to the union, which is why the root's array is never one: two stems first listed in one wave each add their own line under the comment, and the union keeps both; a stem's own array is laid as the formatter lays it, since one stem's slices build in series and no two edit it at once. A slice that changes a static line of a list file, or another slice's module, is the one conflict the layout leaves possible: the file is handed to a model turn to combine, and one it cannot combine ends the run, so it is the slice's to avoid.

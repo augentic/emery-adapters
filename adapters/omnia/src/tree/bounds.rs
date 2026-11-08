@@ -4,9 +4,7 @@
 use std::collections::BTreeSet;
 
 use syn::visit::{self, Visit};
-use syn::{
-    Expr, ExprCall, ExprMethodCall, FnArg, ItemConst, ItemFn, Lit, Macro, Pat, TypeParamBound,
-};
+use syn::{Expr, ExprCall, ExprMethodCall, FnArg, ItemConst, ItemFn, Lit, Pat, TypeParamBound};
 
 use super::{Module, Tree};
 use crate::syntax::{self, path_ends};
@@ -73,7 +71,7 @@ impl Module {
                 syn::Item::Fn(item) if syntax::is_handler_fn(item) => Some(item),
                 _ => None,
             })
-            .filter(|item| !holds_marker(&item.block) && names_capabilities(item))
+            .filter(|item| !syntax::holds_marker(&item.block) && names_capabilities(item))
             .map(|item| {
                 let line = syntax::line(item.sig.fn_token.span);
                 let reached = reached_traits(item);
@@ -119,21 +117,6 @@ fn names_capabilities(item: &ItemFn) -> bool {
     let mut bounds = Bounds(false);
     bounds.visit_generics(&item.sig.generics);
     bounds.0
-}
-
-fn holds_marker(block: &syn::Block) -> bool {
-    struct Markers(bool);
-
-    impl<'ast> Visit<'ast> for Markers {
-        fn visit_macro(&mut self, node: &'ast Macro) {
-            self.0 |= syntax::todo_marker(node).is_some();
-            visit::visit_macro(self, node);
-        }
-    }
-
-    let mut markers = Markers(false);
-    markers.visit_block(block);
-    markers.0
 }
 
 // The traits the body borrows the provider as, by the accessors it calls on

@@ -1,16 +1,26 @@
 //! Checks for empty cache misses on constant store keys, single-field `data`
-//! response wrappers, refusals answered `Ok(())`, and format settings.
+//! response wrappers, refusals answered `Ok(())`, skips answered as refusals,
+//! and format settings.
 
 use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
     Arm, Attribute, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst,
-    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, PatGuard, PatIdent, Path,
-    Stmt, Token, TraitItemFn,
+    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Macro, Pat, PatGuard, PatIdent,
+    Path, Stmt, Token, TraitItemFn,
 };
 
 use super::{Module, Tree};
+use crate::layout;
+use crate::scaffold::{Scaffold, Skip};
 use crate::syntax::{self, path_ends};
+
+// The error constructors a handler refuses a message through: the macros
+// and the `Error` associated functions of the same names.
+const REFUSALS: &[&str] = &["bad_request", "not_found", "server_error", "bad_gateway"];
+
+// The lead of a requirement's comment line above the item that implements it.
+const MARKER_LEAD: &str = "// REQ-";
 
 // The calls that answer an empty collection, each with its spelling.
 const NOTHING: &[(&[&str], &str)] = &[
@@ -94,6 +104,45 @@ impl Tree<'_> {
         ))
     }
 
+    // A requirement whose statement says the message produces no events is
+    // a skip, answered `Ok(())`; code under its marker that constructs a
+    // refusal rejects the delivery instead, which the host records and
+    // redelivers. Held to the stems of the slice that consume a stream: one
+    // laying a consumer, or any where the design lists an inbound stream
+    // for the part.
+    pub fn refused_skips(&self, scaffold: &Scaffold) -> Option<String> {
+        let skips = scaffold.skips();
+        if skips.is_empty() {
+            return None;
+        }
+        let mut lines = Vec::new();
+        for stem in scaffold.stems() {
+            if !(scaffold.consumes(stem) || scaffold.inbound().is_some()) {
+                continue;
+            }
+            let own: Vec<&Skip> = skips.iter().filter(|skip| skip.stem == stem).collect();
+            if own.is_empty() {
+                continue;
+            }
+            let prefix = format!("crates/{}/src/", layout::crate_dir(stem));
+            for module in self.modules.iter().filter(|module| module.path.starts_with(&prefix)) {
+                lines.extend(module.refused_skips(&own));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a requirement whose statement says the message produces no events is a skip, not a \
+             refusal: the consumer answers `Ok(())` after its `tracing` counter event and \
+             publishes nothing, since an `Err` is recorded by the host as a rejected delivery; \
+             `Err` is the malformed or invalid delivery's alone, as the handlers reference shows \
+             under \"A skipped message\"; repair each line named through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
     pub fn format_settings(&self) -> Option<String> {
         let mut lines: Vec<String> = self
             .modules
@@ -157,6 +206,113 @@ impl Module {
             wrappers.visit_file(file);
         }
         wrappers.found
+    }
+
+    // One finding per run of requirement comments that are all skips: the
+    // first refusal constructed between the run's first line and the next
+    // run or the end of the item the run heads. A run naming a requirement
+    // that is no skip is left alone, since a consumer that also refuses a
+    // malformed message constructs its refusal there.
+    fn refused_skips(&self, skips: &[&Skip]) -> Vec<String> {
+        let Some(file) = self.file() else { return Vec::new() };
+        let runs = self.marker_runs();
+        let mut starts: Vec<usize> = file
+            .items
+            .iter()
+            .filter_map(|item| syntax::item_head(item).map(|(line, _)| line))
+            .collect();
+        starts.sort_unstable();
+        let mut refusals = Refusals::default();
+        refusals.visit_file(file);
+        refusals.found.sort();
+        let mut lines = Vec::new();
+        for (at, (from, ids)) in runs.iter().enumerate() {
+            let subjects: Vec<&&Skip> =
+                ids.iter().filter_map(|id| skips.iter().find(|skip| skip.id == *id)).collect();
+            if subjects.len() != ids.len() {
+                continue;
+            }
+
+            // the window closes at the next run, or at the item after the
+            // one the run heads
+            let next_run = runs.get(at + 1).map(|(line, _)| *line);
+            let next_item = starts.iter().copied().filter(|start| start > from).nth(1);
+            let to = [next_run, next_item].into_iter().flatten().min().unwrap_or(usize::MAX);
+            let Some((line, what)) =
+                refusals.found.iter().find(|(line, _)| line > from && *line < to)
+            else {
+                continue;
+            };
+            let named = subjects
+                .iter()
+                .map(|skip| format!("{} {}", skip.id, skip.subject))
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(format!(
+                "{}:{line}: {named} answers a refusal (`{what}`) where its statement says the \
+                 message produces no events",
+                self.path
+            ));
+        }
+        lines
+    }
+
+    // The runs of consecutive requirement comment lines, each as its first
+    // line and the ids it names in order.
+    fn marker_runs(&self) -> Vec<(usize, Vec<String>)> {
+        let mut runs: Vec<(usize, Vec<String>)> = Vec::new();
+        let mut last: Option<usize> = None;
+        for (index, line) in self.text.lines().enumerate() {
+            let number = index + 1;
+            let Some(rest) = line.trim_start().strip_prefix(MARKER_LEAD) else { continue };
+            let id =
+                format!("REQ-{}", rest.split(|ch: char| !ch.is_ascii_digit()).next().unwrap_or(""));
+            match (last, runs.last_mut()) {
+                (Some(previous), Some((_, ids))) if previous + 1 == number => ids.push(id),
+                _ => runs.push((number, vec![id])),
+            }
+            last = Some(number);
+        }
+        runs
+    }
+}
+
+// Every refusal a module constructs, at its line: an `Err(..)` call, one
+// of the error macros, or an `Error::<code>(..)` call.
+#[derive(Default)]
+struct Refusals {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Refusals {
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Expr::Path(func) = &*node.func {
+            let segments: Vec<String> =
+                func.path.segments.iter().map(|segment| segment.ident.to_string()).collect();
+            let what = match segments.as_slice() {
+                [.., last] if last == "Err" => Some("Err(..)".to_owned()),
+                [.., owner, last] if owner == "Error" && REFUSALS.contains(&last.as_str()) => {
+                    Some(format!("Error::{last}(..)"))
+                }
+                _ => None,
+            };
+            if let Some(what) = what {
+                let line = syntax::head_line(&node.func).unwrap_or_default();
+                self.found.push((line, what));
+            }
+        }
+        visit::visit_expr_call(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        if let Some(name) = node.path.segments.last().map(|segment| segment.ident.to_string())
+            && REFUSALS.contains(&name.as_str())
+        {
+            let line =
+                node.path.segments.last().map_or(0, |segment| syntax::line(segment.ident.span()));
+            self.found.push((line, format!("{name}!")));
+        }
+        visit::visit_macro(self, node);
     }
 }
 

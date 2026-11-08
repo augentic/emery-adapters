@@ -1,0 +1,84 @@
+{
+  "seed": {
+    "http": [
+      {
+        "method": "GET",
+        "path": "/rates",
+        "query": {
+          "zone": "auckland-central-otahuhu",
+          "weight": 600
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 2
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "capture": {
+        "order": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/{order}/cancel",
+        "body": {
+          "reason": "duplicate order"
+        }
+      },
+      "expect": {
+        "status": 200
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders/{order}/pay"
+      },
+      "expect": {
+        "status": 409,
+        "body": {
+          "error": "conflict",
+          "state": "cancelled"
+        }
+      }
+    }
+  ]
+}

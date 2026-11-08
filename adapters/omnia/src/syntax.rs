@@ -6,8 +6,8 @@ use std::mem;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprLit, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList, Path, Type, UseTree,
-    Visibility,
+    Expr, ExprLit, ExprMethodCall, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList,
+    Path, Type, UseTree, Visibility,
 };
 
 // Where `syn` refused a file, and why.
@@ -210,6 +210,60 @@ const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
+// A bare `pub fn` among the items of a file: its name, the lines its
+// signature runs over (`pub` to the body's opening brace), and the first
+// line of its doc where it carries one.
+pub struct Exported {
+    pub name: String,
+    pub from: usize,
+    pub to: usize,
+    pub doc: Option<String>,
+}
+
+pub fn exported_fns(file: &syn::File) -> Vec<Exported> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Fn(item) = item else { return None };
+            let Visibility::Public(pub_token) = &item.vis else { return None };
+            let doc = item.attrs.iter().find_map(|attr| {
+                if !attr.path().is_ident("doc") {
+                    return None;
+                }
+                let syn::Meta::NameValue(pair) = &attr.meta else { return None };
+                let Expr::Lit(ExprLit {
+                    lit: Lit::Str(text), ..
+                }) = &pair.value
+                else {
+                    return None;
+                };
+                let text = text.value();
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_owned())
+            });
+            Some(Exported {
+                name: item.sig.ident.to_string(),
+                from: line(pub_token.span),
+                to: line(item.block.brace_token.span.open()),
+                doc,
+            })
+        })
+        .collect()
+}
+
+// The signature of an exported fn as `text` spells it, its lines joined
+// on one and the body's opening brace dropped.
+pub fn signature(text: &str, exported: &Exported) -> String {
+    let joined = text
+        .lines()
+        .skip(exported.from.saturating_sub(1))
+        .take(exported.to.saturating_sub(exported.from) + 1)
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join(" ");
+    joined.trim_end_matches('{').trim_end().to_owned()
+}
+
 // The modules `file` declares from files beside it, `pub mod reading;`, by
 // name; one with a body inline declares no file.
 pub fn mods(file: &syn::File) -> Vec<String> {
@@ -396,6 +450,130 @@ fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
         current_line += 1;
     }
     (current_line == line && column == 0).then_some(offset)
+}
+
+// Every `.topic(..)` registration of the top-level `fn handlers` in `file`
+// whose handler is filled, at its line: the registration that leaves the
+// decoder the SDK's, JSON. One whose handler still holds its marker is a
+// stub the scaffold laid, left to the turn.
+pub fn json_registrations(file: &syn::File) -> Vec<usize> {
+    let stubs: BTreeSet<String> = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Fn(item) if holds_marker(&item.block) => Some(item.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    registrations(file, &["topic"], &stubs)
+}
+
+// Every `.topic(..)` and `.topic_with(..)` registration of the top-level
+// `fn handlers` in `file`, at its line, a stub's among them: the part
+// consumes a stream whatever decodes it.
+pub fn topic_registrations(file: &syn::File) -> Vec<usize> {
+    registrations(file, &["topic", "topic_with"], &BTreeSet::new())
+}
+
+// The line of the `Handlers::from(..)` fold in the top-level `fn handlers`
+// of an entry, where a part's `handlers()` is listed.
+pub fn handlers_from(file: &syn::File) -> Option<usize> {
+    struct Fold(Option<usize>);
+
+    impl<'ast> Visit<'ast> for Fold {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if self.0.is_none()
+                && let Expr::Path(path) = &*call.func
+                && path_ends(&path.path, &["Handlers", "from"])
+            {
+                self.0 = Some(line(call.paren_token.span.open()));
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+
+    let mut fold = Fold(None);
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            fold.visit_block(&item.block);
+        }
+    }
+    fold.0
+}
+
+// The lines of the calls of `methods` in the top-level `fn handlers`, less
+// those registering a handler of `stubs`.
+fn registrations(file: &syn::File, methods: &[&str], stubs: &BTreeSet<String>) -> Vec<usize> {
+    let mut found = Registrations {
+        methods,
+        stubs,
+        lines: Vec::new(),
+    };
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            found.visit_block(&item.block);
+        }
+    }
+    found.lines
+}
+
+struct Registrations<'s> {
+    methods: &'s [&'s str],
+    stubs: &'s BTreeSet<String>,
+    lines: Vec<usize>,
+}
+
+impl<'ast> Visit<'ast> for Registrations<'_> {
+    fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
+        if self.methods.iter().any(|method| call.method == method) {
+            let handler = call.args.iter().nth(1).and_then(|arg| match arg {
+                Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
+                _ => None,
+            });
+            if !handler.is_some_and(|handler| self.stubs.contains(&handler)) {
+                self.lines.push(line(call.method.span()));
+            }
+        }
+        visit::visit_expr_method_call(self, call);
+    }
+}
+
+// Whether `block` holds a `todo!("REQ-..")` marker, so the item is a stub
+// the scaffold laid and the turn has not filled.
+pub fn holds_marker(block: &syn::Block) -> bool {
+    struct Markers(bool);
+
+    impl<'ast> Visit<'ast> for Markers {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= todo_marker(node).is_some();
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut markers = Markers(false);
+    markers.visit_block(block);
+    markers.0
+}
+
+// Whether a block still holds a `todo!` of any text: the gate's stub,
+// whose marker names no requirement.
+pub fn holds_todo(block: &syn::Block) -> bool {
+    struct Todos(bool);
+
+    impl<'ast> Visit<'ast> for Todos {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= path_ends(&node.path, &["todo"]);
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut todos = Todos(false);
+    todos.visit_block(block);
+    todos.0
 }
 
 // Every `pub(crate) async fn(<context>: Context<..>, ..)` handler in

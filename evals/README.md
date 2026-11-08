@@ -18,6 +18,7 @@
 - [Reference comparison](#reference-comparison)
   - [Structural measures](#structural-measures)
   - [Black-box fixture oracle](#black-box-fixture-oracle)
+  - [Black-box scenario oracle (`oracle.toml`)](#black-box-scenario-oracle-oracletoml)
   - [Standalone oracle mode (`--oracle`)](#standalone-oracle-mode---oracle)
 - [Building a plan again](#building-a-plan-again)
   - [Full rebuild (`--rebuild`)](#full-rebuild---rebuild)
@@ -166,8 +167,8 @@ Because `covered` requirement IDs and verification verdicts are self-reported by
 3. **Layout and wiring audit:**
    - **Scenario coverage:** Matches requirement acceptance scenario names against declared test names (`test(...)` / `it(...)` in TypeScript, `#[test]` / `#[tokio::test]` in Rust).
    - **Out-of-layout files:** Lists tracked files outside the target adapter's expected directory layout (`spec/` is always permitted).
-   - **Unreached modules and topics:** Flags slice modules or stem crates that are never exported or wired into `src/index.ts`, `src/routes.rs`, or `src/messaging.rs`, as well as unused topic constants in `crates/common/src/topic.rs`.
-   - **Probe routes:** Lists HTTP routes registered in `src/routes.rs` and flags any route whose slice has no corresponding HTTP route requirement as a **probe**.
+   - **Unreached modules and topics:** Flags slice modules or stem crates that are never exported or wired in: for `node`, into `src/index.ts`; for `omnia`, a part whose `handlers()` its stem's entry does not name, a stem crate whose `handlers()` the root `src/lib.rs` router does not list, and unused topic constants in `crates/common/src/topic.rs`.
+   - **Probe routes:** Lists the HTTP routes each part's `handlers()` registers (`.route(<path>, <method>(<handler>))`) and flags any route whose slice has no corresponding HTTP route requirement as a **probe**.
 
 All host check results are written to `run-N.fidelity.md` and summarized in the scorecard's build columns.
 
@@ -175,7 +176,12 @@ All host check results are written to `run-N.fidelity.md` and summarized in the 
 
 ## Reference comparison
 
-A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path pointing to a hand-written Omnia Rust guest implementing the same service (such as [`cases/train/reference`](cases/train/reference/)). When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md` covering two checks:
+A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path. It names one of two kinds of directory, told apart by whether it holds an `oracle.toml`:
+
+- **A hand-written Omnia guest** implementing the same service beside its recorded fixtures (such as [`cases/train/reference`](cases/train/reference/)), which is both measured against the built tree and driven through it.
+- **A scenario oracle** (such as [`cases/express-orders/oracle`](cases/express-orders/oracle/)): the source service's behaviour recorded as HTTP scenarios under `oracle.toml`, driven through the built guest alone, with no reference guest to measure against.
+
+When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md`. For a guest reference it covers two checks; for a scenario oracle, the third alone:
 
 ### Structural measures
 
@@ -192,8 +198,21 @@ Compares the generated workspace against the hand-written reference across six c
 Drives the reference guest's recorded replay and static fixtures (`crates/*/data/{static,replay}/`) through the generated guest:
 
 1. **Test injection:** Generates `tests/reference_oracle.rs` inside the exported workspace using `omnia_test::guest` doubles.
-2. **Execution:** Feeds each fixture's inbound XML message to `messaging_router`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
-3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture.
+2. **Execution:** Feeds each fixture's inbound XML message to the guest's `router(provider)`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
+3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture. The harness's own output (including a compile failure) is written to `run-N.oracle.log` beside the run.
+
+### Black-box scenario oracle (`oracle.toml`)
+
+A reference directory holding an `oracle.toml` records the source service's behaviour as HTTP scenarios rather than as a second implementation, so a stateful HTTP service (an Express API over Postgres and Redis) can be held to what it answers without porting it by hand. The directory holds:
+
+- `oracle.toml`: `kind = "http"`; `[auth]` with the `header`, the bearer `token`, and the `guarded` path prefix the harness adds it under; `[config]`, the settings the scenarios were recorded under, by the source's own names (`GST_RATE = "0.15"`).
+- `schema.sql`: the store's DDL, applied fresh before every scenario, as the contract the built guest's statements are run against (declared types included, since each column is read back as the type its declaration names).
+- `seed/tables/<table>.json`: rows inserted into `<table>` before every scenario (a catalogue). `seed/http.json`: the default upstream answer per path (`{ "/rates": { "quotes": [..] } }`).
+- `scenarios/<group>/<name>.json`: one scenario each, `{ "seed": {..}, "steps": [..] }`. A step is either `{ "request": { "method", "path", "headers"?, "body"? }, "capture"?: { "<name>": "<dotted body path>" }, "expect": { "status", "headers"?, "body"? } }` or `{ "sql": "UPDATE .." }` run directly against the store (to make a cached read stale). Every `{name}` in a later step is a capture's value; `{uuid}`, `{timestamp}` (RFC 3339), and `{any}` are placeholders; a `"headers": { "authorization": null }` sends no bearer. An expected body is a subset: the fields it lists must be present and equal, arrays the same length item by item. `seed.http` lists the upstream requests the scenario expects as `{ "method", "path", "query", "status"?, "body"? }` (the body from `seed/http.json` when the entry gives none; a 4xx/5xx status with none answers `null`), and `"seed": { "tables": "unavailable" }` makes every store call fail (the degraded readiness probe). An entry with two query parameters is registered in both orders, since the guest may spell them either way.
+
+The runner validates every scenario (steps, captures, placeholders) before staging, writes them with the schema, seeds, and configuration into `oracle/oracle.json` in the exported tree, appends the harness's dev-dependencies (`rusqlite` with `bundled`, `column_decltype`, `functions` among them), and injects `tests/reference_oracle.rs`, which drives each scenario through `router(provider)` over `omnia_test::guest` doubles and a `TableStore` the harness owns: an in-memory SQLite database per scenario, run under the Postgres contract the guest wrote against (`$N` parameters bound by number, `expr::type` as `CAST`, `ILIKE` as `LIKE`, `now()` registered, every column typed by its declaration). The configuration seeded is the `[config]` table whole, plus every setting key the built tree declares that the table lacks, matched by its longest `_`-suffix in the table (`ORDERS_GST_RATE` from `GST_RATE`), else by a generic pattern (`*_URL` to the upstream base, `*_TOKEN` to the bearer, `*_TTL_SECONDS` to `60`); a key neither reads is left unset so the guest's own handling of it shows.
+
+Each scenario is reported as `pass` or `fail` with its first failing step: the status answered against the one expected (with the body the guest answered), an absent or differing header or body field, a request the guest made to the upstream that no step seeds, a panic, and the last failed statement (with its SQL error) and the last `WARN`/`ERROR` event the guest logged. Every scenario runs over a fresh store, so one guest fault blocks only the scenarios that pass through it. The fields asserted are strict: the source's camelCase names, `Location` and `x-total-count` headers, and the `error` code and `state` of an error body; an error's `message` is never asserted.
 
 ### Standalone oracle mode (`--oracle`)
 
@@ -201,9 +220,10 @@ You can re-run the reference comparison on an existing scorecard's `run-1` build
 
 ```bash
 cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train
+cargo run -p evals -- --oracle 2026-11-07T06-05-54Z express-orders
 ```
 
-`--oracle` exports the built tree to `run-1.oracle/` (keeping the directory so subsequent runs reuse the compiled `target/` cache and finish in seconds) and writes `run-1.oracle.md` and `run-1.oracle.log`. You can edit files inside `run-1.oracle/` to test manual fixes against the oracle; delete `run-1.oracle/` to force a fresh export from the Git repository.
+`--oracle` exports the built tree to `run-1.oracle/` (keeping the directory so subsequent runs reuse the compiled `target/` cache and finish in seconds) and writes `run-1.oracle.md` and `run-1.oracle.log`. You can edit files inside `run-1.oracle/` to test manual fixes against the oracle; delete `run-1.oracle/` to force a fresh export from the Git repository. Every toolchain command the runner puts over an exported tree builds into that tree's own `target/` whatever `CARGO_TARGET_DIR` the environment names, since an export carries its commit's timestamps and a shared target directory would answer an earlier export's artefacts as fresh.
 
 ---
 
@@ -349,14 +369,14 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 - `[[requirement]]`, `[[criterion]]`, `[[decision]]`: Expected claims, each with `stem`, source `anchor` (`path#Ln` or `path#Ln-Lm`), one-line `gloss`, and `source` name.
 - `[[absent]]`: Source spans (`anchor`, `gloss`) where **no** `requirement` claim should anchor (such as startup credential fetching, client construction, or signal handlers that belong in the design document rather than behavioral requirements).
 - `[[behaviour]]` (multi-source cases): Expected reconciled requirements across sources, specifying contributing `claims`, expected authority `status` (`agreed`, `unknown`, `divergence`, `conflict`), and optional `loser` source name.
-- `reference` (optional): Path to a hand-written Omnia reference guest for [Reference comparison](#reference-comparison).
+- `reference` (optional): Path to a hand-written Omnia reference guest, or to a scenario oracle directory holding an `oracle.toml`, for [Reference comparison](#reference-comparison).
 
 ### `typescript` cases
 
 | Case | What it probes | Expected stems |
 | --- | --- | --- |
 | [`orders`](cases/orders/expected.toml) | Single module within the inline byte budget. | `order-service` |
-| [`express-orders`](cases/express-orders/expected.toml) | Express service with bootstrap and three routers. | `start`, `orders`, `customers`, `health` |
+| [`express-orders`](cases/express-orders/expected.toml) | Express service with bootstrap and three routers, and a 57-scenario HTTP `oracle/` over an in-memory store. | `start`, `orders`, `customers`, `health` |
 | [`cli-jobs`](cases/cli-jobs/expected.toml) | Commander CLI with background queue workers. | `start`, `import`, `reconcile`, `nightly`, `serve`, `invoices` |
 | [`api-routes`](cases/api-routes/expected.toml) | Next.js App Router API with file-path routing and no bootstrap. | `orders`, `customers`, `health` |
 | [`hono-mounted`](cases/hono-mounted/expected.toml) | Hono sub-apps mounted via `app.route("/orders", orders)`. | `start`, `orders`, `customers`, `health` |
