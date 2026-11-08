@@ -21,7 +21,7 @@ use emery_sdk::{
 };
 
 use self::lists::{Lists, Placement, Topics};
-pub use self::reference::{Gate, Inbound, Wire, registration};
+pub use self::reference::{Codes, Gate, Inbound, Wire, registration};
 use self::reference::{Idiom, Role, Rules};
 use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
@@ -51,6 +51,8 @@ pub struct Plan {
     // slice falls under it.
     gate: Option<Gate>,
     rules: Rules,
+    // The wire codes the design's rules map statuses to.
+    codes: Codes,
     exports: Vec<Export>,
     skips: Vec<Skip>,
 }
@@ -213,6 +215,7 @@ impl Scaffold {
             stems.push(stem);
         }
         let gate = route_rules.gate();
+        let codes = route_rules.codes();
         if let Some(gate) = &gate {
             resolve_gate(root, &existing, gate, &mut stems)?;
         }
@@ -245,6 +248,7 @@ impl Scaffold {
             consumed,
             gate,
             rules: route_rules,
+            codes,
             exports,
             skips,
         })
@@ -361,6 +365,12 @@ impl Scaffold {
     // produces no events.
     pub fn skips(&self) -> &[Skip] {
         &self.plan.skips
+    }
+
+    // The wire codes the design's rules map statuses to, which every
+    // error the slice answers spells over the macro's default.
+    pub const fn codes(&self) -> &Codes {
+        &self.plan.codes
     }
 
     // Whether the slice lays a consumer under `stem`.

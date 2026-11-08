@@ -146,6 +146,7 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
 
 - Fill the input with the delivery's fields.
 - Write the body as a handler's. A rejected delivery is `Err(bad_request!(..))`, never `Ok(())`.
+- The body is the flow of the part's functions, each called where its behaviour belongs, in requirement order: the host runs the consumer alone, so a requirement's function that only its test calls is a behaviour the program never performs, and the check names it.
 - Where the payload is not JSON, register it through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part.
 - The registration itself is never a requirement. The host registers and acknowledges.
 
@@ -167,7 +168,7 @@ A requirement carrying neither a route nor a message is a `pub fn` with a marker
 
 - Give it the signature the behaviour needs. Change its parameters and its return type as the behaviour demands.
   The block the brief quotes is the function from its signature to its closing brace; its comment and doc lines above stand.
-- Return `omnia_sdk::Result<T>`. Build an error with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!`.
+- Return `omnia_sdk::Result<T>`. Build an error with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!` where the design maps no code to its status; where the brief lists the codes the design's mapping spells, `Error::bad_request("<code>", ..)` and its siblings with the mapped code, since each macro spells its own default (`bad_request`) and the check refuses a macro of a mapped status.
 - Never a custom error enum. Never an `Option<T>` that swallows the reason.
 - Add no route to give it a surface.
 

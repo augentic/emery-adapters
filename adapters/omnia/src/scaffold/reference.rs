@@ -732,6 +732,24 @@ impl Rules {
         })
     }
 
+    // The codes the rule paragraphs map each status to: for each status, the
+    // code token after it in the paragraphs' sentences that is spelled most
+    // often, the first on a tie. A sentence is read for every status it
+    // spells, since a mapping lists them in one (`ValidationError to 400
+    // invalid-request; NotFoundError to 404 not-found`).
+    pub fn codes(&self) -> Codes {
+        let sentences: Vec<&str> =
+            self.paragraphs.iter().flat_map(|paragraph| sentences(paragraph)).collect();
+        let mut codes = Vec::new();
+        for status in STATUSES {
+            let spelled = sentences.iter().filter_map(|sentence| code_after(sentence, status));
+            if let Some(code) = most_spelled(spelled) {
+                codes.push(((*status).to_owned(), code));
+            }
+        }
+        Codes(codes)
+    }
+
     // The rule paragraphs' sentences spelling one of `words`, in order.
     fn sentences_spelling(&self, words: &[&str]) -> Vec<&str> {
         self.paragraphs
@@ -742,23 +760,195 @@ impl Rules {
     }
 }
 
-// The `/`-led path `sentences` spell most often, the first on a tie.
-fn most_spelled_path(sentences: &[&str]) -> Option<String> {
+// The wire codes the design's rules map statuses to, each status once, in
+// `STATUSES` order.
+#[derive(Clone, Default)]
+pub struct Codes(Vec<(String, String)>);
+
+impl Codes {
+    pub const fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    // The code the design maps `status` to, where it maps one.
+    pub fn of(&self, status: &str) -> Option<&str> {
+        self.0.iter().find(|(known, _)| known == status).map(|(_, code)| code.as_str())
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0.iter().map(|(status, code)| (status.as_str(), code.as_str()))
+    }
+}
+
+// The words a mapping's sentence puts beside a status that are never its
+// code: the joins of a mapping (`400 with code`), and the words a sentence
+// goes on with after a status that names none (`400 if the body is
+// malformed`).
+const CODE_STOP_WORDS: &[&str] = &[
+    "a",
+    "after",
+    "again",
+    "against",
+    "all",
+    "also",
+    "an",
+    "and",
+    "answered",
+    "answers",
+    "any",
+    "are",
+    "as",
+    "at",
+    "be",
+    "because",
+    "before",
+    "body",
+    "both",
+    "but",
+    "by",
+    "code",
+    "codes",
+    "details",
+    "each",
+    "either",
+    "error",
+    "errors",
+    "every",
+    "for",
+    "from",
+    "has",
+    "have",
+    "here",
+    "if",
+    "in",
+    "into",
+    "is",
+    "it",
+    "its",
+    "json",
+    "logged",
+    "message",
+    "neither",
+    "no",
+    "nor",
+    "not",
+    "of",
+    "on",
+    "only",
+    "or",
+    "otherwise",
+    "over",
+    "payload",
+    "per",
+    "plus",
+    "reason",
+    "response",
+    "returned",
+    "returns",
+    "since",
+    "so",
+    "status",
+    "than",
+    "that",
+    "the",
+    "then",
+    "there",
+    "this",
+    "to",
+    "under",
+    "unless",
+    "until",
+    "via",
+    "was",
+    "when",
+    "where",
+    "whether",
+    "which",
+    "while",
+    "with",
+    "within",
+    "without",
+];
+
+// The words that join a code spelled before its status (`invalid-request`
+// as 400). An arrow is none, since it points from the failure to its
+// status (`ValidationError → 400 invalid-request`).
+const CODE_LINK_WORDS: &[&str] = &["as", "for", "is", "="];
+
+// The words that may stand between a status and the code after it (`400
+// with code invalid-request`), at most `CODE_JOINED_WORDS` of them.
+const CODE_JOIN_WORDS: &[&str] =
+    &["a", "an", "as", "code", "error", "is", "of", "response", "status", "the", "with"];
+const CODE_JOINED_WORDS: usize = 2;
+
+// The code `sentence` maps `status` to: the status as a word of its own,
+// then the code spelled before it over a link word (`invalid-request` as
+// 400), else the first code word after it past at most `CODE_JOINED_WORDS`
+// join words (`400 invalid-request`, `400 with code invalid-request`). A
+// code word is a lowercase word of letters, digits, `-`, and `_` with
+// backticks, quotes, and trailing punctuation trimmed, holding a letter,
+// and no stop word or status, so a sentence going on in prose after a
+// status (`400 if the body is malformed`) names none.
+fn code_after(sentence: &str, status: &str) -> Option<String> {
+    let words: Vec<&str> = sentence.split_whitespace().map(trim_code).collect();
+    let at = words.iter().position(|word| *word == status)?;
+    if at >= 2
+        && CODE_LINK_WORDS.contains(&words[at - 1])
+        && let Some(code) = code_word(words[at - 2])
+    {
+        return Some(code);
+    }
+    for (joined, word) in words[at + 1..].iter().enumerate() {
+        if let Some(code) = code_word(word) {
+            return Some(code);
+        }
+        if !CODE_JOIN_WORDS.contains(word) || joined == CODE_JOINED_WORDS {
+            return None;
+        }
+    }
+    None
+}
+
+// `word` as a code, where it reads as one.
+fn code_word(word: &str) -> Option<String> {
+    (!word.is_empty()
+        && word.chars().any(|ch| ch.is_ascii_lowercase())
+        && word
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || matches!(ch, '-' | '_'))
+        && !CODE_STOP_WORDS.contains(&word)
+        && !STATUSES.contains(&word))
+    .then(|| word.to_owned())
+}
+
+fn trim_code(word: &str) -> &str {
+    word.trim_matches(|ch: char| matches!(ch, '`' | '"' | '\'' | '(' | ')' | '[' | ']' | '*'))
+        .trim_end_matches(['.', ',', ':', ';', '!', '?'])
+}
+
+// The token `spelled` holds most often, the first on a tie.
+fn most_spelled(spelled: impl Iterator<Item = String>) -> Option<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
-    for token in sentences.iter().flat_map(|sentence| sentence.split_whitespace()) {
-        let Some(path) = path_token(token) else { continue };
-        match counts.iter_mut().find(|(known, _)| *known == path) {
+    for token in spelled {
+        match counts.iter_mut().find(|(known, _)| *known == token) {
             Some((_, count)) => *count += 1,
-            None => counts.push((path, 1)),
+            None => counts.push((token, 1)),
         }
     }
     let mut most: Option<(String, usize)> = None;
-    for (path, count) in counts {
+    for (token, count) in counts {
         if most.as_ref().is_none_or(|(_, known)| count > *known) {
-            most = Some((path, count));
+            most = Some((token, count));
         }
     }
-    most.map(|(path, _)| path)
+    most.map(|(token, _)| token)
+}
+
+// The `/`-led path `sentences` spell most often, the first on a tie.
+fn most_spelled_path(sentences: &[&str]) -> Option<String> {
+    most_spelled(
+        sentences.iter().flat_map(|sentence| sentence.split_whitespace()).filter_map(path_token),
+    )
 }
 
 // The gate on the requests the design's rules spell: the prefix it mounts

@@ -132,6 +132,13 @@ const OMNIA_PLACED_CONSUMER: &str = "/// A delivery of `order-placed`.\n#[derive
                                      OnPlacedInput) -> Result<()> {\n    \
                                      context.state().set(&format!(\"orders/{}\", input.id), \
                                      b\"placed\").await?;\n    Ok(())\n}\n";
+// The consumer's write, and the same with the default slice's function
+// called after it.
+const OMNIA_PLACED_WRITE: &str =
+    "    context.state().set(&format!(\"orders/{}\", input.id), b\"placed\").await?;\n";
+const OMNIA_PLACED_CALLING: &str = "    context.state().set(&format!(\"orders/{}\", input.id), \
+                                    b\"placed\").await?;\n    \
+                                    crate::reading::get_id_return_order()?;\n";
 // A design whose rules gate the routes under `/api`: the prefix spelled in
 // its gate sentences more often than `/health`, the keys the gate reads, and
 // the code it refuses with, beside a store paragraph that names no gate.
@@ -601,6 +608,12 @@ fn routed(method: &str, path: &str) -> Trigger {
 // The edit that fills the function the adapter scaffolded for the default slice.
 const fn fill_function() -> (&'static str, &'static str, &'static str) {
     ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED)
+}
+
+// The `edit_files` entry calling the default slice's function from the
+// `on_placed` consumer `OMNIA_PLACED_CONSUMER` lays, so the host reaches it.
+const fn call_function() -> (&'static str, &'static str, &'static str) {
+    ("crates/orders/src/inbound.rs", OMNIA_PLACED_WRITE, OMNIA_PLACED_CALLING)
 }
 
 // One `edit_files` call declaring a second module a turn writes under `stem`
@@ -1533,7 +1546,9 @@ async fn omnia_start_rules_in_brief() {
          tree, to call rather than write again:\n\n- `orders::reading::authenticate` \
          (`crates/orders/src/reading.rs:",
         "): `pub fn authenticate<P: Config>( context: &Context<P>, bearer: Option<&str>, ) -> \
-         Result<()>` — Checks the bearer against the deployment's token.\n\nThe check:",
+         Result<()>` — Checks the bearer against the deployment's token.\n\nThe codes the \
+         design's mapping spells, which the check holds every error to: `400` \
+         `invalid-request`, `404` `not-found`, `409` `conflict`.",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
@@ -3808,8 +3823,11 @@ async fn omnia_scaffold_topic() {
          orders.cancel.refuse-paid: the consumer`, registered in the part's `handlers()` under \
          `topic::ORDERS_CANCEL_REQUESTED`: fill `OnCancelInput` with the delivery's fields, then \
          replace this block with the body, narrowing `P: Capabilities` to the traits the body \
-         reaches. Where the payload is not JSON, register it through \
-         `.topic_with(topic::ORDERS_CANCEL_REQUESTED, on_cancel, decode)` instead, over a `fn \
+         reaches. The body is the flow of this part's functions, each called where its \
+         behaviour belongs in requirement order, since the host runs this function alone and \
+         the check refuses a function only a test reaches. Where the payload is not JSON, \
+         register it through `.topic_with(topic::ORDERS_CANCEL_REQUESTED, on_cancel, decode)` \
+         instead, over a `fn \
          decode(delivery: &Delivery) -> std::result::Result<OnCancelInput, DecodeError>` of the \
          part.\n\n```rust\n    let _ = (&context, &input);\n    todo!(\"REQ-001 orders.cancel, \
          REQ-002 orders.cancel.refuse-paid: the consumer\")\n```\n",
@@ -4380,7 +4398,7 @@ async fn omnia_inbound_registration_stated() {
 
 // A stem whose crate already registers a topic is told at the part's last
 // slice that the stream is consumed there and asked for no second
-// registration, and the function alone passes.
+// registration; the function, called from the consumer that stands, passes.
 #[tokio::test]
 async fn omnia_inbound_registration_consumed() {
     let json = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
@@ -4389,6 +4407,23 @@ async fn omnia_inbound_registration_consumed() {
                     (consumer)** — topic `order-placed` from `KAFKA_SOURCE_TOPIC`\") is consumed \
                     already by a registration in `crates/orders/src/`: register no second one";
     let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let project = omnia_consuming_tree().await;
+    let mut held = slice();
+    held.design = json.to_owned();
+    let model = ScriptedModel::answering([function_only])
+        .calling(0, [edit_files(&[fill_function(), call_function()])]);
+
+    OMNIA.build_slice(&project, &model, &held).await.expect("the consumed stream passes");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    assert!(brief.contains(consumed), "the brief names the consumer that stands: {brief}");
+    assert!(!brief.contains("now or never"), "no second registration is asked for: {brief}");
+}
+
+// A tree with the consumer `OMNIA_PLACED_CONSUMER` registered under the
+// `orders` stem, which the default slice's function is built beside.
+async fn omnia_consuming_tree() -> Scratch {
     let project = omnia_tree().await;
     project.write(
         "crates/common/src/topic.rs",
@@ -4410,17 +4445,84 @@ async fn omnia_inbound_registration_consumed() {
              Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}}\n\n{OMNIA_PLACED_CONSUMER}"
         ),
     );
-    let mut held = slice();
-    held.design = json.to_owned();
-    let model =
-        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+    project
+}
 
-    OMNIA.build_slice(&project, &model, &held).await.expect("the consumed stream passes");
+// A covered requirement's function that no registered handler or consumer
+// of the stem reaches is refused at the part's last slice, named at its
+// line with the repair; a second function under the same requirement that
+// the first reaches through a helper is listed under it alone. Calling the
+// first from the consumer that stands repairs the tree.
+#[tokio::test]
+async fn omnia_unreached_function() {
+    let project = omnia_consuming_tree().await;
+    let chained = "    helper()\n}\n\nfn helper() -> Result<()> {\n    publish_it()\n}\n\n// \
+                   REQ-001 orders.get-id.return-order: the event.\npub fn publish_it() -> \
+                   Result<()> {\n    Ok(())\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, chained)])],
+        )
+        .calling(1, [edit_files(&[call_function()])]);
+
+    OMNIA.build(&project, &model).await.expect("the reached function is accepted");
     model.assert_exhausted();
 
-    let brief = &model.seen()[0].messages[0];
-    assert!(brief.contains(consumed), "the brief names the consumer that stands: {brief}");
-    assert!(!brief.contains("now or never"), "no second registration is asked for: {brief}");
+    let reading = text(&project, "crates/orders/src/reading.rs");
+    let line = reading
+        .lines()
+        .position(|line| line.starts_with("pub fn get_id_return_order"))
+        .expect("the function stands")
+        + 1;
+    let correction = correction(&model);
+    for carried in [
+        "a requirement's function is reached from a function the host runs, the registered \
+         handler or consumer, or the program never performs the behaviour",
+        &format!(
+            "crates/orders/src/reading.rs:{line}: `get_id_return_order` (REQ-001) is reached by \
+             no handler or consumer `orders` registers"
+        ),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(
+        !correction.contains("`publish_it`"),
+        "the chained function is not listed: {correction}"
+    );
+    assert!(
+        text(&project, "crates/orders/src/inbound.rs")
+            .contains("crate::reading::get_id_return_order()?;"),
+        "the consumer calls the function"
+    );
+}
+
+// A function another crate mentions is an export the host reaches through
+// that crate, and a slice that is not its part's last leaves the wiring to
+// a later one; neither is refused.
+#[tokio::test]
+async fn omnia_unreached_function_passes() {
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let exporting = omnia_consuming_tree().await;
+    exporting.write(
+        "crates/common/src/lib.rs",
+        format!(
+            "{}\n/// The order read every stem shares.\npub fn shared_read() -> \
+             omnia_sdk::Result<()> {{\n    orders::reading::get_id_return_order()\n}}\n",
+            omnia_seed("crates/common/src/lib.rs").trim_end()
+        ),
+    );
+    let model = ScriptedModel::answering([report]).calling(0, [edit_files(&[fill_function()])]);
+    OMNIA.build(&exporting, &model).await.expect("the exported function is accepted");
+    model.assert_exhausted();
+
+    let earlier = omnia_consuming_tree().await;
+    let mut slice = slice();
+    slice.count = 2;
+    let model = ScriptedModel::answering([report]).calling(0, [edit_files(&[fill_function()])]);
+    OMNIA.build_slice(&earlier, &model, &slice).await.expect("an earlier slice is accepted");
+    model.assert_exhausted();
 }
 
 // A requirement whose statement says the message produces no events is a
@@ -7079,6 +7181,141 @@ async fn omnia_serial_types_first_slice_only() {
     assert!(
         second_brief.contains("Type: orders.Order\n```ts\ninterface Order"),
         "the second slice's design cut keeps `Order` as a referenced type: {second_brief}"
+    );
+}
+
+// The design's mapping of failures to wire codes, as `Rules::codes` reads
+// it from the rule paragraphs.
+const OMNIA_CODES_DESIGN: &str = "# Design\n\n## Errors\n\nThe error handler maps a \
+                                  ValidationError to 400 invalid-request, a NotFoundError to \
+                                  404 not-found, and an upstream failure to 502 \
+                                  upstream-unavailable; anything else is logged and answered \
+                                  500 internal.\n";
+
+// An error answered through an SDK macro where the design maps its status
+// to a code of its own is refused at the build with the macro's line named
+// and the mapped code spelled; the brief states the mapping before the
+// turn. Answering the mapped code through `Error::<status>(..)` repairs the
+// tree.
+#[tokio::test]
+async fn omnia_default_code_refused() {
+    let project = omnia_tree().await;
+    let mut slice = slice();
+    OMNIA_CODES_DESIGN.clone_into(&mut slice.design);
+    let defaulted = "    Err(not_found!(\"no order\"))\n";
+    let coded = "    Err(Error::not_found(\"not-found\", \"no order\"))\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, defaulted)])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", defaulted, coded)])]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the mapped code is accepted");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "The codes the design's mapping spells, which the check holds every error to: \
+             `400` `invalid-request`, `404` `not-found`, `500` `internal`, `502` \
+             `upstream-unavailable`. An SDK macro spells its own default"
+        ),
+        "the brief states the mapping: {brief}"
+    );
+    let reading = text(&project, "crates/orders/src/reading.rs");
+    let line = reading
+        .lines()
+        .position(|line| line.contains("Error::not_found(\"not-found\""))
+        .expect("the coded error stands where the macro stood")
+        + 1;
+    let correction = correction(&model);
+    for carried in [
+        "a failure's wire code is the one the design's mapping spells for its status",
+        &format!(
+            "crates/orders/src/reading.rs:{line}: `not_found!` answers the code `not_found` \
+             where the design maps 404 to `not-found`"
+        ),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+}
+
+// The mapping is read from the design's phrasings: an arrow table, prose
+// joining each status to its code over `with`, a code spelled before its
+// status over `as`, and a paragraph spelling statuses whose sentences name
+// no code, which maps nothing. A status spelled twice maps to the code
+// spelled most often.
+#[tokio::test]
+async fn omnia_codes_read() {
+    let told = "The codes the design's mapping spells, which the check holds every error to: ";
+    let cases: [(&str, Option<&str>); 4] = [
+        (
+            "**Error mapping** — Schema validation → 400 invalid-request with issues field \
+             paths and messages (REQ-009). Domain ValidationError → 400 invalid-request with \
+             message (REQ-010). Unauthorized → 401 unauthorized (REQ-011). NotFoundError → 404 \
+             not-found with message (REQ-012). ConflictError → 409 conflict with message and \
+             state (REQ-013). UpstreamError → 502 upstream-unavailable with upstream name \
+             (REQ-014). Unhandled → 500 internal (REQ-015). Unmatched route → 404 not-found \
+             with path (REQ-008).",
+            Some(
+                "`400` `invalid-request`, `401` `unauthorized`, `404` `not-found`, `409` \
+                 `conflict`, `500` `internal`, `502` `upstream-unavailable`.",
+            ),
+        ),
+        (
+            "Unhandled routes yield 404 with not-found and the path per REQ-006; the error \
+             handler answers a ZodError as 400 with code invalid-request, and an unknown error \
+             as 500 with code internal.",
+            Some("`400` `invalid-request`, `404` `not-found`, `500` `internal`."),
+        ),
+        (
+            "An error answers `invalid-request` as 400, `not-found` as 404, and `conflict` as \
+             409; a 404 is also answered for an unknown route.",
+            Some("`400` `invalid-request`, `404` `not-found`, `409` `conflict`."),
+        ),
+        (
+            "Errors are answered with the status the failure maps to, 400 if the body is \
+             malformed and 404 if the order is unknown, each with a JSON body.",
+            None,
+        ),
+    ];
+    for (paragraph, expected) in cases {
+        let project = omnia_tree().await;
+        let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+        let mut slice = slice();
+        slice.design = format!("# Design\n\n## Errors\n\n{paragraph}\n");
+        OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+        model.assert_exhausted();
+        let brief = &model.seen()[0].messages[0];
+        match expected {
+            Some(codes) => assert!(
+                brief.contains(&format!("{told}{codes}")),
+                "the brief states `{codes}` for `{paragraph}`: {brief}"
+            ),
+            None => assert!(!brief.contains(told), "no code is read from `{paragraph}`: {brief}"),
+        }
+    }
+}
+
+// A design mapping no status to a code leaves the macros' defaults as the
+// codes, so a turn answering through `not_found!` is accepted.
+#[tokio::test]
+async fn omnia_default_code_unmapped() {
+    let project = omnia_tree().await;
+    let defaulted = "    Err(not_found!(\"no order\"))\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report]).calling(
+        0,
+        [edit_files(&[("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, defaulted)])],
+    );
+
+    OMNIA.build(&project, &model).await.expect("the default code is accepted");
+    model.assert_exhausted();
+    assert!(
+        text(&project, "crates/orders/src/reading.rs").contains(defaulted),
+        "the macro stands as the turn wrote it"
     );
 }
 

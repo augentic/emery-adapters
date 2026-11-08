@@ -259,7 +259,7 @@ impl Module {
 
     // The runs of consecutive requirement comment lines, each as its first
     // line and the ids it names in order.
-    fn marker_runs(&self) -> Vec<(usize, Vec<String>)> {
+    pub fn marker_runs(&self) -> Vec<(usize, Vec<String>)> {
         let mut runs: Vec<(usize, Vec<String>)> = Vec::new();
         let mut last: Option<usize> = None;
         for (index, line) in self.text.lines().enumerate() {

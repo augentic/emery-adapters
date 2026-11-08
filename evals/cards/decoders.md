@@ -325,4 +325,31 @@ The hollow consumer, four of five fresh-revision `train` builds since the regist
 - **Laying the calls.** The scaffold lays the consumer's body as the part's functions called in requirement order. It knows the functions' names at scaffold time and not their signatures, which the turn decides, so laid calls would be wrong as soon as a function takes an argument; the brief would have to say "the arguments are yours", and the marker's one-edit fill is lost. Set aside.
 - **`unreached_functions`, a check at the part's last slice.** Over the stems of the slice that register a consumer or a handler: every `pub fn` or `pub async fn` of the part laid under a `// REQ-` line (the requirement functions, `syntax::pub_fn` over the module) that no registered handler or consumer of the stem reaches, where reaching is the transitive closure of call mentions from the registered functions' bodies over the stem's own functions (a `syn` visit collecting the paths each body names, resolved within the crate's modules). One finding per unreached function, `<path>:<line>: `<fn>` (REQ-NNN) is reached by no registered handler or consumer`, the header naming the repair: call it where the behaviour belongs in the consumer's flow, in requirement order, or leave its requirement out of `covered`. A function reached through another unreached function is listed once, at the root of its chain. The rule waits for the part's last slice, as `unconsumed_streams` does, since an earlier slice may leave the wiring to the one that builds the consumer.
 
-The arm is three fresh runs over `train` on the component carrying the check; the controls are this card's two driven runs and the registration round's two (the consumer calling one function on all four). Predictions and the decision rule are written when the check is built; not in this round.
+The arm is three fresh runs over `train` on the component carrying the check; the controls are this card's two driven runs and the registration round's two (the consumer calling one function on all four).
+
+```bash
+CURSOR_MODEL=composer-2.5 EVAL_RUNS=3 cargo run -p evals -- --build --target omnia train
+```
+
+Built as designed, with three readings the design left open: a function another crate mentions is an export and counts as reached; a function still holding its `todo!` is the scaffold's stub and no candidate, so a slice's stubs pass; and a chain runs through any unreached function, not only one under a `// REQ-` line, so a helper between two requirement functions hides neither. Read against `16-40-39Z` run 2's sealed consumer before the arm, the rule lists eleven functions (`reject_no_actual_update` through `no_publish_without_vehicles`, each at its line) and holds back `publish_schedule_adherence`, `publish_location_event`, and `partition_key_for_event`, which the last listed reaches. The brief's consumer entry now says the body is the flow of the part's functions in requirement order, and `build.md`'s consumer bullets say the same, so the turn is told before the check refuses.
+
+#### Predictions
+
+- **R1, the check fires.** On at least two of three runs the build log carries `unreached_functions` on a candidate of the slice that fills the consumer, naming at least `reject_no_actual_update` or `filter_station` (the second rejection and the first filter, which every hollow consumer so far left uncalled).
+- **R2, the correction lands.** Every run whose candidate is refused by it is accepted within the slice's rounds; no build is lost to the check. The sealed consumer calls the part's functions: on every driven run the `on_*` consumer's body names at least six of the part's requirement functions, against one on the four controls.
+- **R3, the oracle moves.** At least two of three driven runs pass more than 12 of 22, the hollow consumer's ceiling on every control; the run count passing 15 or more is recorded.
+- **R4, no false positive.** No finding names a function the design or the tree shows reached (an export another crate calls, a function the consumer's flow reaches through another), read from the first refused candidate of each run.
+- **The rest counted, not predicted:** the wire key laid as before (W1–W3 held last round), the assigned shape and the scenario's precedence, `stem_manifest_drift` sightings now that its header is reworded, the decoder registered through `topic_with`.
+
+#### Decision rule
+
+- **R1 fails:** the turn wires the consumer unprompted after the brief and prompt changes, or the check does not see the shape; the first sealed consumer is read and whichever it is recorded.
+- **R2 fails, a build lost:** the header's repair is reworded, as `stem_manifest_drift`'s was, and the arm run again.
+- **R2 fails, the consumer still thin after a passing check:** the reach is read against the tree, since a call through a closure or a method may hide the mention; the reader is widened before anything else.
+- **R3 fails with R2 holding:** the next cap is read from `fidelity.md`, since the consumer calling its functions moves nothing where the functions themselves are wrong; the classes are counted as always.
+- **R4 fails:** the false positive's shape is quoted and the rule narrowed, never dropped.
+- Totals alone decide nothing.
+
+#### Results
+
+Not yet run.
