@@ -4,7 +4,6 @@ mod bounds;
 mod lists;
 mod misses;
 mod process;
-mod reach;
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -154,10 +153,8 @@ impl<'a> Tree<'a> {
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
         findings.extend(self.unregistered_handlers(scaffold));
         findings.extend(self.default_decoders(scaffold));
-        findings.extend(self.default_codes(scaffold));
         findings.extend(self.unconsumed_streams(scaffold));
         findings.extend(self.refused_skips(scaffold));
-        findings.extend(self.unreached_functions(scaffold, &report.covered));
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -525,48 +522,6 @@ impl<'a> Tree<'a> {
             wire = wire.name(),
             reader = wire.reader(),
             lines = lines.join("\n")
-        ))
-    }
-
-    // An error answered through an SDK macro spells the macro's default
-    // code, where the design's mapping spells the source's own for that
-    // status; the scaffold writes no such macro, so every use is the
-    // turn's.
-    fn default_codes(&self, scaffold: &Scaffold) -> Option<String> {
-        let codes = scaffold.codes();
-        if codes.is_empty() {
-            return None;
-        }
-        let mut lines = Vec::new();
-        for module in self.parts_of(scaffold) {
-            let Some(file) = module.file() else { continue };
-            for (number, name) in syntax::error_macros(file) {
-                let Some((_, status, default)) =
-                    syntax::ERROR_MACROS.iter().find(|(known, _, _)| *known == name)
-                else {
-                    continue;
-                };
-                let Some(code) = codes.of(status).filter(|code| code != default) else {
-                    continue;
-                };
-                lines.push(format!(
-                    "{}:{number}: `{name}!` answers the code `{default}` where the design maps \
-                     {status} to `{code}`",
-                    module.path
-                ));
-            }
-        }
-        if lines.is_empty() {
-            return None;
-        }
-        Some(format!(
-            "a failure's wire code is the one the design's mapping spells for its status, and \
-             an SDK macro spells its own default instead (`bad_request!` answers `bad_request`, \
-             `not_found!` `not_found`, `bad_gateway!` `bad_gateway`, `server_error!` \
-             `server_error`), so a client reading the mapped code never matches it; answer \
-             `Error::<status>(\"<code>\", <description>)` with the mapped code through \
-             `edit_files`:\n{}",
-            lines.join("\n")
         ))
     }
 

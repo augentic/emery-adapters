@@ -97,7 +97,6 @@ impl Scaffold {
             text.push_str("\n\n");
         }
         self.brief_rules(&mut text);
-        self.brief_codes(&mut text);
         self.brief_gate(&mut text);
         for relaid in &self.plan.relaid {
             let _ = writeln!(
@@ -238,25 +237,6 @@ impl Scaffold {
             }
             text.push('\n');
         }
-    }
-
-    // The wire codes the design's mapping spells, where it spells any, so
-    // an error the slice answers carries the mapped code and not the
-    // macro's default, which the check refuses.
-    fn brief_codes(&self, text: &mut String) {
-        if self.plan.codes.is_empty() {
-            return;
-        }
-        let codes: Vec<String> =
-            self.plan.codes.iter().map(|(status, code)| format!("`{status}` `{code}`")).collect();
-        let _ = writeln!(
-            text,
-            "The codes the design's mapping spells, which the check holds every error to: {}. \
-             An SDK macro spells its own default (`bad_request!` answers `bad_request`), so an \
-             error of a mapped status is `Error::<status>(\"<code>\", <description>)` with the \
-             mapped code.\n",
-            codes.join(", ")
-        );
     }
 
     // The gate the design's rules spell, where they spell one: for each stem
@@ -739,7 +719,21 @@ impl Stem {
         }
         for consumer in &self.consumers {
             count += 1;
-            let _ = writeln!(text, "{count}. {}", consumer.entry(&self.module.path, wire));
+            let _ = writeln!(
+                text,
+                "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
+                 part's `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, \
+                 then replace this block with the body, narrowing `P: Capabilities` to the \
+                 traits the body reaches. {}\n\n{}",
+                consumer.name,
+                consumer.topic,
+                self.module.path,
+                consumer.marker,
+                consumer.constant,
+                consumer.input,
+                consumer.decoder_hint(wire),
+                render::fenced("rust", &consumer.stub())
+            );
         }
         for function in &self.functions {
             count += 1;
@@ -798,27 +792,6 @@ impl Stem {
 }
 
 impl Consumer {
-    // The consumer's marker entry: where it is registered, what to fill,
-    // the body as the flow of the part's functions, which the reach check
-    // holds it to, its decoder, and the stub.
-    fn entry(&self, path: &str, wire: Option<Wire>) -> String {
-        format!(
-            "The consumer `{}` of the topic `{}` in `{path}`, key `{}`, registered in the part's \
-             `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, then replace \
-             this block with the body, narrowing `P: Capabilities` to the traits the body \
-             reaches. The body is the flow of this part's functions, each called where its \
-             behaviour belongs in requirement order, since the host runs this function alone \
-             and the check refuses a function only a test reaches. {}\n\n{}",
-            self.name,
-            self.topic,
-            self.marker,
-            self.constant,
-            self.input,
-            self.decoder_hint(wire),
-            render::fenced("rust", &self.stub())
-        )
-    }
-
     // The clause of the consumer's entry on its decoder: the format the
     // design names with the reader for it, else the conditional.
     fn decoder_hint(&self, wire: Option<Wire>) -> String {

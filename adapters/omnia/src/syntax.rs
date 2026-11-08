@@ -33,13 +33,6 @@ impl Mentions {
         mentions
     }
 
-    // The names one function's body mentions.
-    pub fn of_block(block: &syn::Block) -> Self {
-        let mut mentions = Self::default();
-        mentions.visit_block(block);
-        mentions
-    }
-
     // Whether `name` stands anywhere as an identifier.
     pub fn contains(&self, name: &str) -> bool {
         self.idents.contains_key(name)
@@ -475,36 +468,6 @@ pub fn json_registrations(file: &syn::File) -> Vec<usize> {
     registrations(file, &["topic"], &stubs)
 }
 
-// The SDK's error macros, each with the status it answers and the code it
-// spells by default.
-pub const ERROR_MACROS: &[(&str, &str, &str)] = &[
-    ("bad_request", "400", "bad_request"),
-    ("not_found", "404", "not_found"),
-    ("server_error", "500", "server_error"),
-    ("bad_gateway", "502", "bad_gateway"),
-];
-
-// Every invocation of one of `ERROR_MACROS` in `file`, as the macro's name
-// at the line of its `!`, in file order.
-pub fn error_macros(file: &syn::File) -> Vec<(usize, &'static str)> {
-    struct Macros(Vec<(usize, &'static str)>);
-
-    impl<'ast> Visit<'ast> for Macros {
-        fn visit_macro(&mut self, node: &'ast Macro) {
-            if let Some((name, _, _)) =
-                ERROR_MACROS.iter().find(|(name, _, _)| path_ends(&node.path, &[name]))
-            {
-                self.0.push((line(node.bang_token.span), name));
-            }
-            visit::visit_macro(self, node);
-        }
-    }
-
-    let mut macros = Macros(Vec::new());
-    macros.visit_file(file);
-    macros.0
-}
-
 // Every `.topic(..)` and `.topic_with(..)` registration of the top-level
 // `fn handlers` in `file`, at its line, a stub's among them: the part
 // consumes a stream whatever decodes it.
@@ -538,43 +501,6 @@ pub fn handlers_from(file: &syn::File) -> Option<usize> {
         }
     }
     fold.0
-}
-
-// The functions the top-level `fn handlers` in `file` registers, which the
-// host runs: the handler of each `.route(..)`, `.topic(..)`, or
-// `.topic_with(..)` and the decoder of a `.topic_with(..)`, each named bare
-// or as the one argument of a call (`get(read)`).
-pub fn registered_fns(file: &syn::File) -> BTreeSet<String> {
-    struct Registered(BTreeSet<String>);
-
-    impl<'ast> Visit<'ast> for Registered {
-        fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
-            if ["route", "topic", "topic_with"].iter().any(|method| call.method == method) {
-                for arg in call.args.iter().skip(1) {
-                    let named = match arg {
-                        Expr::Call(wrapped) if wrapped.args.len() == 1 => wrapped.args.first(),
-                        other => Some(other),
-                    };
-                    if let Some(Expr::Path(path)) = named
-                        && let Some(ident) = path.path.get_ident()
-                    {
-                        self.0.insert(ident.to_string());
-                    }
-                }
-            }
-            visit::visit_expr_method_call(self, call);
-        }
-    }
-
-    let mut registered = Registered(BTreeSet::new());
-    for item in &file.items {
-        if let Item::Fn(item) = item
-            && item.sig.ident == "handlers"
-        {
-            registered.visit_block(&item.block);
-        }
-    }
-    registered.0
 }
 
 // The lines of the calls of `methods` in the top-level `fn handlers`, less
