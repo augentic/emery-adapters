@@ -605,17 +605,17 @@ The test for the skip delivers the message over a provider seeded with no stop, 
 
 ## A reference table
 
-A design type that is a constant array of rows — delivery zones by postcode range, rates by code, stations by id — is data the service reads, not code it runs. The adapter lays it as a JSON file beside the stem's sources, `crates/<stem>/data/<name>.json`, every row as the source spells it under the wire's keys, and one `pub fn` in the part that reads the file into the element type the slice owns:
+A design type that is a constant array of rows — delivery zones by postcode range, rates by code, stations by id — is data the service reads, not code it runs. The adapter lays it as a data module of the stem's crate, `crates/<stem>/src/<name>_data.rs`, declared in the entry's `pub mod` list and holding one constant, `JSON`, every row as the source spells it under the wire's keys, and one `pub fn` in the part that reads the constant into the element type the slice owns:
 
 ```rust
-/// The design type `orders.ZONES`, its rows in `data/zones.json`.
+/// The design type `orders.ZONES`, its rows the constant `crate::zones_data::JSON`.
 ///
 /// # Errors
 ///
-/// A row of the file that `DeliveryZone` does not read.
+/// A row of the constant that `DeliveryZone` does not read.
 pub fn zones() -> Result<Vec<DeliveryZone>> {
-    let rows = include_str!("../data/zones.json");
-    serde_json::from_str(rows).map_err(|error| Error::server_error("data", error.to_string()))
+    serde_json::from_str(crate::zones_data::JSON)
+        .map_err(|error| Error::server_error("data", error.to_string()))
 }
 ```
 
@@ -628,10 +628,10 @@ let zone = zones()?
     .ok_or_else(|| not_found!("no delivery zone covers postcode `{postcode}`"))?;
 ```
 
-- The file is the rows' one home. Never type a row again in code, in a `const`, a `vec![..]`, or a test fixture: a test that needs a row reads it through the function.
-- The file keeps every row it was laid with. A row the scenarios add goes through `edit_files`, at the end of the array.
-- A lookup over the rows is the handler's, or a `pub(crate) fn` of the part where two handlers share it. The function reads the file once per call, which is the cost of `serde_json::from_str` over the compiled-in text; a hot path caches the parsed rows in a `std::sync::OnceLock` of the part.
-- A table whose element type the slice does not own, or whose rows nest objects, is laid as an empty struct with its signature in the doc, as any design type the scaffold could not lay: lay its rows the same way yourself, a data file and a reader, rather than a struct holding them.
+- The constant is the rows' one home. Never type a row again in code, in a `const` of your own, a `vec![..]`, or a test fixture: a test that needs a row reads it through the function. The rows are in code because the seed's `clippy.toml` refuses `include_str!` and `include_bytes!`: a table the program reads is a constant in code, never a file compiled in.
+- The constant keeps every row it was laid with. A row the scenarios add goes through `edit_files`, at the end of the array.
+- A lookup over the rows is the handler's, or a `pub(crate) fn` of the part where two handlers share it. The function parses the constant once per call, which is the cost of `serde_json::from_str` over the text; a hot path caches the parsed rows in a `std::sync::OnceLock` of the part.
+- A table whose element type the slice does not own, or whose rows nest objects, is laid as an empty struct with its signature in the doc, as any design type the scaffold could not lay: lay its rows the same way yourself, a data module and a reader, rather than a struct holding them.
 
 ## Ids and time
 

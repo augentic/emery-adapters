@@ -129,11 +129,13 @@ pub struct Type {
     pub body: types::Body,
 }
 
-// A table's data file: its path from the tree's root and its rows as JSON.
+// A table's data module: its path from the tree's root and its text, the
+// rows as one JSON constant.
 pub struct Data {
     pub path: String,
+    pub module: String,
     pub text: String,
-    // The design key of the table the file holds, and the fn reading it.
+    // The design key of the table the module holds, and the fn reading it.
     pub key: String,
     pub reader: String,
 }
@@ -290,10 +292,11 @@ impl Stem {
             .collect();
         let bodies = types::lay(&parsed, &names, design, &mut namespaces.values);
         for ((design_type, name), body) in owned.iter().zip(names).zip(bodies) {
-            if let types::Body::Table { file, json, .. } = &body {
+            if let types::Body::Table { module, json, .. } = &body {
                 self.data.push(Data {
-                    path: format!("crates/{}/{file}", self.dir),
-                    text: json.clone(),
+                    path: format!("crates/{}/src/{module}.rs", self.dir),
+                    module: module.clone(),
+                    text: render::data_module(&design_type.key, json),
                     key: design_type.key.clone(),
                     reader: name.clone(),
                 });
@@ -715,11 +718,13 @@ impl Stem {
             }
         }
         if self.entry.held {
-            lines.push(Line::new(
-                &self.entry.path,
-                format!("pub mod {};", self.part),
-                Place::PubModList,
-            ));
+            for module in self.modules() {
+                lines.push(Line::new(
+                    &self.entry.path,
+                    format!("pub mod {module};"),
+                    Place::PubModList,
+                ));
+            }
             if self.registers() {
                 lines.push(Line::new(
                     &self.entry.path,
@@ -733,6 +738,15 @@ impl Stem {
 
     pub fn held_fn(&self, name: &str) -> bool {
         self.held_fns.contains(name)
+    }
+
+    // The modules the part adds to the entry's `pub mod` list: itself and
+    // each table's data module, in the list's order.
+    pub fn modules(&self) -> Vec<String> {
+        let mut modules = vec![self.part.clone()];
+        modules.extend(self.data.iter().map(|data| data.module.clone()));
+        modules.sort();
+        modules
     }
 
     // The lines of the stem's `[dependencies]` beyond the fixed four: the

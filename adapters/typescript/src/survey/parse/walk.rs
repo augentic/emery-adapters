@@ -1009,9 +1009,9 @@ fn assigned(expr: &Expression<'_>) -> Assigned {
     }
     match core(expr) {
         Core::New(new) => head_path(&new.callee).map_or(Assigned::Other, Assigned::Construction),
-        Core::Other(other @ (Expression::Identifier(_) | Expression::StaticMemberExpression(_))) => {
-            head_path(other).map_or(Assigned::Other, Assigned::Read)
-        }
+        Core::Other(
+            other @ (Expression::Identifier(_) | Expression::StaticMemberExpression(_)),
+        ) => head_path(other).map_or(Assigned::Other, Assigned::Read),
         Core::Call(_) | Core::Other(_) => Assigned::Other,
     }
 }
@@ -1030,7 +1030,10 @@ fn scalar(expr: &Expression<'_>) -> Option<Scalar> {
         }
         Expression::BooleanLiteral(_) => Some(Scalar::Boolean),
         Expression::UnaryExpression(unary)
-            if matches!(unary.operator, UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus) =>
+            if matches!(
+                unary.operator,
+                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus
+            ) =>
         {
             scalar(&unary.argument).filter(|kind| matches!(kind, Scalar::Integer | Scalar::Float))
         }

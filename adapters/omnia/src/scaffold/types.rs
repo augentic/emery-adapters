@@ -149,12 +149,13 @@ pub enum Body {
         variants: Vec<LaidVariant>,
         numeric: bool,
     },
-    // A reference table: the rows as a JSON data file beside the crate's
-    // sources, and the fn reading them into the element type.
+    // A reference table: the rows as the JSON constant of a data module of
+    // the stem's crate, and the fn reading them into the element type,
+    // since the seed's lints refuse a file compiled in.
     Table {
         element: String,
-        // The data file's path from the crate's root.
-        file: String,
+        // The data module's name.
+        module: String,
         json: String,
     },
     Marker {
@@ -469,6 +470,10 @@ pub fn lay(parsed: &[Parsed], names: &[String], design: &Design, values: &mut Na
     bodies
 }
 
+// The suffix of a table's data module after its reader's name, so the
+// module reads as the rows and never as a part.
+const DATA_MODULE_SUFFIX: &str = "_data";
+
 impl Table {
     // Whether the slice lays the table's element as a struct, so the rows
     // deserialise into a type the module declares.
@@ -479,9 +484,9 @@ impl Table {
         })
     }
 
-    // The data file and its reader where the slice lays the element type;
-    // the marker otherwise, since a file no laid type reads is a file the
-    // turn would have to type itself.
+    // The data module and its reader where the slice lays the element type;
+    // the marker otherwise, since rows no laid type reads are rows the turn
+    // would have to type itself.
     fn lay(&self, name: &str, parsed: &[Parsed], owned: &[(String, String)]) -> Body {
         let element = self
             .laid_over(parsed)
@@ -492,7 +497,7 @@ impl Table {
         };
         Body::Table {
             element: element.clone(),
-            file: format!("data/{name}.json"),
+            module: format!("{name}{DATA_MODULE_SUFFIX}"),
             json: self.json(),
         }
     }
@@ -515,7 +520,7 @@ impl Table {
             }
             text.push('\n');
         }
-        text.push_str("]\n");
+        text.push(']');
         text
     }
 }

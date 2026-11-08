@@ -2515,9 +2515,8 @@ async fn typescript_assigned_types() {
             ),
         ],
     );
-    let survey = inventory(&[("Converter", "src/converter.ts#L4-L20", "converter")], &[
-        "src/index.ts",
-    ]);
+    let survey =
+        inventory(&[("Converter", "src/converter.ts#L4-L20", "converter")], &["src/index.ts"]);
     let answered = serde_json::json!({
         "claims": [
             { "kind": "requirement", "id": "converter.convert", "statement": "Converts an update." }

@@ -421,7 +421,7 @@ impl Plan {
                     }
                     Err(err) => {
                         return Err(bad_request!(
-                            "`{}` {err}, where the slice's scaffold writes a data file",
+                            "`{}` {err}, where the slice's scaffold writes a data module",
                             data.path
                         ));
                     }

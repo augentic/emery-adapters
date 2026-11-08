@@ -119,16 +119,18 @@ impl Scaffold {
         text.trim_end().to_owned()
     }
 
-    // Each table's data file the scaffold wrote or found for the stem, and
-    // the fn reading it, so the rows are read and never typed again.
+    // Each table's data module the scaffold wrote or found for the stem,
+    // and the fn reading its constant, so the rows are read and never
+    // typed again.
     fn brief_data(&self, stem: &Stem, text: &mut String) {
         for data in stem.data.iter().filter(|_| stem.module.laid()) {
             let origin = if self.written.contains(&data.path) { "scaffolded" } else { "held" };
             let _ = writeln!(
                 text,
-                "- `{}`: {origin}, every row of the design type `{}` as the wire spells it, read \
-                 into `Vec<_>` by `{}()` in `{}`, which is finished. Read the rows through it \
-                 where the behaviour needs them, and never type a row again in code.\n",
+                "- `{}`: {origin}, every row of the design type `{}` as the wire spells it, one \
+                 JSON constant read into `Vec<_>` by `{}()` in `{}`, which is finished. Read \
+                 the rows through it where the behaviour needs them, and never type a row again \
+                 in code.\n",
                 data.path, data.key, data.reader, stem.module.path
             );
         }
@@ -417,7 +419,8 @@ impl Stem {
             self.brief_dependencies(),
             self.brief_dependency_count()
         );
-        let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
+        let mut entry_lines: Vec<String> =
+            self.modules().iter().map(|module| format!("`pub mod {module};`")).collect();
         if self.registers() {
             entry_lines.push(format!("`{}::handlers()`", self.part));
         }
