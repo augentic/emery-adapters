@@ -116,6 +116,7 @@ layout/review/
 layout/feedback/
 layout/attempts/
 layout/verify/capture/
+layout/dev.log
 ```
 
 ## Around each turn
