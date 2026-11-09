@@ -1209,6 +1209,10 @@ mod tests {
         assert_eq!(Target::Node.runner(), "node --test");
         assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));
         assert_eq!(Target::Node.config_shim(), None);
+        assert_eq!(Target::parse("vue"), Ok(Target::Vue));
+        assert_eq!(Target::Vue.lockfile(), "pnpm-lock.yaml");
+        assert_eq!(Target::Vue.runner(), "layout score");
+        assert_eq!(Target::Vue.config_shim(), None);
     }
 
     #[test]
@@ -1936,6 +1940,40 @@ mod tests {
             "package.json",
         ] {
             assert!(!Target::Omnia.within_layout(path, &stems), "`{path}` is outside the layout");
+        }
+    }
+
+    // A `vue` tree is its seed, the page's code and assets, the original
+    // facts the build leaves, and the verification's score; the stems
+    // name no directory of it.
+    #[test]
+    fn vue_layout() {
+        let stems = BTreeSet::from(["login"]);
+        for path in [
+            "package.json",
+            "pnpm-lock.yaml",
+            "index.html",
+            "layout/capture.mjs",
+            "src/main.js",
+            "src/App.vue",
+            "src/components/LoginForm.vue",
+            "public/facts/assets/logo.svg",
+            "layout/original/index.json",
+            "layout/verify/score.json",
+            "spec/plan.json",
+        ] {
+            assert!(Target::Vue.within_layout(path, &stems), "`{path}` is within the layout");
+        }
+        for path in [
+            "README.md",
+            "package-lock.json",
+            "login/App.vue",
+            "layout/facts/index.json",
+            "layout/review/score.json",
+            "tools/extract.mjs",
+            "public/favicon.ico",
+        ] {
+            assert!(!Target::Vue.within_layout(path, &stems), "`{path}` is outside the layout");
         }
     }
 

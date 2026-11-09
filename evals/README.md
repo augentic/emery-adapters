@@ -123,7 +123,7 @@ The extracted facts are printed to stdout and saved to `target/eval/facts/<case>
 
 ## Building the plan
 
-Passing `--build [--target <node|omnia>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default) or [`emery-omnia`](../adapters/omnia/).
+Passing `--build [--target <node|omnia|vue>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default), [`emery-omnia`](../adapters/omnia/), or [`emery-vue`](../adapters/web/vue/) (experiment / non-production; a case whose design holds a layout).
 
 ### How `--build` stages and runs
 
@@ -139,6 +139,7 @@ Every build and verify turn runs inside the kernel sandbox configured by `emery`
 | --- | --- | --- | --- |
 | `node` (default) | Node.js `>= 22.18` and `npm` on `PATH` | `registry.npmjs.org` | Reads `~/.nvm/versions/node`, `~/.volta` (`VOLTA_HOME=~/.volta`), and `~/.local/share/fnm`. |
 | `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
+| `vue` | Node.js, `pnpm`, and Playwright's `chromium-headless-shell` installed (as [Fetching vendored fixtures](#fetching-vendored-fixtures) installs it) | `registry.npmjs.org` | Reads the Node.js paths `node` reads, and Playwright's browsers at `~/Library/Caches/ms-playwright` or `~/.cache/ms-playwright`. |
 
 Build the target Wasm component before running `--build`:
 
@@ -150,6 +151,10 @@ EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
 # Build and evaluate through emery:omnia
 cargo build -p emery-omnia --target wasm32-wasip2 --release
 EVAL_RUNS=1 cargo run -p evals -- --build --target omnia express-orders
+
+# Build and evaluate through emery:vue (experiment / non-production)
+cargo build -p emery-vue --target wasm32-wasip2 --release
+EVAL_RUNS=1 cargo run -p evals -- --build --target vue fastapi-template-web
 ```
 
 ### How the runner grades a build (`run-N.fidelity.md`)
@@ -160,6 +165,7 @@ Because `covered` requirement IDs and verification verdicts are self-reported by
 2. **Independent host toolchain checks:**
    - For `node`: Runs `npm install`, `npx tsc --noEmit`, and `node --test --test-force-exit --test-timeout=5000 --test-reporter=tap 'test/**/*.test.ts'`.
    - For `omnia`: Runs `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --target wasm32-wasip2`.
+   - For `vue`: Runs `pnpm install --ignore-scripts` and `pnpm run lint`, then the `layout score`: serves the page with the tree's Vite on a free port, captures it with the tree's `layout/capture.mjs` over the sweep of the original facts the build left in `layout/original/`, and scores the capture against them as the build's own check does. The capture, the score, and the overlays are kept in `run-N.score/`; the score is the page's one test, passed or failed. A page declares no tests, so no scenario is named.
 3. **Layout and wiring audit:**
    - **Scenario coverage:** Matches requirement acceptance scenario names against declared test names (`test(...)` / `it(...)` in TypeScript, `#[test]` / `#[tokio::test]` in Rust).
    - **Out-of-layout files:** Lists tracked files outside the target adapter's expected directory layout (`spec/` is always permitted).
@@ -404,7 +410,7 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 
 | Case | What it probes | Expected stems |
 | --- | --- | --- |
-| [`fastapi-template-web`](cases/fastapi-template-web/expected.toml) | The FastAPI template frontend's login page as rendered-layout facts beside an intent brief: the design's one layout and its `ui-layout` tree. `--build` builds through `node` and `omnia` only; the Vue build runs through [`examples/web/emery.toml`](../examples/web/emery.toml) over the same fixture. | `login` (the brief's); `page` has none |
+| [`fastapi-template-web`](cases/fastapi-template-web/expected.toml) | The FastAPI template frontend's login page as rendered-layout facts beside an intent brief: the design's one layout and its `ui-layout` tree. `--build --target vue` rebuilds the page as Vue and the host scores it against the fixture; [`examples/web/emery.toml`](../examples/web/emery.toml) runs the same specify and build outside the eval. | `login` (the brief's); `page` has none |
 
 ### Fetching vendored fixtures
 

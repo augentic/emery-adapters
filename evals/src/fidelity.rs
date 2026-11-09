@@ -3,9 +3,11 @@
 use std::collections::BTreeSet;
 use std::fmt::{self, Display, Formatter};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 use std::{fs, io};
 
 use serde_json::Value;
+use web_rendered_layout::{Facts, FactsFolder, Review, assemble, review};
 
 use crate::build::{Build, Integrated, Tree};
 use crate::grade::stem;
@@ -20,10 +22,11 @@ pub enum Target {
     #[default]
     Node,
     Omnia,
+    Vue,
 }
 
 impl Target {
-    const ALL: [Self; 2] = [Self::Node, Self::Omnia];
+    const ALL: [Self; 3] = [Self::Node, Self::Omnia, Self::Vue];
 
     pub fn parse(name: &str) -> Result<Self, String> {
         Self::ALL.into_iter().find(|target| target.name() == name).ok_or_else(|| {
@@ -37,6 +40,7 @@ impl Target {
         match self {
             Self::Node => "node",
             Self::Omnia => "omnia",
+            Self::Vue => "vue",
         }
     }
 
@@ -45,6 +49,7 @@ impl Target {
         match self {
             Self::Node => "package-lock.json",
             Self::Omnia => "Cargo.lock",
+            Self::Vue => "pnpm-lock.yaml",
         }
     }
 
@@ -52,7 +57,7 @@ impl Target {
     // export is listed.
     const fn scratch(self) -> &'static str {
         match self {
-            Self::Node => "node_modules",
+            Self::Node | Self::Vue => "node_modules",
             Self::Omnia => "target",
         }
     }
@@ -64,24 +69,36 @@ impl Target {
     // reads it, and never under this repository's.
     pub const fn config_shim(self) -> Option<&'static str> {
         match self {
-            Self::Node => None,
+            Self::Node | Self::Vue => None,
             Self::Omnia => Some("clippy.toml"),
         }
     }
 
-    // The check whose exit stands for the tests, and whose output counts them.
+    // The check whose exit stands for the tests, and whose output counts them:
+    // for `vue`, the page's score against the original facts, its one test.
     pub const fn runner(self) -> &'static str {
         match self {
             Self::Node => "node --test",
             Self::Omnia => "cargo test",
+            Self::Vue => LAYOUT_SCORE,
         }
     }
 
-    // The root files the layout admits: for `omnia`, the template the adapter
-    // scaffolds and the lockfile.
+    // The root files the layout admits: for `omnia` and `vue`, the template
+    // or seed the adapter scaffolds and the lockfile.
     const fn root_files(self) -> &'static [&'static str] {
         match self {
             Self::Node => &["package.json", "package-lock.json", "tsconfig.json", ".gitignore"],
+            Self::Vue => &[
+                ".gitignore",
+                "package.json",
+                "pnpm-lock.yaml",
+                "vite.config.js",
+                "index.html",
+                "eslint.config.js",
+                "stylelint.config.js",
+                "layout/capture.mjs",
+            ],
             Self::Omnia => &[
                 "Cargo.toml",
                 "Cargo.lock",
@@ -119,7 +136,8 @@ impl Target {
 
     // Whether a tracked path is one the layout admits: a root file, the entry
     // or the runner, a file under a stem's directory, or a stem's test file
-    // or directory. The sealed specification under `spec/` is the engine's,
+    // or directory; for `vue`, the page's code, its assets, the original
+    // facts the build leaves, and the verification's score. The sealed specification under `spec/` is the engine's,
     // held in every tree a build lands in and written by no slice, so it is
     // never outside.
     pub fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
@@ -144,6 +162,7 @@ impl Target {
                 .strip_prefix("crates/")
                 .and_then(|rest| rest.split_once('/'))
                 .is_some_and(|(dir, _)| stems.contains(dir)),
+            Self::Vue => VUE_DIRS.iter().any(|dir| path.starts_with(dir)),
         }
     }
 
@@ -196,6 +215,18 @@ impl Target {
                 };
                 vec![lint, tests, guest]
             }
+            Self::Vue => {
+                let install = host_check(export, "pnpm install", &["--ignore-scripts"]);
+                if !install.passed() {
+                    return vec![
+                        install,
+                        unrun("pnpm run lint", "the install failed"),
+                        unrun(LAYOUT_SCORE, "the install failed"),
+                    ];
+                }
+                let lint = host_check(export, "pnpm run lint", &[]);
+                vec![install, lint, layout_score(export, &export.with_extension("score"))]
+            }
         }
     }
 
@@ -204,15 +235,21 @@ impl Target {
         match self {
             Self::Node => tap_counts(&runner.note),
             Self::Omnia => cargo_test_counts(&runner.output),
+            Self::Vue => match runner.exit {
+                Some(0) => (1, 0),
+                Some(_) => (0, 1),
+                None => (0, 0),
+            },
         }
     }
 
     // Every test name the tree's test files declare, spelled as a scenario
     // is: a `test(` or `it(` string, or a `#[test]` fn's name with its
-    // underscores as spaces.
+    // underscores as spaces. A `vue` page declares no tests.
     fn test_names(self, export: &Path) -> io::Result<Vec<String>> {
         let mut names = Vec::new();
         match self {
+            Self::Vue => {}
             Self::Node => test_names(&export.join("test"), &mut names)?,
             Self::Omnia => {
                 rust_test_names(&export.join("tests"), &mut names)?;
@@ -233,10 +270,12 @@ impl Target {
     // list merges and no Rust file outside it names as `<stem>::`, a
     // constant of the topic table no stem's module names, or a stem's or a
     // part's `index.ts` the list above it does not re-export. A module's own
-    // tests pass without the list, so the checks cannot see it.
+    // tests pass without the list, so the checks cannot see it. A `vue`
+    // page has no lists.
     pub fn unreached(self, export: &Path) -> io::Result<Vec<String>> {
         let mut unreached = Vec::new();
         match self {
+            Self::Vue => {}
             Self::Node => {
                 let src = export.join("src");
                 let entry = fs::read_to_string(src.join("index.ts")).unwrap_or_default();
@@ -340,10 +379,10 @@ impl Target {
     // method each route fn, or `MethodFilter`, in its second argument
     // spells; a `.route(..)` over a topic is none. The TypeScript layout
     // registers routes on an app a slice is handed, which no one file
-    // spells, so it lists none.
+    // spells, so it lists none, and a `vue` page mounts none.
     pub fn routes(self, export: &Path) -> Vec<(String, String, String)> {
         let mut routes = Vec::new();
-        if self == Self::Node {
+        if self != Self::Omnia {
             return routes;
         }
         let crates = export.join("crates");
@@ -393,6 +432,136 @@ const SPECIFICATION: &str = "spec/";
 const ROUTE_LIST: &str = "src/routes.rs";
 const TOPIC_LIST: &str = "src/messaging.rs";
 const TOPIC_TABLE: &str = "crates/common/src/topic.rs";
+
+// The `vue` layout's directories: the page's code, the assets it serves,
+// the original facts a build leaves, and the verification's score.
+const VUE_DIRS: [&str; 4] = ["src/", "public/facts/", "layout/original/", "layout/verify/"];
+const VUE_ORIGINAL: &str = "layout/original";
+
+// The host's own score of a `vue` page, the check its tests are counted by.
+const LAYOUT_SCORE: &str = "layout score";
+
+// How long the page's server may take to answer.
+const SERVE_WAIT: Duration = Duration::from_secs(120);
+
+// The page in `export` served, captured by the tree's own script over the
+// original facts' sweep, and scored against them, as the build's check
+// scores a turn's capture; the capture, the score, and the overlays are
+// kept in `out`. A page that fails to serve or capture fails the check.
+fn layout_score(export: &Path, out: &Path) -> HostCheck {
+    let scored = (|| {
+        let original = FactsFolder::read(&export.join(VUE_ORIGINAL))
+            .and_then(|folder| Facts::read(&folder))
+            .map_err(|err| format!("`{VUE_ORIGINAL}`: {err}"))?;
+        if out.exists() {
+            fs::remove_dir_all(out)
+                .map_err(|err| format!("clearing `{}`: {err}", out.display()))?;
+        }
+        fs::create_dir_all(out).map_err(|err| format!("creating `{}`: {err}", out.display()))?;
+        let raw = out.join("capture");
+        let printed = serve_and_capture(export, &original, &raw, &out.join("serve.log"))?;
+        let render = assemble(&raw)
+            .and_then(|folder| Facts::read(&folder))
+            .map_err(|err| format!("the capture does not assemble: {err}"))?;
+        let reviewed = review(&original, &render).map_err(|err| err.to_string())?;
+        let dir = out.join("review");
+        reviewed.write(&dir).map_err(|err| err.to_string())?;
+        let findings =
+            reviewed.findings(|width| dir.join(Review::overlay_name(width)).display().to_string());
+        let lowest = reviewed.comparison.lowest();
+        let mut note = findings.iter().map(|finding| format!("- {finding}")).collect::<Vec<_>>();
+        note.push(if findings.is_empty() {
+            format!("pass: lowest score {lowest}")
+        } else {
+            format!("fail: {} findings, lowest score {lowest}", findings.len())
+        });
+        Ok::<_, String>((findings.is_empty(), format!("{printed}{}", note.join("\n")), note))
+    })();
+    match scored {
+        Ok((passed, output, note)) => HostCheck {
+            name: LAYOUT_SCORE,
+            exit: Some(i32::from(!passed)),
+            output,
+            note: note.join("\n"),
+        },
+        Err(why) => HostCheck {
+            name: LAYOUT_SCORE,
+            exit: Some(1),
+            output: why.clone(),
+            note: why,
+        },
+    }
+}
+
+// Serves the page in `export` on a free port with the tree's own Vite,
+// waits until it answers, and captures it into `raw` with the tree's
+// `layout/capture.mjs` over the original's widths and heights; the server
+// is stopped either way. Answers what the capture printed.
+#[expect(
+    clippy::disallowed_types,
+    clippy::disallowed_methods,
+    reason = "the eval serves and captures the page with the host's node"
+)]
+fn serve_and_capture(
+    export: &Path, original: &Facts, raw: &Path, log: &Path,
+) -> Result<String, String> {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .and_then(|listener| listener.local_addr())
+        .map_err(|err| format!("finding a free port: {err}"))?
+        .port();
+    let log_file = fs::File::create(log).map_err(|err| format!("`{}`: {err}", log.display()))?;
+    let err_file = log_file.try_clone().map_err(|err| err.to_string())?;
+    let mut server = std::process::Command::new("node")
+        .arg("node_modules/vite/bin/vite.js")
+        .args(["--host", "127.0.0.1", "--port", &port.to_string(), "--strictPort"])
+        .current_dir(export)
+        .env_remove("CURSOR_API_KEY")
+        .stdout(log_file)
+        .stderr(err_file)
+        .spawn()
+        .map_err(|err| format!("serving the page: {err}"))?;
+
+    let captured = (|| {
+        let started = Instant::now();
+        while std::net::TcpStream::connect(("127.0.0.1", port)).is_err() {
+            if server.try_wait().ok().flatten().is_some() {
+                return Err(format!("the page's server exited; see `{}`", log.display()));
+            }
+            if started.elapsed() > SERVE_WAIT {
+                return Err(format!(
+                    "the page's server did not answer in {}s; see `{}`",
+                    SERVE_WAIT.as_secs(),
+                    log.display()
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+        let (min, max) = original.width_range();
+        let (height_min, height_max) = original.height_range();
+        let output = std::process::Command::new("node")
+            .arg("layout/capture.mjs")
+            .args(["--url", &format!("http://127.0.0.1:{port}/"), "--out"])
+            .arg(raw)
+            .args(["--min", &min.to_string(), "--max", &max.to_string()])
+            .args(["--height", &original.height().to_string()])
+            .args(["--height-min", &height_min.to_string()])
+            .args(["--height-max", &height_max.to_string()])
+            .current_dir(export)
+            .env_remove("CURSOR_API_KEY")
+            .output()
+            .map_err(|err| format!("running the capture: {err}"))?;
+        let mut printed = String::from_utf8_lossy(&output.stdout).into_owned();
+        printed.push_str(&String::from_utf8_lossy(&output.stderr));
+        if !output.status.success() {
+            let tail = printed.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("");
+            return Err(format!("the capture failed ({}): {tail}", output.status));
+        }
+        Ok(printed)
+    })();
+    let _ = server.kill();
+    let _ = server.wait();
+    captured
+}
 
 // Each `pub const <NAME>: &str = "<text>";` or `pub(crate) const ..` of a
 // file, in order, with the text it spells.

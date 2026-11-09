@@ -1282,6 +1282,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "web-rendered-layout",
 ]
 
 [[package]]
