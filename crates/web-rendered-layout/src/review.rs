@@ -1,6 +1,9 @@
 //! A comparison with what a reviewer reads alongside it: overlays at the
 //! review widths and at the worst widths, and findings in plain sentences.
 
+use std::fs;
+use std::path::Path;
+
 use serde_json::{Value, json};
 
 use crate::{
@@ -39,6 +42,42 @@ pub fn review(original: &Facts, render: &Facts) -> Result<Review, Error> {
 }
 
 impl Review {
+    /// The name of the overlay at `width` in a written review.
+    #[must_use]
+    pub fn overlay_name(width: Width) -> String {
+        format!("overlay-{}.svg", width.0)
+    }
+
+    /// Writes `score.json` and every overlay, under [`overlay_name`](Self::overlay_name),
+    /// into `dir`, creating it, and removes any overlay an earlier review left there.
+    ///
+    /// # Errors
+    ///
+    /// When `dir` cannot be read or a file in it written or removed.
+    pub fn write(&self, dir: &Path) -> Result<(), Error> {
+        let failed = |doing: &str, path: &Path, err: std::io::Error| {
+            Error::new(format!("{doing} {}: {err}", path.display()))
+        };
+        fs::create_dir_all(dir).map_err(|err| failed("creating", dir, err))?;
+        for entry in fs::read_dir(dir).map_err(|err| failed("reading", dir, err))?.flatten() {
+            let path = entry.path();
+            let overlay = entry.file_name().to_string_lossy().starts_with("overlay-")
+                && path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("svg"));
+            if overlay {
+                fs::remove_file(&path).map_err(|err| failed("removing", &path, err))?;
+            }
+        }
+        let score = serde_json::to_string_pretty(&self.comparison)
+            .map_err(|err| Error::new(format!("serialising the score: {err}")))?;
+        let to = dir.join("score.json");
+        fs::write(&to, score + "\n").map_err(|err| failed("writing", &to, err))?;
+        for (width, svg) in &self.overlays {
+            let to = dir.join(Self::overlay_name(*width));
+            fs::write(&to, svg).map_err(|err| failed("writing", &to, err))?;
+        }
+        Ok(())
+    }
+
     /// What a failing comparison found, one sentence each, naming the
     /// overlay at each drawn width through `overlay_path`. Empty when the
     /// comparison passes.

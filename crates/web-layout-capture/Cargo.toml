@@ -12,5 +12,4 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
-serde_json.workspace = true
 web-rendered-layout.workspace = true

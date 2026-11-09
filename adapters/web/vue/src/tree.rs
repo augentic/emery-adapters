@@ -277,7 +277,12 @@ fn write_folder(folder: &FactsFolder, dir: &Path) -> Result<(), Error> {
     folder.write(dir).map_err(|err| server_error!("writing {}: {err}", dir.display()))
 }
 
-fn write_file(file: &Path, body: &[u8]) -> Result<(), Error> {
+/// Writes `body` to `file`, creating its directories.
+///
+/// # Errors
+///
+/// When a directory or the file cannot be written.
+pub fn write_file(file: &Path, body: &[u8]) -> Result<(), Error> {
     if let Some(parent) = file.parent() {
         fs::create_dir_all(parent)
             .map_err(|err| server_error!("creating {}: {err}", parent.display()))?;

@@ -26,7 +26,7 @@ use std::process::Command;
 use std::process::ExitCode;
 
 use web_rendered_layout::{
-    Facts, FactsFolder, REVIEW_WIDTHS, Role, assemble, draw, outline, review,
+    Facts, FactsFolder, REVIEW_WIDTHS, Review, Role, assemble, draw, outline, review,
 };
 
 // The capture script and its pinned Playwright, beside this workspace's crates.
@@ -162,14 +162,9 @@ fn score(options: &Options) -> Result<ExitCode, String> {
     let out = options.path("out");
     let reviewed = review(&original, &render).map_err(|err| err.to_string())?;
     replace(&out)?;
-    let score =
-        serde_json::to_string_pretty(&reviewed.comparison).map_err(|err| err.to_string())?;
-    write(&out.join("score.json"), &(score + "\n"))?;
-    for (width, svg) in &reviewed.overlays {
-        write(&out.join(format!("overlay-{}.svg", width.0)), svg)?;
-    }
+    reviewed.write(&out).map_err(|err| err.to_string())?;
     let findings = reviewed
-        .findings(|width| out.join(format!("overlay-{}.svg", width.0)).display().to_string());
+        .findings(|width| out.join(Review::overlay_name(width)).display().to_string());
     if findings.is_empty() {
         println!("pass: lowest score {}", reviewed.comparison.lowest());
         return Ok(ExitCode::SUCCESS);

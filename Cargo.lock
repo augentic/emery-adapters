@@ -5951,7 +5951,6 @@ dependencies = [
 name = "web-layout-capture"
 version = "0.12.0"
 dependencies = [
- "serde_json",
  "web-rendered-layout",
 ]
 

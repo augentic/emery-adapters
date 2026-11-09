@@ -18,6 +18,7 @@ use web_rendered_layout::{Facts, PASS_MARK, Review, Width, assemble, review, sta
 
 use crate::tree::{
     CAPTURE, REVIEW, SEED, SHOTS, SOURCES, VERIFIED, clear_sources, copy_tree, remove_dir,
+    write_file,
 };
 
 /// The scored attempts a build turn has.
@@ -174,7 +175,7 @@ impl<'a> Attempts<'a> {
         let feedback = format!("{FEEDBACK}/attempt-{number}.json");
         let body = serde_json::to_string_pretty(&reviewed.feedback(number, self.turn.facts()))
             .map_err(|err| server_error!("writing `{feedback}`: {err}"))?;
-        write(&root.join(&feedback), (body + "\n").as_bytes())?;
+        write_file(&root.join(&feedback), (body + "\n").as_bytes())?;
         let mut findings = vec![format!(
             "attempt {number} of {MAX_ATTEMPTS}: the check scored your capture against the original page and it did not pass: its lowest score is {} against the pass mark {PASS_MARK}. `{feedback}` lists what differs. Fix the causes in `{SOURCES}/`, capture again, then answer again.",
             comparison.lowest()
@@ -254,7 +255,7 @@ impl<'a> Attempts<'a> {
         let path = format!("{ATTEMPTS}/{}/attempts.json", self.turn.name());
         let body = serde_json::to_string_pretty(&record)
             .map_err(|err| server_error!("writing `{path}`: {err}"))?;
-        write(&self.root.join(path), (body + "\n").as_bytes())
+        write_file(&self.root.join(path), (body + "\n").as_bytes())
     }
 }
 
@@ -419,33 +420,7 @@ fn rendered(root: &Path, dir: &str, original: &Facts) -> Result<Facts, Vec<Strin
 }
 
 fn write_review(root: &Path, dir: &str, reviewed: &Review) -> Result<(), Error> {
-    let out = root.join(dir);
-    fs::create_dir_all(&out).map_err(|err| server_error!("creating `{dir}`: {err}"))?;
-    let entries = fs::read_dir(&out).map_err(|err| server_error!("reading `{dir}`: {err}"))?;
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with("overlay-") && has_extension(&name, "svg") {
-            fs::remove_file(entry.path())
-                .map_err(|err| server_error!("removing `{dir}/{name}`: {err}"))?;
-        }
-    }
-    let score = serde_json::to_string_pretty(&reviewed.comparison)
-        .map_err(|err| server_error!("writing `{dir}/score.json`: {err}"))?;
-    fs::write(out.join("score.json"), score + "\n")
-        .map_err(|err| server_error!("writing `{dir}/score.json`: {err}"))?;
-    for (width, svg) in &reviewed.overlays {
-        fs::write(root.join(overlay_path(dir, *width)), svg)
-            .map_err(|err| server_error!("writing `{}`: {err}", overlay_path(dir, *width)))?;
-    }
-    Ok(())
-}
-
-fn write(file: &Path, body: &[u8]) -> Result<(), Error> {
-    if let Some(parent) = file.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|err| server_error!("creating {}: {err}", parent.display()))?;
-    }
-    fs::write(file, body).map_err(|err| server_error!("writing {}: {err}", file.display()))
+    reviewed.write(&root.join(dir)).map_err(|err| server_error!("writing `{dir}`: {err}"))
 }
 
 #[expect(clippy::float_cmp, reason = "both sweeps are whole pixels read from JSON")]
@@ -460,7 +435,7 @@ fn has_extension(path: &str, extension: &str) -> bool {
 }
 
 fn overlay_path(dir: &str, width: Width) -> String {
-    format!("{dir}/overlay-{}.svg", width.0)
+    format!("{dir}/{}", Review::overlay_name(width))
 }
 
 fn holds_png(dir: &Path) -> bool {
