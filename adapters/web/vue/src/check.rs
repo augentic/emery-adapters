@@ -1,10 +1,10 @@
 //! What a turn's candidate is held to: the seed unchanged, the code's own
 //! rules, and a fresh capture of it scored against the original facts.
 //!
-//! A build turn has at most [`MAX_ATTEMPTS`] scored attempts, as the demo
-//! harness's turns do: a failing one comes back with what differs, written
-//! to `layout/feedback/attempt-<n>.json`, and the last is accepted whatever
-//! it scores, the turn's best attempt then put back in the tree.
+//! A build turn has at most [`MAX_ATTEMPTS`] scored attempts: a failing one
+//! comes back with what differs, written to `layout/feedback/attempt-<n>.json`,
+//! and the last is accepted whatever it scores, the turn's best attempt then
+//! put back in the tree.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -20,8 +20,13 @@ use crate::tree::{
     CAPTURE, REVIEW, SEED, SHOTS, SOURCES, VERIFIED, clear_sources, copy_tree, remove_dir,
 };
 
-/// The scored attempts a build turn has, the demo harness's `MAX_ATTEMPTS`.
-pub const MAX_ATTEMPTS: usize = 3;
+/// The scored attempts a build turn has.
+///
+/// The model backends check at most two candidates a completion (the Cursor
+/// backend's round limit, genai's default `GENAI_MAX_CANDIDATES`), and a
+/// refused last candidate fails the turn; so the last attempt must be one
+/// the check accepts, and no more can be reached.
+pub const MAX_ATTEMPTS: usize = 2;
 /// Where a failing attempt's feedback is written, one file per attempt.
 pub const FEEDBACK: &str = "layout/feedback";
 /// Where each scored attempt's code, screenshots, and score are kept, by turn.

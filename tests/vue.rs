@@ -168,7 +168,7 @@ async fn vue_refactor_positioned_refused() {
 }
 
 // A turn whose attempts score under the pass mark is answered with what
-// differs, in the demo's feedback, for at most three attempts; it ends on
+// differs, in the demo's feedback, for at most two attempts; it ends on
 // its best, and the refactor is built from the best extraction.
 #[tokio::test]
 async fn vue_attempts_end_on_the_best() {
@@ -185,23 +185,21 @@ async fn vue_attempts_end_on_the_best() {
         ("src/components/ProduceSection.vue", SECTION),
         ("src/components/Later.vue", SECTION),
     ];
-    let model = Scripted::answering([REPORT, REPORT, REPORT, REFACTORED, REFACTORED, REFACTORED])
+    let model = Scripted::answering([REPORT, REPORT, REFACTORED, REFACTORED])
         .calling(0, [turn_files(&first, "layout/capture", true)])
         .calling(1, [turn_files(&later, "layout/capture", true)])
-        .calling(2, [turn_files(&later, "layout/capture", true)])
-        .calling(3, [turn_files(&first_refactor, "layout/capture", true)])
-        .calling(4, [turn_files(&later_refactor, "layout/capture", true)])
-        .calling(5, [turn_files(&later_refactor, "layout/capture", true)]);
+        .calling(2, [turn_files(&first_refactor, "layout/capture", true)])
+        .calling(3, [turn_files(&later_refactor, "layout/capture", true)]);
 
     let report =
         build(&project, &model, &slice(&moved)).await.expect("each turn ends on its best attempt");
     model.assert_exhausted();
 
     let refused = refusals(&model);
-    assert_eq!(refused.len(), 4, "two refusals a turn: {refused:?}");
-    for (refusal, attempt) in refused.iter().zip([1, 2, 1, 2]) {
-        assert!(refusal.contains(&format!("attempt {attempt} of 3:")), "{refusal}");
-        assert!(refusal.contains(&format!("layout/feedback/attempt-{attempt}.json")), "{refusal}");
+    assert_eq!(refused.len(), 2, "one refusal a turn: {refused:?}");
+    for refusal in &refused {
+        assert!(refusal.contains("attempt 1 of 2:"), "{refusal}");
+        assert!(refusal.contains("layout/feedback/attempt-1.json"), "{refusal}");
     }
     let feedback: serde_json::Value = serde_json::from_slice(
         &project.read("layout/feedback/attempt-1.json").expect("the refactor's feedback"),
@@ -228,7 +226,7 @@ async fn vue_attempts_end_on_the_best() {
             &project.read(&format!("layout/attempts/{turn}/attempts.json")).expect("the record"),
         )
         .expect("JSON");
-        assert_eq!(record["attempts"].as_array().map(Vec::len), Some(3), "{turn}: {record}");
+        assert_eq!(record["attempts"].as_array().map(Vec::len), Some(2), "{turn}: {record}");
         assert_eq!(record["best_attempt"]["attempt"], 1, "{turn}: {record}");
     }
 }

@@ -25,7 +25,7 @@ Nothing outside `$WORKSPACE` is reachable, and nothing in it but `layout/facts/`
 
 You are done only when you have seen `src/Page.vue` render in a browser under the host above without compile or runtime errors, and it shows the page. Capture it then as [capture](references/capture.md) says, into `layout/capture/` with screenshots in `layout/capture-shots/`, stamped over `src`, and answer.
 
-The check scores that capture against the original facts. It is one attempt; the turn has at most three. An attempt under the pass mark comes back with `layout/feedback/attempt-<n>.json`, what differs from the facts, and the overlays in `layout/review/`: fix the causes in `src/`, capture again, and answer again. Fix the cause an entry shows, a box laid out wrong or a font not loaded, rather than the one width it names. The check writes `layout/feedback/`; never edit it. The turn ends on its best attempt.
+The check scores that capture against the original facts. It is one attempt; the turn has at most two. An attempt under the pass mark comes back with `layout/feedback/attempt-<n>.json`, what differs from the facts, and the overlays in `layout/review/`: fix the causes in `src/`, capture again, and answer again. Fix the cause an entry shows, a box laid out wrong or a font not loaded, rather than the one width it names. The check writes `layout/feedback/`; never edit it. The turn ends on its best attempt.
 
 ## Report
    30|
