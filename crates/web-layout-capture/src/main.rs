@@ -32,9 +32,6 @@ use web_rendered_layout::{
 // The capture script and its pinned Playwright, beside this workspace's crates.
 const TOOLS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tools/web-layout-capture");
 
-// The range options `capture` hands the script unchanged.
-const RANGE_OPTIONS: [&str; 5] = ["min", "max", "height", "height-min", "height-max"];
-
 const USAGE: &str = "usage:
   web-layout-capture capture --url URL --out DIR [--screenshots DIR] [--stamp DIR]
       [--min N] [--max N] [--height N] [--height-min N] [--height-max N] [--tools DIR]
@@ -135,7 +132,8 @@ fn capture(options: &Options) -> Result<ExitCode, String> {
         .args(["--url", options.get("url").unwrap_or_default()])
         .arg("--out")
         .arg(&raw);
-    for name in ["screenshots", "stamp"].iter().chain(&RANGE_OPTIONS) {
+    // every option but `tools` is the script's own, handed on unchanged
+    for name in CAPTURE.optional.iter().filter(|name| **name != "tools") {
         if let Some(value) = options.get(name) {
             node.arg(format!("--{name}")).arg(value);
         }
