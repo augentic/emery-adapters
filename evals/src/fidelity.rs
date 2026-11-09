@@ -111,9 +111,9 @@ impl Target {
     // Whether a tracked path is one the layout admits: a root file, the entry
     // or the runner, a file under a stem's directory, or a stem's test file
     // or directory; for `vue`, the page's code, its assets, the original
-    // facts the build leaves, and the verification's score. The sealed specification under `spec/` is the engine's,
-    // held in every tree a build lands in and written by no slice, so it is
-    // never outside.
+    // facts the build leaves, and the verification's score. The sealed
+    // specification under `spec/` is the engine's, held in every tree a build
+    // lands in and written by no slice, so it is never outside.
     pub fn within_layout(self, path: &str, stems: &BTreeSet<&str>) -> bool {
         if path.starts_with(SPECIFICATION) || self.root_file(path) {
             return true;
