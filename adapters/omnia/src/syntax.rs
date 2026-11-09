@@ -1,11 +1,14 @@
 //! What the scaffold and the checks read of Rust through `syn`: the parse, the lines, and the shapes several rules share.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
 
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
-use syn::{Expr, ExprLit, Item, ItemUse, Lit, LitStr, Macro, MetaList, Path, UseTree, Visibility};
+use syn::{
+    Expr, ExprLit, ExprMethodCall, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList,
+    Path, Type, UseTree, Visibility,
+};
 
 // Where `syn` refused a file, and why.
 pub struct Unparsed {
@@ -207,6 +210,60 @@ const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
+// A bare `pub fn` among the items of a file: its name, the lines its
+// signature runs over (`pub` to the body's opening brace), and the first
+// line of its doc where it carries one.
+pub struct Exported {
+    pub name: String,
+    pub from: usize,
+    pub to: usize,
+    pub doc: Option<String>,
+}
+
+pub fn exported_fns(file: &syn::File) -> Vec<Exported> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Fn(item) = item else { return None };
+            let Visibility::Public(pub_token) = &item.vis else { return None };
+            let doc = item.attrs.iter().find_map(|attr| {
+                if !attr.path().is_ident("doc") {
+                    return None;
+                }
+                let syn::Meta::NameValue(pair) = &attr.meta else { return None };
+                let Expr::Lit(ExprLit {
+                    lit: Lit::Str(text), ..
+                }) = &pair.value
+                else {
+                    return None;
+                };
+                let text = text.value();
+                let trimmed = text.trim();
+                (!trimmed.is_empty()).then(|| trimmed.to_owned())
+            });
+            Some(Exported {
+                name: item.sig.ident.to_string(),
+                from: line(pub_token.span),
+                to: line(item.block.brace_token.span.open()),
+                doc,
+            })
+        })
+        .collect()
+}
+
+// The signature of an exported fn as `text` spells it, its lines joined
+// on one and the body's opening brace dropped.
+pub fn signature(text: &str, exported: &Exported) -> String {
+    let joined = text
+        .lines()
+        .skip(exported.from.saturating_sub(1))
+        .take(exported.to.saturating_sub(exported.from) + 1)
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join(" ");
+    joined.trim_end_matches('{').trim_end().to_owned()
+}
+
 // The modules `file` declares from files beside it, `pub mod reading;`, by
 // name; one with a body inline declares no file.
 pub fn mods(file: &syn::File) -> Vec<String> {
@@ -289,4 +346,289 @@ pub fn todo_marker(mac: &Macro) -> Option<(usize, String)> {
     }
     let text = mac.parse_body::<LitStr>().ok()?.value();
     text.starts_with("REQ-").then(|| (line(mac.bang_token.span), text))
+}
+
+// The top-level declarations of a file, partitioned by namespace, with the
+// string constants `pub(crate) const` declares.
+#[derive(Default)]
+pub struct Declared {
+    pub fns: Vec<String>,
+    pub types: Vec<String>,
+    pub constants: Vec<String>,
+    pub paths: Vec<(String, String)>,
+}
+
+impl Declared {
+    pub fn of(file: &syn::File) -> Self {
+        let mut declared = Self::default();
+        for item in &file.items {
+            match item {
+                Item::Fn(item) => declared.fns.push(item.sig.ident.to_string()),
+                Item::Struct(item) => declared.types.push(item.ident.to_string()),
+                Item::Enum(item) => declared.types.push(item.ident.to_string()),
+                Item::Type(item) => declared.types.push(item.ident.to_string()),
+                Item::Union(item) => declared.types.push(item.ident.to_string()),
+                Item::Trait(item) => declared.types.push(item.ident.to_string()),
+                Item::Const(item) => {
+                    let name = item.ident.to_string();
+                    if is_crate(&item.vis)
+                        && let Expr::Lit(ExprLit {
+                            lit: Lit::Str(lit), ..
+                        }) = &*item.expr
+                    {
+                        declared.paths.push((name.clone(), lit.value()));
+                    }
+                    declared.constants.push(name);
+                }
+                Item::Static(item) => declared.constants.push(item.ident.to_string()),
+                _ => {}
+            }
+        }
+        declared
+    }
+}
+
+// The closing line of the last top-level `use` item in `file`.
+pub fn last_use_line(file: &syn::File) -> Option<usize> {
+    file.items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Use(item) => Some(line(item.semi_token.span)),
+            _ => None,
+        })
+        .max()
+}
+
+// The methods a part's `handlers()` chains over `Handlers::new()`.
+const REGISTRATIONS: [&str; 4] = ["route", "topic", "topic_with", "command"];
+
+// The byte offset where the registration chain in the top-level `fn
+// <name>` ends: the closing `)` of the last `.route(..)` or `.topic(..)`
+// call, or of the `Handlers::new()` receiver, so a new call appended there
+// extends the chain.
+pub fn chain_end(text: &str, file: &syn::File, name: &str) -> Option<usize> {
+    let item = file.items.iter().find_map(|item| match item {
+        Item::Fn(item) if item.sig.ident == name => Some(item),
+        _ => None,
+    })?;
+    let syn::Stmt::Expr(expr, None) = item.block.stmts.last()? else {
+        return None;
+    };
+    let span = match expr {
+        Expr::MethodCall(call) if is_registration_chain(expr) => call.paren_token.span.close(),
+        Expr::Call(call) if is_handlers_new(call) => call.paren_token.span.close(),
+        _ => return None,
+    };
+    let end = span.end();
+    byte_offset(text, end.line, end.column)
+}
+
+fn is_registration_chain(mut expr: &Expr) -> bool {
+    while let Expr::MethodCall(call) = expr {
+        if !REGISTRATIONS.iter().any(|method| call.method == method) {
+            return false;
+        }
+        expr = &call.receiver;
+    }
+    matches!(expr, Expr::Call(call) if is_handlers_new(call))
+}
+
+fn is_handlers_new(call: &syn::ExprCall) -> bool {
+    call.args.is_empty()
+        && matches!(&*call.func, Expr::Path(path) if path_ends(&path.path, &["Handlers", "new"]))
+}
+
+fn byte_offset(text: &str, line: usize, column: usize) -> Option<usize> {
+    let mut current_line = 1;
+    let mut offset = 0;
+    for segment in text.split_inclusive('\n') {
+        if current_line == line {
+            let col_bytes: usize = segment.chars().take(column).map(char::len_utf8).sum();
+            return (col_bytes <= segment.len()).then_some(offset + col_bytes);
+        }
+        offset += segment.len();
+        current_line += 1;
+    }
+    (current_line == line && column == 0).then_some(offset)
+}
+
+// Every `.topic(..)` registration of the top-level `fn handlers` in `file`
+// whose handler is filled, at its line: the registration that leaves the
+// decoder the SDK's, JSON. One whose handler still holds its marker is a
+// stub the scaffold laid, left to the turn.
+pub fn json_registrations(file: &syn::File) -> Vec<usize> {
+    let stubs: BTreeSet<String> = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Fn(item) if holds_marker(&item.block) => Some(item.sig.ident.to_string()),
+            _ => None,
+        })
+        .collect();
+    registrations(file, &["topic"], &stubs)
+}
+
+// Every `.topic(..)` and `.topic_with(..)` registration of the top-level
+// `fn handlers` in `file`, at its line, a stub's among them: the part
+// consumes a stream whatever decodes it.
+pub fn topic_registrations(file: &syn::File) -> Vec<usize> {
+    registrations(file, &["topic", "topic_with"], &BTreeSet::new())
+}
+
+// The line of the `Handlers::from(..)` fold in the top-level `fn handlers`
+// of an entry, where a part's `handlers()` is listed.
+pub fn handlers_from(file: &syn::File) -> Option<usize> {
+    struct Fold(Option<usize>);
+
+    impl<'ast> Visit<'ast> for Fold {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if self.0.is_none()
+                && let Expr::Path(path) = &*call.func
+                && path_ends(&path.path, &["Handlers", "from"])
+            {
+                self.0 = Some(line(call.paren_token.span.open()));
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+
+    let mut fold = Fold(None);
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            fold.visit_block(&item.block);
+        }
+    }
+    fold.0
+}
+
+// The lines of the calls of `methods` in the top-level `fn handlers`, less
+// those registering a handler of `stubs`.
+fn registrations(file: &syn::File, methods: &[&str], stubs: &BTreeSet<String>) -> Vec<usize> {
+    let mut found = Registrations {
+        methods,
+        stubs,
+        lines: Vec::new(),
+    };
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            found.visit_block(&item.block);
+        }
+    }
+    found.lines
+}
+
+struct Registrations<'s> {
+    methods: &'s [&'s str],
+    stubs: &'s BTreeSet<String>,
+    lines: Vec<usize>,
+}
+
+impl<'ast> Visit<'ast> for Registrations<'_> {
+    fn visit_expr_method_call(&mut self, call: &'ast ExprMethodCall) {
+        if self.methods.iter().any(|method| call.method == method) {
+            let handler = call.args.iter().nth(1).and_then(|arg| match arg {
+                Expr::Path(path) => path.path.get_ident().map(ToString::to_string),
+                _ => None,
+            });
+            if !handler.is_some_and(|handler| self.stubs.contains(&handler)) {
+                self.lines.push(line(call.method.span()));
+            }
+        }
+        visit::visit_expr_method_call(self, call);
+    }
+}
+
+// Whether `block` holds a `todo!("REQ-..")` marker, so the item is a stub
+// the scaffold laid and the turn has not filled.
+pub fn holds_marker(block: &syn::Block) -> bool {
+    struct Markers(bool);
+
+    impl<'ast> Visit<'ast> for Markers {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= todo_marker(node).is_some();
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut markers = Markers(false);
+    markers.visit_block(block);
+    markers.0
+}
+
+// Whether a block still holds a `todo!` of any text: the gate's stub,
+// whose marker names no requirement.
+pub fn holds_todo(block: &syn::Block) -> bool {
+    struct Todos(bool);
+
+    impl<'ast> Visit<'ast> for Todos {
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.0 |= path_ends(&node.path, &["todo"]);
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut todos = Todos(false);
+    todos.visit_block(block);
+    todos.0
+}
+
+// Every `pub(crate) async fn(<context>: Context<..>, ..)` handler in
+// `file` that `handlers()` names in no `.route(..)`, `.topic(..)`, or
+// `.topic_with(..)`, at its line.
+pub fn unregistered_handlers(file: &syn::File) -> Vec<(usize, String)> {
+    let registered: BTreeSet<String> = file
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Fn(item) if item.sig.ident == "handlers" => Some(Idents::of(&item.block)),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Fn(item) = item else { return None };
+            let name = item.sig.ident.to_string();
+            (is_handler_fn(item) && !registered.contains(&name))
+                .then(|| (line(item.sig.fn_token.span), name))
+        })
+        .collect()
+}
+
+fn is_crate(vis: &Visibility) -> bool {
+    matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
+}
+
+// A handler takes the context first: a `pub(crate) async fn` whose first
+// parameter is a `Context<..>`.
+pub fn is_handler_fn(item: &ItemFn) -> bool {
+    if !is_crate(&item.vis) || item.sig.asyncness.is_none() {
+        return false;
+    }
+    let Some(FnArg::Typed(first)) = item.sig.inputs.first() else {
+        return false;
+    };
+    matches!(&*first.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
+}
+
+#[derive(Default)]
+struct Idents(BTreeSet<String>);
+
+impl Idents {
+    fn of(block: &syn::Block) -> BTreeSet<String> {
+        let mut idents = Self::default();
+        idents.visit_block(block);
+        idents.0
+    }
+}
+
+impl<'ast> Visit<'ast> for Idents {
+    fn visit_ident(&mut self, node: &'ast Ident) {
+        self.0.insert(node.to_string());
+    }
 }

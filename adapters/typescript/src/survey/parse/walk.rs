@@ -1,21 +1,20 @@
 //! Walks one module's syntax tree into its `Module`.
 
-use std::borrow::Cow;
-
 use emery_sdk::survey::Lines;
 use emery_sdk::survey::code::{
-    self, Arg, Binding, BindingKind, Call, Callee, ClassDecl, Decision, Decorated, Dynamic,
-    EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link, Member, MemberKind,
-    Property, Reexport, Reference, Scope, TypeDecl, TypeKind, Use,
+    self, Arg, Assigned, Assignment, Binding, BindingKind, Call, Callee, ClassDecl, Decision,
+    Decorated, Dynamic, EnvRead, Export, ExportKind, Import, Imported, Init, Invocation, Link,
+    Member, MemberKind, Property, Reexport, Reference, Scalar, Scope, TypeDecl, TypeKind, Use,
 };
 use oxc_allocator::Allocator;
 use oxc_ast::AstKind;
 use oxc_ast::ast::{
-    Argument, AwaitExpression, BinaryOperator, BindingPattern, CallExpression, CatchClause,
-    ChainElement, Class, ClassElement, ComputedMemberExpression, ConditionalExpression,
-    Declaration, Decorator, ExportAllDeclaration, ExportDeclaration, ExportDefaultDeclaration,
-    ExportDefaultDeclarationKind, ExportFromDeclaration, ExportNamedDeclaration, Expression,
-    ExpressionStatement, FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
+    Argument, AssignmentExpression, AssignmentOperator, AssignmentTarget, AwaitExpression,
+    BinaryOperator, BindingPattern, CallExpression, CatchClause, ChainElement, Class, ClassElement,
+    ComputedMemberExpression, ConditionalExpression, Declaration, Decorator, ExportAllDeclaration,
+    ExportDeclaration, ExportDefaultDeclaration, ExportDefaultDeclarationKind,
+    ExportFromDeclaration, ExportNamedDeclaration, Expression, ExpressionStatement,
+    FormalParameters, IdentifierReference, IfStatement, ImportDeclaration,
     ImportDeclarationSpecifier, ImportExpression, ImportOrExportKind, MethodDefinition,
     MethodDefinitionKind, NewExpression, ObjectExpression, ObjectPropertyKind, PropertyDefinition,
     PropertyKey, ReturnStatement, StaticMemberExpression, SwitchStatement, TSAccessibility,
@@ -530,6 +529,23 @@ impl<'a> Visit<'a> for Walker<'_> {
         self.positions.pop();
     }
 
+    fn visit_assignment_expression(&mut self, it: &AssignmentExpression<'a>) {
+        if it.operator == AssignmentOperator::Assign
+            && let AssignmentTarget::StaticMemberExpression(target) = &it.left
+            && let Expression::Identifier(object) = bare(&target.object)
+        {
+            let lines = self.lines(it.span);
+            self.module.assignments.push(Assignment {
+                object: object.name.to_string(),
+                member: target.property.name.to_string(),
+                value: assigned(&it.right),
+                frames: self.frames.iter().map(|frame| frame.id).collect(),
+                lines,
+            });
+        }
+        walk::walk_assignment_expression(self, it);
+    }
+
     fn visit_expression_statement(&mut self, it: &ExpressionStatement<'a>) {
         self.discarded = match core(&it.expression) {
             Core::Call(call) => Some(call.span),
@@ -718,24 +734,25 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_import_declaration(&mut self, it: &ImportDeclaration<'a>) {
-        let specifier = it.source.value.to_string();
-        let type_only = it.import_kind == ImportOrExportKind::Type;
-        match &it.specifiers {
-            None => self.import("", &specifier, Imported::Effect, false),
-            Some(specifiers) => {
-                for specifier_node in specifiers {
-                    match specifier_node {
-                        ImportDeclarationSpecifier::ImportSpecifier(s) => self.import(
-                            &s.local.name,
-                            &specifier,
-                            Imported::Named(s.imported.name().to_string()),
-                            type_only || s.import_kind == ImportOrExportKind::Type,
-                        ),
-                        ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
-                            self.import(&s.local.name, &specifier, Imported::Default, type_only);
-                        }
-                        ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
-                            self.import(&s.local.name, &specifier, Imported::Whole, type_only);
+        if let Some(specifier) = it.source.value.as_str() {
+            let type_only = it.import_kind == ImportOrExportKind::Type;
+            match &it.specifiers {
+                None => self.import("", specifier, Imported::Effect, false),
+                Some(specifiers) => {
+                    for specifier_node in specifiers {
+                        match specifier_node {
+                            ImportDeclarationSpecifier::ImportSpecifier(s) => self.import(
+                                &s.local.name,
+                                specifier,
+                                Imported::Named(s.imported.name().to_string()),
+                                type_only || s.import_kind == ImportOrExportKind::Type,
+                            ),
+                            ImportDeclarationSpecifier::ImportDefaultSpecifier(s) => {
+                                self.import(&s.local.name, specifier, Imported::Default, type_only);
+                            }
+                            ImportDeclarationSpecifier::ImportNamespaceSpecifier(s) => {
+                                self.import(&s.local.name, specifier, Imported::Whole, type_only);
+                            }
                         }
                     }
                 }
@@ -773,27 +790,31 @@ impl<'a> Visit<'a> for Walker<'_> {
     }
 
     fn visit_export_from_declaration(&mut self, it: &ExportFromDeclaration<'a>) {
-        let names = it
-            .specifiers
-            .iter()
-            .map(|s| (s.local.name().to_string(), s.exported.name().to_string()))
-            .collect();
-        self.module.reexports.push(Reexport {
-            specifier: it.source.value.to_string(),
-            names: Some(names),
-            type_only: it.export_kind == ImportOrExportKind::Type,
-            target: None,
-        });
+        if let Some(specifier) = it.source.value.as_str() {
+            let names = it
+                .specifiers
+                .iter()
+                .map(|s| (s.local.name().to_string(), s.exported.name().to_string()))
+                .collect();
+            self.module.reexports.push(Reexport {
+                specifier: specifier.to_owned(),
+                names: Some(names),
+                type_only: it.export_kind == ImportOrExportKind::Type,
+                target: None,
+            });
+        }
         walk::walk_export_from_declaration(self, it);
     }
 
     fn visit_export_all_declaration(&mut self, it: &ExportAllDeclaration<'a>) {
-        self.module.reexports.push(Reexport {
-            specifier: it.source.value.to_string(),
-            names: None,
-            type_only: it.export_kind == ImportOrExportKind::Type,
-            target: None,
-        });
+        if let Some(specifier) = it.source.value.as_str() {
+            self.module.reexports.push(Reexport {
+                specifier: specifier.to_owned(),
+                names: None,
+                type_only: it.export_kind == ImportOrExportKind::Type,
+                target: None,
+            });
+        }
         walk::walk_export_all_declaration(self, it);
     }
 
@@ -979,6 +1000,44 @@ fn literal(expr: &Expression<'_>) -> bool {
         }
         Expression::CallExpression(call) => wraps(call),
         _ => false,
+    }
+}
+
+fn assigned(expr: &Expression<'_>) -> Assigned {
+    if let Some(scalar) = scalar(expr) {
+        return Assigned::Literal(scalar);
+    }
+    match core(expr) {
+        Core::New(new) => head_path(&new.callee).map_or(Assigned::Other, Assigned::Construction),
+        Core::Other(
+            other @ (Expression::Identifier(_) | Expression::StaticMemberExpression(_)),
+        ) => head_path(other).map_or(Assigned::Other, Assigned::Read),
+        Core::Call(_) | Core::Other(_) => Assigned::Other,
+    }
+}
+
+// The kind of a literal, a negated or signed number and a template with no
+// substitution among them.
+fn scalar(expr: &Expression<'_>) -> Option<Scalar> {
+    match bare(expr) {
+        Expression::NumericLiteral(number) => {
+            Some(if number.value.fract() == 0.0 { Scalar::Integer } else { Scalar::Float })
+        }
+        Expression::BigIntLiteral(_) => Some(Scalar::Integer),
+        Expression::StringLiteral(_) => Some(Scalar::String),
+        Expression::TemplateLiteral(template) if template.expressions.is_empty() => {
+            Some(Scalar::String)
+        }
+        Expression::BooleanLiteral(_) => Some(Scalar::Boolean),
+        Expression::UnaryExpression(unary)
+            if matches!(
+                unary.operator,
+                UnaryOperator::UnaryNegation | UnaryOperator::UnaryPlus
+            ) =>
+        {
+            scalar(&unary.argument).filter(|kind| matches!(kind, Scalar::Integer | Scalar::Float))
+        }
+        _ => None,
     }
 }
 
@@ -1169,9 +1228,9 @@ fn head_path(expr: &Expression<'_>) -> Option<Vec<String>> {
 
 fn string_value(expr: &Expression<'_>) -> Option<String> {
     match bare(expr) {
-        Expression::StringLiteral(literal) => Some(literal.value.to_string()),
+        Expression::StringLiteral(literal) => literal.value.as_str().map(str::to_owned),
         Expression::TemplateLiteral(template) => {
-            template.single_quasi().map(|quasi| quasi.to_string())
+            template.single_quasi().and_then(|quasi| quasi.as_str().map(str::to_owned))
         }
         _ => None,
     }
@@ -1240,8 +1299,8 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
         Expression::TemplateLiteral(template) => {
             let [head] = template.expressions.as_slice() else { return None };
             let [lead, tail] = template.quasis.as_slice() else { return None };
-            (is_module_dir(head) && lead.value.cooked.is_some_and(|lead| lead.is_empty()))
-                .then(|| tail.value.cooked.map(|tail| tail.to_string()))
+            (is_module_dir(head) && lead.value.cooked?.is_empty())
+                .then(|| tail.value.cooked?.as_str().map(str::to_owned))
                 .flatten()
         }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
@@ -1254,7 +1313,7 @@ fn module_relative(expr: &Expression<'_>) -> Option<String> {
 fn literal_head(expr: &Expression<'_>) -> Option<String> {
     let lead = match bare(expr) {
         Expression::TemplateLiteral(template) => {
-            template.quasis.first()?.value.cooked.map(|lead| lead.to_string())?
+            template.quasis.first()?.value.cooked?.as_str()?.to_owned()
         }
         Expression::BinaryExpression(binary) if binary.operator == BinaryOperator::Addition => {
             string_value(&binary.left)?
@@ -1327,7 +1386,7 @@ fn pattern_name(pattern: &BindingPattern<'_>) -> Option<String> {
 fn key_name(key: &PropertyKey<'_>) -> Option<String> {
     match key {
         PropertyKey::PrivateIdentifier(id) => Some(format!("#{}", id.name)),
-        other => other.static_name().map(Cow::into_owned),
+        other => other.static_name().and_then(|name| name.as_str().map(str::to_owned)),
     }
 }
 

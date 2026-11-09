@@ -1,16 +1,49 @@
-//! Compares `omnia` builds against a case's vendored reference guest and replay fixtures.
+//! Compares `omnia` builds against a case's reference: a vendored guest with its
+//! replay fixtures, or the source's behaviour recorded as HTTP scenarios.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+
 use crate::fidelity::{HostCheck, files_under, host_check};
 
-// The reference guest a case names, located under the repository root.
+// The reference a case names, located under the repository root.
 pub struct Reference {
     dir: PathBuf,
     name: String,
+    kind: Kind,
+}
+
+// What a reference directory holds: a hand-written guest beside its
+// recorded fixtures, measured and driven, or `oracle.toml` over recorded
+// scenarios of the source itself, driven alone.
+enum Kind {
+    Guest,
+    Scenarios(Spec),
+}
+
+// What `oracle.toml` declares over a reference of recorded scenarios: the
+// bearer its guarded paths take, and the configuration the scenarios were
+// recorded under.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Spec {
+    kind: String,
+    auth: Auth,
+    #[serde(default)]
+    config: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Auth {
+    header: String,
+    token: String,
+    guarded: String,
 }
 
 impl Reference {
@@ -24,26 +57,35 @@ impl Reference {
             eprintln!("eval: reference `{name}` is not a directory; nothing compared");
             return None;
         }
+        let kind = match fs::read_to_string(dir.join(SPEC)) {
+            Ok(text) => match Spec::parse(&text) {
+                Ok(spec) => Kind::Scenarios(spec),
+                Err(why) => {
+                    eprintln!("eval: reference `{name}`: {SPEC} {why}; nothing compared");
+                    return None;
+                }
+            },
+            Err(_) => Kind::Guest,
+        };
         Some(Self {
             dir,
             name: name.to_owned(),
+            kind,
         })
     }
 
-    // The built tree at `export` measured against the reference, and the
-    // reference's fixtures driven through the guest it holds.
+    // The built tree at `export` measured against a reference guest, and
+    // the reference's fixtures or scenarios driven through the built guest.
     pub fn compare(&self, export: &Path) -> io::Result<Comparison> {
         let built = Shape::read(export)?;
-        let reference = Shape::read(&self.dir)?;
-        let measures = vec![
-            Measure::names("crates", &built.crates, &reference.crates),
-            Measure::count("Rust files", built.files, reference.files),
-            Measure::count("Rust lines (non-blank)", built.lines, reference.lines),
-            Measure::names("dependencies", &built.dependencies, &reference.dependencies),
-            Measure::names("config keys", &built.config, &reference.config),
-            Measure::names("topics", &built.topics, &reference.topics),
-        ];
-        let (oracle, log) = match self.stage(export, &built)? {
+        let (measures, staged) = match &self.kind {
+            Kind::Guest => {
+                let reference = Shape::read(&self.dir)?;
+                (built.against(&reference), self.stage(export, &built)?)
+            }
+            Kind::Scenarios(spec) => (Vec::new(), self.stage_scenarios(export, &built, spec)?),
+        };
+        let (oracle, log) = match staged {
             Ok(fixtures) => {
                 let check = host_check(
                     export,
@@ -98,20 +140,8 @@ impl Reference {
                 self.name
             )));
         }
-        let manifest_path = export.join("Cargo.toml");
-        let manifest = fs::read_to_string(&manifest_path)?;
-        let table: toml::Table = manifest
-            .parse()
-            .map_err(|error| io::Error::other(format!("the built tree's Cargo.toml: {error}")))?;
-        let Some(package) = table
-            .get("package")
-            .and_then(|package| package.get("name"))
-            .and_then(toml::Value::as_str)
-        else {
-            return Ok(Err("the built tree's root `Cargo.toml` declares no package".to_owned()));
-        };
-        let additions = match dev_dependency_additions(&table) {
-            Ok(additions) => additions,
+        let manifest = match Manifest::read(export, &[])? {
+            Ok(manifest) => manifest,
             Err(why) => return Ok(Err(why)),
         };
 
@@ -130,41 +160,371 @@ impl Reference {
         });
         fs::write(oracle.join("oracle.json"), serde_json::to_string_pretty(&settings)?)?;
 
-        // the harness, over the dev-dependencies it reads
-        if !additions.is_empty() {
-            fs::write(&manifest_path, format!("{manifest}\n{additions}"))?;
-        }
-        fs::create_dir_all(export.join("tests"))?;
-        fs::write(
-            export.join(harness_path()),
-            HARNESS_SOURCE.replace("__CRATE__", &package.replace('-', "_")),
-        )?;
+        manifest.write_harness(export, HARNESS_SOURCE)?;
         Ok(Ok(fixtures.len()))
     }
+
+    // Every recorded scenario of the reference, as `<group>/<name>` and its
+    // JSON, in path order: `scenarios/<group>/<name>.json`.
+    fn scenarios(&self) -> io::Result<Vec<(String, Value)>> {
+        let mut found = Vec::new();
+        for group in fs::read_dir(self.dir.join("scenarios")).into_iter().flatten() {
+            let group = group?.path();
+            if !group.is_dir() {
+                continue;
+            }
+            let group_name = group.file_name().map(|name| name.to_string_lossy().into_owned());
+            for entry in fs::read_dir(&group)? {
+                let path = entry?.path();
+                if path.extension().is_some_and(|extension| extension == "json")
+                    && let Some(stem) = path.file_stem()
+                {
+                    let scenario: Value = serde_json::from_str(&fs::read_to_string(&path)?)
+                        .map_err(|error| {
+                            io::Error::other(format!("{}: {error}", path.display()))
+                        })?;
+                    found.push((
+                        format!(
+                            "{}/{}",
+                            group_name.clone().unwrap_or_default(),
+                            stem.to_string_lossy()
+                        ),
+                        scenario,
+                    ));
+                }
+            }
+        }
+        found.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(found)
+    }
+
+    // The scenario harness written into the export: `oracle/oracle.json`
+    // carrying the scenarios, the schema and seeds of the store, the
+    // upstream answers, and the configuration, with the dev-dependencies
+    // the harness reads and the test itself; `Err` names why it cannot run.
+    fn stage_scenarios(
+        &self, export: &Path, built: &Shape, spec: &Spec,
+    ) -> io::Result<Result<usize, String>> {
+        let scenarios = self.scenarios()?;
+        if scenarios.is_empty() {
+            return Ok(Err(format!(
+                "`{}` holds no scenarios under `scenarios/<group>/`",
+                self.name
+            )));
+        }
+        for (name, scenario) in &scenarios {
+            if let Err(why) = check_scenario(scenario) {
+                return Ok(Err(format!("scenario `{name}` {why}")));
+            }
+        }
+        let manifest = match Manifest::read(export, &SCENARIO_DEPENDENCIES)? {
+            Ok(manifest) => manifest,
+            Err(why) => return Ok(Err(why)),
+        };
+
+        // the store's schema and seeds, and the upstream's default answers
+        let schema = read_or_empty(&self.dir.join("schema.sql"));
+        let mut tables = serde_json::Map::new();
+        for entry in fs::read_dir(self.dir.join("seed/tables")).into_iter().flatten() {
+            let path = entry?.path();
+            if path.extension().is_some_and(|extension| extension == "json")
+                && let Some(table) = path.file_stem()
+            {
+                let rows: Value = serde_json::from_str(&fs::read_to_string(&path)?)
+                    .map_err(|error| io::Error::other(format!("{}: {error}", path.display())))?;
+                tables.insert(table.to_string_lossy().into_owned(), rows);
+            }
+        }
+        let http: Value = match fs::read_to_string(self.dir.join("seed/http.json")) {
+            Ok(text) => serde_json::from_str(&text)
+                .map_err(|error| io::Error::other(format!("seed/http.json: {error}")))?,
+            Err(_) => Value::Object(serde_json::Map::new()),
+        };
+
+        // the settings
+        let oracle = export.join("oracle");
+        fs::create_dir_all(&oracle)?;
+        let settings = serde_json::json!({
+            "config": scenario_config(&spec.config, &spec.auth.token, &built.config),
+            "auth": spec.auth,
+            "schema": schema,
+            "tables": tables,
+            "http": http,
+            "scenarios": scenarios
+                .iter()
+                .map(|(name, scenario)| {
+                    serde_json::json!({
+                        "name": name,
+                        "seed": scenario.get("seed").cloned().unwrap_or(Value::Null),
+                        "steps": scenario["steps"],
+                    })
+                })
+                .collect::<Vec<Value>>(),
+        });
+        fs::write(oracle.join("oracle.json"), serde_json::to_string_pretty(&settings)?)?;
+
+        manifest.write_harness(export, SCENARIO_HARNESS_SOURCE)?;
+        Ok(Ok(scenarios.len()))
+    }
+}
+
+impl Spec {
+    fn parse(text: &str) -> Result<Self, String> {
+        let spec: Self = toml::from_str(text).map_err(|error| error.to_string())?;
+        if spec.kind != "http" {
+            return Err(format!("declares `kind = \"{}\"`, and `http` is the one kind", spec.kind));
+        }
+        if !spec.auth.guarded.starts_with('/') {
+            return Err("declares a guarded prefix that is no path".to_owned());
+        }
+        Ok(spec)
+    }
+}
+
+// What a scenario must hold to be driven: steps, each one request with its
+// expected status or one statement, and every `{name}` a step spells
+// captured by an earlier one or one of the harness's own placeholders.
+fn check_scenario(scenario: &Value) -> Result<(), String> {
+    const PLACEHOLDERS: [&str; 3] = ["uuid", "timestamp", "any"];
+    let Some(steps) = scenario["steps"].as_array().filter(|steps| !steps.is_empty()) else {
+        return Err("has no `steps`".to_owned());
+    };
+    for entry in scenario["seed"]["http"].as_array().into_iter().flatten() {
+        if entry["path"].as_str().is_none_or(|path| !path.starts_with('/')) {
+            return Err("seeds an upstream answer with no `path`".to_owned());
+        }
+    }
+    let mut captured: BTreeSet<String> =
+        PLACEHOLDERS.iter().map(|name| (*name).to_owned()).collect();
+    for (index, step) in steps.iter().enumerate() {
+        let at = index + 1;
+        match (step.get("request"), step.get("sql")) {
+            (Some(request), None) => {
+                if request["method"].as_str().is_none() {
+                    return Err(format!("step {at} has no `request.method`"));
+                }
+                if request["path"].as_str().is_none_or(|path| !path.starts_with('/')) {
+                    return Err(format!("step {at} has no `request.path`"));
+                }
+                if step["expect"]["status"].as_u64().is_none() {
+                    return Err(format!("step {at} has no `expect.status`"));
+                }
+                let mut spelled = BTreeSet::new();
+                placeholders(request, &mut spelled);
+                for (name, path) in step["capture"].as_object().into_iter().flatten() {
+                    if path.as_str().is_none() {
+                        return Err(format!("step {at} captures `{name}` from no path"));
+                    }
+                    captured.insert(name.clone());
+                }
+                placeholders(&step["expect"], &mut spelled);
+                if let Some(unknown) = spelled.iter().find(|name| !captured.contains(*name)) {
+                    return Err(format!(
+                        "step {at} spells `{{{unknown}}}`, which no earlier step captures"
+                    ));
+                }
+            }
+            (None, Some(sql)) => {
+                let Some(sql) = sql.as_str() else {
+                    return Err(format!("step {at} has a `sql` that is no string"));
+                };
+                let mut spelled = BTreeSet::new();
+                placeholders(&Value::String(sql.to_owned()), &mut spelled);
+                if let Some(unknown) = spelled.iter().find(|name| !captured.contains(*name)) {
+                    return Err(format!(
+                        "step {at} spells `{{{unknown}}}`, which no earlier step captures"
+                    ));
+                }
+            }
+            _ => {
+                return Err(format!(
+                    "step {at} has one of `request` and `sql`, not both or neither"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+// Every `{name}` the strings of `value` spell, at any depth.
+fn placeholders(value: &Value, names: &mut BTreeSet<String>) {
+    match value {
+        Value::String(text) => {
+            let mut rest = text.as_str();
+            while let Some(open) = rest.find('{') {
+                let Some(close) = rest[open..].find('}') else { break };
+                let name = &rest[open + 1..open + close];
+                if !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+                    names.insert(name.to_owned());
+                }
+                rest = &rest[open + close + 1..];
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|item| placeholders(item, names)),
+        Value::Object(fields) => fields.values().for_each(|field| placeholders(field, names)),
+        _ => {}
+    }
+}
+
+// The configuration a scenarios reference seeds the guest with: the
+// reference's table whole, then every key of the built tree's settings the
+// table lacks, by its longest `_`-suffix in the table (`ORDERS_GST_RATE`
+// from `GST_RATE`), else by the generic pattern its name holds; a key
+// neither reads is left unset so the guest's own reading of it shows.
+fn scenario_config(
+    table: &BTreeMap<String, String>, token: &str, keys: &BTreeSet<String>,
+) -> BTreeMap<String, String> {
+    let mut seed = table.clone();
+    for key in keys {
+        if seed.contains_key(key) {
+            continue;
+        }
+        let upper = key.to_uppercase();
+        let value = table
+            .get(&upper)
+            .cloned()
+            .or_else(|| {
+                upper.match_indices('_').find_map(|(at, _)| table.get(&upper[at + 1..]).cloned())
+            })
+            .or_else(|| generic_seed(&upper, token));
+        if let Some(value) = value {
+            seed.insert(key.clone(), value);
+        }
+    }
+    seed
+}
+
+// The value a key of no recorded name is seeded by the pattern its
+// upper-cased name holds: an endpoint reaches the harness's upstream, a
+// token is the bearer, and a window or a size is a plausible default.
+fn generic_seed(upper: &str, token: &str) -> Option<String> {
+    const PATTERNS: [(&[&str], &str); 8] = [
+        (&["URL", "HOST", "ENDPOINT", "BASE"], BASE_URL),
+        (&["API_KEY", "SECRET", "PASSWORD"], "secret"),
+        (&["TTL", "SECONDS", "TIMEOUT", "INTERVAL"], "60"),
+        (&["PAGE_SIZE", "LIMIT"], "20"),
+        (&["PORT"], "3000"),
+        (&["LEVEL"], "info"),
+        (&["PREFIX"], ""),
+        (&["ENV"], "dev"),
+    ];
+    if upper.contains("TOKEN") {
+        return Some(token.to_owned());
+    }
+    PATTERNS
+        .iter()
+        .find(|(patterns, _)| patterns.iter().any(|pattern| upper.contains(pattern)))
+        .map(|(_, value)| (*value).to_owned())
 }
 
 const GROUPS: [&str; 2] = ["static", "replay"];
 
 const HARNESS: &str = "reference_oracle";
 
+const SPEC: &str = "oracle.toml";
+
 fn harness_path() -> String {
     format!("tests/{HARNESS}.rs")
 }
+
+// The built tree's root manifest as the harness is staged into it: the
+// package whose router the harness drives, and the dev-dependencies to
+// append for the harness to compile.
+struct Manifest {
+    path: PathBuf,
+    text: String,
+    package: String,
+    additions: String,
+}
+
+impl Manifest {
+    // The root manifest read with the additions `extra` and the shared list
+    // need; `Err` names why no harness can run over it.
+    fn read(export: &Path, extra: &[Dependency]) -> io::Result<Result<Self, String>> {
+        let path = export.join("Cargo.toml");
+        let text = fs::read_to_string(&path)?;
+        let table: toml::Table = text
+            .parse()
+            .map_err(|error| io::Error::other(format!("the built tree's Cargo.toml: {error}")))?;
+        let Some(package) = table
+            .get("package")
+            .and_then(|package| package.get("name"))
+            .and_then(toml::Value::as_str)
+        else {
+            return Ok(Err("the built tree's root `Cargo.toml` declares no package".to_owned()));
+        };
+        let additions = match dev_dependency_additions(&table, extra) {
+            Ok(additions) => additions,
+            Err(why) => return Ok(Err(why)),
+        };
+        Ok(Ok(Self {
+            path,
+            text,
+            package: package.to_owned(),
+            additions,
+        }))
+    }
+
+    // The harness `source` written as the root package's test, over the
+    // dev-dependencies appended to the manifest.
+    fn write_harness(&self, export: &Path, source: &str) -> io::Result<()> {
+        if !self.additions.is_empty() {
+            fs::write(&self.path, format!("{}\n{}", self.text, self.additions))?;
+        }
+        fs::create_dir_all(export.join("tests"))?;
+        fs::write(
+            export.join(harness_path()),
+            source.replace("__CRATE__", &self.package.replace('-', "_")),
+        )
+    }
+}
+
+// A crate a harness reads: its name, the version taken where the workspace
+// pins none, and the features it needs.
+struct Dependency {
+    name: &'static str,
+    version: &'static str,
+    features: &'static [&'static str],
+}
+
+impl Dependency {
+    const fn plain(name: &'static str, version: &'static str) -> Self {
+        Self {
+            name,
+            version,
+            features: &[],
+        }
+    }
+}
+
+// What every harness reads.
+const SHARED_DEPENDENCIES: [Dependency; 6] = [
+    Dependency::plain("bytes", "1"),
+    Dependency::plain("chrono", "0.4"),
+    Dependency::plain("chrono-tz", "0.10"),
+    Dependency::plain("http", "1"),
+    Dependency::plain("serde_json", "1"),
+    Dependency::plain("tracing", "0.1"),
+];
+
+// What the scenario harness reads besides: the in-memory database its
+// table store runs the guest's statements against, the declared column
+// types read back through `column_decltype`, and `now()` registered
+// through `functions`.
+const SCENARIO_DEPENDENCIES: [Dependency; 1] = [Dependency {
+    name: "rusqlite",
+    version: "0.41",
+    features: &["bundled", "column_decltype", "functions"],
+}];
 
 // The TOML the harness's dev-dependencies are appended to the built tree's
 // root manifest as, one table per crate the root package depends on under
 // no table: the workspace's pin where it carries one, a version otherwise.
 // `omnia-test` and `tokio` are the layout's own and are never added, since
 // their versions and features are the tree's to pin.
-fn dev_dependency_additions(manifest: &toml::Table) -> Result<String, String> {
-    const NEEDED: [(&str, &str); 6] = [
-        ("bytes", "1"),
-        ("chrono", "0.4"),
-        ("chrono-tz", "0.10"),
-        ("http", "1"),
-        ("serde_json", "1"),
-        ("tracing", "0.1"),
-    ];
+fn dev_dependency_additions(
+    manifest: &toml::Table, extra: &[Dependency],
+) -> Result<String, String> {
     const NATIVE: &str = "target.'cfg(not(target_arch = \"wasm32\"))'.dev-dependencies";
 
     let present = package_dependency_names(manifest);
@@ -182,16 +542,21 @@ fn dev_dependency_additions(manifest: &toml::Table) -> Result<String, String> {
         .map(|table| table.keys().map(String::as_str).collect())
         .unwrap_or_default();
     let mut additions = String::new();
-    for (name, version) in NEEDED {
-        if present.contains(name) {
+    for dependency in SHARED_DEPENDENCIES.iter().chain(extra) {
+        if present.contains(dependency.name) {
             continue;
         }
-        let entry = if workspace.contains(name) {
+        let mut entry = if workspace.contains(dependency.name) {
             "workspace = true".to_owned()
         } else {
-            format!("version = \"{version}\"")
+            format!("version = \"{}\"", dependency.version)
         };
-        let _ = write!(additions, "[{NATIVE}.{name}]\n{entry}\n\n");
+        if !dependency.features.is_empty() {
+            let features: Vec<String> =
+                dependency.features.iter().map(|feature| format!("\"{feature}\"")).collect();
+            let _ = write!(entry, "\nfeatures = [{}]", features.join(", "));
+        }
+        let _ = write!(additions, "[{NATIVE}.{}]\n{entry}\n\n", dependency.name);
     }
     Ok(additions)
 }
@@ -280,12 +645,15 @@ impl Shape {
         }
         let dependencies = named.difference(&packages).cloned().collect();
 
-        // the settings: the catalog where a tree keeps one, and the per-part
-        // constants spelled as their own names where the layout declares them
+        // the settings: the catalog where a tree keeps one, the per-part
+        // constants spelled as their own names, and the keys of each part's
+        // settings struct
         let common = root.join("crates/common/src");
         let mut config = str_consts(&read_or_empty(&common.join("config.rs")));
         for path in rust.iter().filter(|path| path.starts_with("crates/")) {
-            config.extend(setting_consts(&fs::read_to_string(root.join(path))?));
+            let text = fs::read_to_string(root.join(path))?;
+            config.extend(setting_consts(&text));
+            config.extend(setting_fields(&text));
         }
 
         // the topic table, wherever the tree's shape keeps it
@@ -305,6 +673,18 @@ impl Shape {
             config,
             topics,
         })
+    }
+
+    // Each measure of this tree beside the reference guest's.
+    fn against(&self, reference: &Self) -> Vec<Measure> {
+        vec![
+            Measure::names("crates", &self.crates, &reference.crates),
+            Measure::count("Rust files", self.files, reference.files),
+            Measure::count("Rust lines (non-blank)", self.lines, reference.lines),
+            Measure::names("dependencies", &self.dependencies, &reference.dependencies),
+            Measure::names("config keys", &self.config, &reference.config),
+            Measure::names("topics", &self.topics, &reference.topics),
+        ]
     }
 }
 
@@ -346,6 +726,50 @@ fn setting_consts(text: &str) -> BTreeSet<String> {
             (literal == name.trim()).then(|| literal.to_owned())
         })
         .collect()
+}
+
+// The key of every field of a `#[derive(.., Settings)]` struct of `text`,
+// as the derive reads it: the field's name upper-cased behind the struct's
+// `#[setting(prefix = "..")]`, or the field's own `#[setting(key = "..")]`.
+fn setting_fields(text: &str) -> BTreeSet<String> {
+    let mut keys = BTreeSet::new();
+    let mut from = 0;
+    while let Some(at) = text[from..].find("#[derive(") {
+        let start = from + at + "#[derive(".len();
+        let Some(close) = text[start..].find(")]") else { break };
+        from = start + close;
+        if !text[start..from].split(',').any(|name| name.trim() == "Settings") {
+            continue;
+        }
+        let Some(open) = text[from..].find('{') else { break };
+        let Some(end) = text[from + open..].find('}') else { break };
+        let prefix = setting_attribute(&text[from..from + open], "prefix").unwrap_or_default();
+        let mut explicit = None;
+        for line in text[from + open + 1..from + open + end].lines().map(str::trim) {
+            if let Some(key) = setting_attribute(line, "key") {
+                explicit = Some(key);
+            } else if !line.starts_with("//")
+                && !line.starts_with('#')
+                && let Some((field, _)) = line.split_once(':')
+            {
+                let field = field.rsplit(' ').next().unwrap_or(field);
+                keys.insert(
+                    explicit
+                        .take()
+                        .unwrap_or_else(|| format!("{prefix}{}", field.to_ascii_uppercase())),
+                );
+            }
+        }
+        from += open + end;
+    }
+    keys
+}
+
+// The string a `#[setting(<name> = "..")]` attribute in `text` spells.
+fn setting_attribute(text: &str, name: &str) -> Option<String> {
+    let lead = format!("{name} = \"");
+    let at = text.find(&lead)? + lead.len();
+    text[at..].split_once('"').map(|(value, _)| value.to_owned())
 }
 
 // The body of `mod <name> { ... }` in `text`, braces balanced; empty where
@@ -501,12 +925,22 @@ impl Comparison {
                 format!("{name} {} vs {}", measure.built, measure.reference)
             })
             .collect();
-        format!("reference oracle {}; {}", self.oracle.cell(), measures.join(", "))
+        let oracle = format!("reference oracle {}", self.oracle.cell());
+        if measures.is_empty() { oracle } else { format!("{oracle}; {}", measures.join(", ")) }
     }
 }
 
 impl Display for Comparison {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.measures.is_empty() {
+            writeln!(
+                f,
+                "\n## Reference comparison\n\nAgainst `{}`, the source's behaviour recorded as \
+                 scenarios, each driven through the built guest over one fresh store.",
+                self.name
+            )?;
+            return write!(f, "{}", self.oracle);
+        }
         writeln!(
             f,
             "\n## Reference comparison\n\nAgainst `{}`, the hand-written guest of the same \
@@ -570,20 +1004,22 @@ fn spelled(names: &[String]) -> String {
     spelled.join(", ")
 }
 
-// What the harness answered: each fixture's outcome, the topic the guest
-// consumed the messages under, the topics it published to, the table paths
-// a fixture read that another fixture's recording answered, or why it ran
-// nothing.
+// What the harness answered: each fixture's or scenario's outcome, the topic
+// the guest consumed the messages under, the topics it published to, the
+// table paths a fixture read that another fixture's recording answered, or
+// why it ran nothing.
 struct Oracle {
     outcomes: Vec<Outcome>,
+    // `scenarios` where the harness drove recorded requests, else fixtures
+    kind: Option<String>,
     inbound: Option<String>,
     outbound: Vec<String>,
     shared: Vec<String>,
     note: Option<String>,
 }
 
-// One fixture driven through the guest: what it recorded, and every way
-// the guest's answer differed, none for a pass.
+// One fixture or scenario driven through the guest: what it recorded, and
+// every way the guest's answer differed, none for a pass.
 struct Outcome {
     fixture: String,
     expected: String,
@@ -594,6 +1030,7 @@ impl Oracle {
     const fn not_run(why: String) -> Self {
         Self {
             outcomes: Vec::new(),
+            kind: None,
             inbound: None,
             outbound: Vec::new(),
             shared: Vec::new(),
@@ -622,18 +1059,22 @@ impl Oracle {
 
     // The lines the harness prints: `oracle <fixture> | <expected> | pass`,
     // `oracle <fixture> | <expected> | fail: <reason>; <reason>`,
-    // `oracle-inbound <topic>`, `oracle-outbound <topic>, <topic>`,
-    // `oracle-shared <path>, <path>`, and `oracle-none <why>`.
+    // `oracle-kind scenarios`, `oracle-inbound <topic>`,
+    // `oracle-outbound <topic>, <topic>`, `oracle-shared <path>, <path>`,
+    // and `oracle-none <why>`.
     fn parse(output: &str) -> Self {
         let mut oracle = Self {
             outcomes: Vec::new(),
+            kind: None,
             inbound: None,
             outbound: Vec::new(),
             shared: Vec::new(),
             note: None,
         };
         for line in output.lines().map(str::trim) {
-            if let Some(rest) = marked(line, "oracle-inbound ") {
+            if let Some(rest) = marked(line, "oracle-kind ") {
+                oracle.kind = Some(rest.to_owned());
+            } else if let Some(rest) = marked(line, "oracle-inbound ") {
                 oracle.inbound = Some(rest.to_owned());
             } else if let Some(rest) = marked(line, "oracle-outbound ") {
                 oracle.outbound =
@@ -714,16 +1155,30 @@ impl Display for Oracle {
             .into_iter()
             .map(|(group, passed, total)| format!("{passed}/{total} {group}"))
             .collect();
-        let inbound = self.inbound.as_deref().unwrap_or("none");
-        let outbound =
-            if self.outbound.is_empty() { "nothing".to_owned() } else { spelled(&self.outbound) };
-        writeln!(
-            f,
-            "- {}/{} fixtures pass: {}; consumed under `{inbound}`, published to {outbound}.",
-            self.passed(),
-            self.outcomes.len(),
-            groups.join(", ")
-        )?;
+        let scenarios = self.kind.as_deref() == Some("scenarios");
+        if scenarios {
+            writeln!(
+                f,
+                "- {}/{} scenarios pass: {}.",
+                self.passed(),
+                self.outcomes.len(),
+                groups.join(", ")
+            )?;
+        } else {
+            let inbound = self.inbound.as_deref().unwrap_or("none");
+            let outbound = if self.outbound.is_empty() {
+                "nothing".to_owned()
+            } else {
+                spelled(&self.outbound)
+            };
+            writeln!(
+                f,
+                "- {}/{} fixtures pass: {}; consumed under `{inbound}`, published to {outbound}.",
+                self.passed(),
+                self.outcomes.len(),
+                groups.join(", ")
+            )?;
+        }
         if let Some(note) = &self.note {
             writeln!(f, "- {note}")?;
         }
@@ -735,7 +1190,11 @@ impl Display for Oracle {
                 spelled(&self.shared)
             )?;
         }
-        writeln!(f, "\n| fixture | recorded | outcome |\n| --- | --- | --- |")?;
+        if scenarios {
+            writeln!(f, "\n| scenario | steps | outcome |\n| --- | --- | --- |")?;
+        } else {
+            writeln!(f, "\n| fixture | recorded | outcome |\n| --- | --- | --- |")?;
+        }
         for outcome in &self.outcomes {
             let verdict = if outcome.reasons.is_empty() {
                 "pass".to_owned()
@@ -909,7 +1368,7 @@ async fn run() {
         let provider = provider(&config, MatchedHttp::default());
         let probed = topic.clone();
         let outcome = tokio::task::spawn_local(async move {
-            let router = __CRATE__::messaging_router(provider).await;
+            let router = __CRATE__::router(provider);
             router.handle(delivery(probed, Vec::new())).await
         })
         .await;
@@ -1035,7 +1494,7 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
     let outcome = {
         let _default = tracing::subscriber::set_default(logged.clone());
         tokio::task::spawn_local(async move {
-            let router = __CRATE__::messaging_router(provider).await;
+            let router = __CRATE__::router(provider);
             router.handle(delivery(topic, payload)).await
         })
         .await
@@ -1323,6 +1782,969 @@ fn with_text(xml: &str, element: &str, text: &str) -> String {
 }
 "#;
 
+// The test the eval writes into the built tree for a reference of recorded
+// scenarios, `__CRATE__` the root package's crate name: every scenario of
+// `oracle/oracle.json` driven through the guest's HTTP router over
+// `omnia_test` doubles and an in-memory table store, its outcome printed in
+// the lines `Oracle::parse` reads.
+const SCENARIO_HARNESS_SOURCE: &str = r#"//! The eval's reference oracle: every recorded scenario of the source
+//! driven through this guest's HTTP router over one fresh store apiece.
+//! Written by the eval into the exported tree and removed with it.
+
+use std::collections::BTreeMap;
+use std::fmt::{self, Write as _};
+use std::fs;
+use std::future::{Future, ready};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
+
+use chrono::{DateTime, SecondsFormat, Utc};
+use omnia_sdk::TableStore;
+use omnia_sdk::anyhow::{Result as AnyResult, anyhow};
+use omnia_sdk::axum::body::Body;
+use omnia_sdk::bytes::Bytes;
+use omnia_sdk::http::{Method, Request, Response};
+use omnia_sdk::sql::{DataType, Field, Row};
+use omnia_test::guest::{
+    FixedIdentity, MapConfig, MatchedHttp, Memory, MemoryDocs, ScriptedLoader, ScriptedModel,
+    ScriptedVcs, Sink, send,
+};
+use rusqlite::functions::FunctionFlags;
+use rusqlite::types::{Value as Sql, ValueRef};
+use rusqlite::{Connection, params_from_iter};
+use serde_json::{Map, Value};
+use tracing::field::{Field as LogField, Visit};
+use tracing::{Event, Level, Metadata, Subscriber, span};
+
+// Every upstream the scenarios seed answers under this base; the
+// configuration names it as the endpoint of each.
+const BASE_URL: &str = "http://api.test";
+
+// The longest a quoted body or event is kept at in a reason.
+const QUOTED_CHARS: usize = 240;
+
+// Every capability double the guest reaches, the table store a real
+// in-memory database.
+#[derive(Clone, Debug, omnia_sdk::Provider)]
+struct Oracle {
+    #[provider(Config)]
+    config: MapConfig,
+    #[provider(HttpRequest)]
+    http: MatchedHttp,
+    #[provider(Identity)]
+    identity: FixedIdentity,
+    #[provider(Publish)]
+    publish: Sink,
+    #[provider(Broadcast)]
+    broadcast: Sink,
+    #[provider(StateStore, BlobStore, Vault)]
+    storage: Memory,
+    #[provider(DocumentStore)]
+    docs: MemoryDocs,
+    #[provider(TableStore)]
+    tables: Sqlite,
+    #[provider(Model)]
+    model: ScriptedModel,
+    #[provider(Plugins)]
+    plugins: ScriptedLoader,
+    #[provider(Vcs)]
+    vcs: ScriptedVcs,
+}
+
+// An in-memory database answering the guest's statements under the
+// contract they were written against: `$N` bound by number, each column
+// read as the type its declaration names, `expr::type` as a cast. Every
+// failed statement is kept with its error, since a guest answering 500 says
+// why there alone. `None` is a store that answers nothing, the degraded
+// probe's.
+#[derive(Clone)]
+struct Sqlite {
+    conn: Option<Arc<Mutex<Connection>>>,
+    errors: Arc<Mutex<Vec<String>>>,
+}
+
+impl fmt::Debug for Sqlite {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(if self.conn.is_some() { "Sqlite" } else { "Sqlite(unavailable)" })
+    }
+}
+
+impl Sqlite {
+    fn open(schema: &str, tables: &Map<String, Value>) -> Self {
+        let conn = Connection::open_in_memory().expect("an in-memory database");
+        conn.create_scalar_function("now", 0, FunctionFlags::SQLITE_UTF8, |_| {
+            Ok(Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true))
+        })
+        .expect("now()");
+        if !schema.trim().is_empty() {
+            conn.execute_batch(schema).expect("the schema applies");
+        }
+        for (table, rows) in tables {
+            for row in rows.as_array().into_iter().flatten() {
+                let Some(fields) = row.as_object() else { continue };
+                let columns: Vec<&str> = fields.keys().map(String::as_str).collect();
+                let slots: Vec<String> = (1..=columns.len()).map(|at| format!("?{at}")).collect();
+                let sql = format!(
+                    "INSERT INTO {table} ({}) VALUES ({})",
+                    columns.join(", "),
+                    slots.join(", ")
+                );
+                conn.execute(&sql, params_from_iter(fields.values().map(json_sql)))
+                    .unwrap_or_else(|error| panic!("the seed of `{table}` inserts: {error}"));
+            }
+        }
+        Self {
+            conn: Some(Arc::new(Mutex::new(conn))),
+            errors: Arc::default(),
+        }
+    }
+
+    fn unavailable() -> Self {
+        Self {
+            conn: None,
+            errors: Arc::default(),
+        }
+    }
+
+    fn connection(&self) -> AnyResult<MutexGuard<'_, Connection>> {
+        self.conn
+            .as_ref()
+            .map(|conn| conn.lock().expect("connection"))
+            .ok_or_else(|| anyhow!("the table store is unavailable"))
+    }
+
+    fn failed(&self, sql: &str, error: &rusqlite::Error) -> omnia_sdk::anyhow::Error {
+        let text = format!("{error} in `{sql}`");
+        self.errors.lock().expect("errors").push(text.clone());
+        anyhow!("sql: {text}")
+    }
+
+    fn last_error(&self) -> Option<String> {
+        self.errors.lock().expect("errors").last().cloned()
+    }
+
+    // A statement of the scenario's own, run as written: the rows it changed.
+    fn change(&self, sql: &str) -> AnyResult<usize> {
+        let conn = self.connection()?;
+        conn.execute(sql, []).map_err(|error| anyhow!("{error} in `{sql}`"))
+    }
+
+    fn select(&self, query: &str, params: &[DataType]) -> AnyResult<Vec<Row>> {
+        let sql = translate(query);
+        let conn = self.connection()?;
+        let result: rusqlite::Result<Vec<Row>> = (|| {
+            let mut statement = conn.prepare(&sql)?;
+            let columns: Vec<(String, Option<String>)> = statement
+                .columns()
+                .map(|column| (column.name().to_owned(), column.decl_type().map(str::to_owned)))
+                .collect();
+            let mut rows = statement.query(params_from_iter(params.iter().map(to_sql)))?;
+            let mut out: Vec<Row> = Vec::new();
+            while let Some(row) = rows.next()? {
+                let mut fields = Vec::with_capacity(columns.len());
+                for (at, (name, declared)) in columns.iter().enumerate() {
+                    fields.push(Field {
+                        name: name.clone(),
+                        value: typed(row.get_ref(at)?, declared.as_deref()),
+                    });
+                }
+                let index = out.len().to_string();
+                out.push(Row { index, fields });
+            }
+            Ok(out)
+        })();
+        result.map_err(|error| self.failed(&sql, &error))
+    }
+
+    fn execute(&self, query: &str, params: &[DataType]) -> AnyResult<u32> {
+        let sql = translate(query);
+        let conn = self.connection()?;
+        conn.execute(&sql, params_from_iter(params.iter().map(to_sql)))
+            .map(|changed| u32::try_from(changed).unwrap_or(u32::MAX))
+            .map_err(|error| self.failed(&sql, &error))
+    }
+}
+
+impl TableStore for Sqlite {
+    fn query(
+        &self, _conn_name: &str, query: &str, params: &[DataType],
+    ) -> impl Future<Output = AnyResult<Vec<Row>>> + Send {
+        ready(self.select(query, params))
+    }
+
+    fn exec(
+        &self, _conn_name: &str, query: &str, params: &[DataType],
+    ) -> impl Future<Output = AnyResult<u32>> + Send {
+        ready(self.execute(query, params))
+    }
+}
+
+// A statement as the guest wrote it for its production database, in the
+// dialect the in-memory database runs.
+fn translate(sql: &str) -> String {
+    let sql = numbered_params(sql);
+    let sql = casts(&sql);
+    rewrite_word(&sql, "ILIKE", "LIKE")
+}
+
+// `$N` outside a string literal as `?N`, so a parameter binds by its number.
+fn numbered_params(sql: &str) -> String {
+    let mut out = String::with_capacity(sql.len());
+    let mut quoted = false;
+    let mut chars = sql.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\'' {
+            quoted = !quoted;
+        } else if !quoted && c == '$' && chars.peek().is_some_and(char::is_ascii_digit) {
+            out.push('?');
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+// Every `operand::type` outside a string literal as `CAST(operand AS type)`,
+// the operand a parenthesised group with the call before it, a literal, or
+// a name, parameter, or column path.
+fn casts(sql: &str) -> String {
+    let mut text = sql.to_owned();
+    while let Some(at) = unquoted(&text, "::") {
+        let type_end = type_end(&text, at + 2);
+        let type_name = text[at + 2..type_end].trim().to_owned();
+        let start = operand_start(&text, at);
+        if type_name.is_empty() || start == at {
+            break;
+        }
+        let operand = text[start..at].to_owned();
+        text.replace_range(start..type_end, &format!("CAST({operand} AS {type_name})"));
+    }
+    text
+}
+
+// The byte at which `needle` first occurs in `sql` outside a string literal.
+fn unquoted(sql: &str, needle: &str) -> Option<usize> {
+    let mut quoted = false;
+    for (at, c) in sql.char_indices() {
+        if c == '\'' {
+            quoted = !quoted;
+        } else if !quoted && sql[at..].starts_with(needle) {
+            return Some(at);
+        }
+    }
+    None
+}
+
+fn is_name(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || byte == b'_'
+}
+
+// Where the type name opening at `from` ends: its words, and a precision
+// in parentheses.
+fn type_end(sql: &str, from: usize) -> usize {
+    let bytes = sql.as_bytes();
+    let mut at = from;
+    while at < bytes.len() && bytes[at] == b' ' {
+        at += 1;
+    }
+    while at < bytes.len() && is_name(bytes[at]) {
+        at += 1;
+    }
+    if at < bytes.len() && bytes[at] == b'(' {
+        while at < bytes.len() && bytes[at] != b')' {
+            at += 1;
+        }
+        at = (at + 1).min(bytes.len());
+    }
+    at
+}
+
+// Where the operand ending at `end` starts.
+fn operand_start(sql: &str, end: usize) -> usize {
+    let bytes = sql.as_bytes();
+    let mut at = end;
+    if at > 0 && bytes[at - 1] == b')' {
+        let mut depth = 0usize;
+        while at > 0 {
+            at -= 1;
+            match bytes[at] {
+                b')' => depth += 1,
+                b'(' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        while at > 0 && is_name(bytes[at - 1]) {
+            at -= 1;
+        }
+        return at;
+    }
+    if at > 0 && bytes[at - 1] == b'\'' {
+        at -= 1;
+        while at > 0 {
+            at -= 1;
+            if bytes[at] == b'\'' {
+                break;
+            }
+        }
+        return at;
+    }
+    while at > 0 && (is_name(bytes[at - 1]) || matches!(bytes[at - 1], b'.' | b'?' | b'$')) {
+        at -= 1;
+    }
+    at
+}
+
+// Every whole word `from`, in any case, outside a string literal, as `to`.
+fn rewrite_word(sql: &str, from: &str, to: &str) -> String {
+    let bytes = sql.as_bytes();
+    let mut out = String::with_capacity(sql.len());
+    let mut quoted = false;
+    let mut at = 0;
+    while at < sql.len() {
+        let c = bytes[at];
+        if c == b'\'' {
+            quoted = !quoted;
+        }
+        let bounded = at + from.len() <= sql.len()
+            && sql[at..at + from.len()].eq_ignore_ascii_case(from)
+            && (at == 0 || !is_name(bytes[at - 1]))
+            && sql.as_bytes().get(at + from.len()).is_none_or(|next| !is_name(*next));
+        if !quoted && bounded {
+            out.push_str(to);
+            at += from.len();
+            continue;
+        }
+        out.push(c as char);
+        at += 1;
+    }
+    out
+}
+
+fn to_sql(value: &DataType) -> Sql {
+    match value {
+        DataType::Boolean(Some(b)) => Sql::Integer(i64::from(*b)),
+        DataType::Int32(Some(i)) => Sql::Integer(i64::from(*i)),
+        DataType::Int64(Some(i)) => Sql::Integer(*i),
+        DataType::Uint32(Some(u)) => Sql::Integer(i64::from(*u)),
+        DataType::Uint64(Some(u)) => Sql::Integer(i64::try_from(*u).unwrap_or(i64::MAX)),
+        DataType::Float(Some(f)) => Sql::Real(f64::from(*f)),
+        DataType::Double(Some(f)) => Sql::Real(*f),
+        DataType::Str(Some(s))
+        | DataType::Date(Some(s))
+        | DataType::Time(Some(s))
+        | DataType::Timestamp(Some(s)) => Sql::Text(s.clone()),
+        DataType::Binary(Some(b)) => Sql::Blob(b.clone()),
+        _ => Sql::Null,
+    }
+}
+
+fn json_sql(value: &Value) -> Sql {
+    match value {
+        Value::Null => Sql::Null,
+        Value::Bool(b) => Sql::Integer(i64::from(*b)),
+        Value::Number(n) => n.as_i64().map_or_else(
+            || Sql::Real(n.as_f64().unwrap_or_default()),
+            Sql::Integer,
+        ),
+        Value::String(s) => Sql::Text(s.clone()),
+        other => Sql::Text(other.to_string()),
+    }
+}
+
+// A column's value as the type its declaration names; an expression,
+// declared nothing, as the value is stored.
+fn typed(value: ValueRef<'_>, declared: Option<&str>) -> DataType {
+    let declared = declared.map(str::to_ascii_uppercase).unwrap_or_default();
+    let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
+    if declared.contains("BOOL") {
+        return DataType::Boolean(match value {
+            ValueRef::Integer(i) => Some(i != 0),
+            ValueRef::Real(f) => Some(f != 0.0),
+            ValueRef::Text(t) => Some(matches!(
+                text(t).to_ascii_lowercase().as_str(),
+                "1" | "t" | "true" | "y" | "yes"
+            )),
+            _ => None,
+        });
+    }
+    if declared.contains("INT") {
+        return DataType::Int64(match value {
+            ValueRef::Integer(i) => Some(i),
+            ValueRef::Real(f) => Some(f as i64),
+            ValueRef::Text(t) => text(t).parse().ok(),
+            _ => None,
+        });
+    }
+    if ["DOUBLE", "REAL", "FLOAT", "NUMERIC", "DECIMAL"].iter().any(|kind| declared.contains(kind)) {
+        return DataType::Double(match value {
+            ValueRef::Integer(i) => Some(i as f64),
+            ValueRef::Real(f) => Some(f),
+            ValueRef::Text(t) => text(t).parse().ok(),
+            _ => None,
+        });
+    }
+    if declared.contains("TIMESTAMP") {
+        return DataType::Timestamp(stored_text(value));
+    }
+    if declared.contains("DATE") {
+        return DataType::Date(stored_text(value));
+    }
+    if declared.contains("TIME") {
+        return DataType::Time(stored_text(value));
+    }
+    if !declared.is_empty() {
+        return DataType::Str(stored_text(value));
+    }
+    match value {
+        ValueRef::Null => DataType::Str(None),
+        ValueRef::Integer(i) => DataType::Int64(Some(i)),
+        ValueRef::Real(f) => DataType::Double(Some(f)),
+        ValueRef::Text(t) => DataType::Str(Some(text(t))),
+        ValueRef::Blob(b) => DataType::Binary(Some(b.to_vec())),
+    }
+}
+
+fn stored_text(value: ValueRef<'_>) -> Option<String> {
+    match value {
+        ValueRef::Null => None,
+        ValueRef::Integer(i) => Some(i.to_string()),
+        ValueRef::Real(f) => Some(f.to_string()),
+        ValueRef::Text(t) => Some(String::from_utf8_lossy(t).into_owned()),
+        ValueRef::Blob(b) => Some(String::from_utf8_lossy(b).into_owned()),
+    }
+}
+
+// The guest's warn and error events as one scenario runs, since a handler
+// that logs a failure and answers an error says why here alone.
+#[derive(Clone, Default)]
+struct Logged(Arc<Mutex<Vec<String>>>);
+
+impl Logged {
+    fn last(&self) -> Option<String> {
+        self.0.lock().expect("logged").last().cloned()
+    }
+}
+
+impl Subscriber for Logged {
+    fn enabled(&self, metadata: &Metadata<'_>) -> bool {
+        *metadata.level() <= Level::WARN
+    }
+
+    fn new_span(&self, _span: &span::Attributes<'_>) -> span::Id {
+        span::Id::from_u64(1)
+    }
+
+    fn record(&self, _span: &span::Id, _values: &span::Record<'_>) {}
+
+    fn record_follows_from(&self, _span: &span::Id, _follows: &span::Id) {}
+
+    fn event(&self, event: &Event<'_>) {
+        let mut fields = Fields::default();
+        event.record(&mut fields);
+        let line = format!(
+            "{} {}: {}",
+            event.metadata().level(),
+            event.metadata().target(),
+            fields.0.trim()
+        );
+        self.0.lock().expect("logged").push(line);
+    }
+
+    fn enter(&self, _span: &span::Id) {}
+
+    fn exit(&self, _span: &span::Id) {}
+}
+
+// An event's fields spelled as text, its message first.
+#[derive(Default)]
+struct Fields(String);
+
+impl Visit for Fields {
+    fn record_debug(&mut self, field: &LogField, value: &dyn fmt::Debug) {
+        if field.name() == "message" {
+            self.0.insert_str(0, &format!("{value:?} "));
+        } else {
+            let _ = write!(self.0, "{}={value:?} ", field.name());
+        }
+    }
+}
+
+// A text as a reason reads it: one line, within the quote length, with the
+// separators the oracle's lines are split on spelled otherwise.
+fn quoted(line: &str) -> String {
+    shortened(&flat(line), QUOTED_CHARS)
+}
+
+fn flat(text: &str) -> String {
+    text.replace('\n', " ").replace(" | ", " / ").replace("; ", ", ")
+}
+
+fn shortened(text: &str, chars: usize) -> String {
+    let mut short: String = text.chars().take(chars).collect();
+    if text.chars().count() > chars {
+        short.push('…');
+    }
+    short
+}
+
+fn oracle_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("oracle")
+}
+
+fn panic_text(join: tokio::task::JoinError) -> String {
+    match join.try_into_panic() {
+        Ok(payload) => payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|text| (*text).to_owned()))
+            .unwrap_or_else(|| "panicked".to_owned()),
+        Err(join) => join.to_string(),
+    }
+}
+
+// What every scenario runs over: the configuration, the bearer the guarded
+// paths take, the store's schema and seeds, and each upstream path's
+// default answer.
+struct Settings {
+    config: Vec<(String, String)>,
+    header: String,
+    token: String,
+    guarded: String,
+    schema: String,
+    tables: Map<String, Value>,
+    http: Map<String, Value>,
+}
+
+impl Settings {
+    fn read(oracle: &Value) -> Self {
+        Self {
+            config: oracle["config"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(key, value)| (key.clone(), value.as_str().unwrap_or("").to_owned()))
+                .collect(),
+            header: oracle["auth"]["header"].as_str().unwrap_or("authorization").to_owned(),
+            token: oracle["auth"]["token"].as_str().unwrap_or("").to_owned(),
+            guarded: oracle["auth"]["guarded"].as_str().unwrap_or("/").to_owned(),
+            schema: oracle["schema"].as_str().unwrap_or("").to_owned(),
+            tables: oracle["tables"].as_object().cloned().unwrap_or_default(),
+            http: oracle["http"].as_object().cloned().unwrap_or_default(),
+        }
+    }
+
+    // The provider one scenario runs over: a fresh store seeded, the
+    // upstream answers the scenario seeds, and the configuration.
+    fn provider(&self, seed: &Value) -> Oracle {
+        let tables = if seed["tables"].as_str() == Some("unavailable") {
+            Sqlite::unavailable()
+        } else {
+            Sqlite::open(&self.schema, &self.tables)
+        };
+        Oracle {
+            config: MapConfig::default().with(self.config.iter().cloned()),
+            http: self.upstream(&seed["http"]),
+            identity: FixedIdentity::new(&self.token),
+            publish: Sink::default(),
+            broadcast: Sink::default(),
+            storage: Memory::default(),
+            docs: MemoryDocs::default(),
+            tables,
+            model: ScriptedModel::default(),
+            plugins: ScriptedLoader::default(),
+            vcs: ScriptedVcs::default(),
+        }
+    }
+
+    // Every upstream answer the scenario seeds, at its path and query in the
+    // order given and, for two parameters, the other; a body the entry
+    // leaves out is the path's default, a status of 4xx or 5xx an error.
+    fn upstream(&self, entries: &Value) -> MatchedHttp {
+        let mut http = MatchedHttp::default();
+        for entry in entries.as_array().into_iter().flatten() {
+            let method = entry["method"].as_str().unwrap_or("GET");
+            let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
+            let path = entry["path"].as_str().unwrap_or("/");
+            let status = u16::try_from(entry["status"].as_u64().unwrap_or(200)).unwrap_or(500);
+            let body = match entry.get("body") {
+                Some(body) => body.to_string(),
+                None if status >= 400 => Value::Null.to_string(),
+                None => self.http.get(path).cloned().unwrap_or(Value::Null).to_string(),
+            };
+            let params: Vec<(String, String)> = entry["query"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(key, value)| {
+                    let value = match value {
+                        Value::String(text) => text.clone(),
+                        other => other.to_string(),
+                    };
+                    (key.clone(), value)
+                })
+                .collect();
+            let mut orders = vec![params.clone()];
+            if params.len() == 2 {
+                orders.push(vec![params[1].clone(), params[0].clone()]);
+            }
+            for order in orders {
+                let query: Vec<String> =
+                    order.iter().map(|(key, value)| format!("{key}={value}")).collect();
+                let url = if query.is_empty() {
+                    format!("{BASE_URL}{path}")
+                } else {
+                    format!("{BASE_URL}{path}?{}", query.join("&"))
+                };
+                let response = Response::builder()
+                    .status(status)
+                    .header("content-type", "application/json")
+                    .body(Bytes::from(body.clone()))
+                    .expect("upstream response");
+                http = http.on(method.clone(), url, response);
+            }
+        }
+        http
+    }
+}
+
+#[tokio::test]
+async fn reference_scenarios() {
+    tokio::task::LocalSet::new().run_until(run()).await;
+}
+
+async fn run() {
+    let dir = oracle_dir();
+    let oracle: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("oracle.json")).expect("oracle.json"))
+            .expect("oracle.json parses");
+    let settings = Settings::read(&oracle);
+    println!("oracle-kind scenarios");
+    for scenario in oracle["scenarios"].as_array().into_iter().flatten() {
+        let name = scenario["name"].as_str().unwrap_or("?");
+        let driven = drive(&settings, scenario).await;
+        if driven.reasons.is_empty() {
+            println!("oracle {name} | {} | pass", driven.expected);
+        } else {
+            println!("oracle {name} | {} | fail: {}", driven.expected, driven.reasons.join("; "));
+        }
+    }
+}
+
+// What one scenario driven through the guest showed.
+struct Driven {
+    expected: String,
+    reasons: Vec<String>,
+}
+
+// One scenario through the guest, step by step over one provider: the first
+// step whose answer differs ends it, with the last failed statement and the
+// last event the guest logged beside the difference.
+async fn drive(settings: &Settings, scenario: &Value) -> Driven {
+    let steps: Vec<&Value> = scenario["steps"].as_array().into_iter().flatten().collect();
+    let last_status = steps
+        .iter()
+        .rev()
+        .find_map(|step| step["expect"]["status"].as_u64())
+        .unwrap_or_default();
+    let expected = match steps.len() {
+        1 => format!("1 step to {last_status}"),
+        count => format!("{count} steps to {last_status}"),
+    };
+    let provider = settings.provider(&scenario["seed"]);
+    let tables = provider.tables.clone();
+    let logged = Logged::default();
+    let router = __CRATE__::router(provider);
+    let mut captures: BTreeMap<String, String> = BTreeMap::new();
+    let mut reasons = Vec::new();
+
+    for (index, step) in steps.iter().enumerate() {
+        let label = format!("step {} of {}", index + 1, steps.len());
+
+        // a statement of the scenario's own, over the store behind the guest
+        if let Some(sql) = step["sql"].as_str() {
+            let sql = substitute(sql, &captures);
+            match tables.change(&sql) {
+                Ok(0) => reasons.push(format!("{label}: `{sql}` changed no row")),
+                Ok(_) => {}
+                Err(error) => reasons.push(format!("{label}: {}", quoted(&error.to_string()))),
+            }
+            if reasons.is_empty() {
+                continue;
+            }
+            break;
+        }
+
+        // the request through the router
+        let request = match build_request(&step["request"], settings, &captures) {
+            Ok(request) => request,
+            Err(why) => {
+                reasons.push(format!("{label}: {why}"));
+                break;
+            }
+        };
+        let outcome = {
+            let _default = tracing::subscriber::set_default(logged.clone());
+            let router = router.clone();
+            tokio::task::spawn_local(async move { send(&router, request).await }).await
+        };
+        let response = match outcome {
+            Ok(response) => response,
+            Err(join) => {
+                let text = panic_text(join);
+                let reason = match text.strip_prefix("no response scripted for ") {
+                    Some(fetched) => format!("fetched {fetched}, which the scenario does not seed"),
+                    None => format!("panicked: {text}"),
+                };
+                reasons.push(format!("{label}: {}", quoted(&reason)));
+                break;
+            }
+        };
+        let status = response.status().as_u16();
+        let text = String::from_utf8_lossy(response.body()).into_owned();
+        let body: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+
+        // the status first, since an error body answers nothing else asked
+        let expect = &step["expect"];
+        let wanted = expect["status"].as_u64().and_then(|status| u16::try_from(status).ok());
+        if let Some(wanted) = wanted.filter(|wanted| *wanted != status) {
+            reasons.push(format!(
+                "{label}: status {status}, {wanted} expected (answered {})",
+                quoted(text.trim())
+            ));
+            break;
+        }
+        if !expect["body"].is_null() && body.is_null() && !text.trim().is_empty() {
+            reasons.push(format!("{label}: the body is no JSON (answered {})", quoted(text.trim())));
+            break;
+        }
+
+        // the captures, before the expectations name them
+        for (name, path) in step["capture"].as_object().into_iter().flatten() {
+            let path = path.as_str().unwrap_or("");
+            match value_at(&body, path) {
+                Some(Value::String(value)) => {
+                    captures.insert(name.clone(), value.clone());
+                }
+                Some(other) => {
+                    captures.insert(name.clone(), other.to_string());
+                }
+                None => reasons.push(format!("{label}: `{path}` is absent from the body")),
+            }
+        }
+
+        // the headers and the body
+        let mut differences = Vec::new();
+        for (header, want) in expect["headers"].as_object().into_iter().flatten() {
+            let want = substitute(want.as_str().unwrap_or(""), &captures);
+            let have = response.headers().get(header.as_str()).and_then(|value| value.to_str().ok());
+            if have != Some(want.as_str()) {
+                differences.push(format!(
+                    "header `{header}` is {}, `{want}` expected",
+                    have.map_or_else(|| "absent".to_owned(), |have| format!("`{}`", flat(have)))
+                ));
+            }
+        }
+        if !expect["body"].is_null() {
+            compare(&expect["body"], &body, "body", &captures, &mut differences);
+        }
+        if !differences.is_empty() {
+            reasons.push(format!("{label}: {}", differences.join(", ")));
+        }
+        if !reasons.is_empty() {
+            break;
+        }
+    }
+
+    // what the store and the guest said as it failed
+    if !reasons.is_empty() {
+        if let Some(error) = tables.last_error() {
+            reasons.push(format!("sql: {}", quoted(&error)));
+        }
+        if let Some(last) = logged.last() {
+            reasons.push(format!("logged: {}", quoted(&last)));
+        }
+    }
+    Driven { expected, reasons }
+}
+
+// The step's request: its method, path, headers, and JSON body with every
+// capture substituted, and the bearer on a guarded path the step leaves to
+// the harness.
+fn build_request(
+    spec: &Value, settings: &Settings, captures: &BTreeMap<String, String>,
+) -> Result<Request<Body>, String> {
+    let method = spec["method"].as_str().unwrap_or("GET");
+    let path = substitute(spec["path"].as_str().unwrap_or("/"), captures);
+    let mut builder = Request::builder().method(method).uri(path.as_str());
+    let mut authorised = false;
+    for (name, value) in spec["headers"].as_object().into_iter().flatten() {
+        if name.eq_ignore_ascii_case(&settings.header) {
+            authorised = true;
+        }
+        if let Some(text) = value.as_str() {
+            builder = builder.header(name.as_str(), substitute(text, captures));
+        }
+    }
+    if path.starts_with(&settings.guarded) && !authorised {
+        builder = builder.header(settings.header.as_str(), format!("Bearer {}", settings.token));
+    }
+    let body = &spec["body"];
+    let request = if body.is_null() {
+        builder.body(Body::empty())
+    } else {
+        builder
+            .header("content-type", "application/json")
+            .body(Body::from(substitute_value(body, captures).to_string()))
+    };
+    request.map_err(|error| format!("the request is malformed: {error}"))
+}
+
+// `text` with every `{name}` a capture holds spelled as its value.
+fn substitute(text: &str, captures: &BTreeMap<String, String>) -> String {
+    let mut out = text.to_owned();
+    for (name, value) in captures {
+        out = out.replace(&format!("{{{name}}}"), value);
+    }
+    out
+}
+
+fn substitute_value(value: &Value, captures: &BTreeMap<String, String>) -> Value {
+    match value {
+        Value::String(text) => Value::String(substitute(text, captures)),
+        Value::Array(items) => {
+            Value::Array(items.iter().map(|item| substitute_value(item, captures)).collect())
+        }
+        Value::Object(fields) => Value::Object(
+            fields
+                .iter()
+                .map(|(key, field)| (key.clone(), substitute_value(field, captures)))
+                .collect(),
+        ),
+        other => other.clone(),
+    }
+}
+
+// The value at a dotted `path` of `body`, a numeric segment an index.
+fn value_at<'a>(body: &'a Value, path: &str) -> Option<&'a Value> {
+    let mut current = body;
+    for segment in path.split('.').filter(|segment| !segment.is_empty()) {
+        current = match segment.parse::<usize>() {
+            Ok(index) => current.get(index)?,
+            Err(_) => current.get(segment)?,
+        };
+    }
+    Some(current)
+}
+
+// Every way `have` differs from `want`: an object's listed fields each
+// present and agreeing, an array of the same length agreeing item by item,
+// a string equal once captures are spelled, or holding to its placeholder,
+// a number equal in value, a boolean or null equal.
+fn compare(
+    want: &Value, have: &Value, path: &str, captures: &BTreeMap<String, String>,
+    differences: &mut Vec<String>,
+) {
+    match want {
+        Value::Object(fields) => {
+            let Some(object) = have.as_object() else {
+                differences.push(format!("`{path}` is {}, an object expected", brief(have)));
+                return;
+            };
+            for (key, want) in fields {
+                match object.get(key) {
+                    Some(have) => compare(want, have, &format!("{path}.{key}"), captures, differences),
+                    None => differences.push(format!("`{path}.{key}` is absent")),
+                }
+            }
+        }
+        Value::Array(items) => {
+            let Some(array) = have.as_array() else {
+                differences.push(format!("`{path}` is {}, an array expected", brief(have)));
+                return;
+            };
+            if array.len() != items.len() {
+                differences.push(format!(
+                    "`{path}` holds {} items, {} expected",
+                    array.len(),
+                    items.len()
+                ));
+                return;
+            }
+            for (index, (want, have)) in items.iter().zip(array).enumerate() {
+                compare(want, have, &format!("{path}[{index}]"), captures, differences);
+            }
+        }
+        Value::String(text) => {
+            let agrees = match text.as_str() {
+                "{uuid}" => have.as_str().is_some_and(is_uuid),
+                "{timestamp}" => {
+                    have.as_str().is_some_and(|text| DateTime::parse_from_rfc3339(text).is_ok())
+                }
+                "{any}" => !have.is_null(),
+                _ => have.as_str() == Some(substitute(text, captures).as_str()),
+            };
+            if !agrees {
+                differences.push(format!(
+                    "`{path}` is {}, `{}` expected",
+                    brief(have),
+                    substitute(text, captures)
+                ));
+            }
+        }
+        Value::Number(number) => {
+            let agrees = match (have.as_f64(), number.as_f64()) {
+                (Some(have), Some(want)) => (have - want).abs() < 1e-9,
+                _ => false,
+            };
+            if !agrees {
+                differences.push(format!("`{path}` is {}, {number} expected", brief(have)));
+            }
+        }
+        Value::Bool(_) | Value::Null => {
+            if want != have {
+                differences.push(format!("`{path}` is {}, {want} expected", brief(have)));
+            }
+        }
+    }
+}
+
+fn is_uuid(text: &str) -> bool {
+    text.len() == 36
+        && text.char_indices().all(|(at, c)| match at {
+            8 | 13 | 18 | 23 => c == '-',
+            _ => c.is_ascii_hexdigit(),
+        })
+}
+
+// A value as a reason quotes it: `absent` for null, else its JSON within
+// a short length.
+fn brief(value: &Value) -> String {
+    if value.is_null() {
+        return "absent".to_owned();
+    }
+    format!("`{}`", shortened(&flat(&value.to_string()), 80))
+}
+
+// The dialect translation held to the statements a port writes.
+#[test]
+fn translations() {
+    assert_eq!(
+        translate("SELECT count(*)::text AS total FROM orders WHERE state = $1 AND customer_id = $2"),
+        "SELECT CAST(count(*) AS text) AS total FROM orders WHERE state = ?1 AND customer_id = ?2"
+    );
+    assert_eq!(translate("UPDATE customers SET tier = $2 WHERE id = $1"), "UPDATE customers SET tier = ?2 WHERE id = ?1");
+    assert_eq!(translate("SELECT $1::uuid, 'a::b'"), "SELECT CAST(?1 AS uuid), 'a::b'");
+    assert_eq!(translate("SELECT (a + b)::int, x::varchar(10)"), "SELECT CAST((a + b) AS int), CAST(x AS varchar(10))");
+    assert_eq!(translate("SELECT 1 FROM c WHERE email ILIKE $1 AND note = 'ILIKE'"), "SELECT 1 FROM c WHERE email LIKE ?1 AND note = 'ILIKE'");
+    assert_eq!(translate("SELECT id FROM orders LIMIT $3 OFFSET $4"), "SELECT id FROM orders LIMIT ?3 OFFSET ?4");
+}
+"#;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1413,6 +2835,25 @@ oracle-shared /stops, /routes?all=true
         assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["RATES_URL"]);
     }
 
+    // A prefixed struct's fields read under its prefix, a field's own key
+    // over it, an unprefixed struct's bare; a struct deriving no `Settings`
+    // and a field comment spelling a colon add nothing.
+    #[test]
+    fn setting_fields_of_a_part() {
+        let text = "// The settings the part reads: `ORDERS_RATE_URL`, `ORDERS_TYPE`.\n\
+                    #[derive(Debug, Settings)]\n#[setting(prefix = \"ORDERS_\")]\n\
+                    pub(crate) struct PlacingSettings {\n    // Where the rates are: the upstream.\n    \
+                    rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n    \
+                    ttl_secs: u64,\n}\n\n#[derive(Debug, Deserialize)]\npub struct Order {\n    \
+                    pub id: String,\n}\n\n#[derive(Settings)]\nstruct Probe {\n    pub(crate) \
+                    deadline_ms: u64,\n}\n";
+        let keys = setting_fields(text);
+        assert_eq!(
+            keys.into_iter().collect::<Vec<_>>(),
+            ["DEADLINE_MS", "ORDERS_RATE_URL", "ORDERS_TTL_SECS", "ORDERS_TYPE"]
+        );
+    }
+
     #[test]
     fn topic_module_block() {
         let text = "pub mod http {}\n\npub mod topic {\n    pub const TRAIN: &str = \"realtime-train.v1\";\n    pub mod inner { pub const X: &str = \"x\"; }\n}\npub const OUT: &str = \"outside\";\n";
@@ -1474,7 +2915,7 @@ serde_json.workspace = true
 "
         .parse()
         .unwrap();
-        let additions = dev_dependency_additions(&manifest).unwrap();
+        let additions = dev_dependency_additions(&manifest, &[]).unwrap();
         assert!(additions.contains(".dev-dependencies.chrono]\nworkspace = true"), "{additions}");
         assert!(
             additions.contains(".dev-dependencies.chrono-tz]\nversion = \"0.10\""),
@@ -1482,10 +2923,21 @@ serde_json.workspace = true
         );
         assert!(additions.contains(".dev-dependencies.tracing]\nversion = \"0.1\""), "{additions}");
         assert!(!additions.contains("serde_json"), "{additions}");
+        assert!(!additions.contains("rusqlite"), "{additions}");
         let appended: toml::Table =
             format!("{}\n{additions}", toml::to_string(&manifest).unwrap()).parse().unwrap();
         assert_eq!(package_dependency_names(&appended).len(), 8);
-        assert!(dev_dependency_additions(&appended).unwrap().is_empty(), "added once");
+        assert!(dev_dependency_additions(&appended, &[]).unwrap().is_empty(), "added once");
+
+        // the scenario harness adds its database with the features it reads
+        let scenario = dev_dependency_additions(&manifest, &SCENARIO_DEPENDENCIES).unwrap();
+        assert!(
+            scenario.contains(
+                ".dev-dependencies.rusqlite]\nversion = \"0.41\"\nfeatures = [\"bundled\", \
+                 \"column_decltype\", \"functions\"]\n"
+            ),
+            "{scenario}"
+        );
 
         // a crate the package depends on already serves its tests
         let depending: toml::Table = "\
@@ -1499,13 +2951,148 @@ tokio = \"1\"
 "
         .parse()
         .unwrap();
-        assert!(!dev_dependency_additions(&depending).unwrap().contains("tracing"));
+        assert!(!dev_dependency_additions(&depending, &[]).unwrap().contains("tracing"));
 
         let bare: toml::Table = "[package]\nname = \"guest\"\n".parse().unwrap();
         assert_eq!(
-            dev_dependency_additions(&bare).unwrap_err(),
+            dev_dependency_additions(&bare, &[]).unwrap_err(),
             "the built tree's root package has no `omnia-test` dev-dependency"
         );
+    }
+
+    #[test]
+    fn spec_parsed() {
+        let spec = Spec::parse(
+            "kind = \"http\"\n[auth]\nheader = \"authorization\"\ntoken = \"t\"\nguarded = \
+             \"/api\"\n[config]\nGST_RATE = \"0.15\"\n",
+        )
+        .unwrap();
+        assert_eq!(spec.auth.guarded, "/api");
+        assert_eq!(spec.config["GST_RATE"], "0.15");
+        let kind = Spec::parse(
+            "kind = \"grpc\"\n[auth]\nheader = \"a\"\ntoken = \"t\"\nguarded = \"/\"\n",
+        )
+        .unwrap_err();
+        assert!(kind.contains("`http` is the one kind"), "{kind}");
+        let guarded = Spec::parse(
+            "kind = \"http\"\n[auth]\nheader = \"a\"\ntoken = \"t\"\nguarded = \"api\"\n",
+        )
+        .unwrap_err();
+        assert!(guarded.contains("no path"), "{guarded}");
+        Spec::parse("kind = \"http\"\nextra = 1\n").unwrap_err();
+    }
+
+    #[test]
+    fn scenario_checked() {
+        let sound = serde_json::json!({
+            "seed": { "http": [{ "path": "/rates", "query": { "zone": "z" } }] },
+            "steps": [
+                {
+                    "request": { "method": "POST", "path": "/api/orders", "body": { "n": 1 } },
+                    "capture": { "order": "id" },
+                    "expect": { "status": 201, "headers": { "location": "/api/orders/{order}" },
+                                "body": { "id": "{uuid}", "createdAt": "{timestamp}" } }
+                },
+                { "sql": "UPDATE orders SET state = 'paid' WHERE id = '{order}'" },
+                { "request": { "method": "GET", "path": "/api/orders/{order}" },
+                  "expect": { "status": 200, "body": { "total": "{any}" } } }
+            ]
+        });
+        check_scenario(&sound).unwrap();
+
+        let unknown = serde_json::json!({
+            "steps": [{ "request": { "method": "GET", "path": "/api/orders/{order}" },
+                        "expect": { "status": 200 } }]
+        });
+        assert_eq!(
+            check_scenario(&unknown).unwrap_err(),
+            "step 1 spells `{order}`, which no earlier step captures"
+        );
+        let both = serde_json::json!({
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "sql": "SELECT 1",
+                        "expect": { "status": 200 } }]
+        });
+        assert!(check_scenario(&both).unwrap_err().contains("not both or neither"));
+        let status = serde_json::json!({
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": {} }]
+        });
+        assert_eq!(check_scenario(&status).unwrap_err(), "step 1 has no `expect.status`");
+        let empty = serde_json::json!({ "steps": [] });
+        assert_eq!(check_scenario(&empty).unwrap_err(), "has no `steps`");
+        let seed = serde_json::json!({
+            "seed": { "http": [{ "query": {} }] },
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": { "status": 200 } }]
+        });
+        assert!(check_scenario(&seed).unwrap_err().contains("no `path`"));
+    }
+
+    // The table's own keys stand; a built key the table lacks takes the
+    // value of its longest suffix in the table, else the pattern seed, and
+    // is left unset where neither reads it.
+    #[test]
+    fn scenario_config_seeded_by_suffix() {
+        let table: BTreeMap<String, String> = [
+            ("GST_RATE", "0.15"),
+            ("SHIPPING_API_URL", "http://api.test"),
+            ("API_TOKENS", "test-token"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+        let keys: BTreeSet<String> = [
+            "ORDERS_GST_RATE",
+            "RATES_SHIPPING_API_URL",
+            "START_API_TOKENS",
+            "ORDERS_CACHE_TTL_SECONDS",
+            "HEALTH_DEADLINE_MS",
+            "START_BEARER_TOKEN",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let seed = scenario_config(&table, "test-token", &keys);
+        assert_eq!(seed["GST_RATE"], "0.15");
+        assert_eq!(seed["ORDERS_GST_RATE"], "0.15");
+        assert_eq!(seed["RATES_SHIPPING_API_URL"], "http://api.test");
+        assert_eq!(seed["START_API_TOKENS"], "test-token");
+        assert_eq!(seed["ORDERS_CACHE_TTL_SECONDS"], "60");
+        assert_eq!(seed["START_BEARER_TOKEN"], "test-token");
+        assert!(!seed.contains_key("HEALTH_DEADLINE_MS"));
+    }
+
+    #[test]
+    fn scenario_oracle_lines() {
+        let output = "\
+oracle-kind scenarios
+oracle orders/place-standard | 2 steps to 201 | pass
+oracle orders/cancel-shipped | 4 steps to 409 | fail: step 3 of 4: status 200, 409 expected (answered {}); sql: no such column: foo in `SELECT foo`
+oracle start/missing-bearer | 1 steps to 401 | fail: step 1 of 1: status 201, 401 expected
+";
+        let oracle = Oracle::parse(output);
+        assert_eq!(oracle.kind.as_deref(), Some("scenarios"));
+        assert_eq!(oracle.cell(), "1/3");
+        assert_eq!(oracle.groups(), [("orders".to_owned(), 1, 2), ("start".to_owned(), 0, 1)]);
+        assert_eq!(oracle.outcomes[1].reasons.len(), 2);
+        let text = oracle.to_string();
+        assert!(text.contains("- 1/3 scenarios pass: 1/2 orders, 0/1 start."), "{text}");
+        assert!(text.contains("| scenario | steps | outcome |"), "{text}");
+        assert!(!text.contains("consumed under"), "{text}");
+    }
+
+    #[test]
+    fn scenario_comparison_finding() {
+        let comparison = Comparison {
+            name: "evals/cases/express-orders/oracle".to_owned(),
+            measures: Vec::new(),
+            oracle: Oracle::parse(
+                "oracle-kind scenarios\noracle orders/place-standard | 2 steps to 201 | pass\n",
+            ),
+            log: String::new(),
+        };
+        assert_eq!(comparison.finding(), "reference oracle 1/1");
+        let text = comparison.to_string();
+        assert!(text.contains("recorded as scenarios"), "{text}");
+        assert!(!text.contains("| measure |"), "{text}");
     }
 
     #[test]

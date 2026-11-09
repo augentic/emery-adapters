@@ -5,93 +5,29 @@ mod item;
 use std::fmt::Write as _;
 
 use self::item::{
-    Call, Chain, Const, Consts, Doc, Enum, Expr, Fence, Field, Fn, Item, Source, Struct, TAB, Uses,
-    Variant, Vis, block, closure, pad,
+    BODY_WIDTH, Call, Chain, Const, Consts, Doc, Enum, Expr, Fence, Field, Fn, Impl, Item, Source,
+    Struct, Uses, Variant, Vis, block,
 };
+pub use self::item::{MAX_WIDTH, TAB, pad};
+use super::gate::Gating;
+use super::lists::{Place, insert};
 use super::names::{escape, flat, snake};
+use super::reference::Gate;
+use super::settings::Settings;
 use super::stem::{Act, Consumer, Function, Handler, Kind, Stated, Stem, Test, Type};
 use super::trigger;
 use super::types::{Body, DefaultFn, LaidField, LaidVariant};
-use crate::layout::{
-    PROBE_DEPENDENCY, ROUTES_ARRAY_ANCHOR as ROUTES_ANCHOR, STEM_DEPENDENCIES,
-    TOPICS_ARRAY_ANCHOR as TOPICS_ANCHOR,
-};
+use crate::layout::{HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER};
+use crate::syntax;
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
 // The derives of a type a float reaches, which `Eq` cannot hold.
 const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserialize";
-const GENERICS: &str = "<P: Capabilities>";
-
-// The stem's manifest, as the layout reference spells it, its
-// `[dependencies]` the layout's fixed lines and, where the slice probes or
-// reaches a SQL store, the SQL crate after them.
-const MANIFEST: &str = r#"[package]
-name = "<package>"
-description = "The `<stem>` stem"
-publish.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-version.workspace = true
-
-[lints]
-workspace = true
-
-# Target-gated so the guest's wasm32 dependency graph never sees the doubles.
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-omnia-test = { workspace = true, features = ["guest"] }
-tokio.workspace = true
-tower.workspace = true
-
-# One line per crate the stem's files use, each added at the end.
-[dependencies]
-<dependencies>
-"#;
-
-// The bodies of the decoders a pre-rendered route function reads the input
-// with, as lines relative to the block: what the SDK's `post` and `get` do,
-// spelled in the part so the encoder beside them is the one place a status
-// changes. The SDK's form decoder is private, so a query is read as string
-// fields over `serde_json`, which coerces nothing, and a query field is a
-// `String`.
-const DECODE_JSON_BODY: &str = r#"let mut value = if body.is_empty() {
-    serde_json::Value::Object(serde_json::Map::new())
-} else {
-    serde_json::from_slice(body).map_err(|error| DecodeError::new(error.to_string()))?
-};
-let serde_json::Value::Object(object) = &mut value else {
-    return Err(DecodeError::new("the request body must be a JSON object"));
-};
-for (key, param) in params {
-    object.insert(key.clone(), serde_json::Value::String(param.clone()));
-}
-serde_json::from_value(value).map_err(|error| DecodeError::new(error.to_string()))"#;
-const DECODE_QUERY_BODY: &str = r#"let mut object = serde_json::Map::new();
-for pair in query.unwrap_or_default().split('&').filter(|pair| !pair.is_empty()) {
-    let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
-    object.insert(unescape(key)?, serde_json::Value::String(unescape(value)?));
-}
-for (key, param) in params {
-    object.insert(key.clone(), serde_json::Value::String(param.clone()));
-}
-serde_json::from_value(serde_json::Value::Object(object))
-    .map_err(|error| DecodeError::new(error.to_string()))"#;
-const UNESCAPE_BODY: &str = r#"let malformed = || DecodeError::new(format!("malformed query string: `{token}`"));
-let hex = |c: Option<char>| -> Option<u8> { u8::try_from(c?.to_digit(16)?).ok() };
-let mut bytes = Vec::with_capacity(token.len());
-let mut chars = token.chars();
-while let Some(c) = chars.next() {
-    match c {
-        '+' => bytes.push(b' '),
-        '%' => {
-            let (Some(high), Some(low)) = (hex(chars.next()), hex(chars.next())) else {
-                return Err(malformed());
-            };
-            bytes.push(high * 16 + low);
-        }
-        other => bytes.extend_from_slice(other.encode_utf8(&mut [0; 4]).as_bytes()),
-    }
-}
-String::from_utf8(bytes).map_err(|error| DecodeError::new(error.to_string()))"#;
+// The bound every scaffolded handler and consumer opens with: the turn
+// narrows it to the capabilities the body reaches.
+const BOUND: &str = "P: Capabilities";
+// The value a seeded setting holds until the turn fills it.
+const PLACEHOLDER: &str = "<value>";
 
 impl Stem {
     pub fn render(&self, kind: Kind) -> String {
@@ -103,20 +39,23 @@ impl Stem {
         }
     }
 
+    // The manifest: the header, then one line per crate the stem's files
+    // use, sorted by crate: the topic table's where a part names a topic,
+    // the gate's where the stem lays or imports it.
     fn render_manifest(&self) -> String {
         let mut dependencies: Vec<String> =
             STEM_DEPENDENCIES.iter().map(|name| dependency_line(name)).collect();
-        if self.sql {
-            dependencies.push(dependency_line(PROBE_DEPENDENCY));
-        }
-        MANIFEST
-            .replace("<package>", &self.package)
-            .replace("<stem>", &self.name)
-            .replace("<dependencies>", &dependencies.join("\n"))
+        dependencies.extend(self.dependencies());
+        dependencies.sort_by(|a, b| dependency_name(a).cmp(dependency_name(b)));
+        format!(
+            "{}\n{}\n",
+            STEM_MANIFEST_HEADER.replace("<package>", &self.package).replace("<stem>", &self.name),
+            dependencies.join("\n")
+        )
     }
 
-    // The stem's entry, as the layout reference spells it, with one part's
-    // lines in its lists.
+    // The stem's entry, as the layout reference spells it, with the part in
+    // its list where the part registers anything.
     fn render_entry(&self) -> String {
         let mut source = Source::default();
         source.push(Doc::new([
@@ -126,30 +65,23 @@ impl Stem {
         ]));
         source.push(Item::Mods(vec![self.part.clone()]));
         let mut uses = Uses::default();
-        uses.add("common", &["Capabilities"]);
-        uses.add("omnia_sdk::api", &["Client", "messaging"]);
+        uses.add("omnia_sdk", &["Capabilities"]);
+        uses.add("omnia_sdk::api", &["Handlers"]);
         source.push(uses);
-        let routes = (!self.handlers.is_empty()).then(|| format!("{}::routes(),", self.part));
         source.push(
-            Fn::new("router")
-                .docs(["The stem's routes, merged onto the root router."])
+            Fn::new("handlers")
+                .docs(["The stem's handlers, merged onto the root routers."])
                 .vis(Vis::Pub)
-                .generics(GENERICS)
-                .returns("axum::Router<Client<P>>")
-                .body(fold("common::routers([", ROUTES_ANCHOR, routes)),
+                .generics("<P: Capabilities>")
+                .returns("Handlers<P>")
+                .body(["Handlers::from([])"]),
         );
-        let topics = (!self.consumers.is_empty()).then(|| format!("{}::topics,", self.part));
-        source.push(
-            Fn::new("topics")
-                .docs(["The stem's topics, registered on the root messaging router under `env`."])
-                .attr("#[must_use]")
-                .vis(Vis::Pub)
-                .generics(GENERICS)
-                .params(["router: messaging::Router<P>", "env: &str"])
-                .returns("messaging::Router<P>")
-                .body(fold("common::topics(router, env).parts([", TOPICS_ANCHOR, topics)),
-        );
-        source.render()
+        let text = source.render();
+        if !self.registers() {
+            return text;
+        }
+        let line = format!("{}::handlers()", self.part);
+        insert(&text, &line, &Place::After(HANDLER_LIST_ANCHOR)).unwrap_or(text)
     }
 
     fn render_module(&self) -> String {
@@ -164,10 +96,15 @@ impl Stem {
                 Const::new(constant, "&str", format!("\"{}\"", escape(path))).vis(Vis::Crate)
             });
             source.push(Consts::new(paths).comment("The paths the part serves."));
-            source.push(self.routes_fn());
         }
-        if !self.consumers.is_empty() {
-            source.push(self.topics_fn());
+        if self.registers() {
+            source.push(self.handlers_fn());
+        }
+        if let Some(settings) = &self.settings {
+            source.push(settings.render("part"));
+        }
+        if let Some(gate) = self.laid_gate() {
+            gate.render(&mut source);
         }
         for design_type in &self.types {
             design_type.render(&mut source);
@@ -181,28 +118,14 @@ impl Stem {
         for function in &self.functions {
             source.push(function.render());
         }
-        let encoded = self.handlers.iter().filter(|handler| handler.route_fn.is_some());
-        let (json, query): (Vec<_>, Vec<_>) =
-            encoded.partition(|handler| carries_body(&handler.route.method));
-        if !json.is_empty() {
-            source.push(decode_json());
-        }
-        if !query.is_empty() {
-            source.push(decode_query());
-            source.push(unescape());
-        }
         source.render()
     }
 
     // The test file: the prelude the scenarios act through, each helper
     // only where a test calls it, then one ignored test per scenario.
     fn render_tests(&self) -> String {
-        let sending = self.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)));
-        let delivering = self.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)));
-        let with_body = self
-            .scenarios
-            .iter()
-            .any(|test| matches!(&test.act, Act::Route(route) if carries_body(&route.method)));
+        let sending = self.sending();
+        let delivering = self.delivering();
         let ident = self.package.replace('-', "_");
 
         let mut source = Source::default();
@@ -210,35 +133,14 @@ impl Stem {
             "The acceptance scenarios of the `{}` part of the `{}` stem, over the guest doubles.",
             self.part, self.name
         )]));
-        let mut uses = Uses::default();
-        if sending {
-            uses.add("axum::body", &["Body", "to_bytes"]);
-            if with_body {
-                uses.add("axum::http::header", &["CONTENT_TYPE"]);
-            }
-            uses.add("axum::http", &["Request", "StatusCode"]);
-        }
-        let common: &[&str] = if delivering { &["config", "topic"] } else { &["config"] };
-        uses.add("common", common);
-        if sending || delivering {
-            uses.add("omnia_sdk::api", &["Client"]);
-        }
-        if delivering {
-            uses.add("omnia_sdk::api::messaging", &["Delivery", "DeliveryError", "Router"]);
-        }
-        uses.add("omnia_test::guest", &["MapConfig", "Provider"]);
-        if sending {
-            uses.add("serde_json", &["Value"]);
-            uses.add("tower", &["ServiceExt as _"]);
-        }
-        source.push(uses);
+        source.push(self.test_imports());
 
-        source.push(provider());
-        if sending {
-            source.push(send(&ident));
+        source.push(provider(&self.seeded()));
+        if sending || delivering {
+            source.push(router(&ident));
         }
-        if delivering {
-            source.push(deliver(&ident));
+        if sending {
+            source.push(call());
         }
         for test in &self.scenarios {
             source.push(
@@ -254,182 +156,406 @@ impl Stem {
     fn imports(&self) -> Uses {
         let routed = !self.handlers.is_empty();
         let consuming = !self.consumers.is_empty();
-        let encoding = self.handlers.iter().any(|handler| handler.route_fn.is_some());
         let mut uses = Uses::default();
         if self.types.iter().any(|design_type| design_type.body.uses_map()) {
             uses.add("std::collections", &["BTreeMap"]);
         }
-        if encoding {
-            uses.add("axum", &["Json"]);
-            uses.add("axum::http", &["StatusCode"]);
-            uses.add("axum::response", &["IntoResponse"]);
-            uses.add("axum::routing", &["MethodRouter"]);
-        }
-        if routed || consuming {
-            let common: &[&str] =
-                if consuming { &["Capabilities", "config", "topic"] } else { &["Capabilities"] };
-            uses.add("common", common);
-        }
+        let laying = self.laid_gate().is_some();
         if routed {
-            let mut names: Vec<&str> = self
+            uses.add("axum", &["Json"]);
+            if self.handlers.iter().any(|handler| !handler.params.is_empty()) {
+                uses.add("axum::extract", &["Path"]);
+            }
+            let mut http = Vec::new();
+            if self.handlers.iter().any(|handler| handler.gated) || laying {
+                http.push("HeaderMap");
+            }
+            if self.handlers.iter().any(|handler| handler.status) || laying {
+                http.push("StatusCode");
+            }
+            uses.add("axum::http", &http);
+            if laying {
+                uses.add("axum::response", &["IntoResponse", "Response"]);
+            }
+            let methods: Vec<&str> = self
                 .handlers
                 .iter()
-                .filter(|handler| handler.route_fn.is_none())
                 .map(|handler| trigger::method_fn(&handler.route.method))
                 .collect();
-            if encoding {
-                names.extend(["DecodeError", "MethodFilter", "RawRequest", "handle_with"]);
-            }
-            uses.add("omnia_sdk::api::http", &names);
+            uses.add("axum::routing", &methods);
+        }
+        if consuming {
+            uses.add("common", &["topic"]);
+        }
+        if let Some(path) = self.gating.as_ref().and_then(Gating::imported) {
+            uses.add(path, &[Gate::ERROR, Gate::FN]);
         }
         if routed || consuming {
-            let mut api = Vec::new();
-            if routed {
-                api.push("Client");
-            }
-            api.push("Context");
-            if consuming {
-                api.push("messaging");
-            }
-            uses.add("omnia_sdk::api", &api);
+            uses.add("omnia_sdk::api", &["Context", "Handlers"]);
         }
-        if encoding {
-            uses.add("serde::de", &["DeserializeOwned"]);
+        let tabled = self.types.iter().any(|design_type| design_type.body.is_table());
+        let mut sdk = Vec::new();
+        if routed || consuming {
+            sdk.push("Capabilities");
         }
+        if laying {
+            sdk.push("Config");
+        }
+        if tabled {
+            sdk.push("Error");
+        }
+        if routed || consuming || tabled || !self.functions.is_empty() {
+            sdk.push("Result");
+        }
+        if self.settings.is_some() || self.laid_gate().is_some_and(|gate| gate.settings.is_some()) {
+            sdk.push("Settings");
+        }
+        uses.add("omnia_sdk", &sdk);
+        let deserializing = consuming
+            || !self.types.is_empty()
+            || self.handlers.iter().any(|handler| handler.input.is_some());
         let serializing = routed || !self.types.is_empty();
-        if serializing {
-            uses.add("serde", &["Deserialize", "Serialize"]);
-        } else if consuming {
-            uses.add("serde", &["Deserialize"]);
+        let mut serde = Vec::new();
+        if deserializing {
+            serde.push("Deserialize");
         }
+        if serializing {
+            serde.push("Serialize");
+        }
+        uses.add("serde", &serde);
         uses
     }
 
-    // The part's `topics(..)`: one `.route(..)` per consumer, chained over
-    // the router.
-    fn topics_fn(&self) -> Fn {
+    // The part's `handlers()`: one `.route(..)` per handler and one
+    // `.topic(..)` per consumer, chained over a new `Handlers`.
+    fn handlers_fn(&self) -> Fn {
         let calls = self
-            .consumers
+            .handlers
             .iter()
-            .map(|consumer| {
-                let topic = Call::new(
-                    "config::topic_for",
-                    ["env".to_owned(), format!("topic::{}", consumer.constant)],
-                );
-                let consume = Call::new("messaging::consume", [consumer.name.as_str()]);
-                Call::new(".route", [topic, consume])
-            })
+            .map(Handler::registration)
+            .chain(self.consumers.iter().map(Consumer::registration))
             .collect();
-        Fn::new("topics")
+        Fn::new("handlers")
             .vis(Vis::Crate)
-            .generics(GENERICS)
-            .params(["router: messaging::Router<P>", "env: &str"])
-            .returns("messaging::Router<P>")
-            .body(Chain::new("router", calls).tail(0))
+            .generics("<P: Capabilities>")
+            .returns("Handlers<P>")
+            .body(Chain::new("Handlers::new()", calls).tail(0))
     }
 
-    // The part's `routes()`: one `.route(..)` per handler, chained over a
-    // new router.
-    fn routes_fn(&self) -> Fn {
-        let chain = Chain::new(
-            "axum::Router::new()",
-            self.handlers.iter().map(Handler::registration).collect(),
-        );
-        Fn::new("routes")
-            .vis(Vis::Crate)
-            .generics(GENERICS)
-            .returns("axum::Router<Client<P>>")
-            .body(chain.tail(0))
+    fn sending(&self) -> bool {
+        self.scenarios.iter().any(|test| matches!(test.act, Act::Route(_)))
+    }
+
+    fn delivering(&self) -> bool {
+        self.scenarios.iter().any(|test| matches!(test.act, Act::Topic(_)))
+    }
+
+    // Extends the held `text` of a module for a later serial slice of the
+    // part: inserts missing imports, registers new routes and topics in
+    // `handlers()` where `syn` locates its chain (else records them as
+    // unanchored), and appends the slice's new path constants, settings,
+    // design types, handlers, consumers, and functions at the end of the
+    // file.
+    pub fn extend_module(&self, text: &str) -> (String, Vec<String>) {
+        let parsed = syntax::parse(text).ok();
+        let mut next = text.to_owned();
+        let mut unanchored = Vec::new();
+        let calls: Vec<String> = self
+            .handlers
+            .iter()
+            .map(|handler| handler.registration().inline())
+            .chain(self.consumers.iter().map(|consumer| consumer.registration().inline()))
+            .collect();
+        if !calls.is_empty() && self.held_fn("handlers") {
+            if let Some(at) =
+                parsed.as_ref().and_then(|file| syntax::chain_end(text, file, "handlers"))
+            {
+                next.insert_str(at, &calls.concat());
+            } else {
+                for call in calls {
+                    unanchored.push(format!("`{call}` in `handlers()` of `{}`", self.module.path));
+                }
+            }
+        }
+
+        let uses = missing_uses(self.imports(), parsed.as_ref());
+        insert_uses(&mut next, uses, parsed.as_ref());
+
+        let mut appended = Source::default();
+        if !self.paths.is_empty() {
+            let paths = self.paths.iter().map(|(constant, path)| {
+                Const::new(constant, "&str", format!("\"{}\"", escape(path))).vis(Vis::Crate)
+            });
+            appended.push(Consts::new(paths));
+        }
+        if self.registers() && !self.held_fn("handlers") {
+            appended.push(self.handlers_fn());
+        }
+        if let Some(settings) = &self.settings {
+            appended.push(settings.render("part"));
+        }
+        if let Some(gate) = self.laid_gate() {
+            gate.render(&mut appended);
+        }
+        for design_type in &self.types {
+            design_type.render(&mut appended);
+        }
+        for handler in &self.handlers {
+            handler.render(&mut appended);
+        }
+        for consumer in &self.consumers {
+            consumer.render(&mut appended);
+        }
+        for function in &self.functions {
+            appended.push(function.render());
+        }
+        append_source(&mut next, &appended);
+        (next, unanchored)
+    }
+
+    // Extends the held `text` of a test file for a later serial slice of the
+    // part: inserts missing imports and helpers (`router`, `call`), and
+    // appends the slice's new ignored scenario tests at the end of the file.
+    pub fn extend_tests(&self, text: &str) -> String {
+        if self.scenarios.is_empty() {
+            return text.to_owned();
+        }
+        let parsed = syntax::parse(text).ok();
+        let mut next = text.to_owned();
+        let uses = missing_uses(self.test_imports(), parsed.as_ref());
+        insert_uses(&mut next, uses, parsed.as_ref());
+
+        let ident = self.package.replace('-', "_");
+        let mut appended = Source::default();
+        if !self.held_fn("provider") {
+            appended.push(provider(&self.seeded()));
+        }
+        if (self.sending() || self.delivering()) && !self.held_fn("router") {
+            appended.push(router(&ident));
+        }
+        if self.sending() && !self.held_fn("call") {
+            appended.push(call());
+        }
+        for test in &self.scenarios {
+            appended.push(
+                test.render(self)
+                    .comments(test.steps())
+                    .attr("#[tokio::test]")
+                    .attr(test.ignored()),
+            );
+        }
+        append_source(&mut next, &appended);
+        next
+    }
+
+    fn test_imports(&self) -> Uses {
+        let sending = self.sending();
+        let delivering = self.delivering();
+        let with_body = self
+            .scenarios
+            .iter()
+            .any(|test| matches!(&test.act, Act::Route(route) if self.sends_body(route)));
+        let with_gate = self
+            .scenarios
+            .iter()
+            .any(|test| matches!(&test.act, Act::Route(route) if self.gates(route)));
+        let mut uses = Uses::default();
+        if sending {
+            uses.add("axum::body", &["Body"]);
+            let mut headers = Vec::new();
+            if with_gate {
+                headers.push("AUTHORIZATION");
+            }
+            if with_body {
+                headers.push("CONTENT_TYPE");
+            }
+            uses.add("axum::http::header", &headers);
+            uses.add("axum::http", &["Request", "StatusCode"]);
+        }
+        if delivering {
+            uses.add("common", &["topic"]);
+        }
+        if sending || delivering {
+            uses.add("omnia_sdk::api", &["Client", "Router"]);
+        }
+        let mut doubles = vec!["Provider"];
+        if !self.seeded().is_empty() {
+            doubles.push("MapConfig");
+        }
+        if sending {
+            doubles.push("send");
+        }
+        if delivering {
+            doubles.push("deliver");
+        }
+        uses.add("omnia_test::guest", &doubles);
+        if sending {
+            uses.add("serde_json", &["Value"]);
+        }
+        uses
     }
 }
 
 impl Handler {
-    // The `.route(..)` call that registers the handler: its route function
-    // where one was scaffolded, else the SDK's method fn over it.
+    // The `.route(..)` call that registers the handler under the method
+    // router for its method.
     fn registration(&self) -> Call {
-        let service = self.route_fn.as_ref().map_or_else(
-            || Call::new(trigger::method_fn(&self.route.method), [self.name.as_str()]),
-            |route_fn| Call::new(route_fn.as_str(), Vec::<Expr>::new()),
-        );
+        let service = Call::new(trigger::method_fn(&self.route.method), [self.name.as_str()]);
         Call::new(".route", [Expr::from(self.constant.as_str()), service.into()])
     }
 
-    // Its input over the route's parameters and its output, the route
-    // function where one was scaffolded, and the handler under its
-    // requirements, its body the marker.
+    // Its input where the method carries a body, its output, and the
+    // handler under its requirements: the context first, then each
+    // extractor the route needs, its body the marker.
     fn render(&self, source: &mut Source) {
         let route = escape(&format!("{} {}", self.route.method, self.route.path));
-        let params = self.params.iter().map(|param| {
-            let wire = escape(&param.wire);
-            Field::new(&param.field, "String")
-                .docs([format!("The `{wire}` path parameter.")])
-                .attrs(
-                    (param.field != param.wire).then(|| format!("#[serde(rename = \"{wire}\")]")),
-                )
-                .vis(Vis::Pub)
-        });
-        source.push(
-            Struct::new(&self.input)
-                .docs([format!("The input of `{route}`.")])
-                .attr("#[derive(Debug, Deserialize)]")
-                .vis(Vis::Pub)
-                .fields(params),
-        );
+        if let Some(input) = &self.input {
+            source.push(
+                Struct::new(input)
+                    .docs([format!("The input of `{route}`.")])
+                    .attr("#[derive(Debug, Deserialize)]")
+                    .vis(Vis::Pub),
+            );
+        }
         source.push(
             Struct::new(&self.output)
                 .docs([format!("The output of `{route}`.")])
                 .attr("#[derive(Debug, Serialize)]")
                 .vis(Vis::Pub),
         );
-        if let Some(route_fn) = &self.route_fn {
-            let decode = if carries_body(&self.route.method) {
-                "decode_json(raw.path_params, raw.body)"
-            } else {
-                "decode_query(raw.path_params, raw.query)"
-            };
-            let arg = pad(TAB);
-            let mut body = vec![
-                "handle_with(".to_owned(),
-                format!("{arg}MethodFilter::{},", self.route.method),
-                format!("{arg}{},", self.name),
-                format!("{arg}|raw: RawRequest<'_>| -> Result<{}, DecodeError> {{", self.input),
-                format!("{}{decode}", pad(2 * TAB)),
-                format!("{arg}}},"),
-            ];
-            body.extend(closure(
-                TAB,
-                &format!("|output: {}|", self.output),
-                "(StatusCode::OK, Json(output)).into_response()",
-                ",",
-            ));
-            body.push(")".to_owned());
-            source.push(
-                Fn::new(route_fn)
-                    .comments([format!(
-                        "The `{route}` route: the handler's `Ok` answered as JSON under the \
-                         status named here."
-                    )])
-                    .vis(Vis::Crate)
-                    .generics(GENERICS)
-                    .returns("MethodRouter<Client<P>>")
-                    .body(body),
-            );
+        let mut params = vec!["context: Context<P>".to_owned()];
+        if self.gated {
+            params.push("headers: HeaderMap".to_owned());
         }
+        match self.params.as_slice() {
+            [] => {}
+            [one] => params.push(format!("Path({}): Path<String>", one.field)),
+            several => {
+                let fields: Vec<&str> = several.iter().map(|param| param.field.as_str()).collect();
+                let types = vec!["String"; several.len()];
+                params.push(format!("Path(({})): Path<({})>", fields.join(", "), types.join(", ")));
+            }
+        }
+        if let Some(input) = &self.input {
+            params.push(format!("Json(input): Json<{input}>"));
+        }
+        let answered = if self.status {
+            format!("(StatusCode, Json<{}>)", self.output)
+        } else {
+            format!("Json<{}>", self.output)
+        };
+        let returns = if self.gated {
+            format!("std::result::Result<{answered}, {}>", Gate::ERROR)
+        } else {
+            format!("Result<{answered}>")
+        };
+        let mut body = Vec::new();
+        if self.gated {
+            body.push(format!("{}(&context, &headers).await?;", Gate::FN));
+        }
+        body.extend(stub_lines(&self.borrowed(), &self.marker));
         source.push(
             Fn::new(&self.name)
                 .comments(stated(&self.stated))
                 .vis(Vis::Crate)
                 .asynchronous()
-                .generics(GENERICS)
-                .params([format!("input: {}", self.input), "context: Context<P>".to_owned()])
-                .returns(format!("omnia_sdk::Result<{}>", self.output))
-                .body(stub_lines(&self.marker)),
+                .generics("<P>")
+                .params(params)
+                .returns(returns)
+                .bounds([BOUND])
+                .body(body),
         );
     }
 }
 
+impl Gate {
+    // The gate as the module lays it: its settings where the design spells
+    // keys, its error answering the refusal under the design's code and
+    // passing the host's through, and the function every handler under the
+    // prefix calls first, its body the marker.
+    fn render(&self, source: &mut Source) {
+        if let Some(settings) = &self.settings {
+            source.push(settings.render("gate"));
+        }
+        source.push(
+            Enum::new(Self::ERROR)
+                .docs([format!("Why the gate under `{}` refused a request.", escape(&self.prefix))])
+                .attr("#[derive(Debug, thiserror::Error)]")
+                .vis(Vis::Pub)
+                .variants([
+                    Variant::new("Unauthorized")
+                        .docs(["The request carried no accepted credential."])
+                        .attrs([format!("#[error(\"{}\")]", escape(&self.code))]),
+                    Variant::new("Host")
+                        .docs(["The settings or a capability failed."])
+                        .attrs(["#[error(transparent)]"])
+                        .payload("#[from] omnia_sdk::Error"),
+                ]),
+        );
+        source.push(Impl::new(format!("impl From<anyhow::Error> for {}", Self::ERROR)).body([
+            "fn from(error: anyhow::Error) -> Self {",
+            "    Self::Host(error.into())",
+            "}",
+        ]));
+        source.push(Impl::new(format!("impl IntoResponse for {}", Self::ERROR)).body([
+            "fn into_response(self) -> Response {".to_owned(),
+            "    match self {".to_owned(),
+            "        Self::Unauthorized => {".to_owned(),
+            format!(
+                "            let body = serde_json::json!({{ \"error\": \"{}\" }});",
+                escape(&self.code)
+            ),
+            "            (StatusCode::UNAUTHORIZED, Json(body)).into_response()".to_owned(),
+            "        }".to_owned(),
+            "        Self::Host(inner) => inner.into_response(),".to_owned(),
+            "    }".to_owned(),
+            "}".to_owned(),
+        ]));
+        source.push(self.signature().docs([
+            format!(
+                "The gate every route under `{}` passes first, as the design's rules state it.",
+                escape(&self.prefix)
+            ),
+            String::new(),
+            "# Errors".to_owned(),
+            String::new(),
+            format!(
+                "[`{}::Unauthorized`] where the request carries no accepted credential.",
+                Self::ERROR
+            ),
+        ]));
+    }
+
+    fn signature(&self) -> Fn {
+        Fn::new(Self::FN)
+            .vis(Vis::Pub)
+            .asynchronous()
+            .generics("<P>")
+            .params(["context: &Context<P>", "headers: &HeaderMap"])
+            .returns(format!("std::result::Result<(), {}>", Self::ERROR))
+            .bounds(["P: Config"])
+            .body(gate_stub_lines(self))
+    }
+}
+
+// The body of the laid gate as the file holds it: the one block the turn
+// replaces.
+pub fn gate_stub(gate: &Gate) -> String {
+    block(gate_stub_lines(gate)).collect::<Vec<_>>().join("\n")
+}
+
+fn gate_stub_lines(gate: &Gate) -> Vec<String> {
+    let mut lines = vec!["let _ = (context, headers);".to_owned()];
+    lines.extend(marker_lines(&gate.marker()));
+    lines
+}
+
 impl Consumer {
-    // Its input over the delivery, and the handler under its requirements,
+    fn registration(&self) -> Call {
+        Call::new(".topic", [format!("topic::{}", self.constant), self.name.clone()])
+    }
+
+    // Its input over the delivery, and the consumer under its requirements,
     // its body the marker.
     fn render(&self, source: &mut Source) {
         source.push(
@@ -443,10 +569,11 @@ impl Consumer {
                 .comments(stated(&self.stated))
                 .vis(Vis::Crate)
                 .asynchronous()
-                .generics(GENERICS)
-                .params([format!("input: {}", self.input), "context: Context<P>".to_owned()])
-                .returns("omnia_sdk::Result<()>")
-                .body(stub_lines(&self.marker)),
+                .generics("<P>")
+                .params(["context: Context<P>".to_owned(), format!("input: {}", self.input)])
+                .returns("Result<()>")
+                .bounds([BOUND])
+                .body(stub_lines(&["context".to_owned(), "input".to_owned()], &self.marker)),
         );
     }
 }
@@ -473,10 +600,28 @@ impl Function {
     }
 
     fn signature(&self) -> Fn {
-        Fn::new(&self.name)
-            .vis(Vis::Pub)
-            .returns("omnia_sdk::Result<()>")
-            .body(marker_lines(&self.marker))
+        Fn::new(&self.name).vis(Vis::Pub).returns("Result<()>").body(marker_lines(&self.marker))
+    }
+}
+
+impl Settings {
+    // The settings struct under the keys `reader` (the part, the gate)
+    // reads: one `String` field per key, under the shared prefix where the
+    // keys have one, a key spelled on its field where the derive would not
+    // read it off the name.
+    fn render(&self, reader: &str) -> Struct {
+        let keys: Vec<String> = self.keys().map(|key| format!("`{key}`")).collect();
+        let fields = self.fields.iter().map(|field| {
+            Field::new(&field.name, "String").attrs(
+                field.explicit.then(|| format!("#[setting(key = \"{}\")]", escape(&field.key))),
+            )
+        });
+        Struct::new(&self.name)
+            .comments([format!("The settings the {reader} reads: {}.", keys.join(", "))])
+            .attr("#[derive(Debug, Settings)]")
+            .attrs(self.prefix.as_ref().map(|prefix| format!("#[setting(prefix = \"{prefix}\")]")))
+            .vis(Vis::Crate)
+            .fields(fields)
     }
 }
 
@@ -486,6 +631,11 @@ impl Type {
     // `serde(default)` names after it, or the empty marker where the
     // signature was not read.
     fn render(&self, source: &mut Source) {
+        let name = self.name.as_str();
+        if let Body::Table { element, .. } = &self.body {
+            self.render_table(element, source);
+            return;
+        }
         let fence = Fence::around(&self.signature);
         let mut docs = Doc::new([
             format!("The design type `{}`.", self.key),
@@ -496,7 +646,6 @@ impl Type {
             docs.push(line.trim_end());
         }
         docs.push(fence.to_string());
-        let name = self.name.as_str();
         match &self.body {
             Body::Struct {
                 generics,
@@ -549,8 +698,48 @@ impl Type {
                         .vis(Vis::Pub),
                 );
             }
+            Body::Table { .. } => {}
         }
     }
+
+    // The fn compiling a table's data file in and reading its rows into
+    // the element type, under the table's first line fenced in its doc;
+    // the rows themselves stand in the file, never in the part.
+    fn render_table(&self, element: &str, source: &mut Source) {
+        let first = self.signature.lines().next().unwrap_or_default().trim_end();
+        let fence = Fence::around(first);
+        let file = data_file(&self.name);
+        let docs = Doc::new([
+            format!("The design type `{}`, its rows the file `{file}`.", self.key),
+            String::new(),
+            format!("{fence}text"),
+            first.to_owned(),
+            fence.to_string(),
+            String::new(),
+            "# Errors".to_owned(),
+            String::new(),
+            format!("A row of the file that `{element}` does not read."),
+        ]);
+        source.push(
+            Fn::new(&self.name)
+                .docs(docs)
+                .vis(Vis::Pub)
+                .returns(format!("Result<Vec<{element}>>"))
+                .body([
+                    format!("serde_json::from_str(include_str!(\"../{file}\"))"),
+                    format!(
+                        "{}.map_err(|error| Error::server_error(\"data\", error.to_string()))",
+                        pad(TAB)
+                    ),
+                ]),
+        );
+    }
+}
+
+// A table's data file, relative to the stem's crate: the rows the reader
+// of that name compiles in from beside the sources.
+pub fn data_file(reader: &str) -> String {
+    format!("data/{reader}.json")
 }
 
 impl Test {
@@ -612,13 +801,20 @@ impl Test {
                 for (wire, field) in &params {
                     lines.push(format!("let {field} = \"<{}>\";", escape(wire)));
                 }
+                let gated = stem.gates(route);
+                if gated {
+                    lines.push("let authorization = \"<authorization>\";".to_owned());
+                }
                 let target = if params.is_empty() {
                     Expr::from(format!("\"{}\"", escape(&route.path)))
                 } else {
                     Expr::Macro(Call::new("format!", [format!("\"{}\"", escape(&format))]))
                 };
                 let mut calls = Vec::new();
-                if carries_body(&route.method) {
+                if gated {
+                    calls.push(Call::new(".header", ["AUTHORIZATION", "authorization"]));
+                }
+                if stem.sends_body(route) {
                     calls.push(Call::new(".header", ["CONTENT_TYPE", "\"application/json\""]));
                     calls.push(Call::new(".body", ["Body::from(\"{}\")"]));
                 } else {
@@ -628,7 +824,7 @@ impl Test {
                 let receiver =
                     Call::new(format!("Request::{}", trigger::method_fn(&route.method)), [target]);
                 lines.extend(Chain::new(receiver, calls).bound(0, "request"));
-                lines.push("let (status, body) = send(provider(), request).await;".to_owned());
+                lines.push("let (status, body) = call(&provider(), request).await;".to_owned());
                 lines.push("let _ = (&status, &body);".to_owned());
                 lines
             }
@@ -638,12 +834,16 @@ impl Test {
                     .iter()
                     .find(|consumer| consumer.topic == *topic)
                     .map_or("TOPIC", |consumer| consumer.constant.as_str());
-                let provider = Call::new("provider", Vec::<Expr>::new());
                 let delivery = Call::new(
                     "deliver",
-                    [provider.into(), Expr::from(format!("topic::{constant}")), "b\"{}\"".into()],
+                    [
+                        "&router(&provider)".to_owned(),
+                        format!("topic::{constant}"),
+                        "b\"{}\"".to_owned(),
+                    ],
                 );
-                let mut lines = Chain::new(delivery, Vec::new()).awaited().bound(0, "outcome");
+                let mut lines = vec!["let provider = provider();".to_owned()];
+                lines.extend(Chain::new(delivery, Vec::new()).awaited().bound(0, "outcome"));
                 lines.push("let _ = &outcome;".to_owned());
                 lines
             }
@@ -660,6 +860,12 @@ pub fn dependency_line(name: &str) -> String {
     format!("{name}.workspace = true")
 }
 
+// The crate a `[dependencies]` line names, before its `.workspace` or its
+// ` =`.
+fn dependency_name(line: &str) -> &str {
+    line.split(['.', ' ', '=']).next().unwrap_or(line)
+}
+
 // The topic table's constant for `topic`, under its doc line, as the lines
 // added at the end of the table.
 pub fn topic_constant(constant: &str, topic: &str) -> String {
@@ -671,85 +877,100 @@ pub fn topic_constant(constant: &str, topic: &str) -> String {
     source.render().trim_end().to_owned()
 }
 
-// The body of an entry's fold: its array opened under the anchor the
-// scaffold's lines and the engine's union merge read, the part's entry
-// beneath where the part has one.
-fn fold(opener: &str, anchor: &str, entry: Option<String>) -> Vec<String> {
-    let mut lines = vec![opener.to_owned(), format!("{}{anchor}", pad(TAB))];
-    lines.extend(entry.map(|entry| format!("{}{entry}", pad(TAB))));
-    lines.push("])".to_owned());
+// The doubles every scenario starts from, each setting the part reads
+// seeded with a placeholder the turn fills.
+fn provider(keys: &[&str]) -> Fn {
+    let item = Fn::new("provider").returns("Provider");
+    if keys.is_empty() {
+        return item
+            .comments([
+                "The doubles every scenario starts from: set a setting or a response on them in \
+                 the arrangement.",
+            ])
+            .body(["Provider::default()"]);
+    }
+    let seeds: Vec<String> =
+        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
+    let inline = format!("[{}]", seeds.join(", "));
+    let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
+    let body = if joined.chars().count() <= BODY_WIDTH {
+        vec![joined]
+    } else {
+        let mut lines = seeded(&seeds, &inline);
+        lines.push("Provider::default().config(MapConfig::default().with(settings))".to_owned());
+        lines
+    };
+    item.comments([
+        "The doubles every scenario starts from, the part's settings seeded: give each its",
+        "value for the scenarios, and set a response on the doubles in the arrangement.",
+    ])
+    .body(body)
+}
+
+// `let settings = [..];` as the formatter lays an array: on one line where
+// it fits, beneath the binding where it fits there, else one seed per line.
+fn seeded(seeds: &[String], inline: &str) -> Vec<String> {
+    let joined = format!("let settings = {inline};");
+    if joined.chars().count() <= BODY_WIDTH {
+        return vec![joined];
+    }
+    if TAB + inline.chars().count() < BODY_WIDTH {
+        return vec!["let settings =".to_owned(), format!("{}{inline};", pad(TAB))];
+    }
+    let mut lines = vec!["let settings = [".to_owned()];
+    lines.extend(seeds.iter().map(|seed| format!("{}{seed},", pad(TAB))));
+    lines.push("];".to_owned());
     lines
 }
 
-// The doubles every scenario starts from.
-fn provider() -> Fn {
-    Fn::new("provider")
-        .comments([
-            "The doubles every scenario starts from: set a setting or a response on them in the \
-             arrangement.",
-        ])
-        .returns("Provider")
-        .body(["Provider::default().config(MapConfig::default().with([(config::ENV, \"test\")]))"])
+// The stem's router over the doubles, built as the guest builds it.
+fn router(ident: &str) -> Fn {
+    Fn::new("router")
+        .comments(["The stem's router over the doubles, as the guest builds it."])
+        .params(["provider: &Provider"])
+        .returns("Router<Provider>")
+        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
 }
 
-// One request through the router of the stem `ident` names, its body read
-// as JSON so a test asserts fields and never bytes.
-fn send(ident: &str) -> Fn {
-    Fn::new("send")
+// One request through the stem's router, its body read as JSON so a test
+// asserts fields and never bytes.
+fn call() -> Fn {
+    Fn::new("call")
         .comments([
             "One request through the stem's router, answered as its status and its body as JSON:",
             "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
         ])
         .asynchronous()
-        .params(["provider: Provider", "request: Request<Body>"])
+        .params(["provider: &Provider", "request: Request<Body>"])
         .returns("(StatusCode, Value)")
         .body([
-            format!("let router = {ident}::router().with_state(Client::new(\"test\", provider));"),
-            "let response = router.oneshot(request).await.expect(\"response\");".to_owned(),
-            "let status = response.status();".to_owned(),
-            "let body = to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");"
-                .to_owned(),
-            "let body = if body.is_empty() {".to_owned(),
-            "    Value::Null".to_owned(),
-            "} else {".to_owned(),
-            "    serde_json::from_slice(&body)".to_owned(),
-            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))"
-                .to_owned(),
-            "};".to_owned(),
-            "(status, body)".to_owned(),
+            "let response = send(&router(provider), request).await;",
+            "let status = response.status();",
+            "let body = response.into_body();",
+            "let body = if body.is_empty() {",
+            "    Value::Null",
+            "} else {",
+            "    serde_json::from_slice(&body)",
+            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))",
+            "};",
+            "(status, body)",
         ])
 }
 
-// One delivery through the topics of the stem `ident` names.
-fn deliver(ident: &str) -> Fn {
-    Fn::new("deliver")
-        .comments(["One delivery through the stem's topics, under the test environment."])
-        .asynchronous()
-        .params(["provider: Provider", "topic: &str", "payload: &[u8]"])
-        .returns("Result<(), DeliveryError>")
-        .body([
-            format!(
-                "let router = {ident}::topics(Router::new(Client::new(\"test\", provider)), \
-                 \"test\");"
-            ),
-            "let delivery = Delivery {".to_owned(),
-            "    topic: Some(config::topic_for(\"test\", topic)),".to_owned(),
-            "    payload: payload.to_vec(),".to_owned(),
-            "    ..Delivery::default()".to_owned(),
-            "};".to_owned(),
-            "router.handle(delivery).await".to_owned(),
-        ])
+// The body of a handler or a consumer as the file holds it: the borrow of
+// `names` that keeps the lints quiet and the marker, the one block the
+// turn replaces.
+pub fn stub(names: &[String], marker: &str) -> String {
+    block(stub_lines(names, marker)).collect::<Vec<_>>().join("\n")
 }
 
-// The body of a handler or a consumer as the file holds it: the borrow
-// that keeps the lints quiet and the marker, the one block the turn
-// replaces.
-pub fn stub(marker: &str) -> String {
-    block(stub_lines(marker)).collect::<Vec<_>>().join("\n")
-}
-
-fn stub_lines(marker: &str) -> Vec<String> {
-    let mut lines = vec!["let _ = (&input, &context);".to_owned()];
+fn stub_lines(names: &[String], marker: &str) -> Vec<String> {
+    let borrowed: Vec<String> = names.iter().map(|name| format!("&{name}")).collect();
+    let borrow = match borrowed.as_slice() {
+        [one] => format!("let _ = {one};"),
+        several => format!("let _ = ({});", several.join(", ")),
+    };
+    let mut lines = vec![borrow];
     lines.extend(marker_lines(marker));
     lines
 }
@@ -763,12 +984,6 @@ fn marker_lines(marker: &str) -> Vec<String> {
 pub fn fenced(lang: &str, text: &str) -> String {
     let fence = Fence::around(text);
     format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
-}
-
-// Whether the method decodes its input from the body, as the SDK's `post`,
-// `put`, and `patch` do.
-fn carries_body(method: &str) -> bool {
-    matches!(method, "POST" | "PUT" | "PATCH")
 }
 
 fn laid_field(field: &LaidField) -> Field {
@@ -788,43 +1003,62 @@ fn default_fn(default: &DefaultFn) -> Fn {
     if default.constant { item.constant() } else { item }
 }
 
-fn decode_json() -> Fn {
-    Fn::new("decode_json")
-        .comments([
-            "The JSON body with the path parameters inserted as string fields, as the",
-            "SDK's `post` decodes an input.",
-        ])
-        .generics("<I: DeserializeOwned>")
-        .params(["params: &[(String, String)]", "body: &[u8]"])
-        .returns("Result<I, DecodeError>")
-        .body(DECODE_JSON_BODY.lines())
-}
-
-fn decode_query() -> Fn {
-    Fn::new("decode_query")
-        .comments([
-            "The path parameters and the query string together as string fields, as the",
-            "SDK's `get` decodes an input: a field the query fills is a `String`, or",
-            "deserialises from one.",
-        ])
-        .generics("<I: DeserializeOwned>")
-        .params(["params: &[(String, String)]", "query: Option<&str>"])
-        .returns("Result<I, DecodeError>")
-        .body(DECODE_QUERY_BODY.lines())
-}
-
-fn unescape() -> Fn {
-    Fn::new("unescape")
-        .comments(["One form-encoded token: `+` a space, `%XX` the byte it spells."])
-        .params(["token: &str"])
-        .returns("Result<String, DecodeError>")
-        .body(UNESCAPE_BODY.lines())
-}
-
 // `// <id> <subject>: <statement>`, one per requirement an item stands for.
 fn stated(stated: &[Stated]) -> Vec<String> {
     stated
         .iter()
         .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
         .collect()
+}
+
+// The imports of `uses` that `file` does not already bring into scope.
+fn missing_uses(mut uses: Uses, file: Option<&syn::File>) -> Uses {
+    if let Some(mentions) = file.map(syntax::Mentions::of) {
+        uses.retain(|path, name| {
+            let ident = name.split_whitespace().next().unwrap_or(name);
+            let tail = [path.rsplit("::").next().unwrap_or(path), ident];
+            !(mentions.path_ends(&tail) || mentions.contains(ident))
+        });
+    }
+    uses
+}
+
+fn insert_uses(text: &mut String, uses: Uses, file: Option<&syn::File>) {
+    if uses.is_empty() {
+        return;
+    }
+    let mut source = Source::default();
+    source.push(uses);
+    let rendered = source.render();
+    let trimmed = rendered.trim_end();
+    let mut lines: Vec<&str> = text.lines().collect();
+    if let Some(last) = file
+        .and_then(syntax::last_use_line)
+        .and_then(|line| line.checked_sub(1))
+        .or_else(|| lines.iter().rposition(|line| line.starts_with("use ")))
+    {
+        lines.insert(last + 1, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    if let Some(last) = lines.iter().rposition(|line| line.starts_with("//!")) {
+        lines.insert(last + 1, "");
+        lines.insert(last + 2, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    *text = format!("{rendered}\n{text}");
+}
+
+fn append_source(text: &mut String, appended: &Source) {
+    let rendered = appended.render();
+    if rendered.is_empty() {
+        return;
+    }
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        *text = rendered;
+    } else {
+        *text = format!("{trimmed}\n\n{rendered}");
+    }
 }

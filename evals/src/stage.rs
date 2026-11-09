@@ -11,7 +11,7 @@ use crate::Settings;
 use crate::build::Tree;
 use crate::case::Case;
 use crate::fidelity::Target;
-use crate::run::{Run, accepted, completions, surveyed, unreached};
+use crate::run::{Run, accepted, cap_exhaustions, completions, surveyed, unreached};
 
 // Copies each source's fixture into a project of its own beneath `dir` —
 // `emery` mounts its invocation directory, so the tree must sit inside it,
@@ -158,7 +158,7 @@ pub fn skipped_entry(name: &std::ffi::OsStr) -> bool {
 // is built — the template's finding, not the model's. So the drift is read
 // here from the commit the resume starts at, through `omnia-template` at
 // this workspace's lock, the template `emery_omnia.wasm` built from the
-// same lock embeds: the root manifest held outside its two stem lists and
+// same lock embeds: the root manifest held outside its stem list and
 // every static file byte for byte, as the gate holds them. The files are
 // read out of the commit into `scratch`, which is removed after; a file the
 // commit lacks is left lacking, which the hold reads as drift. The drift as
@@ -329,6 +329,7 @@ pub fn restaged(
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
+        cap_exhausted: cap_exhaustions(&stderr),
         surveyed: surveyed(&stderr),
         unreached: unreached(&stderr),
         spec: None,

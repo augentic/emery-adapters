@@ -1,16 +1,26 @@
-//! Checks for empty cache misses on constant `StateStore` keys, single-field
-//! `data` response wrappers, refusals answered `Ok(())`, and format settings.
+//! Checks for empty cache misses on constant store keys, single-field `data`
+//! response wrappers, refusals answered `Ok(())`, skips answered as refusals,
+//! and format settings.
 
 use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
     Arm, Attribute, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst,
-    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Pat, PatGuard, PatIdent, Path,
-    Stmt, Token, TraitItemFn,
+    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Macro, Pat, PatGuard, PatIdent,
+    Path, Stmt, Token, TraitItemFn,
 };
 
 use super::{Module, Tree};
+use crate::layout;
+use crate::scaffold::{Scaffold, Skip};
 use crate::syntax::{self, path_ends};
+
+// The error constructors a handler refuses a message through: the macros
+// and the `Error` associated functions of the same names.
+const REFUSALS: &[&str] = &["bad_request", "not_found", "server_error", "bad_gateway"];
+
+// The lead of a requirement's comment line above the item that implements it.
+const MARKER_LEAD: &str = "// REQ-";
 
 // The calls that answer an empty collection, each with its spelling.
 const NOTHING: &[(&[&str], &str)] = &[
@@ -94,6 +104,45 @@ impl Tree<'_> {
         ))
     }
 
+    // A requirement whose statement says the message produces no events is
+    // a skip, answered `Ok(())`; code under its marker that constructs a
+    // refusal rejects the delivery instead, which the host records and
+    // redelivers. Held to the stems of the slice that consume a stream: one
+    // laying a consumer, or any where the design lists an inbound stream
+    // for the part.
+    pub fn refused_skips(&self, scaffold: &Scaffold) -> Option<String> {
+        let skips = scaffold.skips();
+        if skips.is_empty() {
+            return None;
+        }
+        let mut lines = Vec::new();
+        for stem in scaffold.stems() {
+            if !(scaffold.consumes(stem) || scaffold.inbound().is_some()) {
+                continue;
+            }
+            let own: Vec<&Skip> = skips.iter().filter(|skip| skip.stem == stem).collect();
+            if own.is_empty() {
+                continue;
+            }
+            let prefix = format!("crates/{}/src/", layout::crate_dir(stem));
+            for module in self.modules.iter().filter(|module| module.path.starts_with(&prefix)) {
+                lines.extend(module.refused_skips(&own));
+            }
+        }
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        Some(format!(
+            "a requirement whose statement says the message produces no events is a skip, not a \
+             refusal: the consumer answers `Ok(())` after its `tracing` counter event and \
+             publishes nothing, since an `Err` is recorded by the host as a rejected delivery; \
+             `Err` is the malformed or invalid delivery's alone, as the handlers reference shows \
+             under \"A skipped message\"; repair each line named through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
+
     pub fn format_settings(&self) -> Option<String> {
         let mut lines: Vec<String> = self
             .modules
@@ -111,9 +160,9 @@ impl Tree<'_> {
         Some(format!(
             "a format is the parser's syntax and never a deployment value: a date or time format \
              a criterion spells (`DD/MM/YYYY`) is a `const` of the module that parses with it, \
-             holding the parser's own syntax (`\"%d/%m/%Y\"`), and no setting read through \
-             `Config::get`; replace each setting named with that constant through \
-             `edit_files`:\n{}",
+             holding the parser's own syntax (`\"%d/%m/%Y\"`), and no field of a \
+             `#[derive(Settings)]` struct or setting read through `Config::get`; replace each \
+             setting named with that constant through `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
@@ -157,6 +206,113 @@ impl Module {
             wrappers.visit_file(file);
         }
         wrappers.found
+    }
+
+    // One finding per run of requirement comments that are all skips: the
+    // first refusal constructed between the run's first line and the next
+    // run or the end of the item the run heads. A run naming a requirement
+    // that is no skip is left alone, since a consumer that also refuses a
+    // malformed message constructs its refusal there.
+    fn refused_skips(&self, skips: &[&Skip]) -> Vec<String> {
+        let Some(file) = self.file() else { return Vec::new() };
+        let runs = self.marker_runs();
+        let mut starts: Vec<usize> = file
+            .items
+            .iter()
+            .filter_map(|item| syntax::item_head(item).map(|(line, _)| line))
+            .collect();
+        starts.sort_unstable();
+        let mut refusals = Refusals::default();
+        refusals.visit_file(file);
+        refusals.found.sort();
+        let mut lines = Vec::new();
+        for (at, (from, ids)) in runs.iter().enumerate() {
+            let subjects: Vec<&&Skip> =
+                ids.iter().filter_map(|id| skips.iter().find(|skip| skip.id == *id)).collect();
+            if subjects.len() != ids.len() {
+                continue;
+            }
+
+            // the window closes at the next run, or at the item after the
+            // one the run heads
+            let next_run = runs.get(at + 1).map(|(line, _)| *line);
+            let next_item = starts.iter().copied().filter(|start| start > from).nth(1);
+            let to = [next_run, next_item].into_iter().flatten().min().unwrap_or(usize::MAX);
+            let Some((line, what)) =
+                refusals.found.iter().find(|(line, _)| line > from && *line < to)
+            else {
+                continue;
+            };
+            let named = subjects
+                .iter()
+                .map(|skip| format!("{} {}", skip.id, skip.subject))
+                .collect::<Vec<_>>()
+                .join(", ");
+            lines.push(format!(
+                "{}:{line}: {named} answers a refusal (`{what}`) where its statement says the \
+                 message produces no events",
+                self.path
+            ));
+        }
+        lines
+    }
+
+    // The runs of consecutive requirement comment lines, each as its first
+    // line and the ids it names in order.
+    fn marker_runs(&self) -> Vec<(usize, Vec<String>)> {
+        let mut runs: Vec<(usize, Vec<String>)> = Vec::new();
+        let mut last: Option<usize> = None;
+        for (index, line) in self.text.lines().enumerate() {
+            let number = index + 1;
+            let Some(rest) = line.trim_start().strip_prefix(MARKER_LEAD) else { continue };
+            let id =
+                format!("REQ-{}", rest.split(|ch: char| !ch.is_ascii_digit()).next().unwrap_or(""));
+            match (last, runs.last_mut()) {
+                (Some(previous), Some((_, ids))) if previous + 1 == number => ids.push(id),
+                _ => runs.push((number, vec![id])),
+            }
+            last = Some(number);
+        }
+        runs
+    }
+}
+
+// Every refusal a module constructs, at its line: an `Err(..)` call, one
+// of the error macros, or an `Error::<code>(..)` call.
+#[derive(Default)]
+struct Refusals {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Refusals {
+    fn visit_expr_call(&mut self, node: &'ast ExprCall) {
+        if let Expr::Path(func) = &*node.func {
+            let segments: Vec<String> =
+                func.path.segments.iter().map(|segment| segment.ident.to_string()).collect();
+            let what = match segments.as_slice() {
+                [.., last] if last == "Err" => Some("Err(..)".to_owned()),
+                [.., owner, last] if owner == "Error" && REFUSALS.contains(&last.as_str()) => {
+                    Some(format!("Error::{last}(..)"))
+                }
+                _ => None,
+            };
+            if let Some(what) = what {
+                let line = syntax::head_line(&node.func).unwrap_or_default();
+                self.found.push((line, what));
+            }
+        }
+        visit::visit_expr_call(self, node);
+    }
+
+    fn visit_macro(&mut self, node: &'ast Macro) {
+        if let Some(name) = node.path.segments.last().map(|segment| segment.ident.to_string())
+            && REFUSALS.contains(&name.as_str())
+        {
+            let line =
+                node.path.segments.last().map_or(0, |segment| syntax::line(segment.ident.span()));
+            self.found.push((line, format!("{name}!")));
+        }
+        visit::visit_macro(self, node);
     }
 }
 
@@ -261,6 +417,8 @@ impl<'ast> Visit<'ast> for Swallowed<'_> {
     }
 }
 
+// The settings a module reads: a `const KEY: &str = "KEY"` and each field
+// of a `#[derive(Settings)]` struct, keyed as the derive spells it.
 #[derive(Default)]
 struct Settings {
     found: Vec<(usize, String)>,
@@ -271,8 +429,14 @@ impl Settings {
         let Expr::Lit(literal) = expr else { return };
         let Lit::Str(value) = &literal.lit else { return };
         let name = name.to_string();
-        if value.value() == name && name.split('_').any(|segment| segment == "FORMAT") {
-            self.found.push((line, name));
+        if value.value() == name {
+            self.key(line, name);
+        }
+    }
+
+    fn key(&mut self, line: usize, key: String) {
+        if key.split('_').any(|segment| segment == "FORMAT") {
+            self.found.push((line, key));
         }
     }
 }
@@ -287,6 +451,35 @@ impl<'ast> Visit<'ast> for Settings {
         self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
         visit::visit_impl_item_const(self, node);
     }
+
+    fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
+        if !derives(&node.attrs, "Settings") {
+            return;
+        }
+        let prefix = setting_attr(&node.attrs, "prefix").unwrap_or_default();
+        let Fields::Named(fields) = &node.fields else { return };
+        for field in &fields.named {
+            let Some(ident) = &field.ident else { continue };
+            let key = setting_attr(&field.attrs, "key")
+                .unwrap_or_else(|| format!("{prefix}{}", ident.to_string().to_ascii_uppercase()));
+            self.key(syntax::line(ident.span()), key);
+        }
+    }
+}
+
+// The `#[setting(<name> = "..")]` value among `attrs`.
+fn setting_attr(attrs: &[Attribute], name: &str) -> Option<String> {
+    attrs.iter().filter(|attr| attr.path().is_ident("setting")).find_map(|attr| {
+        let mut value = None;
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident(name) {
+                let lit: syn::LitStr = meta.value()?.parse()?;
+                value = Some(lit.value());
+            }
+            Ok(())
+        });
+        value
+    })
 }
 
 #[derive(Default)]
@@ -409,9 +602,13 @@ impl<'ast> Visit<'ast> for Misses<'_> {
     }
 
     // The receiver first, since a read defaulted where it is made,
-    // `StateStore::get(..).await?.unwrap_or_default()`, is the receiver.
+    // `context.state().get(KEY).await?.unwrap_or_default()`, is the
+    // receiver.
     fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
         visit::visit_expr_method_call(self, node);
+        if let Some(line) = constant_keyed_method_read(node) {
+            self.read = Some(line);
+        }
         if self.read.is_some()
             && let Some(spelling) = defaulted(node)
         {
@@ -548,21 +745,55 @@ fn derives(attrs: &[Attribute], name: &str) -> bool {
     })
 }
 
-// A `StateStore::get(.., KEY)` under a constant key, and the line it reads at.
+// The reads of a store that answer `None` on a miss: the trait's method and
+// the extension's, each by the trait it is called through.
+const READS: &[&[&str]] = &[
+    &["StateStore", "get"],
+    &["StateStoreExt", "get_json"],
+    &["DocumentStore", "get"],
+    &["DocumentStoreExt", "get_as"],
+];
+// The accessors of the context the reads are made through.
+const STORES: [&str; 2] = ["state", "docs"];
+
+// A `StateStore::get(.., KEY)` under a constant key, and the line it reads
+// at.
 fn constant_keyed_read(call: &ExprCall) -> Option<usize> {
     let Expr::Path(func) = &*call.func else { return None };
-    if !path_ends(&func.path, &["StateStore", "get"]) {
+    if !READS.iter().any(|read| path_ends(&func.path, read)) {
         return None;
     }
-    let mut key = call.args.iter().nth(1)?;
+    let keyed = call.args.iter().skip(1).any(is_constant_key);
+    keyed.then(|| syntax::head_line(&call.func)).flatten()
+}
+
+// A `context.state().get(KEY)` or `.get_json(KEY)` under a constant key,
+// and the line it reads at.
+fn constant_keyed_method_read(call: &ExprMethodCall) -> Option<usize> {
+    let read = READS.iter().any(|read| read.last().is_some_and(|name| call.method == name));
+    let through_store = matches!(
+        &*call.receiver,
+        Expr::MethodCall(accessor)
+            if accessor.args.is_empty() && STORES.iter().any(|store| accessor.method == store)
+    );
+    if !read || !through_store || !call.args.iter().any(is_constant_key) {
+        return None;
+    }
+    syntax::head_line(&call.receiver)
+}
+
+// Whether the argument names a `SCREAMING_SNAKE` constant, behind any
+// borrows.
+fn is_constant_key(mut key: &Expr) -> bool {
     while let Expr::Reference(reference) = key {
         key = &reference.expr;
     }
-    let Expr::Path(key) = key else { return None };
-    let name = key.path.segments.last()?.ident.to_string();
-    let constant = name.chars().any(|ch| ch.is_ascii_uppercase())
-        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_');
-    constant.then(|| syntax::head_line(&call.func)).flatten()
+    let Expr::Path(key) = key else { return false };
+    let Some(name) = key.path.segments.last().map(|segment| segment.ident.to_string()) else {
+        return false;
+    };
+    name.chars().any(|ch| ch.is_ascii_uppercase())
+        && name.chars().all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit() || ch == '_')
 }
 
 // A `Some(..)` or `Ok(Some(..))` pattern, which the hit runs under.

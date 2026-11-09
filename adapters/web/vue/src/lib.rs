@@ -11,6 +11,8 @@
 mod check;
 mod tree;
 
+use std::num::NonZeroU32;
+
 use emery_sdk::target::{Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Doc, Error, Model};
 
@@ -56,6 +58,7 @@ impl TargetAdapter for Adapter {
         Metadata {
             rules: RULES,
             grants: &[NPM, NVM, VOLTA, FNM, PLAYWRIGHT],
+            budget: NonZeroU32::new(12),
         }
     }
 

@@ -1,5 +1,6 @@
 //! The Rust items a scaffold writes and the one printer over them, laid as the layout's formatter lays them.
 
+use std::cmp::Ordering;
 use std::fmt::{self, Display, Write as _};
 
 // The template's `rustfmt.toml` width: a line the formatter would break
@@ -9,7 +10,7 @@ pub const MAX_WIDTH: usize = 100;
 pub const TAB: usize = 4;
 // The columns a line of a fn body has past the block indent, which the
 // expression printer lays within: every expression it lays stands in one.
-const BODY_WIDTH: usize = MAX_WIDTH - TAB;
+pub const BODY_WIDTH: usize = MAX_WIDTH - TAB;
 
 // A source file's items in order, printed one blank line apart.
 #[derive(Default)]
@@ -27,6 +28,14 @@ pub enum Item {
     Fn(Fn),
     Struct(Struct),
     Enum(Enum),
+    Impl(Impl),
+}
+
+// An `impl` block: its head, `impl From<E> for T`, and its items as lines
+// relative to the block, indented once when rendered.
+pub struct Impl {
+    head: String,
+    body: Vec<String>,
 }
 
 // The lines of a doc comment, an empty one its marker alone.
@@ -53,8 +62,8 @@ pub struct Const {
 }
 
 // A function: the `//` lines above it, its docs and attributes, its
-// signature, and its body as lines relative to the block, indented once
-// when rendered.
+// signature, the bounds of its `where` clause, and its body as lines
+// relative to the block, indented once when rendered.
 #[derive(Default)]
 pub struct Fn {
     comments: Vec<String>,
@@ -67,12 +76,15 @@ pub struct Fn {
     generics: String,
     params: Vec<String>,
     ret: String,
+    bounds: Vec<String>,
     body: Vec<String>,
 }
 
-// A struct: its generics, `<T>`, printed after the name where it has any.
+// A struct: the `//` lines above it, its docs and attributes, and its
+// generics, `<T>`, printed after the name where it has any.
 #[derive(Default)]
 pub struct Struct {
+    comments: Vec<String>,
     docs: Doc,
     attrs: Vec<String>,
     vis: Vis,
@@ -98,11 +110,13 @@ pub struct Enum {
     variants: Vec<Variant>,
 }
 
-// A unit variant under its docs and attributes.
+// A variant under its docs and attributes: a unit one, or a tuple one over
+// the fields its payload spells, `Host(#[from] omnia_sdk::Error)`.
 pub struct Variant {
     docs: Doc,
     attrs: Vec<String>,
     name: String,
+    payload: Option<String>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -173,7 +187,38 @@ impl Item {
             Self::Fn(item) => item.render(out),
             Self::Struct(item) => item.render(out),
             Self::Enum(item) => item.render(out),
+            Self::Impl(item) => item.render(out),
         }
+    }
+}
+
+impl From<Impl> for Item {
+    fn from(item: Impl) -> Self {
+        Self::Impl(item)
+    }
+}
+
+impl Impl {
+    pub fn new(head: impl Into<String>) -> Self {
+        Self {
+            head: head.into(),
+            body: Vec::new(),
+        }
+    }
+
+    // The block's items as lines relative to it, an empty line between
+    // two.
+    pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.body = lines.into_iter().map(Into::into).collect();
+        self
+    }
+
+    fn render(&self, out: &mut String) {
+        let _ = writeln!(out, "{} {{", self.head);
+        for line in block(&self.body) {
+            let _ = writeln!(out, "{line}");
+        }
+        out.push_str("}\n");
     }
 }
 
@@ -254,13 +299,22 @@ impl Uses {
         self.0.is_empty()
     }
 
+    pub fn retain(&mut self, mut keep: impl FnMut(&str, &str) -> bool) {
+        for (path, names) in &mut self.0 {
+            names.retain(|name| keep(path, name));
+        }
+        self.0.retain(|(_, names)| !names.is_empty());
+    }
+
     // `use <path>::<name>;` for one name, `use <path>::{<names>};` for
     // several, the names compressed beneath the brace where the line is
-    // too long, and the standard library's group a blank line apart from
-    // the crates', as the template's `group_imports` lays them.
+    // too long, in the formatter's order: the standard library's group, the
+    // crates', and the crate's own, a blank line apart, each sorted.
     fn render(&self, out: &mut String) {
-        for (at, (path, names)) in self.0.iter().enumerate() {
-            if at > 0 && is_std(&self.0[at - 1].0) && !is_std(path) {
+        let mut uses: Vec<&(String, Vec<String>)> = self.0.iter().collect();
+        uses.sort_by(|a, b| use_order(a, b));
+        for (at, (path, names)) in uses.iter().enumerate() {
+            if at > 0 && group(&uses[at - 1].0) != group(path) {
                 out.push('\n');
             }
             if let [name] = names.as_slice() {
@@ -279,10 +333,51 @@ impl Uses {
     }
 }
 
-fn is_std(path: &str) -> bool {
-    ["std", "core", "alloc"]
-        .iter()
-        .any(|root| path == *root || path.starts_with(&format!("{root}::")))
+// The formatter's group of a `use` path under `group_imports =
+// "StdExternalCrate"`: the standard library, the other crates, the crate's
+// own paths.
+fn group(path: &str) -> u8 {
+    let root = path.split("::").next().unwrap_or(path);
+    match root {
+        "std" | "core" | "alloc" => 0,
+        "crate" | "self" | "super" => 2,
+        _ => 1,
+    }
+}
+
+// A segment of a `use` as the formatter orders them: `self`, `super`, and
+// `crate` first, then a name, then a brace list.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Segment<'s> {
+    Slf,
+    Super,
+    Crate,
+    Ident(&'s str),
+    List,
+}
+
+fn segments<'s>(path: &'s str, names: &'s [String]) -> Vec<Segment<'s>> {
+    let mut segments: Vec<Segment> = path
+        .split("::")
+        .map(|segment| match segment {
+            "self" => Segment::Slf,
+            "super" => Segment::Super,
+            "crate" => Segment::Crate,
+            name => Segment::Ident(name),
+        })
+        .collect();
+    segments.push(match names {
+        [name] => Segment::Ident(name),
+        _ => Segment::List,
+    });
+    segments
+}
+
+// The formatter's order over two `use` lines: by group, then segment by
+// segment, a name before a brace list where one path runs on past the
+// other.
+fn use_order(a: &(String, Vec<String>), b: &(String, Vec<String>)) -> Ordering {
+    group(&a.0).cmp(&group(&b.0)).then_with(|| segments(&a.0, &a.1).cmp(&segments(&b.0, &b.1)))
 }
 
 impl Consts {
@@ -390,6 +485,13 @@ impl Fn {
         self
     }
 
+    // The bounds of a `where` clause, `P: Capabilities`, one per line
+    // under `where`, the brace alone on the line after them.
+    pub fn bounds<B: Into<String>>(mut self, bounds: impl IntoIterator<Item = B>) -> Self {
+        self.bounds = bounds.into_iter().map(Into::into).collect();
+        self
+    }
+
     // The body as lines relative to the block: a statement unindented, a
     // line nested in one indented past it.
     pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
@@ -413,7 +515,9 @@ impl Fn {
     // compressed beneath the opener and the return on the closer's line
     // where there are parameters, and otherwise the brace alone on the next
     // line where the signature fits before it, three columns past the width
-    // at most, and the return on the next line past that.
+    // at most, and the return on the next line past that. A `where` clause
+    // takes the brace off the signature's last line: it follows the bounds,
+    // alone on its line.
     fn head(&self, out: &mut String) {
         let lead = format!(
             "{}{}{}fn {}",
@@ -424,27 +528,38 @@ impl Fn {
         );
         let opener = format!("{lead}{}(", self.generics);
         let arrow = if self.ret.is_empty() { String::new() } else { format!(" -> {}", self.ret) };
-        let joined = format!("{opener}{}){arrow} {{", self.params.join(", "));
-        let bounds = self.generics.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'));
+        let brace = if self.bounds.is_empty() { " {" } else { "" };
+        let joined = format!("{opener}{}){arrow}{brace}", self.params.join(", "));
+        let generics = self.generics.strip_prefix('<').and_then(|rest| rest.strip_suffix('>'));
         if width(&joined) <= MAX_WIDTH {
             let _ = writeln!(out, "{joined}");
-        } else if let Some(bounds) = bounds.filter(|_| width(&opener) + 3 > MAX_WIDTH) {
-            let _ = writeln!(out, "{lead}<\n{}{bounds},", pad(TAB));
+        } else if let Some(generics) = generics.filter(|_| width(&opener) + 3 > MAX_WIDTH) {
+            let _ = writeln!(out, "{lead}<\n{}{generics},", pad(TAB));
             if self.params.is_empty() {
-                let _ = writeln!(out, ">(){arrow} {{");
+                let _ = writeln!(out, ">(){arrow}{brace}");
             } else {
                 let _ = writeln!(out, ">(");
                 compressed(&self.params, TAB, out);
-                let _ = writeln!(out, "){arrow} {{");
+                let _ = writeln!(out, "){arrow}{brace}");
             }
         } else if !self.params.is_empty() {
             let _ = writeln!(out, "{opener}");
             compressed(&self.params, TAB, out);
-            let _ = writeln!(out, "){arrow} {{");
-        } else if width(&joined) <= MAX_WIDTH + 3 || arrow.is_empty() {
-            let _ = writeln!(out, "{opener}){arrow}\n{{");
+            let _ = writeln!(out, "){arrow}{brace}");
+        } else if brace.is_empty() || width(&joined) <= MAX_WIDTH + 3 || arrow.is_empty() {
+            let _ = writeln!(out, "{opener}){arrow}");
+            if !brace.is_empty() {
+                out.push_str("{\n");
+            }
         } else {
             let _ = writeln!(out, "{opener})\n-> {} {{", self.ret);
+        }
+        if !self.bounds.is_empty() {
+            out.push_str("where\n");
+            for bound in &self.bounds {
+                let _ = writeln!(out, "{}{bound},", pad(TAB));
+            }
+            out.push_str("{\n");
         }
     }
 }
@@ -455,6 +570,11 @@ impl Struct {
             name: name.into(),
             ..Self::default()
         }
+    }
+
+    pub fn comments<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.comments.extend(lines.into_iter().map(Into::into));
+        self
     }
 
     pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
@@ -488,6 +608,7 @@ impl Struct {
     }
 
     fn render(&self, out: &mut String) {
+        marked("//", &self.comments, out);
         self.docs.render("///", out);
         attributes(&self.attrs, out);
         let decl = format!("{}struct {}{}", self.vis.prefix(), self.name, self.generics);
@@ -589,6 +710,7 @@ impl Variant {
             docs: Doc::default(),
             attrs: Vec::new(),
             name: name.into(),
+            payload: None,
         }
     }
 
@@ -602,13 +724,26 @@ impl Variant {
         self
     }
 
+    // The fields of a tuple variant, as spelled between its parentheses.
+    pub fn payload(mut self, payload: impl Into<String>) -> Self {
+        self.payload = Some(payload.into());
+        self
+    }
+
     fn render(&self, out: &mut String) {
         let indent = pad(TAB);
         self.docs.render(&format!("{indent}///"), out);
         for attr in &self.attrs {
             let _ = writeln!(out, "{indent}{attr}");
         }
-        let _ = writeln!(out, "{indent}{},", self.name);
+        match &self.payload {
+            Some(payload) => {
+                let _ = writeln!(out, "{indent}{}({payload}),", self.name);
+            }
+            None => {
+                let _ = writeln!(out, "{indent}{},", self.name);
+            }
+        }
     }
 }
 
@@ -675,7 +810,7 @@ impl Call {
         }
     }
 
-    fn inline(&self) -> String {
+    pub fn inline(&self) -> String {
         let args: Vec<String> = self.args.iter().map(Expr::inline).collect();
         format!("{}({})", self.callee, args.join(", "))
     }
@@ -842,20 +977,6 @@ impl Display for Fence {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
-}
-
-// A closure `at` columns into the body, `close` after it: `<head> <body>`
-// on one line where it fits, else the body in a block.
-pub fn closure(at: usize, head: &str, body: &str, close: &str) -> Vec<String> {
-    let joined = format!("{}{head} {body}{close}", pad(at));
-    if width(&joined) <= BODY_WIDTH {
-        return vec![joined];
-    }
-    vec![
-        format!("{}{head} {{", pad(at)),
-        format!("{}{body}", pad(at + TAB)),
-        format!("{}}}{close}", pad(at)),
-    ]
 }
 
 // The lines of a fn body as the file holds them: each non-empty line a

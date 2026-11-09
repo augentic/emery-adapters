@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health/live",
+        "headers": {
+          "authorization": null
+        }
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok"
+        }
+      }
+    }
+  ]
+}

@@ -18,6 +18,7 @@
 - [Reference comparison](#reference-comparison)
   - [Structural measures](#structural-measures)
   - [Black-box fixture oracle](#black-box-fixture-oracle)
+  - [Black-box scenario oracle (`oracle.toml`)](#black-box-scenario-oracle-oracletoml)
   - [Standalone oracle mode (`--oracle`)](#standalone-oracle-mode---oracle)
 - [Building a plan again](#building-a-plan-again)
   - [Full rebuild (`--rebuild`)](#full-rebuild---rebuild)
@@ -67,9 +68,11 @@ cargo run -p evals -- --facts fastapi-routers
 # Specify, apply, and build the plan through emery:node (default) or emery:omnia
 cargo run -p evals -- --build express-orders
 cargo run -p evals -- --build --target omnia express-orders
+cargo run -p evals -- --build --target omnia --budget 6 express-orders
 
-# Rebuild a previous scorecard's sealed revision from scratch
+# Rebuild a previous scorecard's sealed revision from scratch (optionally under a new --budget)
 cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z express-orders
+cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z --target omnia --budget 6 express-orders
 
 # Resume a previous scorecard's build starting at wave 3
 cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at 3 --target omnia express-orders
@@ -87,6 +90,7 @@ cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train
 | `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | Path to the target adapter Wasm component used when `--build` is set. |
 | `EVAL_RUNS` | `3` | Number of `emery specify` runs per case (3 runs distinguish stable output from single-run variance). |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs <N>` to cap concurrent slice builds per wave. |
+| `EVAL_BUDGET` | unset | Passed to `emery build` as `--budget <N>` to cap requirements per build slice (overridden by CLI `--budget <N>`; falls back to the target adapter's `metadata().budget` default of `12`). |
 | `EVAL_LADDER` | `600/120,1200/240,2400/480` | Comma-separated timeout/inactivity rungs (`CURSOR_TIMEOUT_SECS/CURSOR_INACTIVITY_SECS`, or `GENAI_TIMEOUT_SECS/GENAI_SHELL_TIMEOUT_SECS` under `emery-dev`) that `emery specify` climbs on timeout. |
 | `EVAL_BUILD_RUNG` | `1200/240` | Fixed timeout/inactivity rung used for `emery build`. Under `emery-dev`, the second number caps individual shell commands (`cargo`), so raise it (e.g., `1200/1200`) if cold builds time out. |
 | `CURSOR_MODEL` / `GENAI_MODEL` | `auto` / `gpt-5.5` | Model identifier recorded in the scorecard header. Pin an explicit model before comparing two runs. |
@@ -110,7 +114,7 @@ rm -f ~/.emery/adapters/eval_*
 
 Recommended quick smoke-test subsets:
 
-- **TypeScript:** `orders`, `cli-jobs`, `hono-mounted` (or all 8 `typescript` cases when modifying `survey.md`).
+- **TypeScript:** `orders`, `cli-jobs`, `hono-mounted` (or all 7 `typescript` cases when modifying `survey.md`).
 - **Python:** `fastapi-orders`, `click-jobs`, `flask-blueprints` (or all 6 authored `python` cases when modifying `survey.md`).
 
 ### Survey facts without a model turn (`--facts`)
@@ -123,7 +127,7 @@ The extracted facts are printed to stdout and saved to `target/eval/facts/<case>
 
 ## Building the plan
 
-Passing `--build [--target <node|omnia|vue>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default), [`emery-omnia`](../adapters/omnia/), or [`emery-vue`](../adapters/web/vue/) (experiment / non-production; a case whose design holds a layout).
+Passing `--build [--target <node|omnia|vue>] [--budget <N>] [case|adapter..]` extends each successful `emery specify` run by sealing the staged candidate with `emery apply` and building the plan through [`emery-node`](../adapters/node/) (default), [`emery-omnia`](../adapters/omnia/), or [`emery-vue`](../adapters/web/vue/) (experiment / non-production; a case whose design holds a layout).
 
 ### How `--build` stages and runs
 
@@ -138,7 +142,7 @@ Every build and verify turn runs inside the kernel sandbox configured by `emery`
 | Target (`--target`) | Host prerequisite | Granted network egress | Granted `~/` read paths and env vars |
 | --- | --- | --- | --- |
 | `node` (default) | Node.js `>= 22.18` and `npm` on `PATH` | `registry.npmjs.org` | Reads `~/.nvm/versions/node`, `~/.volta` (`VOLTA_HOME=~/.volta`), and `~/.local/share/fnm`. |
-| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
+| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io`, `github.com` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
 | `vue` | Node.js, `pnpm`, and Playwright's `chromium-headless-shell` installed (as [Fetching vendored fixtures](#fetching-vendored-fixtures) installs it) | `registry.npmjs.org` | Reads the Node.js paths `node` reads, and Playwright's browsers at `~/Library/Caches/ms-playwright` or `~/.cache/ms-playwright`. |
 
 Build the target Wasm component before running `--build`:
@@ -169,8 +173,8 @@ Because `covered` requirement IDs and verification verdicts are self-reported by
 3. **Layout and wiring audit:**
    - **Scenario coverage:** Matches requirement acceptance scenario names against declared test names (`test(...)` / `it(...)` in TypeScript, `#[test]` / `#[tokio::test]` in Rust).
    - **Out-of-layout files:** Lists tracked files outside the target adapter's expected directory layout (`spec/` is always permitted).
-   - **Unreached modules and topics:** Flags slice modules or stem crates that are never exported or wired into `src/index.ts`, `src/routes.rs`, or `src/messaging.rs`, as well as unused topic constants in `crates/common/src/topic.rs`.
-   - **Probe routes:** Lists HTTP routes registered in `src/routes.rs` and flags any route whose slice has no corresponding HTTP route requirement as a **probe**.
+   - **Unreached modules and topics:** Flags slice modules or stem crates that are never exported or wired in: for `node`, into `src/index.ts`; for `omnia`, a part whose `handlers()` its stem's entry does not name, a stem crate whose `handlers()` the root `src/lib.rs` router does not list, and unused topic constants in `crates/common/src/topic.rs`.
+   - **Probe routes:** Lists the HTTP routes each part's `handlers()` registers (`.route(<path>, <method>(<handler>))`) and flags any route whose slice has no corresponding HTTP route requirement as a **probe**.
 
 All host check results are written to `run-N.fidelity.md` and summarized in the scorecard's build columns.
 
@@ -178,7 +182,12 @@ All host check results are written to `run-N.fidelity.md` and summarized in the 
 
 ## Reference comparison
 
-A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path pointing to a hand-written Omnia Rust guest implementing the same service (such as [`cases/train/reference`](cases/train/reference/README.md) and [`cases/train-pair/reference`](cases/train-pair/reference/README.md)). When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md` covering two checks:
+A benchmark case in `evals/cases/<name>/expected.toml` can optionally specify a `reference` path. It names one of two kinds of directory, told apart by whether it holds an `oracle.toml`:
+
+- **A hand-written Omnia guest** implementing the same service beside its recorded fixtures (such as [`cases/train/reference`](cases/train/reference/)), which is both measured against the built tree and driven through it.
+- **A scenario oracle** (such as [`cases/express-orders/oracle`](cases/express-orders/oracle/)): the source service's behaviour recorded as HTTP scenarios under `oracle.toml`, driven through the built guest alone, with no reference guest to measure against.
+
+When you run `--build --target omnia` on a case with a reference, the runner adds a `## Reference comparison` section to `run-N.fidelity.md`. For a guest reference it covers two checks; for a scenario oracle, the third alone:
 
 ### Structural measures
 
@@ -195,8 +204,21 @@ Compares the generated workspace against the hand-written reference across six c
 Drives the reference guest's recorded replay and static fixtures (`crates/*/data/{static,replay}/`) through the generated guest:
 
 1. **Test injection:** Generates `tests/reference_oracle.rs` inside the exported workspace using `omnia_test::guest` doubles.
-2. **Execution:** Feeds each fixture's inbound XML message to `messaging_router`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
-3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture.
+2. **Execution:** Feeds each fixture's inbound XML message to the guest's `router(provider)`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
+3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture. The harness's own output (including a compile failure) is written to `run-N.oracle.log` beside the run.
+
+### Black-box scenario oracle (`oracle.toml`)
+
+A reference directory holding an `oracle.toml` records the source service's behaviour as HTTP scenarios rather than as a second implementation, so a stateful HTTP service (an Express API over Postgres and Redis) can be held to what it answers without porting it by hand. The directory holds:
+
+- `oracle.toml`: `kind = "http"`; `[auth]` with the `header`, the bearer `token`, and the `guarded` path prefix the harness adds it under; `[config]`, the settings the scenarios were recorded under, by the source's own names (`GST_RATE = "0.15"`).
+- `schema.sql`: the store's DDL, applied fresh before every scenario, as the contract the built guest's statements are run against (declared types included, since each column is read back as the type its declaration names).
+- `seed/tables/<table>.json`: rows inserted into `<table>` before every scenario (a catalogue). `seed/http.json`: the default upstream answer per path (`{ "/rates": { "quotes": [..] } }`).
+- `scenarios/<group>/<name>.json`: one scenario each, `{ "seed": {..}, "steps": [..] }`. A step is either `{ "request": { "method", "path", "headers"?, "body"? }, "capture"?: { "<name>": "<dotted body path>" }, "expect": { "status", "headers"?, "body"? } }` or `{ "sql": "UPDATE .." }` run directly against the store (to make a cached read stale). Every `{name}` in a later step is a capture's value; `{uuid}`, `{timestamp}` (RFC 3339), and `{any}` are placeholders; a `"headers": { "authorization": null }` sends no bearer. An expected body is a subset: the fields it lists must be present and equal, arrays the same length item by item. `seed.http` lists the upstream requests the scenario expects as `{ "method", "path", "query", "status"?, "body"? }` (the body from `seed/http.json` when the entry gives none; a 4xx/5xx status with none answers `null`), and `"seed": { "tables": "unavailable" }` makes every store call fail (the degraded readiness probe). An entry with two query parameters is registered in both orders, since the guest may spell them either way.
+
+The runner validates every scenario (steps, captures, placeholders) before staging, writes them with the schema, seeds, and configuration into `oracle/oracle.json` in the exported tree, appends the harness's dev-dependencies (`rusqlite` with `bundled`, `column_decltype`, `functions` among them), and injects `tests/reference_oracle.rs`, which drives each scenario through `router(provider)` over `omnia_test::guest` doubles and a `TableStore` the harness owns: an in-memory SQLite database per scenario, run under the Postgres contract the guest wrote against (`$N` parameters bound by number, `expr::type` as `CAST`, `ILIKE` as `LIKE`, `now()` registered, every column typed by its declaration). The configuration seeded is the `[config]` table whole, plus every setting key the built tree declares that the table lacks, matched by its longest `_`-suffix in the table (`ORDERS_GST_RATE` from `GST_RATE`), else by a generic pattern (`*_URL` to the upstream base, `*_TOKEN` to the bearer, `*_TTL_SECONDS` to `60`); a key neither reads is left unset so the guest's own handling of it shows.
+
+Each scenario is reported as `pass` or `fail` with its first failing step: the status answered against the one expected (with the body the guest answered), an absent or differing header or body field, a request the guest made to the upstream that no step seeds, a panic, and the last failed statement (with its SQL error) and the last `WARN`/`ERROR` event the guest logged. Every scenario runs over a fresh store, so one guest fault blocks only the scenarios that pass through it. The fields asserted are strict: the source's camelCase names, `Location` and `x-total-count` headers, and the `error` code and `state` of an error body; an error's `message` is never asserted.
 
 ### Standalone oracle mode (`--oracle`)
 
@@ -204,9 +226,10 @@ You can re-run the reference comparison on an existing scorecard's `run-1` build
 
 ```bash
 cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train
+cargo run -p evals -- --oracle 2026-11-07T06-05-54Z express-orders
 ```
 
-`--oracle` exports the built tree to `run-1.oracle/` (keeping the directory so subsequent runs reuse the compiled `target/` cache and finish in seconds) and writes `run-1.oracle.md` and `run-1.oracle.log`. You can edit files inside `run-1.oracle/` to test manual fixes against the oracle; delete `run-1.oracle/` to force a fresh export from the Git repository.
+`--oracle` exports the built tree to `run-1.oracle/` (keeping the directory so subsequent runs reuse the compiled `target/` cache and finish in seconds) and writes `run-1.oracle.md` and `run-1.oracle.log`. You can edit files inside `run-1.oracle/` to test manual fixes against the oracle; delete `run-1.oracle/` to force a fresh export from the Git repository. Every toolchain command the runner puts over an exported tree builds into that tree's own `target/` whatever `CARGO_TARGET_DIR` the environment names, since an export carries its commit's timestamps and a shared target directory would answer an earlier export's artefacts as fresh.
 
 ---
 
@@ -216,7 +239,7 @@ To compare target adapter changes or model settings without re-running `emery sp
 
 ### Full rebuild (`--rebuild`)
 
-`--rebuild <card> [--target <name>] [case|adapter..]` copies the sealed `run-1` specification from `<card>` into a new scorecard directory and runs `emery build` from scratch using your current `EMERY_BIN`, target adapter `.wasm`, `CURSOR_MODEL` / `GENAI_MODEL`, and `EVAL_JOBS`:
+`--rebuild <card> [--target <name>] [--budget <N>] [case|adapter..]` copies the sealed `run-1` specification from `<card>` into a new scorecard directory and runs `emery build` from scratch using your current `EMERY_BIN`, target adapter `.wasm`, `CURSOR_MODEL` / `GENAI_MODEL`, `EVAL_JOBS`, and `--budget` / `EVAL_BUDGET`:
 
 ```bash
 cargo run -p evals -- --rebuild 2026-10-09T18-15-59Z --target omnia express-orders
@@ -352,18 +375,17 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 - `[[requirement]]`, `[[criterion]]`, `[[decision]]`: Expected claims, each with `stem`, source `anchor` (`path#Ln` or `path#Ln-Lm`), one-line `gloss`, and `source` name.
 - `[[absent]]`: Source spans (`anchor`, `gloss`) where **no** `requirement` claim should anchor (such as startup credential fetching, client construction, or signal handlers that belong in the design document rather than behavioral requirements).
 - `[[behaviour]]` (multi-source cases): Expected reconciled requirements across sources, specifying contributing `claims`, expected authority `status` (`agreed`, `unknown`, `divergence`, `conflict`), and optional `loser` source name.
-- `reference` (optional): Path to a hand-written Omnia reference guest for [Reference comparison](#reference-comparison).
+- `reference` (optional): Path to a hand-written Omnia reference guest, or to a scenario oracle directory holding an `oracle.toml`, for [Reference comparison](#reference-comparison).
 
 ### `typescript` cases
 
 | Case | What it probes | Expected stems |
 | --- | --- | --- |
 | [`orders`](cases/orders/expected.toml) | Single module within the inline byte budget. | `order-service` |
-| [`express-orders`](cases/express-orders/expected.toml) | Express service with bootstrap and three routers. | `start`, `orders`, `customers`, `health` |
+| [`express-orders`](cases/express-orders/expected.toml) | Express service with bootstrap and three routers, and a 57-scenario HTTP `oracle/` over an in-memory store. | `start`, `orders`, `customers`, `health` |
 | [`cli-jobs`](cases/cli-jobs/expected.toml) | Commander CLI with background queue workers. | `start`, `import`, `reconcile`, `nightly`, `serve`, `invoices` |
 | [`api-routes`](cases/api-routes/expected.toml) | Next.js App Router API with file-path routing and no bootstrap. | `orders`, `customers`, `health` |
 | [`hono-mounted`](cases/hono-mounted/expected.toml) | Hono sub-apps mounted via `app.route("/orders", orders)`. | `start`, `orders`, `customers`, `health` |
-| [`cli-table`](cases/cli-table/expected.toml) | Three CLI commands registered from a table in a loop. | `start`, `import`, `reconcile`, `nightly` |
 | [`fastify-demo`](cases/fastify-demo/expected.toml) | Vendored official Fastify demo (`@fastify/autoload` directory plugins and `db:*` scripts). | `start`, `home`, `api`, `auth`, `users`, `tasks`, `create-database`, `drop-database`, `migrate`, `seed-database` |
 | [`nestjs-boilerplate`](cases/nestjs-boilerplate/expected.toml) | Vendored 177-module NestJS application (scale benchmark). | `start`, `auth`, `users`, `files`, `home`, `run-seed` |
 | [`train`](cases/train/expected.toml) | Production Kafka XML consumer with `[[absent]]` bootstrap spans and a 22-fixture Omnia `reference/` guest. | `train-update` (`start` surveyed with 0 requirements) |
@@ -397,14 +419,11 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 | Case | What it probes | Expected reconciliation |
 | --- | --- | --- |
 | [`orders-triad`](cases/orders-triad/expected.toml) | Documentation (`docs`), TypeScript (`code`), and inline intent (`brief`) with differing stem names. | 5 shared behaviors, 2 doc-only behaviors. |
-| [`orders-brief`](cases/orders-brief/expected.toml) | Documentation alongside a higher-ranked intent brief that overrides one rule. | `divergence` (intent outranks documentation). |
 | [`orders-divergence`](cases/orders-divergence/expected.toml) | Documentation and TypeScript code disagreeing on two rules. | `divergence` on both rules. |
 | [`orders-conflict`](cases/orders-conflict/expected.toml) | Two `documentation` sources (`docs` and `faq`) contradicting each other at equal rank. | `conflict`. |
-| [`orders-ranked`](cases/orders-ranked/expected.toml) | Same sources as `orders-conflict`, with `faq` lowered to `rank = 4`. | `divergence` (`docs` outranks `faq`). |
-| [`orders-spelled`](cases/orders-spelled/expected.toml) | Documentation rewritten to use the exact same claim IDs as the code. | Cross-source pre-merge on matching IDs. |
 | [`orders-broker`](cases/orders-broker/expected.toml) | Two ADRs naming Confluent Kafka and KeyVault alongside TypeScript code with vendor-named identifiers. | `leaks = 0`; vendor choices recorded as `decision` claims; secret surface stemmed as `secrets`. |
 | [`nestjs-pair`](cases/nestjs-pair/expected.toml) | `nestjs-docs` combined with the 177-module `nestjs-boilerplate` codebase. | 14 shared behaviors, 3 doc-only behaviors. |
-| [`train-pair`](cases/train-pair/expected.toml) | Multi-repo pipeline combining the SOAP `connector` and Kafka `train` services into one Omnia guest. | `inbound` and `train` stems; `reference/` guest with both crates. |
+| [`train-pair`](cases/train-pair/expected.toml) | Multi-repo pipeline combining the SOAP `connector` and Kafka `train` services into one specification. | `inbound` and `train-update` stems. |
 
 ### `web` cases (experiment / non-production)
 
@@ -465,10 +484,32 @@ Each run writes a Markdown scorecard to `target/eval/<card>.md` and per-run arti
 | `built` | `merged/slices` (plus `~k` slices requiring AI merge conflict resolution, and the failure code if the build aborted). |
 | `verified` | `passed/waves` across the waves executed by `emery build`. |
 | `build wall` | Total wall-clock time for the `emery build` process. |
-| `speedup` | Ratio of serial turn time to critical-path wave time, alongside the theoretical plan width factor (`slices ÷ waves`). |
+| `speedup` | Ratio of serial turn time to critical-path wave time, alongside the theoretical schedule width factor (`slices ÷ waves`). |
 | `covered` | Self-reported `covered` requirement IDs across merged slices vs. total requirements assigned to those slices. |
 | `host checks` | Independent host verification result (`ok <passed>/<total>` when install, typecheck/clippy, and tests all pass, or `✗` on the failing step). |
 | `scenarios named` | `named/scenarios (p%) · k outside · u unreached · p probes` from `run-N.fidelity.md`. |
+
+### Plan shape and schedule sections
+
+Below the per-run notes, the scorecard renders two structural tables for each case:
+
+- **`## Plan shape`** (rendered whenever a run stages a plan or runs a `slicing` turn):
+
+  | Column | Meaning |
+  | --- | --- |
+  | `slicing` | Outcome and wall duration of the `slicing` turn (`ok (14s)`, `corrected (38s)`, `exhausted (120s)`, or `no turn` for a single-stem specification). |
+  | `cap exhausted` | Count of `slicing` completions that exhausted their retry budget over a slice-size or pair-merge finding. Expected to be `0`. |
+  | `parts` | Number of logical `PART-NNN` parts in the staged `plan.json`. |
+  | `waves` | Wave count and per-wave part widths (`3 (1/2/1)`). |
+  | `widest` | Maximum number of parts ready to build in a single wave. |
+  | `merged stems` | Count and names of domain stems merged into another stem's part (`0` when each domain stem is one part; a `start` requirement placed into another stem's part by a shared route/topic trigger is not counted as a merged stem). |
+  | `derived edges` | Inter-part `depends-on` edges derived from a type owned by the dependent part referencing a type owned by the dependency part in its signature (`1 (\`orders\` → \`customers\` (\`Customer\`))`; rendered as `type-backed edges` on pre-grammar-10 plans without `uses`). |
+  | `named edges` | Inter-part `depends-on` edges explained by the dependent part's `uses` list alone (`1 (\`audit\` → \`orders\` (\`Order\`))`; rendered as `unbacked edges` on pre-grammar-10 plans without `uses`). |
+  | `onto typeless` | Count of inter-part `depends-on` edges whose target part owns no data type, expected to be `0` (`unbacked onto start` on pre-grammar-10 plans without `uses`). |
+
+- **`## Schedule`** (rendered on `--build`, `--rebuild`, and `--resume` runs):
+  - Summarizes the resolved requirement `budget` and its source (`flag`, `config`, `adapter`, `default`), total scheduled slices, schedule wave shape, `widest` wave, and the count and IDs of slices flagged `over budget`.
+  - Lists one row per scheduled slice (`SLICE-NNN <name> (index/count)`), its `part` (`PART-NNN`), scheduled `wave`, requirement count (`req`), total acceptance `scenarios` across its requirements in `spec.json`, `over budget` (`yes`/`no`), and the `duration` and token counts (`input`, `cached`, `output`, `reasoning`) summed across its `build-SLICE-NNN` completions.
 
 ### Diagnostic notes and stability
 

@@ -11,7 +11,7 @@ use emery_sdk::target::{
 use emery_sdk::{Standing, Trigger, standing};
 use test_programs::{ADAPTER, Caller, WORKSPACE, arguments, check_version};
 
-omnia_sdk::command!(scenario);
+omnia_sdk::api::command::export!(scenario);
 
 async fn scenario() {
     let metadata = Caller.metadata(ADAPTER);
@@ -39,9 +39,38 @@ async fn scenario() {
             };
             check_verdict(&verdict);
         }
-        ["metadata", rules @ ..] => {
-            let declared: Vec<String> = metadata.merge_rules.iter().map(format_rule).collect();
-            assert_eq!(declared, rules, "the merge rules the metadata declares, in order");
+        ["serial"] => {
+            assert_eq!(
+                run(&Task::Init).await,
+                Outcome::Initialised,
+                "an init answers an initialised tree"
+            );
+
+            for slice in [first_serial_slice(), second_serial_slice()] {
+                let outcome = run(&Task::Build(slice.clone())).await;
+                let Outcome::Built(report) = outcome else {
+                    panic!("a build answers a report, not {outcome}");
+                };
+                check_report(&report, &slice);
+            }
+
+            let outcome = run(&Task::Verify).await;
+            let Outcome::Verified(verdict) = outcome else {
+                panic!("a verify answers a verdict, not {outcome}");
+            };
+            check_verdict(&verdict);
+        }
+        ["metadata", expected @ ..] => {
+            let declared: Vec<String> = metadata
+                .budget
+                .map(|budget| format!("budget={budget}"))
+                .into_iter()
+                .chain(metadata.merge_rules.iter().map(format_rule))
+                .collect();
+            assert_eq!(
+                declared, expected,
+                "the budget and merge rules the metadata declares, in order"
+            );
         }
         ["init"] => {
             assert_eq!(
@@ -68,7 +97,8 @@ async fn scenario() {
             );
         }
         other => panic!(
-            "no argument, `metadata <glob>=<strategy>..`, `init`, or `refused <code> <fragment>`; got {other:?}"
+            "no argument, `serial`, `metadata [budget=<n>] <glob>=<strategy>..`, `init`, or \
+             `refused <code> <fragment>`; got {other:?}"
         ),
     }
 }
@@ -112,12 +142,15 @@ fn format_rule(rule: &MergeRule) -> String {
 fn slice() -> Slice {
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: "orders".to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         requirements: vec![Requirement {
             id: "REQ-001".to_owned(),
             subject: "orders.create".to_owned(),
-            statement: vec!["Creates an order from at least one item.".to_owned()],
+            statement: vec!["Creates an order from at least one item in the body.".to_owned()],
             scenarios: vec![Scenario {
                 name: "An order is created".to_owned(),
                 given: vec!["an item".to_owned()],
@@ -133,11 +166,51 @@ fn slice() -> Slice {
         }],
         brief: vec!["Create an order from its items.".to_owned()],
         spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nPOST /orders \
-               creates an order from at least one item.\n"
+               creates an order from at least one item in the body.\n"
             .to_owned(),
         design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
-        plan: "## Slice: orders\n\nID: SLICE-001\nRequirements: REQ-001\nTypes: orders.Order\n\
+        plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
+            .to_owned(),
+        layouts: Vec::new(),
+    }
+}
+
+fn first_serial_slice() -> Slice {
+    let mut slice = slice();
+    slice.count = 2;
+    slice
+}
+
+fn second_serial_slice() -> Slice {
+    Slice {
+        id: "SLICE-002".to_owned(),
+        part: "PART-001".to_owned(),
+        name: "orders".to_owned(),
+        index: 2,
+        count: 2,
+        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        requirements: vec![Requirement {
+            id: "REQ-002".to_owned(),
+            subject: "orders.read".to_owned(),
+            statement: vec!["Reads an order by its id.".to_owned()],
+            scenarios: vec![Scenario {
+                name: "An order is read".to_owned(),
+                given: vec!["an order 42".to_owned()],
+                when: "GET /orders/42 is called".to_owned(),
+                then: "the order is answered".to_owned(),
+                and: Vec::new(),
+            }],
+            trigger: Some(Trigger::http("GET /orders/{id}").expect("valid route")),
+        }],
+        types: Vec::new(),
+        brief: vec!["Create and read an order.".to_owned()],
+        spec: "# Specification\n\n## Requirement: orders.read\n\nID: REQ-002\n\nGET /orders/{id} \
+               reads an order by its id.\n"
+            .to_owned(),
+        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
+        plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001, REQ-002\nTypes: \
+               orders.Order\nDepends on: none\n"
             .to_owned(),
         layouts: Vec::new(),
     }

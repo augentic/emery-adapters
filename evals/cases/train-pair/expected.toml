@@ -21,13 +21,6 @@
 # `on` hook inside the producer's options in `start.ts`, which makes the
 # bootstrap the one locating module — so the surface is the model's to find
 # in the modules inlined whole, which is what the case measures of the survey.
-# Beside the sources sits `reference/`, a trimmed copy of the hand-written
-# omnia guest the two were ported into — one crate per service, the topic
-# constant the one thing they share — which a `--build --target omnia` run
-# compares the built guest with and drives the adapter's 22 recorded
-# fixtures through.
-
-reference = "evals/cases/train-pair/reference"
 
 [[source]]
 name = "connector"

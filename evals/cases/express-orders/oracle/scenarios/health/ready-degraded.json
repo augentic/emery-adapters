@@ -1,0 +1,19 @@
+{
+  "seed": {
+    "tables": "unavailable"
+  },
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health/ready"
+      },
+      "expect": {
+        "status": 503,
+        "body": {
+          "status": "degraded"
+        }
+      }
+    }
+  ]
+}

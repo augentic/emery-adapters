@@ -1,0 +1,16 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/health/live"
+      },
+      "expect": {
+        "status": 200,
+        "body": {
+          "status": "ok"
+        }
+      }
+    }
+  ]
+}

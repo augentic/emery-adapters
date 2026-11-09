@@ -1,7 +1,7 @@
 //! Python dialect configuration.
 
 use emery_sdk::survey::route::Spelling;
-use emery_sdk::survey::{ClassSyntax, Dialect};
+use emery_sdk::survey::{Annotations, ClassSyntax, Dialect};
 
 pub static DIALECT: Dialect = Dialect {
     self_name: "self",
@@ -150,6 +150,13 @@ pub static DIALECT: Dialect = Dialect {
     env_object: None,
     enum_bases: &["Enum", "Flag"],
     class_syntax: ClassSyntax::INDENTED,
+    annotations: Annotations {
+        integer: "int",
+        float: "float",
+        string: "str",
+        boolean: "bool",
+        unknown: "object",
+    },
     described: "a test's docstring or name under its class's",
     route: Spelling {
         pattern: &['*', '{', '(', '[', '<', '?', '\\'],

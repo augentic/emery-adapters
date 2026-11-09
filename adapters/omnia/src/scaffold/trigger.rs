@@ -5,8 +5,8 @@ use emery_sdk::survey::route::Spelling;
 use emery_sdk::target::Requirement;
 use emery_sdk::{Route, Trigger};
 
-// The methods `omnia_sdk::api::http` has a route function for, each with
-// that function.
+// The methods `axum::routing` has a method router for, each with that
+// function.
 const METHODS: [(&str, &str); 5] =
     [("DELETE", "delete"), ("GET", "get"), ("PATCH", "patch"), ("POST", "post"), ("PUT", "put")];
 
@@ -48,9 +48,14 @@ fn is_topic(name: &str) -> bool {
         })
 }
 
-// The SDK's route function for `method`, `get` for one it has none for.
+// The method router function for `method`, `get` for one it has none for.
 pub fn method_fn(method: &str) -> &'static str {
     METHODS.iter().find(|(name, _)| *name == method).map_or("get", |(_, function)| function)
+}
+
+// Whether the method carries a request body the handler reads as JSON.
+pub fn carries_body(method: &str) -> bool {
+    matches!(method, "POST" | "PUT" | "PATCH")
 }
 
 // The stem the route's first resource segment names, `health` for `GET

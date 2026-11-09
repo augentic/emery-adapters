@@ -7,7 +7,8 @@ use std::path::Path;
 use emery_sdk::{Error, NoFollow, Standing, bad_request, server_error, standing};
 
 use super::names::{Names, screaming};
-use crate::layout::{self, PATH_LIST_ANCHOR, ROUTES_ARRAY_ANCHOR, TOPICS_ARRAY_ANCHOR};
+use super::render::{MAX_WIDTH, TAB, pad};
+use crate::layout::{self, insert_after};
 
 // A line a stem adds to a list, and where the list stands with it.
 pub struct Line {
@@ -26,23 +27,16 @@ pub enum Placement {
 
 // Where a list takes a line.
 pub enum Place {
-    // The root manifest's path list: after `common`'s line and the stems'
-    // after it.
-    PathList,
-    // The root manifest's crate list, and the topic table: the end of the
-    // file.
+    // After the template's anchor, as the template's own insertion lays it:
+    // on the line after the anchor's, or, for an anchor opening an array,
+    // as the array's last entry.
+    After(&'static str),
+    // The topic table: the end of the file.
     FileEnd,
-    // Before the line that starts with the anchor, as the root route and
-    // topic lists take a statement.
-    Before(&'static str),
     // Among the `pub mod` lines of a stem's entry, in the order the
     // formatter keeps them; before its first `use`, a blank line between,
     // where the entry holds none.
     PubModList,
-    // At the end of the routes array of a stem's entry.
-    RoutesArray,
-    // At the end of the topics array of a stem's entry.
-    TopicsArray,
 }
 
 // The text of each list a line is placed in, read once; a list the tree
@@ -73,11 +67,21 @@ impl Line {
     // anchor, or lacking the anchor or the list.
     pub fn place(&mut self, root: &Path, lists: &mut Lists) -> Result<(), Error> {
         self.placement = match lists.text(root, &self.path)? {
-            Some(text) if text.lines().any(|held| held.trim() == self.key()) => Placement::Held,
+            Some(text) if self.held_by(text) => Placement::Held,
             Some(text) if insert(text, &self.text, &self.place).is_some() => Placement::Add,
             _ => Placement::Unanchored,
         };
         Ok(())
+    }
+
+    // Whether the list holds the line already: as a line of its own, or,
+    // for an array's entry, anywhere in the text, since the formatter lays
+    // a short array on the anchor's own line.
+    fn held_by(&self, text: &str) -> bool {
+        let key = self.key();
+        text.lines().any(|held| held.trim() == key)
+            || matches!(self.place, Place::After(anchor) if anchor.ends_with('['))
+                && text.contains(key.trim_end_matches(','))
     }
 
     // The line that tells whether the file holds this one: the last of a
@@ -158,6 +162,11 @@ impl Topics {
         self.declared.push((name.clone(), topic.to_owned()));
         (name, false)
     }
+
+    // Whether the table, or a slice adding to it, names a constant `name`.
+    pub fn is_named(&self, name: &str) -> bool {
+        self.names.contains(name)
+    }
 }
 
 // `text` with `line` where `place` says, or none where the text holds no
@@ -165,17 +174,11 @@ impl Topics {
 pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
     let mut lines: Vec<&str> = text.lines().collect();
     let at = match place {
-        Place::PathList => {
-            let mut at = lines.iter().position(|held| *held == PATH_LIST_ANCHOR)? + 1;
-            while lines.get(at).is_some_and(|held| held.contains(" = { path = \"crates/")) {
-                at += 1;
-            }
-            at
+        Place::After(anchor) => {
+            let text = insert_after(text, anchor, line)?;
+            return if anchor.ends_with('[') { laid(&text, anchor) } else { Some(text) };
         }
         Place::FileEnd => lines.len(),
-        Place::Before(anchor) => {
-            lines.iter().position(|held| held.trim_start().starts_with(anchor))?
-        }
         Place::PubModList => {
             let is_mod = |held: &&str| held.trim_start().starts_with("pub mod ");
             if let (Some(first), Some(last)) =
@@ -191,15 +194,46 @@ pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
                 at
             }
         }
-        Place::RoutesArray => array_end(&lines, ROUTES_ARRAY_ANCHOR)?,
-        Place::TopicsArray => array_end(&lines, TOPICS_ARRAY_ANCHOR)?,
     };
     lines.insert(at, line);
     Some(lines.join("\n") + "\n")
 }
 
-// The index of the `])` closing the array `anchor` opens.
-fn array_end(lines: &[&str], anchor: &str) -> Option<usize> {
-    let opened = lines.iter().position(|held| held.trim() == anchor)? + 1;
-    Some(opened + lines[opened..].iter().position(|held| held.trim() == "])")?)
+// `text` with the array `anchor` opens laid as the formatter lays it: on
+// the anchor's line where that fits the width, else one entry per line
+// under it, a call chained on the array moved under its closing bracket.
+// An array holding a comment stands as it is, since the formatter keeps
+// one vertical.
+fn laid(text: &str, anchor: &str) -> Option<String> {
+    let (before, after) = text.split_once(anchor)?;
+    let (inner, rest) = after.split_once(']')?;
+    if inner.contains("//") {
+        return Some(text.to_owned());
+    }
+    let entries: Vec<&str> =
+        inner.split(',').map(str::trim).filter(|entry| !entry.is_empty()).collect();
+    let line_start = before.rfind('\n').map_or(0, |at| at + 1);
+    let lead = &before[line_start..];
+    let indent: String = lead.chars().take_while(|ch| ch.is_whitespace()).collect();
+    let (tail, remainder) =
+        rest.split_once('\n').map_or((rest, None), |(tail, rest)| (tail, Some(rest)));
+    let joined = format!("{lead}{anchor}{}]{tail}", entries.join(", "));
+    let array = if entries.is_empty() || joined.chars().count() <= MAX_WIDTH {
+        joined
+    } else {
+        let mut lines = vec![format!("{lead}{anchor}")];
+        lines.extend(entries.iter().map(|entry| format!("{indent}{}{entry},", pad(TAB))));
+        let (close, chain) =
+            tail.split_once('.').map_or((tail, None), |(close, chain)| (close, Some(chain)));
+        lines.push(format!("{indent}]{close}"));
+        lines.extend(chain.map(|chain| format!("{indent}.{chain}")));
+        lines.join("\n")
+    };
+    let mut out = before[..line_start].to_owned();
+    out.push_str(&array);
+    if let Some(remainder) = remainder {
+        out.push('\n');
+        out.push_str(remainder);
+    }
+    Some(out)
 }

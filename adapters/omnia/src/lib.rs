@@ -11,6 +11,7 @@ mod scaffold;
 mod syntax;
 mod tree;
 
+use std::num::NonZeroU32;
 use std::path::Path;
 
 use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
@@ -22,14 +23,13 @@ use self::tree::Tree;
 const RULES: &[MergeRule] = &[
     MergeRule::ours("Cargo.lock"),
     MergeRule::union("Cargo.toml"),
-    MergeRule::union("src/routes.rs"),
-    MergeRule::union("src/messaging.rs"),
+    MergeRule::union("src/lib.rs"),
     MergeRule::union("crates/common/src/topic.rs"),
     MergeRule::union("crates/*/Cargo.toml"),
     MergeRule::union("crates/*/src/lib.rs"),
 ];
 const CARGO: Grant = Grant {
-    egress: &["index.crates.io", "static.crates.io"],
+    egress: &["index.crates.io", "static.crates.io", "github.com"],
     read: &[],
     env: &[],
 };
@@ -47,6 +47,7 @@ impl TargetAdapter for Adapter {
         Metadata {
             rules: RULES,
             grants: &[CARGO, RUSTUP],
+            budget: NonZeroU32::new(12),
         }
     }
 

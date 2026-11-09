@@ -1,0 +1,13 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/nothing-here"
+      },
+      "expect": {
+        "status": 404
+      }
+    }
+  ]
+}

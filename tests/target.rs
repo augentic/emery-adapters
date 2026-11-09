@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
+use std::num::NonZeroU32;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
@@ -14,7 +15,7 @@ use emery_sdk::target::{
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
 use omnia_test::SeenWorker;
-use omnia_test::guest::Scripted;
+use omnia_test::guest::ScriptedModel;
 use omnia_test::host::{Scratch, scratch};
 
 const PASSED: &str = r#"{"passed": true, "failures": []}"#;
@@ -44,42 +45,133 @@ const OMNIA_FUNCTION_MARKER: &str =
 const OMNIA_FUNCTION_FILLED: &str = "    Ok(())\n";
 // The handler and test markers the adapter scaffolds for the routed slice, each
 // the block the brief quotes for the edit's `find`, and the bodies a turn puts
-// in their place, the test's `#[ignore]` line gone and its act lines kept.
+// in their place, the test's `#[ignore]` line gone and its act lines kept; the
+// filled handler reads the state, so the bound a turn narrows the scaffolded
+// `P: Capabilities` to is `StateStore`, imported beside the sdk's other names.
 const OMNIA_HANDLER_MARKER: &str =
-    "    let _ = (&input, &context);\n    todo!(\"REQ-001 orders.read: the handler\")\n";
-const OMNIA_HANDLER_FILLED: &str = "    let ReadInput { id } = input;\n    let _ = (id, context, \
-                                    common::topic::ORDER_PLACED);\n    Ok(ReadOutput {})\n";
+    "    let _ = (&context, &id);\n    todo!(\"REQ-001 orders.read: the handler\")\n";
+const OMNIA_HANDLER_FILLED: &str = "    let _ = (&id, common::topic::ORDER_PLACED);\n    let _ = \
+                                    context.state().get(\"orders/42\").await?;\n    \
+                                    Ok(Json(ReadOutput {}))\n";
+const OMNIA_BOUND: &str = "where\n    P: Capabilities,\n";
+const OMNIA_BOUND_NARROWED: &str = "where\n    P: StateStore,\n";
+const OMNIA_SDK_USE: &str = "use omnia_sdk::{Capabilities, Result};\n";
+const OMNIA_SDK_USE_NARROWED: &str = "use omnia_sdk::{Capabilities, Result, StateStore};\n";
 const OMNIA_TEST_MARKER: &str = "#[ignore = \"REQ-001 An order is returned by its id: \
                                  unfilled\"]\nasync fn an_order_is_returned_by_its_id() {\n    \
                                  let id = \"<id>\";\n    let request = \
                                  Request::get(format!(\"/orders/{id}\")).body(Body::empty()).\
-                                 expect(\"request\");\n    let (status, body) = send(provider(), \
-                                 request).await;\n    let _ = (&status, &body);\n    \
-                                 todo!(\"REQ-001 An order is returned by its id: arrange, act, \
-                                 assert\")\n}\n";
+                                 expect(\"request\");\n    let (status, body) = \
+                                 call(&provider(), request).await;\n    let _ = (&status, \
+                                 &body);\n    todo!(\"REQ-001 An order is returned by its id: \
+                                 arrange, act, assert\")\n}\n";
 const OMNIA_TEST_FILLED: &str = "async fn an_order_is_returned_by_its_id() {\n    let request = \
                                  Request::get(\"/orders/42\").body(Body::empty()).\
-                                 expect(\"request\");\n    let (status, _body) = send(provider(), \
-                                 request).await;\n    assert_eq!(status, StatusCode::OK);\n}\n";
+                                 expect(\"request\");\n    let (status, _body) = \
+                                 call(&provider(), request).await;\n    assert_eq!(status, \
+                                 StatusCode::OK);\n}\n";
 // The lines the omnia slice adds to the seed's lists, each after the anchor
-// the seeded file holds: the topic table's constant at its end, the route
-// list's and the topic list's statements, and the stem in the root
-// manifest's two lists.
+// the seeded file holds: the topic table's constant at its end, the stem's
+// `handlers()` under the comment heading the root router's array, which
+// keeps the array one entry per line, and the stem's crate at the end of
+// the root manifest.
 const OMNIA_TABLE_LINE: &str =
     "\n/// An order was placed.\npub const ORDER_PLACED: &str = \"order-placed\";\n";
-const OMNIA_ROUTE_ANCHOR: &str = "    let router = axum::Router::new();\n";
-const OMNIA_ROUTE_LINE: &str = "    let router = router.merge(orders::router());\n";
-const OMNIA_TOPICS_ANCHOR: &str =
-    "    let router = messaging::Router::new(Client::new(OWNER, provider));\n";
-const OMNIA_TOPICS_LINE: &str = "    let router = orders::topics(router, &env);\n";
-const OMNIA_PATH_CRATE_ANCHOR: &str = "common = { path = \"crates/common\" }\n";
+const OMNIA_ROOT_ANCHOR: &str = "    Handlers::from([\n        // one `<stem>::handlers(),` per \
+                                 stem, each added at the end\n    ])\n    \
+                                 .with_state(Client::new(provider))\n";
+const OMNIA_ROOT_LINE: &str = "    Handlers::from([\n        // one `<stem>::handlers(),` per \
+                               stem, each added at the end\n        orders::handlers(),\n    \
+                               ])\n    .with_state(Client::new(provider))\n";
+const OMNIA_PATH_CRATE_ANCHOR: &str = "omnia-sdk.workspace = true\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
-const OMNIA_STEM_ANCHOR: &str = "tracing.workspace = true\n";
-const OMNIA_STEM_LINE: &str = "orders.workspace = true\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
 // A pin of the root manifest and the edit a turn might put to it.
-const OMNIA_PIN: &str = "omnia-sdk = \"0.37.0\"\n";
-const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN: &str = "omnia-sdk = \"0.38.0\"\n";
+const OMNIA_PIN_EDITED: &str = "omnia-sdk = \"0.39.0\"\n";
+
+// A reference table's element type and the table itself as a TypeScript
+// source declares them, the table's third row spelled in single quotes
+// with an apostrophe escaped.
+const OMNIA_ZONE_SIGNATURE: &str = "export interface DeliveryZone {\n  from: string;\n  to: \
+                                     string;\n  zone: string;\n  courier: string;\n  minDays: \
+                                     number;\n  rural: boolean;\n}";
+const OMNIA_ZONES_TABLE: &str = "export const ZONES: readonly DeliveryZone[] = [\n  { from: \
+                                 \"0110\", to: \"0139\", zone: \"northland-kerikeri\", courier: \
+                                 \"nzpost\", minDays: 2, rural: false },\n  { from: \"0140\", to: \
+                                 \"0149\", zone: \"northland-warkworth\", courier: \"nzpost\", \
+                                 minDays: 3, rural: true },\n  { from: '0150', to: '0199', zone: \
+                                 'o\\'hara', courier: \"nzpost\", minDays: 3, rural: true },\n];";
+// The table's data module as the adapter lays it, the rows one object per
+// line in one constant.
+const OMNIA_ZONES_DATA: &str = "[\n  {\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+                                \"northland-kerikeri\", \"courier\": \"nzpost\", \"minDays\": 2, \
+                                \"rural\": false},\n  {\"from\": \"0140\", \"to\": \"0149\", \
+                                \"zone\": \"northland-warkworth\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true},\n  {\"from\": \"0150\", \"to\": \
+                                \"0199\", \"zone\": \"o'hara\", \"courier\": \"nzpost\", \
+                                \"minDays\": 3, \"rural\": true}\n]\n";
+// The fn reading the table, as the adapter lays it.
+const OMNIA_ZONES_READER: &str = "/// The design type `orders.ZONES`, its rows the file \
+                                  `data/zones.json`.\n///\n/// ```text\n/// export const ZONES: \
+                                  readonly DeliveryZone[] = [\n/// ```\n///\n/// # \
+                                  Errors\n///\n/// A row of the file that `DeliveryZone` does \
+                                  not read.\npub fn zones() -> Result<Vec<DeliveryZone>> {\n    \
+                                  serde_json::from_str(include_str!(\"../data/zones.json\"))\n        \
+                                  .map_err(|error| Error::server_error(\"data\", \
+                                  error.to_string()))\n}\n";
+// A consumer of `order-placed` as a turn fills one, writing the delivery's
+// order under its id.
+const OMNIA_PLACED_CONSUMER: &str = "/// A delivery of `order-placed`.\n#[derive(Debug, \
+                                     Deserialize)]\npub struct OnPlacedInput {\n    /// The \
+                                     order's id.\n    pub id: String,\n}\n\npub(crate) async fn \
+                                     on_placed<P: StateStore>(context: Context<P>, input: \
+                                     OnPlacedInput) -> Result<()> {\n    \
+                                     context.state().set(&format!(\"orders/{}\", input.id), \
+                                     b\"placed\").await?;\n    Ok(())\n}\n";
+// A design whose rules gate the routes under `/api`: the prefix spelled in
+// its gate sentences more often than `/health`, the keys the gate reads, and
+// the code it refuses with, beside a store paragraph that names no gate.
+const OMNIA_GATED_DESIGN: &str = "# Design\n\n## APIs and integrations\n\nInbound HTTP surfaces \
+                                  (from typescript): GET /health/live (REQ-003); GET \
+                                  /api/orders/{id} (REQ-001); POST /api/orders (REQ-002). \
+                                  Authenticate mounts only under /api.\n\nStore role: a SQL \
+                                  database over DATABASE_URL (required). Authentication for \
+                                  the store is [unknown].\n\n## Technical logic\n\nBearer \
+                                  authentication gates /api: a missing or unknown token yields \
+                                  401 (REQ-001, REQ-002). Typed failures map to not-found, \
+                                  invalid-request, unauthorized, or conflict responses. \
+                                  Liveness lives under /health (REQ-003).\n\nauthenticate \
+                                  reads the authorization header, requires BEARER_PREFIX \
+                                  \"Bearer \", trims the remainder, and accepts it only when it \
+                                  is in API_TOKENS; otherwise it answers 401 { error: \
+                                  \"unauthorized\" }. Mounted only under /api.\n";
+// The gate's error as the adapter lays it under `/api` and the design's code.
+const OMNIA_GATE_ERROR: &str = "/// Why the gate under `/api` refused a request.\n#[derive(Debug, \
+                                thiserror::Error)]\npub enum GateError {\n    /// The request \
+                                carried no accepted credential.\n    \
+                                #[error(\"unauthorized\")]\n    Unauthorized,\n    /// The \
+                                settings or a capability failed.\n    \
+                                #[error(transparent)]\n    Host(#[from] \
+                                omnia_sdk::Error),\n}\n\nimpl From<anyhow::Error> for GateError \
+                                {\n    fn from(error: anyhow::Error) -> Self {\n        \
+                                Self::Host(error.into())\n    }\n}\n\nimpl IntoResponse for \
+                                GateError {\n    fn into_response(self) -> Response {\n        \
+                                match self {\n            Self::Unauthorized => {\n                \
+                                let body = serde_json::json!({ \"error\": \"unauthorized\" \
+                                });\n                (StatusCode::UNAUTHORIZED, \
+                                Json(body)).into_response()\n            }\n            \
+                                Self::Host(inner) => inner.into_response(),\n        }\n    \
+                                }\n}\n";
+// The gate's function as the adapter lays it: the signature every handler
+// under the prefix calls, over the marker the turn fills.
+const OMNIA_GATE: &str = "/// The gate every route under `/api` passes first, as the design's \
+                          rules state it.\n///\n/// # Errors\n///\n/// [`GateError::Unauthorized`] \
+                          where the request carries no accepted credential.\npub async fn \
+                          authenticate<P>(\n    context: &Context<P>, headers: &HeaderMap,\n) -> \
+                          std::result::Result<(), GateError>\nwhere\n    P: Config,\n{\n    let _ \
+                          = (context, headers);\n    todo!(\"authenticate: the gate under \
+                          /api\")\n}\n";
 
 // The three root files the node target's initialisation scaffolds, as the crate
 // embeds them.
@@ -90,7 +182,7 @@ const NODE_SEED: [(&str, &str); 3] = [
 ];
 
 // The `orders` stem's manifest as the adapter scaffolds it for the stem's first
-// slice: the layout's one text, its `[dependencies]` the six fixed lines.
+// slice: the layout's one text, its `[dependencies]` the four fixed lines.
 const OMNIA_MANIFEST: &str = "[package]\nname = \"orders\"\ndescription = \"The `orders` \
                               stem\"\npublish.workspace = true\nedition.workspace = \
                               true\nrust-version.workspace = true\nversion.workspace = \
@@ -98,75 +190,67 @@ const OMNIA_MANIFEST: &str = "[package]\nname = \"orders\"\ndescription = \"The 
                               wasm32 dependency graph never sees the doubles.\n[target.'cfg(not(\
                               target_arch = \"wasm32\"))'.dev-dependencies]\nomnia-test = { \
                               workspace = true, features = [\"guest\"] }\ntokio.workspace = \
-                              true\ntower.workspace = true\n\n# One line per crate the stem's \
-                              files use, each added at the end.\n[dependencies]\naxum.workspace = \
-                              true\ncommon.workspace = true\nomnia-sdk.workspace = \
-                              true\nserde.workspace = true\nserde_json.workspace = \
-                              true\ntracing.workspace = true\n";
-// The line a probing stem's manifest carries after the six, naming the crate
-// whose `Row` the quoted probe tests arrange the store's answer with.
-const OMNIA_PROBE_DEPENDENCY: &str = "omnia-wasi-sql.workspace = true\n";
+                              true\n\n# One line per crate the stem's files use, each added at \
+                              the end.\n[dependencies]\naxum.workspace = true\nomnia-sdk.\
+                              workspace = true\nserde.workspace = true\nserde_json.workspace = \
+                              true\n";
+// The line a consuming stem's manifest carries among the four, naming the
+// crate whose topic table the part's registration reads.
+const OMNIA_TOPIC_DEPENDENCY: &str = "common.workspace = true\n";
 // The `orders` stem's entry as the adapter scaffolds it for the routed slice: the
-// part's line, then the `router()` the root route list merges, the part's
-// routes its one entry, and the `topics(..)` the root topic list registers,
-// its array empty since the adapter derives no topic.
+// part's line, then the `handlers()` the root router lists, the part's
+// handlers its one entry.
 const OMNIA_ENTRY: &str = "//! # orders\n//!\n//! The `orders` stem.\n\npub mod reading;\n\nuse \
-                           common::Capabilities;\nuse omnia_sdk::api::{Client, messaging};\n\n/// \
-                           The stem's routes, merged onto the root router.\npub fn router<P: \
-                           Capabilities>() -> axum::Router<Client<P>> {\n    common::routers([\n        \
-                           // one entry per part with routes, each added at the end\n        \
-                           reading::routes(),\n    ])\n}\n\n/// The stem's topics, registered on \
-                           the root messaging router under `env`.\n#[must_use]\npub fn topics<P: \
-                           Capabilities>(router: messaging::Router<P>, env: &str) -> \
-                           messaging::Router<P> {\n    common::topics(router, env).parts([\n        \
-                           // one entry per part with topics, each added at the end\n    ])\n}\n";
+                           omnia_sdk::Capabilities;\nuse omnia_sdk::api::Handlers;\n\n/// The \
+                           stem's handlers, merged onto the root routers.\npub fn handlers<P: \
+                           Capabilities>() -> Handlers<P> {\n    \
+                           Handlers::from([reading::handlers()])\n}\n";
 // The routed slice's part as the adapter scaffolds it: the module doc from the
 // plan's brief, the imports its handler needs, the path constant and the
-// `routes()` over it, the owned design type laid from its signature with the
-// signature fenced in its doc, the handler's input and output over the
-// route, and the handler under its requirement, its body the marker.
-const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse common::Capabilities;\nuse \
-                            omnia_sdk::api::http::get;\nuse omnia_sdk::api::{Client, \
-                            Context};\nuse serde::{Deserialize, Serialize};\n\n// The paths the \
+// `handlers()` over it, the owned design type laid from its signature with
+// the signature fenced in its doc, the handler's output over the route, and
+// the handler under its requirement, its path parameter extracted and its
+// body the marker.
+const OMNIA_MODULE: &str = "//! Reads an order by its id.\n\nuse axum::Json;\nuse \
+                            axum::extract::Path;\nuse axum::routing::get;\nuse \
+                            omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, \
+                            Result};\nuse serde::{Deserialize, Serialize};\n\n// The paths the \
                             part serves.\npub(crate) const ORDERS_ID: &str = \
-                            \"/orders/{id}\";\n\npub(crate) fn routes<P: Capabilities>() -> \
-                            axum::Router<Client<P>> {\n    axum::Router::new().route(ORDERS_ID, \
+                            \"/orders/{id}\";\n\npub(crate) fn handlers<P: Capabilities>() -> \
+                            Handlers<P> {\n    Handlers::new().route(ORDERS_ID, \
                             get(read))\n}\n\n/// The design type `orders.Order`.\n///\n/// \
                             ```text\n/// interface Order {\n///   id: string;\n/// }\n/// \
                             ```\n#[derive(Debug, Clone, PartialEq, Eq, Serialize, \
                             Deserialize)]\npub struct Order {\n    /// The `id` field.\n    pub \
-                            id: String,\n}\n\n/// The input of `GET \
-                            /orders/{id}`.\n#[derive(Debug, Deserialize)]\npub struct ReadInput \
-                            {\n    /// The `id` path parameter.\n    pub id: String,\n}\n\n/// \
-                            The output of `GET /orders/{id}`.\n#[derive(Debug, \
-                            Serialize)]\npub struct ReadOutput {}\n\n// REQ-001 orders.read: \
-                            Answers the order by its id.\npub(crate) async fn read<P: \
-                            Capabilities>(\n    input: ReadInput, context: Context<P>,\n) -> \
-                            omnia_sdk::Result<ReadOutput> {\n    let _ = (&input, \
-                            &context);\n    todo!(\"REQ-001 orders.read: the handler\")\n}\n";
+                            id: String,\n}\n\n/// The output of `GET \
+                            /orders/{id}`.\n#[derive(Debug, Serialize)]\npub struct ReadOutput \
+                            {}\n\n// REQ-001 orders.read: Answers the order by its \
+                            id.\npub(crate) async fn read<P>(context: Context<P>, Path(id): \
+                            Path<String>) -> Result<Json<ReadOutput>>\nwhere\n    P: \
+                            Capabilities,\n{\n    let _ = (&context, &id);\n    \
+                            todo!(\"REQ-001 orders.read: the handler\")\n}\n";
 // The routed slice's tests as the adapter scaffolds them: the prelude over the
-// doubles with the request helper the routed scenario sends through, then one
-// ignored test per scenario, the scenario's steps in a comment above it and
-// its request laid from the typed route before its marker.
+// doubles with the router and the request helper the routed scenario calls
+// through, then one ignored test per scenario, the scenario's steps in a
+// comment above it and its request laid from the typed route before its
+// marker.
 const OMNIA_TESTS: &str = "//! The acceptance scenarios of the `reading` part of the `orders` \
-                           stem, over the guest doubles.\n\nuse axum::body::{Body, \
-                           to_bytes};\nuse axum::http::{Request, StatusCode};\nuse \
-                           common::config;\nuse omnia_sdk::api::Client;\nuse \
-                           omnia_test::guest::{MapConfig, Provider};\nuse serde_json::Value;\nuse \
-                           tower::ServiceExt as _;\n\n// The doubles every scenario starts from: \
-                           set a setting or a response on them in the arrangement.\nfn provider() \
-                           -> Provider {\n    \
-                           Provider::default().config(MapConfig::default().with([(config::ENV, \
-                           \"test\")]))\n}\n\n// One request through the stem's router, answered \
-                           as its status and its body as JSON:\n// `Value::Null` for an empty \
-                           body, the text as a `Value::String` where it is not JSON.\nasync fn \
-                           send(provider: Provider, request: Request<Body>) -> (StatusCode, \
-                           Value) {\n    let router = \
-                           orders::router().with_state(Client::new(\"test\", provider));\n    let \
-                           response = router.oneshot(request).await.expect(\"response\");\n    \
-                           let status = response.status();\n    let body = \
-                           to_bytes(response.into_body(), usize::MAX).await.expect(\"body\");\n    \
-                           let body = if body.is_empty() {\n        Value::Null\n    } else {\n        \
+                           stem, over the guest doubles.\n\nuse axum::body::Body;\nuse \
+                           axum::http::{Request, StatusCode};\nuse omnia_sdk::api::{Client, \
+                           Router};\nuse omnia_test::guest::{Provider, send};\nuse \
+                           serde_json::Value;\n\n// The doubles every scenario starts from: set a \
+                           setting or a response on them in the arrangement.\nfn provider() -> \
+                           Provider {\n    Provider::default()\n}\n\n// The stem's router over \
+                           the doubles, as the guest builds it.\nfn router(provider: &Provider) \
+                           -> Router<Provider> {\n    \
+                           orders::handlers().with_state(Client::new(provider.clone()))\n}\n\n// \
+                           One request through the stem's router, answered as its status and its \
+                           body as JSON:\n// `Value::Null` for an empty body, the text as a \
+                           `Value::String` where it is not JSON.\nasync fn call(provider: \
+                           &Provider, request: Request<Body>) -> (StatusCode, Value) {\n    let \
+                           response = send(&router(provider), request).await;\n    let status = \
+                           response.status();\n    let body = response.into_body();\n    let body \
+                           = if body.is_empty() {\n        Value::Null\n    } else {\n        \
                            serde_json::from_slice(&body)\n            .unwrap_or_else(|_| \
                            Value::String(String::from_utf8_lossy(&body).into_owned()))\n    \
                            };\n    (status, body)\n}\n\n// REQ-001 orders.read: An order is \
@@ -176,35 +260,32 @@ const OMNIA_TESTS: &str = "//! The acceptance scenarios of the `reading` part of
                            an_order_is_returned_by_its_id() {\n    let id = \"<id>\";\n    let \
                            request = \
                            Request::get(format!(\"/orders/{id}\")).body(Body::empty()).\
-                           expect(\"request\");\n    let (status, body) = send(provider(), \
+                           expect(\"request\");\n    let (status, body) = call(&provider(), \
                            request).await;\n    let _ = (&status, &body);\n    todo!(\"REQ-001 An \
                            order is returned by its id: arrange, act, assert\")\n}\n";
 // The default slice's part as the adapter scaffolds it: its requirement states no
-// route, so the part is one `pub fn` with a marker and no `routes()`.
-const OMNIA_FUNCTION_MODULE: &str = "//! The `reading` part of the `orders` stem.\n\n// REQ-001 \
+// route, so the part is one `pub fn` with a marker and no `handlers()`.
+const OMNIA_FUNCTION_MODULE: &str = "//! The `reading` part of the `orders` stem.\n\nuse \
+                                     omnia_sdk::Result;\n\n// REQ-001 \
                                      orders.get-id.return-order: The behaviour \
                                      `orders.get-id.return-order` states.\n/// The behaviour \
                                      `orders.get-id.return-order` states.\n///\n/// # \
                                      Errors\n///\n/// As the requirement states.\npub fn \
-                                     get_id_return_order() -> omnia_sdk::Result<()> {\n    \
-                                     todo!(\"REQ-001 orders.get-id.return-order: the \
-                                     behaviour\")\n}\n";
+                                     get_id_return_order() -> Result<()> {\n    todo!(\"REQ-001 \
+                                     orders.get-id.return-order: the behaviour\")\n}\n";
 // The part behind the entry: its path as a `pub(crate)` constant, its
-// routes and topics, and its handlers, `pub(crate)` so one the stem never
-// routes is the compiler's to refuse.
-const OMNIA_PART: &str = "//! Reads orders.\n\nuse common::{Capabilities, config, topic};\nuse \
-                          omnia_sdk::api::http::get;\nuse omnia_sdk::api::{Client, Context, \
-                          messaging};\n\npub(crate) const ORDER: &str = \"/orders/{id}\";\n\n\
-                          pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-                          axum::Router::new().route(ORDER, get(get_order))\n}\n\npub(crate) fn \
-                          topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
-                          &str,\n) -> messaging::Router<P> {\n    \
-                          router.route(config::topic_for(env, topic::ORDER_PLACED), \
-                          messaging::consume(on_placed))\n}\n\npub(crate) async fn \
-                          get_order<P>(input: GetOrder, context: Context<P>) -> \
-                          omnia_sdk::Result<Order> {\n    todo!()\n}\n\npub(crate) async fn \
-                          on_placed<P>(input: Order, context: Context<P>) -> omnia_sdk::Result<()> \
-                          {\n    todo!()\n}\n";
+// `handlers()` over a route and a topic, and its handlers, `pub(crate)` so
+// one the stem never registers is the compiler's to refuse.
+const OMNIA_PART: &str = "//! Reads orders.\n\nuse axum::Json;\nuse axum::extract::Path;\nuse \
+                          axum::routing::get;\nuse common::topic;\nuse omnia_sdk::api::{Context, \
+                          Handlers};\nuse omnia_sdk::{Capabilities, Result};\n\npub(crate) const \
+                          ORDER: &str = \"/orders/{id}\";\n\npub(crate) fn handlers<P: \
+                          Capabilities>() -> Handlers<P> {\n    Handlers::new().route(ORDER, \
+                          get(get_order)).topic(topic::ORDER_PLACED, \
+                          on_placed)\n}\n\npub(crate) async fn get_order<P>(context: Context<P>, \
+                          Path(id): Path<String>) -> Result<Json<Order>> {\n    \
+                          todo!()\n}\n\npub(crate) async fn on_placed<P>(context: Context<P>, \
+                          input: Order) -> Result<()> {\n    todo!()\n}\n";
 
 // A shipped target adapter: its name, the prose its turns open under, and
 // the `Adapter` every call goes through.
@@ -234,20 +315,20 @@ impl<A: TargetAdapter> Shipped<A> {
             adapter_id: self.name,
             workspace: root(project),
         };
-        match A::run(Task::<Scripted>::Init(ctx)).await? {
+        match A::run(Task::<ScriptedModel>::Init(ctx)).await? {
             Outcome::Initialised => Ok(()),
             outcome => panic!("an init answers an initialised tree, not {outcome}"),
         }
     }
 
     // One build of the slice into `project`, as the component's export puts it.
-    async fn build(&self, project: &Scratch, model: &Scripted) -> Result<Report, Error> {
+    async fn build(&self, project: &Scratch, model: &ScriptedModel) -> Result<Report, Error> {
         self.build_slice(project, model, &slice()).await
     }
 
     // One build of `slice` into `project`, for a scenario over a slice of its own.
     async fn build_slice(
-        &self, project: &Scratch, model: &Scripted, slice: &Slice,
+        &self, project: &Scratch, model: &ScriptedModel, slice: &Slice,
     ) -> Result<Report, Error> {
         let ctx = BuildContext {
             adapter_id: self.name,
@@ -264,7 +345,7 @@ impl<A: TargetAdapter> Shipped<A> {
     }
 
     // One verification of `project`, as the component's export puts it.
-    async fn verify(&self, project: &Scratch, model: &Scripted) -> Result<Verdict, Error> {
+    async fn verify(&self, project: &Scratch, model: &ScriptedModel) -> Result<Verdict, Error> {
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
@@ -311,7 +392,7 @@ impl<A: TargetAdapter> Shipped<A> {
             calls.push(edit_files(edits));
         }
         let calls_made = calls.len();
-        let model = Scripted::answering([report, PASSED]).calling(0, calls);
+        let model = ScriptedModel::answering([report, PASSED]).calling(0, calls);
 
         let report =
             self.build_slice(&project, &model, slice).await.expect("build over the lent tree");
@@ -348,6 +429,7 @@ impl<A: TargetAdapter> Shipped<A> {
         assert_eq!(build.worker, Self::granted(), "the build's worker carries the adapter's grant");
         for carried in [
             "SLICE-001",
+            "PART-001",
             "orders-reading",
             "REQ-001",
             "0123456789abcdef0123456789abcdef01234567",
@@ -402,7 +484,7 @@ impl<A: TargetAdapter> Shipped<A> {
     // One verify over `project`, answering `failed`: a verdict that fails is
     // the adapter's answer, carried whole to the caller.
     async fn failed(&self, project: &Scratch, failed: &str) {
-        let model = Scripted::answering([failed]);
+        let model = ScriptedModel::answering([failed]);
 
         let verdict = self
             .verify(project, &model)
@@ -488,12 +570,15 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
     let ids: Vec<&str> = requirements.iter().map(|requirement| requirement.id.as_str()).collect();
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: name.to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         spec,
         design: "# Design\n\n## Type: Order\n\nAn id and its items.\n".to_owned(),
         plan: format!(
-            "## Slice: {name}\n\nID: SLICE-001\nRequirements: [{}]\nTypes: [Order]\n",
+            "## Part: {name}\n\nID: PART-001\nRequirements: [{}]\nTypes: [Order]\n",
             ids.join(", ")
         ),
         requirements,
@@ -571,7 +656,7 @@ fn delete_files(paths: &[&str]) -> ToolCall {
 
 // The correction the adapter's check put to the model: the one `check`
 // exchange the script refused.
-fn correction(model: &Scripted) -> String {
+fn correction(model: &ScriptedModel) -> String {
     let refused: Vec<String> = model
         .exchanges()
         .into_iter()
@@ -697,6 +782,15 @@ fn node_worker() {
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
 }
 
+#[test]
+fn node_budget() {
+    assert_eq!(
+        emery_node::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
+}
+
 #[tokio::test]
 async fn node_verify() {
     let project = scratch();
@@ -706,22 +800,25 @@ async fn node_verify() {
 
 // The seed is scaffolded by the initialisation and the slice's skeleton by
 // the adapter, both before the slice's turn, and neither is the turn's: the
-// turn fills the handler and the test the adapter scaffolded and adds the
-// constant of a topic the adapter does not derive to the seeded table, the
-// stem's lines standing in the route list, the topic list, and the root
-// manifest's two lists as the adapter added them, every other file of the
-// seed as the template spells it.
+// turn fills the handler and the test the adapter scaffolded, narrows the
+// handler's bound to the capability its body reaches, and adds the constant
+// of a topic the adapter does not derive to the seeded table, the stem's
+// lines standing in the root router's array and the root manifest's list as
+// the adapter added them, every other file of the seed as the template
+// spells it.
 #[tokio::test]
 async fn omnia() {
     let table = omnia_seed("crates/common/src/topic.rs");
     let edits = [
         ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+        ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+        ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
         ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
         ("crates/common/src/topic.rs", &*table, &*format!("{table}{OMNIA_TABLE_LINE}")),
     ];
     let project = OMNIA.built(&omnia_slice(), &[], &edits, OMNIA_REPORT).await;
 
-    let lists = ["Cargo.toml", "src/routes.rs", "src/messaging.rs", "crates/common/src/topic.rs"];
+    let lists = ["Cargo.toml", "src/lib.rs", "crates/common/src/topic.rs"];
     for entry in omnia_template::ENTRIES {
         let held = project.read(entry.path);
         if lists.contains(&entry.path) {
@@ -743,12 +840,16 @@ async fn omnia() {
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
         OMNIA_ENTRY,
-        "the stem's entry holds the part's line and the two routers the root merges"
+        "the stem's entry holds the part's line and the handlers the root lists"
     );
     assert_eq!(
         text(&project, "crates/orders/src/reading.rs"),
-        OMNIA_MODULE.replace(OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
-        "the part stands as the adapter scaffolded it with the handler filled"
+        OMNIA_MODULE
+            .replace(OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED)
+            .replace(OMNIA_BOUND, OMNIA_BOUND_NARROWED)
+            .replace(OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+        "the part stands as the adapter scaffolded it with the handler filled and its bound \
+         narrowed"
     );
     assert_eq!(
         text(&project, "crates/orders/tests/reading.rs"),
@@ -760,24 +861,15 @@ async fn omnia() {
         format!("{table}{OMNIA_TABLE_LINE}"),
         "the topic table holds the topic's constant after its doc"
     );
-    let routes = text(&project, "src/routes.rs");
-    assert!(
-        routes.contains(&format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}    router.with_state")),
-        "the route list holds the stem's one statement before the terminal line: {routes}"
+    assert_eq!(
+        text(&project, "src/lib.rs"),
+        omnia_root_with_orders(),
+        "the root router's array holds the stem's one entry"
     );
-    let topics = text(&project, "src/messaging.rs");
-    assert!(
-        topics.contains(&format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}    tracing::debug!")),
-        "the topic list holds the stem's one statement before its trace: {topics}"
-    );
-    let manifest = text(&project, "Cargo.toml");
-    assert!(
-        manifest.contains(&format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}\n")),
-        "the root manifest's path list holds the stem after `common`: {manifest}"
-    );
-    assert!(
-        manifest.ends_with(&format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}")),
-        "the root manifest ends with the stem's one line: {manifest}"
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders(),
+        "the root manifest ends with the stem's one line"
     );
 }
 
@@ -838,45 +930,34 @@ async fn omnia_init_held() {
         );
     }
 
-    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/routes.rs", "src/messaging.rs"]}"#;
-    let routes = format!("// held\nfn router() {{\n{OMNIA_ROUTE_LINE}}}\n");
-    let messaging = format!("// held\nfn topics() {{\n{OMNIA_TOPICS_LINE}}}\n");
-    let model = Scripted::answering([report]).calling(
-        0,
-        [edit_files(&[
-            fill_function(),
-            ("src/routes.rs", "// held\n", &routes),
-            ("src/messaging.rs", "// held\n", &messaging),
-        ])],
-    );
+    let report =
+        r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/lib.rs"]}"#;
+    let root = "// held\nfn router() {\n    Handlers::from([orders::handlers()])\n}\n";
+    let model = ScriptedModel::answering([report])
+        .calling(0, [edit_files(&[fill_function(), ("src/lib.rs", "// held\n", root)])]);
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
     assert_eq!(
         report.written,
-        ["crates/orders/src/reading.rs", "src/messaging.rs", "src/routes.rs"],
-        "the report names the module the turn filled and the lists it added to, no other seed \
+        ["crates/orders/src/reading.rs", "src/lib.rs"],
+        "the report names the module the turn filled and the list it added to, no other seed \
          file"
     );
     assert_eq!(text(&project, ".gitignore"), "# held\n", "the build writes no file of the seed");
     assert_eq!(
-        text(&project, "src/routes.rs"),
-        routes,
+        text(&project, "src/lib.rs"),
+        root,
         "a held list without its anchor takes no line from the adapter, the turn's alone"
     );
     assert_eq!(
         text(&project, "Cargo.toml"),
         omnia_manifest_with_orders(),
-        "the held root manifest takes the stem's lines at its anchors"
+        "the held root manifest takes the stem's line at its anchor"
     );
     let brief = &model.seen()[0].messages[0];
-    for carried in [
-        "`src/routes.rs` holds no anchor for `let router = router.merge(orders::router());`, so \
-         the line was not added",
-        "`src/messaging.rs` holds no anchor for `let router = orders::topics(router, &env);`, \
-         so the line was not added",
-    ] {
-        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
-    }
+    let carried = "`src/lib.rs` holds no anchor for `orders::handlers()`, so the line was not \
+                   added";
+    assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
 }
 
 // The slice's skeleton is the adapter's, scaffolded from the typed slice before
@@ -890,7 +971,7 @@ async fn omnia_init_held() {
 async fn omnia_scaffold() {
     let project = omnia_tree().await;
     let before = files_under(project.path());
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     let report =
         OMNIA.build_slice(&project, &model, &omnia_slice()).await.expect("a turn filling nothing");
@@ -931,16 +1012,9 @@ async fn omnia_scaffold() {
     );
     assert_eq!(text(&project, "Cargo.toml"), omnia_manifest_with_orders());
     assert_eq!(
-        text(&project, "src/routes.rs"),
-        omnia_seed("src/routes.rs")
-            .replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}")),
-        "the route list merges the stem before the terminal line"
-    );
-    assert_eq!(
-        text(&project, "src/messaging.rs"),
-        omnia_seed("src/messaging.rs")
-            .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
-        "the topic list registers the stem before its trace"
+        text(&project, "src/lib.rs"),
+        omnia_root_with_orders(),
+        "the root router's array lists the stem's handlers under its comment"
     );
     assert_eq!(
         text(&project, "crates/common/src/topic.rs"),
@@ -970,21 +1044,25 @@ fn assert_omnia_scaffold_brief(brief: &str) {
          is the whole text that takes the quoted block's place, its lines indented as the \
          block's are:\n\n1. The handler `read` of `GET /orders/{{id}}` in \
          `crates/orders/src/reading.rs`, key `REQ-001 orders.read: the handler`: \
-         fill `ReadInput` and `ReadOutput` with the wire's fields, then replace this block with \
-         the body. Its `Ok` is answered `200` as JSON; for another status, declare a route \
-         function over `handle_with(MethodFilter::GET, read, decode, |output: ReadOutput| \
-         (StatusCode::NO_CONTENT, Json(output)).into_response())` as the handlers reference \
-         shows and name it in `routes()` in place of \
-         `get(read)`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
+         fill `ReadOutput` with the wire's fields, then replace this block with the body. Its \
+         `Ok` is answered `200` as JSON; for another status, change the return type to \
+         `Result<(StatusCode, Json<ReadOutput>)>` and answer the pair, as the handlers reference \
+         shows. Each path parameter is extracted as a `String`; where the design keys it as an \
+         integer, extract it typed, `Path<i64>`, and let axum answer `400` for a malformed one. \
+         Narrow `P: Capabilities` to the traits the body reaches through the context, `P: \
+         StateStore + Config` for `context.state()` and \
+         `context.config()`.\n\n```rust\n{OMNIA_HANDLER_MARKER}```\n\n2. The test \
          `an_order_is_returned_by_its_id` in `crates/orders/tests/reading.rs`, key `REQ-001 An \
          order is returned by its id: arrange, act, assert`: replace this block with the filled \
          test, its `#[ignore = ..]` line gone: the arrangement over `provider()`, the act as \
          laid, and the assertions the scenario states.\n\n```rust\n{OMNIA_TEST_MARKER}```\n"
     );
     for carried in [
-        "Stem `orders`, part `reading`:\n\n- `crates/orders/Cargo.toml`: scaffolded.",
-        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` and `reading::routes(),` in \
-         its lists.",
+        "Stem `orders`, part `reading`:\n\n- `crates/orders/Cargo.toml`: scaffolded. One \
+         `<crate>.workspace = true` line at the end of `[dependencies]` for each crate your code \
+         uses beyond the four it holds",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` and `reading::handlers()` \
+         in its lists.",
         "- `crates/orders/src/reading.rs`: scaffolded. Fill its markers, listed below, through \
          `edit_files`. Its text:",
         &module_text,
@@ -992,16 +1070,14 @@ fn assert_omnia_scaffold_brief(brief: &str) {
          scenario, each sending the request or the delivery its requirement carries. Fill each \
          test through `edit_files`, replacing the block listed below. Its text:",
         &tests_text,
-        "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines added: `orders = { \
-         path = \"crates/orders\" }` in `Cargo.toml`, `orders.workspace = true` in `Cargo.toml`, \
-         `let router = router.merge(orders::router());` in `src/routes.rs`, `let router = \
-         orders::topics(router, &env);` in `src/messaging.rs`.",
+        "- `Cargo.toml`, `src/lib.rs`: the stem's lines added: `orders = { path = \
+         \"crates/orders\" }` in `Cargo.toml`, `orders::handlers()` in `src/lib.rs`.",
         &markers,
         "The check: once your edits are in, run `cargo clippy -p orders --all-targets -- -D \
          warnings && cargo test -p orders && cargo check --target wasm32-wasip2 && cargo +nightly \
          fmt --all -- --check` in `$WORKSPACE`",
-        "From `references/omnia-api.md`, under \"Routing — `omnia_sdk::api::http`\":\n\nOne route \
-         function per method",
+        "From `references/omnia-api.md`, under \"Routing — `Handlers::route`\":\n\nOne \
+         `.route(PATH, method(handler))` per route",
         "From `references/omnia-api.md`, under \"The handler — `omnia_sdk::api`\":\n\n```rust\npub \
          struct Context<P> {",
         "From `references/omnia-api.md`, under \"The capabilities — `omnia_sdk`\":\n\n```rust\npub \
@@ -1020,17 +1096,21 @@ fn assert_omnia_scaffold_brief(brief: &str) {
     }
     for absent in [
         "`start`",
-        "The general constructor",
-        "Messaging — `omnia_sdk::api::messaging`",
+        "Messaging — `Handlers::topic`",
+        "under \"Settings",
+        "From `references/handlers.md`, under \"A status of its own\"",
         "pub trait StateStore",
+        "pub async fn deliver",
         "a message is consumed",
         "under \"A probe\"",
         "under \"A cache-aside read\"",
+        "The rules every route obeys",
     ] {
         assert!(
             !scaffolded.contains(absent),
-            "no `{absent}` for a routed slice with no `start` id, no consumer, no body route, a \
-             design naming no store, and text calling for no idiom: {scaffolded}"
+            "no `{absent}` for a routed slice with no `start` id, no consumer, no status, no \
+             setting, a design naming no store or rule, and text calling for no idiom: \
+             {scaffolded}"
         );
     }
     assert!(
@@ -1056,7 +1136,7 @@ async fn omnia_write_scaffolded_refused() {
     let overwritten = [("crates/orders/src/reading.rs", "//! Written over.\n")];
     let cut = [("crates/orders/src/lib.rs", "//! # orders\n\npub mod reading;\n")];
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report])
+    let model = ScriptedModel::answering([report])
         .calling(0, [write_files(&overwritten), write_files(&cut), edit_files(&[fill_function()])]);
 
     let report = OMNIA.build(&project, &model).await.expect("the edited tree is accepted");
@@ -1080,12 +1160,9 @@ async fn omnia_write_scaffolded_refused() {
         writes[1].starts_with(
             "write_files: nothing written: `crates/orders/src/lib.rs` was scaffolded before this \
              turn and this content drops what the skeleton holds: `//! The `orders` stem.`, \
-             `use common::Capabilities;`, `use omnia_sdk::api::{Client, messaging};`, `/// The \
-             stem's routes, merged onto the root router.`, `pub fn router<P: Capabilities>() -> \
-             axum::Router<Client<P>> {`, `common::routers([`, `// one entry per part with \
-             routes, each added at the end`, `])`, `}`, `/// The stem's topics, registered on \
-             the root messaging router under `env`.`, and 4 more; change the file through \
-             `edit_files`"
+             `use omnia_sdk::Capabilities;`, `use omnia_sdk::api::Handlers;`, `/// The stem's \
+             handlers, merged onto the root routers.`, `pub fn handlers<P: Capabilities>() -> \
+             Handlers<P> {`, `Handlers::from([])`, `}`; change the file through `edit_files`"
         ),
         "a list keeps every line it holds: {}",
         writes[1]
@@ -1098,9 +1175,15 @@ async fn omnia_write_scaffolded_refused() {
     );
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("        reading::routes(),\n", ""),
+        omnia_function_entry(),
         "the entry stands"
     );
+}
+
+// The `orders` stem's entry for a stem whose parts register nothing: the
+// `handlers()` array empty.
+fn omnia_function_entry() -> String {
+    OMNIA_ENTRY.replace("reading::handlers()", "")
 }
 
 // A marker is filled by an `edit_files` edit whose `find` is the key the
@@ -1118,7 +1201,7 @@ async fn omnia_scaffold_keyed() {
     });
     let laid = "pub struct OrderRef {\n    /// The order id.\n    pub id: Option<String>,\n}";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([report]).calling(
+    let model = ScriptedModel::answering([report]).calling(
         0,
         [
             edit_files(&[(
@@ -1133,6 +1216,8 @@ async fn omnia_scaffold_keyed() {
                     "REQ-001 orders.read: the handler",
                     OMNIA_HANDLER_FILLED.trim_end(),
                 ),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 (
                     "crates/orders/tests/reading.rs",
                     "REQ-001 An order is returned by its id: arrange, act, assert",
@@ -1190,10 +1275,10 @@ async fn omnia_scaffold_keyed() {
 async fn omnia_write_scaffolded_kept() {
     let project = omnia_tree().await;
     let filled = OMNIA_FUNCTION_MODULE.replace(OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED);
-    let entry = OMNIA_ENTRY.replace("        reading::routes(),\n", "");
-    let extended = entry.replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n");
+    let extended =
+        omnia_function_entry().replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report]).calling(
+    let model = ScriptedModel::answering([report]).calling(
         0,
         [write_files(&[
             ("crates/orders/src/reading.rs", &filled),
@@ -1220,32 +1305,38 @@ async fn omnia_write_scaffolded_kept() {
     assert_eq!(text(&project, "crates/orders/src/lib.rs"), extended);
 }
 
-// A stem the tree already holds from an earlier slice keeps its manifest
-// and its entry, the part's `pub mod` line and `routes()` entry added to
-// the entry's lists, the module and the tests scaffolded fresh beside the
-// held part, and the root lists, which already name the stem, left as they
-// stand; the brief says which file was held and which scaffolded.
+// A stem the tree already holds from an earlier slice keeps its manifest,
+// with the dependency the earlier turn added, and its entry, the part's
+// `pub mod` line and `handlers()` entry added to the entry's lists, the
+// module and the tests scaffolded fresh beside the held part, and the root
+// lists, which already name the stem, left as they stand; the brief says
+// which file was held and which scaffolded.
 #[tokio::test]
 async fn omnia_scaffold_held_stem() {
     let project = omnia_tree().await;
-    let first = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
-    let manifest_edited = OMNIA_MANIFEST.replace("The `orders` stem", "The `orders` stem, held");
+    let manifest_edited = format!("{OMNIA_MANIFEST}tracing.workspace = true\n");
     project.write("crates/orders/Cargo.toml", manifest_edited.as_bytes());
+    let module_edited = OMNIA_MODULE.replace(
+        "    let _ = (&context, &id);\n",
+        "    tracing::debug!(%id, \"reading\");\n    let _ = (&context, &id);\n",
+    );
+    project.write("crates/orders/src/reading.rs", module_edited.as_bytes());
     let before = files_under(project.path());
-    let root_lists =
-        ["Cargo.toml", "src/routes.rs", "src/messaging.rs"].map(|path| text(&project, path));
+    let root_lists = ["Cargo.toml", "src/lib.rs"].map(|path| text(&project, path));
 
     let mut slice = omnia_slice();
     slice.name = "orders-paying".to_owned();
     slice.requirements[0].subject = "orders.pay".to_owned();
-    slice.requirements[0].statement = vec!["Settles the order.".to_owned()];
+    slice.requirements[0].statement =
+        vec!["Settles the order from the payment in the body.".to_owned()];
     slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/pay"));
     slice.requirements[0].scenarios[0].name = "An order is paid".to_owned();
     slice.types = Vec::new();
     slice.brief = vec!["Pays an order.".to_owned()];
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &model, &slice).await.expect("the second slice's turn");
     model.assert_exhausted();
 
@@ -1263,43 +1354,36 @@ async fn omnia_scaffold_held_stem() {
     );
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("pub mod reading;\n", "pub mod paying;\npub mod reading;\n").replace(
-            "        reading::routes(),\n",
-            "        reading::routes(),\n        paying::routes(),\n"
-        ),
+        OMNIA_ENTRY
+            .replace("pub mod reading;\n", "pub mod paying;\npub mod reading;\n")
+            .replace("reading::handlers()", "reading::handlers(), paying::handlers()"),
         "the held entry takes the part's `pub mod` line where the formatter sorts it and its \
-         routes entry at the end of the array"
+         handlers entry at the end of the array"
     );
     assert_eq!(
         text(&project, "crates/orders/src/reading.rs"),
-        OMNIA_MODULE,
-        "the earlier part stands"
+        module_edited,
+        "the earlier part stands as the earlier slice left it"
     );
     let paying = text(&project, "crates/orders/src/paying.rs");
     for carried in [
         "//! Pays an order.\n",
-        "use axum::Json;\nuse axum::http::StatusCode;\nuse axum::response::IntoResponse;\nuse \
-         axum::routing::MethodRouter;\nuse common::Capabilities;\nuse \
-         omnia_sdk::api::http::{DecodeError, MethodFilter, RawRequest, handle_with};\nuse \
-         omnia_sdk::api::{Client, Context};\nuse serde::de::DeserializeOwned;\nuse \
+        "use axum::Json;\nuse axum::extract::Path;\nuse axum::routing::post;\nuse \
+         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, Result};\nuse \
          serde::{Deserialize, Serialize};\n",
         "pub(crate) const ORDERS_ID_PAY: &str = \"/orders/{id}/pay\";\n",
-        "axum::Router::new().route(ORDERS_ID_PAY, pay_route())\n",
-        "// The `POST /orders/{id}/pay` route: the handler's `Ok` answered as JSON under the \
-         status named here.\npub(crate) fn pay_route<P: Capabilities>() -> \
-         MethodRouter<Client<P>> {\n    handle_with(\n        MethodFilter::POST,\n        pay,\n        \
-         |raw: RawRequest<'_>| -> Result<PayInput, DecodeError> {\n            \
-         decode_json(raw.path_params, raw.body)\n        },\n        |output: PayOutput| \
-         (StatusCode::OK, Json(output)).into_response(),\n    )\n}\n",
-        "pub(crate) async fn pay<P: Capabilities>(",
-        "    todo!(\"REQ-001 orders.pay: the handler\")\n",
-        "fn decode_json<I: DeserializeOwned>(\n    params: &[(String, String)], body: &[u8],\n) \
-         -> Result<I, DecodeError> {\n",
+        "    Handlers::new().route(ORDERS_ID_PAY, post(pay))\n",
+        "/// The input of `POST /orders/{id}/pay`.\n#[derive(Debug, Deserialize)]\npub struct \
+         PayInput {}\n",
+        "pub(crate) async fn pay<P>(\n    context: Context<P>, Path(id): Path<String>, \
+         Json(input): Json<PayInput>,\n) -> Result<Json<PayOutput>>\nwhere\n    P: \
+         Capabilities,\n{\n    let _ = (&context, &id, &input);\n    todo!(\"REQ-001 orders.pay: \
+         the handler\")\n}\n",
     ] {
         assert!(paying.contains(carried), "the part carries `{carried}`: {paying}");
     }
     assert!(!paying.contains("pub struct Order"), "the type is the first slice's: {paying}");
-    for (path, held) in ["Cargo.toml", "src/routes.rs", "src/messaging.rs"].iter().zip(root_lists) {
+    for (path, held) in ["Cargo.toml", "src/lib.rs"].iter().zip(root_lists) {
         assert_eq!(text(&project, path), held, "`{path}` already names the stem and stands");
     }
     let tests = text(&project, "crates/orders/tests/paying.rs");
@@ -1307,7 +1391,7 @@ async fn omnia_scaffold_held_stem() {
         "use axum::http::header::CONTENT_TYPE;\n",
         "    let id = \"<id>\";\n    let request = Request::post(format!(\"/orders/{id}/pay\"))\n        \
          .header(CONTENT_TYPE, \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
-         .expect(\"request\");\n    let (status, body) = send(provider(), request).await;\n",
+         .expect(\"request\");\n    let (status, body) = call(&provider(), request).await;\n",
     ] {
         assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
     }
@@ -1315,28 +1399,630 @@ async fn omnia_scaffold_held_stem() {
     let brief = &model.seen()[0].messages[0];
     for carried in [
         "- `crates/orders/Cargo.toml`: held.",
-        "- `crates/orders/src/lib.rs`: held, `pub mod paying;` and `paying::routes(),` added to \
-         its lists.",
+        "- `crates/orders/src/lib.rs`: held, `pub mod paying;` and `paying::handlers()` added \
+         to its lists.",
         "- `crates/orders/src/paying.rs`: scaffolded. Fill its markers, listed below, through \
          `edit_files`.",
-        "- `Cargo.toml`, `src/routes.rs`, `src/messaging.rs`: the stem's lines already held:",
-        "Its `Ok` is answered as JSON under the status the encoder in `pay_route` names, \
-         `StatusCode::OK`, which is this slice's to decide there: a `201` for a creation, or \
-         one read off the output, `503` where a probe found its store down; an error status, a \
-         `404`, is the error the errors passage maps to it.",
-        "From `references/omnia-api.md`, under \"Routing — `omnia_sdk::api::http`\":\n\nThe \
-         general constructor",
+        "- `Cargo.toml`, `src/lib.rs`: the stem's lines already held:",
+        "fill `PayInput` and `PayOutput` with the wire's fields, then replace this block with \
+         the body. Its `Ok` is answered `200` as JSON; for another status, change the return \
+         type to `Result<(StatusCode, Json<PayOutput>)>` and answer the pair, as the handlers \
+         reference shows.",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
 }
 
-// A handler whose scenarios state a status other than `200` is scaffolded
-// with its route function over `handle_with` whatever its method, as a
-// `POST` is, so the status is one token's edit, and the brief carries the
-// general constructor passage; a design naming a database and a cache
-// selects the store capabilities, their doubles whole, and the testing
-// table's rows for them.
+// A stem's lines in the root lists are each one line added under the
+// list's anchor and nothing else of the seed changed, so two stems first
+// listed in one wave each add their line and the engine's union keeps both;
+// the router's array stays one entry per line under the comment that heads
+// it, however few entries it holds, and a second stem lands under the first.
+#[tokio::test]
+async fn omnia_scaffold_second_stem() {
+    let project = omnia_tree().await;
+    let seed = omnia_seed("src/lib.rs");
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first stem's turn");
+    first.assert_exhausted();
+    let after_orders = text(&project, "src/lib.rs");
+
+    let mut slice = slice_for("billing", &["billing.charge"]);
+    slice.requirements[0].trigger = Some(routed("POST", "/charges"));
+    slice.brief = vec!["Takes charges.".to_owned()];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the second stem's turn");
+    model.assert_exhausted();
+
+    let added = |held: &str, now: &str| -> Vec<String> {
+        now.lines()
+            .filter(|line| !held.lines().any(|kept| kept == *line))
+            .map(str::to_owned)
+            .collect()
+    };
+    assert_eq!(
+        added(&seed, &after_orders),
+        ["        orders::handlers(),"],
+        "the first stem's entry is one line added to the seed's array"
+    );
+    let root = text(&project, "src/lib.rs");
+    assert_eq!(
+        added(&after_orders, &root),
+        ["        billing::handlers(),"],
+        "the second stem's entry is one line added under the first"
+    );
+    assert_eq!(
+        root,
+        omnia_root_with_orders().replace(
+            "        orders::handlers(),\n",
+            "        orders::handlers(),\n        billing::handlers(),\n"
+        ),
+        "the array stays one entry per line under its comment"
+    );
+    assert_eq!(
+        text(&project, "Cargo.toml"),
+        omnia_manifest_with_orders().replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            &format!("{OMNIA_PATH_CRATE_ANCHOR}billing = {{ path = \"crates/billing\" }}\n")
+        ),
+        "the root manifest's list holds the second stem's line where it sorts"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "- `Cargo.toml`, `src/lib.rs`: the stem's lines added: `billing = { path = \
+             \"crates/billing\" }` in `Cargo.toml`, `billing::handlers()` in `src/lib.rs`."
+        ),
+        "the brief names the second stem's lines as added: {brief}"
+    );
+}
+
+// A rule every route obeys that the plan's brief hands to `start`, or the
+// design states as a gate or an error mapping, is the slice's to apply, so
+// the brief says so, quotes the design's paragraphs on it, and lists the
+// `pub fn`s the stems already in the tree export for it; a heading, a type
+// block, and a paragraph naming a bearer alone are no rule.
+#[tokio::test]
+async fn omnia_start_rules_in_brief() {
+    let project = omnia_tree().await;
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first stem's turn");
+    first.assert_exhausted();
+    let module_edited = format!(
+        "{OMNIA_MODULE}\n/// Checks the bearer against the deployment's token.\n///\n/// # \
+         Errors\n///\n/// `unauthorized` for a bearer the deployment does not hold.\npub fn \
+         authenticate<P: Config>(\n    context: &Context<P>, bearer: Option<&str>,\n) -> \
+         Result<()> {{\n    let _ = (context, bearer);\n    Ok(())\n}}\n\nfn \
+         private_helper() {{}}\n"
+    );
+    project.write("crates/orders/src/reading.rs", module_edited.as_bytes());
+
+    let mut slice = slice_for("payments", &["payments.charge"]);
+    slice.requirements[0].trigger = Some(routed("POST", "/charges"));
+    slice.brief = vec![
+        "Takes charges. Assumes bearer authentication and the error mapping from `start`."
+            .to_owned(),
+    ];
+    slice.design = "# Design\n\n## Authentication\n\nEvery route authenticates the request by \
+                    its bearer before it reads the body.\n\n## Errors\n\nAn error answers \
+                    `invalid-request` as 400, `not-found` as 404, and `conflict` as 409.\n\n## \
+                    Data types\n\nType: payments.Charge\n```\ninterface Charge {\n  // an error \
+                    here is 400 or 409\n  amount: number;\n}\n```\n\n## Transport\n\nThe bearer \
+                    is read from the `Authorization` header.\n"
+        .to_owned();
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the second stem's turn");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "The rules every route obeys are this part's to apply: there is no `start` crate, so a \
+         gate on the request or a mapping of failures to wire codes that the plan or the design \
+         says `start` applies to this part's routes is written here. A gate is one `pub fn` of \
+         the first stem that needs it, called at the top of each handler it guards; a later \
+         stem depends on that crate (`<stem> = { path = \"../<stem>\" }` under its \
+         `[dependencies]`) and calls it rather than writing its own.",
+        "`Error::bad_request(\"<code>\", ..)` over the macro, which spells the default; a \
+         status the host's `Error` lacks (`401`) is the part's own error type",
+        "since axum's own rejection answers `422`, or a plain `400`, for a field that is missing \
+         or malformed.\n\nThe design says of them:\n\n> Every route authenticates the request by \
+         its bearer before it reads the body.\n\n> An error answers `invalid-request` as 400, \
+         `not-found` as 404, and `conflict` as 409.\n\nExported by the stems already in the \
+         tree, to call rather than write again:\n\n- `orders::reading::authenticate` \
+         (`crates/orders/src/reading.rs:",
+        "): `pub fn authenticate<P: Config>( context: &Context<P>, bearer: Option<&str>, ) -> \
+         Result<()>` — Checks the bearer against the deployment's token.\n\nThe check:",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    for absent in
+        ["> ## ", "> Type: ", "> interface Charge", "> The bearer is read", "private_helper"]
+    {
+        assert!(!brief.contains(absent), "no `{absent}` among the rules: {brief}");
+    }
+    assert!(!brief.contains("The gate under"), "a rule naming no prefix lays no gate: {brief}");
+}
+
+// The slice a gated design lays over: a read and a create under `/api`,
+// the create stating a body and a `201`, and a liveness route outside the
+// prefix.
+fn gated_slice() -> Slice {
+    let mut slice = slice_for("orders-reading", &["orders.read", "orders.create", "health.live"]);
+    slice.requirements[0].statement = vec!["Answers the order by its id.".to_owned()];
+    slice.requirements[0].trigger = Some(routed("GET", "/api/orders/{id}"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "An order is returned by its id".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "GET /api/orders/42 is called".to_owned(),
+        then: "the order is answered".to_owned(),
+        and: Vec::new(),
+    }];
+    slice.requirements[1].statement = vec!["Creates the order the body states.".to_owned()];
+    slice.requirements[1].trigger = Some(routed("POST", "/api/orders"));
+    slice.requirements[1].scenarios = vec![Scenario {
+        name: "An order is created".to_owned(),
+        given: vec!["no order".to_owned()],
+        when: "POST /api/orders is called with the order in the body".to_owned(),
+        then: "the status is 201".to_owned(),
+        and: Vec::new(),
+    }];
+    slice.requirements[2].statement = vec!["Answers that the process is live.".to_owned()];
+    slice.requirements[2].trigger = Some(routed("GET", "/health/live"));
+    slice.requirements[2].scenarios = vec![Scenario {
+        name: "Liveness is answered".to_owned(),
+        given: Vec::new(),
+        when: "GET /health/live is called".to_owned(),
+        then: "the status is 200".to_owned(),
+        and: Vec::new(),
+    }];
+    OMNIA_GATED_DESIGN.clone_into(&mut slice.design);
+    slice.brief = vec!["Reads and creates orders.".to_owned()];
+    slice
+}
+
+// A design whose gate sentences name the prefix the gate mounts under, the
+// keys it reads, and the code it refuses with lays the gate by code in the
+// first stem of the slice with a route under the prefix: the settings, the
+// error answering `401` under the code, and the function over a marker;
+// every handler under the prefix takes the headers and calls it first,
+// answering the gate's error, while one outside the prefix is laid as any
+// handler; the tests seed the gate's keys and send the credential from a
+// placeholder; and the manifest names the error crates.
+#[tokio::test]
+async fn omnia_gate_laid() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &gated_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let reading = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        "use axum::http::{HeaderMap, StatusCode};\nuse axum::response::{IntoResponse, \
+         Response};\nuse axum::routing::{get, post};\nuse omnia_sdk::api::{Context, \
+         Handlers};\nuse omnia_sdk::{Capabilities, Config, Result, Settings};\n",
+        "// The settings the gate reads: `API_TOKENS`, `BEARER_PREFIX`.\n#[derive(Debug, \
+         Settings)]\npub(crate) struct GateSettings {\n    api_tokens: String,\n    \
+         bearer_prefix: String,\n}\n",
+        OMNIA_GATE_ERROR,
+        OMNIA_GATE,
+        "// REQ-001 orders.read: Answers the order by its id.\npub(crate) async fn read<P>(\n    \
+         context: Context<P>, headers: HeaderMap, Path(id): Path<String>,\n) -> \
+         std::result::Result<Json<ReadOutput>, GateError>\nwhere\n    P: Capabilities,\n{\n    \
+         authenticate(&context, &headers).await?;\n    let _ = (&context, &id);\n    \
+         todo!(\"REQ-001 orders.read: the handler\")\n}\n",
+        "pub(crate) async fn create<P>(\n    context: Context<P>, headers: HeaderMap, \
+         Json(input): Json<CreateInput>,\n) -> std::result::Result<(StatusCode, \
+         Json<CreateOutput>), GateError>\nwhere\n    P: Capabilities,\n{\n    \
+         authenticate(&context, &headers).await?;\n    let _ = (&context, &input);\n",
+    ] {
+        assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");
+    }
+    let health = text(&project, "crates/health/src/orders_reading.rs");
+    assert!(
+        health.contains(
+            "pub(crate) async fn live<P>(context: Context<P>) -> \
+             Result<Json<LiveOutput>>\nwhere\n    P: Capabilities,\n{\n    let _ = &context;\n"
+        ),
+        "a route outside the prefix is laid as any handler: {health}"
+    );
+    for absent in ["HeaderMap", "authenticate", "GateError"] {
+        assert!(!health.contains(absent), "no `{absent}` outside the prefix: {health}");
+    }
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        OMNIA_MANIFEST.replace(
+            "[dependencies]\naxum.workspace = true\n",
+            "[dependencies]\nanyhow.workspace = true\naxum.workspace = true\n"
+        ) + "thiserror.workspace = true\n",
+        "the gating stem's manifest names the error crates among the four"
+    );
+    assert_eq!(
+        text(&project, "crates/health/Cargo.toml"),
+        OMNIA_MANIFEST.replace("orders", "health"),
+        "a stem outside the prefix names the four alone"
+    );
+
+    let tests = text(&project, "crates/orders/tests/reading.rs");
+    for carried in [
+        "use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};\n",
+        "use omnia_test::guest::{MapConfig, Provider, send};\n",
+        "    let settings = [(\"API_TOKENS\", \"<value>\"), (\"BEARER_PREFIX\", \"<value>\")];\n    \
+         Provider::default().config(MapConfig::default().with(settings))\n",
+        "    let id = \"<id>\";\n    let authorization = \"<authorization>\";\n    let request = \
+         Request::get(format!(\"/api/orders/{id}\"))\n        .header(AUTHORIZATION, \
+         authorization)\n        .body(Body::empty())\n        .expect(\"request\");\n",
+        "    let authorization = \"<authorization>\";\n    let request = \
+         Request::post(\"/api/orders\")\n        .header(AUTHORIZATION, authorization)\n        \
+         .header(CONTENT_TYPE, \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
+         .expect(\"request\");\n",
+    ] {
+        assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
+    }
+    let health_tests = text(&project, "crates/health/tests/orders_reading.rs");
+    for absent in ["AUTHORIZATION", "authorization", "MapConfig", "<value>"] {
+        assert!(!health_tests.contains(absent), "no `{absent}` outside the prefix: {health_tests}");
+    }
+    assert_parses(
+        &project,
+        &[
+            "crates/orders/src/reading.rs",
+            "crates/orders/tests/reading.rs",
+            "crates/health/src/orders_reading.rs",
+            "crates/health/tests/orders_reading.rs",
+        ],
+    );
+}
+
+// A design whose gate sentences name no path — the gate word in a preamble
+// sentence and in the error mapping — spells the prefix in its bearer
+// sentences, `bearer token checks on /api routes` and `bearer auth on
+// /api`, which the reader falls to, so the gate is laid under `/api` as
+// before, with no settings where those sentences spell no key.
+#[tokio::test]
+async fn omnia_gate_bearer_prefix() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = gated_slice();
+    slice.design = "# Design\n\nThe program is an HTTP service: health probes without API \
+                    authentication, bearer-protected order APIs, and a SQL store. The API layer \
+                    applies bearer token checks on `/api` routes (REQ-001, REQ-002).\n\n## \
+                    Technical logic\n\nHTTP middleware stack: health at /health without auth; \
+                    bearer auth on /api; order routers under /api; global error handler mapping \
+                    ValidationError to 400 invalid-request, UnauthorizedError to 401 \
+                    unauthorized, NotFoundError to 404 not-found.\n"
+        .to_owned();
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let reading = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        OMNIA_GATE_ERROR,
+        "pub(crate) async fn read<P>(\n    context: Context<P>, headers: HeaderMap, Path(id): \
+         Path<String>,\n) -> std::result::Result<Json<ReadOutput>, GateError>\nwhere\n    P: \
+         Capabilities,\n{\n    authenticate(&context, &headers).await?;\n",
+    ] {
+        assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");
+    }
+    assert!(!reading.contains("GateSettings"), "no key is spelled, so no settings: {reading}");
+    let health = text(&project, "crates/health/src/orders_reading.rs");
+    assert!(!health.contains("authenticate"), "the gate stays under `/api`: {health}");
+}
+
+// The brief of a slice the gate is laid for says where the gate is and
+// what every handler under the prefix does, names the manifest lines, lists
+// the gate's marker first, and quotes the gate passage.
+#[tokio::test]
+async fn omnia_gate_laid_brief() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &gated_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "- `crates/orders/Cargo.toml`: scaffolded, `anyhow.workspace = true` among its \
+         `[dependencies]` for the gate's error type and `thiserror.workspace = true` among its \
+         `[dependencies]` for the gate's error type. One `<crate>.workspace = true` line at the \
+         end of `[dependencies]` for each crate your code uses beyond the six it holds;",
+        "1. The gate `authenticate` in `crates/orders/src/reading.rs`, key `authenticate: the \
+         gate under /api`: replace this block with the body, the rule as the design states it \
+         over `GateSettings::load(context.config()).await?` and the request's headers, `Ok(())` \
+         for an accepted credential and `Err(GateError::Unauthorized)` for a missing or unknown \
+         one; keep the signature, which every handler under `/api` calls.\n\n```rust\n    let _ \
+         = (context, headers);\n    todo!(\"authenticate: the gate under /api\")\n```\n",
+        "2. The handler `read` of `GET /api/orders/{id}` in `crates/orders/src/reading.rs`",
+        "The gate under `/api` the design's rules spell is laid in `crates/orders/src/reading.rs`: \
+         `pub async fn authenticate<P: Config>(context: &Context<P>, headers: &HeaderMap) -> \
+         std::result::Result<(), GateError>` beside `GateError` (its `Unauthorized` answering \
+         `401 {\"error\": \"unauthorized\"}`, its `Host` passing the host's error through) and \
+         `GateSettings` over `API_TOKENS` and `BEARER_PREFIX`, which `provider()` seeds in every \
+         test file under `/api`. Fill the gate's marker, listed under the stem, with the rule \
+         as the design states it, `Err(GateError::Unauthorized)` where the credential is \
+         missing or unknown, and every handler of this slice under `/api` takes `headers: \
+         HeaderMap` after the context, calls `authenticate(&context, &headers).await?` before \
+         anything else, and answers `std::result::Result<_, GateError>`, as laid; its tests \
+         send `AUTHORIZATION` from `let authorization = \"<authorization>\";`, which you fill \
+         with a credential the seeded settings accept. Write no second gate: a later stem \
+         imports this one.\n",
+        "From `references/handlers.md`, under \"A gate\":\n\n",
+        "From `references/handlers.md`, under \"A status of its own\":\n\n",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
+// A second stem's slice with one route under `/api`, built after the stem
+// that holds the gate.
+fn customers_slice() -> Slice {
+    let mut slice = slice_for("customers-reading", &["customers.read"]);
+    slice.requirements[0].trigger = Some(routed("GET", "/api/customers/{id}"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "A customer is returned by its id".to_owned(),
+        given: vec!["a customer 7".to_owned()],
+        when: "GET /api/customers/7 is called".to_owned(),
+        then: "the customer is answered".to_owned(),
+        and: Vec::new(),
+    }];
+    OMNIA_GATED_DESIGN.clone_into(&mut slice.design);
+    slice.brief = vec!["Reads customers.".to_owned()];
+    slice
+}
+
+// A stem whose routes fall under a prefix another stem's gate already
+// guards imports that gate: the module takes `GateError` and `authenticate`
+// from the holding crate, its manifest names that crate by path, its
+// handlers call the gate as laid, its tests seed the gate's keys and send
+// the credential, and nothing of the gate is laid again.
+#[tokio::test]
+async fn omnia_gate_existing() {
+    let project = omnia_tree().await;
+    let mut first = slice_for("orders-reading", &["orders.read"]);
+    first.requirements[0].trigger = Some(routed("GET", "/api/orders/{id}"));
+    first.design = OMNIA_GATED_DESIGN.to_owned();
+    first.brief = vec!["Reads orders.".to_owned()];
+    let laid = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &laid, &first).await.expect("the gating stem's turn");
+    laid.assert_exhausted();
+
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &customers_slice()).await.expect("the importing turn");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/customers/src/reading.rs");
+    for carried in [
+        "use axum::http::HeaderMap;\nuse axum::routing::get;\nuse omnia_sdk::api::{Context, \
+         Handlers};\nuse omnia_sdk::{Capabilities, Result};\nuse orders::reading::{GateError, \
+         authenticate};\nuse serde::Serialize;\n",
+        "pub(crate) async fn read<P>(\n    context: Context<P>, headers: HeaderMap, Path(id): \
+         Path<String>,\n) -> std::result::Result<Json<ReadOutput>, GateError>\nwhere\n    P: \
+         Capabilities,\n{\n    authenticate(&context, &headers).await?;\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    for absent in ["enum GateError", "fn authenticate", "GateSettings", "thiserror"] {
+        assert!(!module.contains(absent), "the gate is imported, not laid again: {module}");
+    }
+    assert_eq!(
+        text(&project, "crates/customers/Cargo.toml"),
+        OMNIA_MANIFEST.replace("orders", "customers").replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            "omnia-sdk.workspace = true\norders = { path = \
+                                              \"../orders\" }\n"
+        ),
+        "the importing stem's manifest names the gate's crate by path where it sorts"
+    );
+    let tests = text(&project, "crates/customers/tests/reading.rs");
+    for carried in [
+        "use axum::http::header::AUTHORIZATION;\n",
+        "    let settings = [(\"API_TOKENS\", \"<value>\"), (\"BEARER_PREFIX\", \"<value>\")];\n",
+        "    let authorization = \"<authorization>\";\n    let request = \
+         Request::get(format!(\"/api/customers/{id}\"))\n        .header(AUTHORIZATION, \
+         authorization)\n",
+    ] {
+        assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
+    }
+    assert_parses(
+        &project,
+        &["crates/customers/src/reading.rs", "crates/customers/tests/reading.rs"],
+    );
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "- `crates/customers/Cargo.toml`: scaffolded, `orders = { path = \"../orders\" }` among \
+         its `[dependencies]` for the gate it imports.",
+        "The gate under `/api` is `orders::reading::authenticate` in \
+         `crates/orders/src/reading.rs`, imported into `crates/customers/src/reading.rs`, \
+         `orders = { path = \"../orders\" }` under its `[dependencies]`, and every handler of \
+         this slice under `/api` takes `headers: HeaderMap` after the context, calls \
+         `authenticate(&context, &headers).await?` before anything else,",
+        "Write no second gate.\n",
+        "From `references/handlers.md`, under \"A gate\":\n\n",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert!(!brief.contains("The gate `authenticate` in"), "no gate marker to fill: {brief}");
+}
+
+// A stem crate exporting a function over the headers outside the laid
+// shape is named to the turn instead of a gate: nothing of the gate is laid
+// or imported, the handlers are laid ungated, and the brief says what to
+// call.
+#[tokio::test]
+async fn omnia_gate_named() {
+    let project = omnia_tree().await;
+    let plain = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &plain, &omnia_slice()).await.expect("the first stem's turn");
+    plain.assert_exhausted();
+    project.write(
+        "crates/orders/src/reading.rs",
+        format!(
+            "{OMNIA_MODULE}\n/// Whether the headers carry an accepted bearer.\npub fn \
+             check_bearer(headers: &axum::http::HeaderMap) -> bool {{\n    \
+             headers.contains_key(\"authorization\")\n}}\n"
+        )
+        .as_bytes(),
+    );
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &customers_slice()).await.expect("the named gate's turn");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/customers/src/reading.rs");
+    for absent in ["HeaderMap", "authenticate", "GateError", "check_bearer"] {
+        assert!(!module.contains(absent), "nothing of the gate is laid: {module}");
+    }
+    assert_eq!(
+        text(&project, "crates/customers/Cargo.toml"),
+        OMNIA_MANIFEST.replace("orders", "customers"),
+        "no crate is named for a gate the laid code does not call"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "The tree already holds a function taking the request's headers, \
+             `orders::reading::check_bearer` in `crates/orders/src/reading.rs`, outside the laid \
+             shape, so no gate was laid and the handlers of this slice under `/api` take no \
+             `HeaderMap` yet: give each `headers: HeaderMap` after the context and call it \
+             before anything else, send `AUTHORIZATION` from each test under `/api`, and write \
+             no second gate.\n"
+        ),
+        "the brief names the function: {brief}"
+    );
+}
+
+// A later serial slice of the part whose held module declares the gate
+// appends its handlers calling it, imports nothing of it again, lays no
+// second gate, and keeps the held settings and error; the brief says the
+// gate stands from the earlier slice.
+#[tokio::test]
+async fn omnia_gate_held() {
+    let project = omnia_tree().await;
+    let mut first = slice_for("orders-reading", &["orders.read"]);
+    first.requirements[0].trigger = Some(routed("GET", "/api/orders/{id}"));
+    first.index = 1;
+    first.count = 2;
+    first.design = OMNIA_GATED_DESIGN.to_owned();
+    first.brief = vec!["Reads orders.".to_owned()];
+    let laid = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &laid, &first).await.expect("the first slice's turn");
+    laid.assert_exhausted();
+    let held = text(&project, "crates/orders/src/reading.rs");
+
+    let mut second = slice_for("orders-reading", &["orders.create"]);
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.requirements[0].statement = vec!["Creates the order the body states.".to_owned()];
+    second.requirements[0].trigger = Some(routed("POST", "/api/orders"));
+    second.index = 2;
+    second.count = 2;
+    second.design = OMNIA_GATED_DESIGN.to_owned();
+    second.brief = vec!["Reads orders.".to_owned()];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &model, &second).await.expect("the second slice's turn");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    for kept in [OMNIA_GATE_ERROR, OMNIA_GATE] {
+        assert!(held.contains(kept) && module.contains(kept), "the held gate stands: {module}");
+    }
+    for carried in [
+        "use axum::routing::post;\n",
+        "Handlers::new().route(API_ORDERS_ID, get(read)).route(API_ORDERS, post(create))\n",
+        "pub(crate) async fn create<P>(\n    context: Context<P>, headers: HeaderMap, \
+         Json(input): Json<CreateInput>,\n) -> std::result::Result<Json<CreateOutput>, \
+         GateError>\nwhere\n    P: Capabilities,\n{\n    authenticate(&context, \
+         &headers).await?;\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    assert_eq!(module.matches("fn authenticate").count(), 1, "one gate: {module}");
+    assert_eq!(module.matches("enum GateError").count(), 1, "one error: {module}");
+    assert_eq!(module.matches("use axum::http::{HeaderMap, StatusCode};").count(), 1, "{module}");
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        OMNIA_MANIFEST.replace(
+            "[dependencies]\naxum.workspace = true\n",
+            "[dependencies]\nanyhow.workspace = true\naxum.workspace = true\n"
+        ) + "thiserror.workspace = true\n",
+        "the held manifest already names the error crates"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "The gate under `/api` stands in `crates/orders/src/reading.rs` from an earlier \
+             slice, and every handler of this slice under `/api` takes `headers: HeaderMap` \
+             after the context,"
+        ),
+        "the brief says the gate stands: {brief}"
+    );
+    assert!(!brief.contains("The gate `authenticate` in"), "no gate marker to fill: {brief}");
+}
+
+// A turn that fills a handler behind the gate while the gate itself still
+// holds its stub is refused with the gate's line named, since every request
+// to the handler would panic there; the turn that fills the gate is
+// accepted.
+#[tokio::test]
+async fn omnia_gate_unfilled() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-reading", &["orders.read"]);
+    slice.requirements[0].statement = vec!["Answers the order by its id.".to_owned()];
+    slice.requirements[0].trigger = Some(routed("GET", "/api/orders/{id}"));
+    slice.design = OMNIA_GATED_DESIGN.to_owned();
+    slice.brief = vec!["Reads orders.".to_owned()];
+    let handler_marker =
+        "    let _ = (&context, &id);\n    todo!(\"REQ-001 orders.read: the handler\")\n";
+    let handler_filled = "    let _ = &id;\n    Ok(Json(ReadOutput {}))\n";
+    let gate_marker = "    let _ = (context, headers);\n    todo!(\"authenticate: the gate under \
+                       /api\")\n";
+    let gate_filled = "    let settings = GateSettings::load(context.config()).await?;\n    let \
+                       bearer = headers\n        .get(axum::http::header::AUTHORIZATION)\n        \
+                       .and_then(|value| value.to_str().ok())\n        .and_then(|value| \
+                       value.strip_prefix(settings.bearer_prefix.as_str()))\n        \
+                       .ok_or(GateError::Unauthorized)?;\n    if settings.api_tokens.split(',').\
+                       any(|token| token == bearer) {\n        Ok(())\n    } else {\n        \
+                       Err(GateError::Unauthorized)\n    }\n";
+    let report = r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", handler_marker, handler_filled),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, "where\n    P: Config,\n"),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", gate_marker, gate_filled)])]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the filled gate is accepted");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert!(module.contains(gate_filled), "the gate is filled: {module}");
+    assert!(!module.contains("todo!"), "no stub stands: {module}");
+    let correction = correction(&model);
+    let gate_at = line_of(&module, "pub async fn authenticate<P>(");
+    for carried in [
+        "a handler under the gate's prefix is filled while the gate it calls first is still \
+         the scaffold's stub, so every request to it would panic at the gate: fill \
+         `authenticate` in `crates/orders/src/reading.rs` through `edit_files` under its \
+         marker key, `authenticate: the gate under <prefix>`,"
+            .to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{gate_at}: `authenticate` holds its `todo!` while a \
+             handler calling it is filled"
+        ),
+    ] {
+        assert!(correction.contains(&carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(!correction.contains("Capabilities"), "the narrowed bound is no finding: {correction}");
+}
+
+// A handler whose scenarios state a status other than `200` answers the
+// `(StatusCode, Json<Output>)` pair, so the status is the handler's own
+// expression, and the brief's hint says which to answer; a design naming a
+// database and a cache selects the store capabilities, their doubles
+// whole, and the testing table's rows for them.
 #[tokio::test]
 async fn omnia_scaffold_status() {
     let project = omnia_tree().await;
@@ -1352,54 +2038,37 @@ async fn omnia_scaffold_status() {
                     integrations\n\nStore (PostgreSQL): orders are read from the database. \
                     Cache (Redis): an order is cached under a TTL.\n"
         .to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
     let reading = text(&project, "crates/orders/src/reading.rs");
     for carried in [
-        "omnia_sdk::api::http::{DecodeError, MethodFilter, RawRequest, handle_with};\n",
-        "axum::Router::new().route(ORDERS_ID, read_route())\n",
-        "// The `GET /orders/{id}` route: the handler's `Ok` answered as JSON under the status \
-         named here.\npub(crate) fn read_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
-         handle_with(\n        MethodFilter::GET,\n        read,\n        |raw: RawRequest<'_>| -> \
-         Result<ReadInput, DecodeError> {\n            decode_query(raw.path_params, raw.query)\n        \
-         },\n        |output: ReadOutput| (StatusCode::OK, Json(output)).into_response(),\n    )\n}\n",
-        "fn decode_query<I: DeserializeOwned>(\n    params: &[(String, String)], query: \
-         Option<&str>,\n) -> Result<I, DecodeError> {\n    let mut object = \
-         serde_json::Map::new();\n    for pair in \
-         query.unwrap_or_default().split('&').filter(|pair| !pair.is_empty()) {\n        let \
-         (key, value) = pair.split_once('=').unwrap_or((pair, \"\"));\n        \
-         object.insert(unescape(key)?, serde_json::Value::String(unescape(value)?));\n    }\n    \
-         for (key, param) in params {\n        object.insert(key.clone(), \
-         serde_json::Value::String(param.clone()));\n    }\n",
-        "fn unescape(token: &str) -> Result<String, DecodeError> {\n",
+        "use axum::http::StatusCode;\n",
+        "Handlers::new().route(ORDERS_ID, get(read))\n",
+        "pub(crate) async fn read<P>(\n    context: Context<P>, Path(id): Path<String>,\n) -> \
+         Result<(StatusCode, Json<ReadOutput>)>\nwhere\n    P: Capabilities,\n{\n",
     ] {
         assert!(reading.contains(carried), "the part carries `{carried}`: {reading}");
     }
-    assert!(!reading.contains("get(read)"), "the method fn gives way to the route fn: {reading}");
-    assert!(
-        !reading.contains("decode_json"),
-        "a `GET` reads the query as the SDK's `get` does, never the body: {reading}"
-    );
+    assert!(!reading.contains("Result<Json<ReadOutput>>"), "the pair takes the place of the JSON");
     assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]);
 
     let brief = &model.seen()[0].messages[0];
     for carried in [
-        "Its `Ok` is answered as JSON under the status the encoder in `read_route` names, \
-         `StatusCode::OK`, which is this slice's to decide there: a `201` for a creation, or \
-         one read off the output, `503` where a probe found its store down; an error status, a \
-         `404`, is the error the errors passage maps to it.",
-        "From `references/omnia-api.md`, under \"Routing — `omnia_sdk::api::http`\":\n\nThe \
-         general constructor",
+        "Its `Ok` is a `(StatusCode, Json<ReadOutput>)` pair, since a scenario states a status: \
+         answer the status the outcome earns, `StatusCode::CREATED` for a creation, \
+         `StatusCode::SERVICE_UNAVAILABLE` where a probe found its store down; an error status, \
+         a `404`, is the error the errors passage maps to it.",
+        "From `references/handlers.md`, under \"A status of its own\":\n\n",
         "pub trait StateStore: Send + Sync {",
         "pub trait TableStore: Send + Sync {",
-        "// omnia_wasi_sql, a crate of the stem's manifest at the pinned version\npub struct Row \
-         { pub index: String, pub fields: Vec<Field> }\npub struct Field { pub name: String, pub \
-         value: DataType }\npub enum DataType {",
-        "impl Memory {   // Default: empty; `set` ignores `ttl_secs`\n    pub fn state(&self, \
-         key: &str) -> Option<Vec<u8>>\n",
+        "// omnia_sdk::sql\npub struct Row { pub index: String, pub fields: Vec<Field> }\nimpl \
+         Row {\n",
+        "pub struct Field { pub name: String, pub value: DataType }\npub enum DataType {",
+        "impl Memory {   // Default: empty; an entry set with `ttl_secs` expires after it\n    \
+         pub fn state(&self, key: &str) -> Option<Vec<u8>>\n",
         "    pub fn is_empty(&self) -> bool\n}\n",
         "impl ScriptedTables {   // Default: no rule, so a statement panics naming its SQL and \
          parameters\n    pub fn on_query(self, matches: impl Fn(&str, &[DataType]) -> bool + Send \
@@ -1413,14 +2082,170 @@ async fn omnia_scaffold_status() {
     }
 }
 
+// A status stated in a scenario's `and` line selects the pair as one in its
+// `then` does, and a `200` stated, or a three-digit quantity outside the
+// status range, selects nothing: of two handlers, the one whose scenario
+// states `201` answers `(StatusCode, Json<Output>)` and the other
+// `Json<Output>`, `StatusCode` imported once, the brief carrying each
+// handler's own hint and the status section quoted.
+#[tokio::test]
+async fn omnia_stated_status_return_type() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-writing", &["orders.create", "orders.read"]);
+    slice.requirements[0].trigger = Some(routed("POST", "/orders"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "An order is created".to_owned(),
+        given: vec!["no order".to_owned()],
+        when: "POST /orders is called with the order in the body".to_owned(),
+        then: "the order is created".to_owned(),
+        and: vec!["the status is 201".to_owned()],
+    }];
+    slice.requirements[1].trigger = Some(routed("GET", "/orders/{id}"));
+    slice.requirements[1].scenarios = vec![Scenario {
+        name: "An order is read".to_owned(),
+        given: vec!["an order 42 of 640 lines".to_owned()],
+        when: "GET /orders/42 is called".to_owned(),
+        then: "the status is 200".to_owned(),
+        and: vec!["the body holds 640 lines".to_owned()],
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/writing.rs");
+    for carried in [
+        "use axum::http::StatusCode;\n",
+        "    Handlers::new().route(ORDERS, post(create)).route(ORDERS_ID, get(read))\n",
+        "pub(crate) async fn create<P>(\n    context: Context<P>, Json(input): \
+         Json<CreateInput>,\n) -> Result<(StatusCode, Json<CreateOutput>)>\nwhere\n    P: \
+         Capabilities,\n{\n",
+        "pub(crate) async fn read<P>(context: Context<P>, Path(id): Path<String>) -> \
+         Result<Json<ReadOutput>>\nwhere\n    P: Capabilities,\n{\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    assert_eq!(module.matches("StatusCode").count(), 2, "one import, one pair: {module}");
+    assert_parses(&project, &["crates/orders/src/writing.rs", "crates/orders/tests/writing.rs"]);
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "Its `Ok` is a `(StatusCode, Json<CreateOutput>)` pair, since a scenario states a status: \
+         answer the status the outcome earns, `StatusCode::CREATED` for a creation,",
+        "Its `Ok` is answered `200` as JSON; for another status, change the return type to \
+         `Result<(StatusCode, Json<ReadOutput>)>` and answer the pair, as the handlers \
+         reference shows.",
+        "From `references/handlers.md`, under \"A status of its own\":\n\n",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
+// A slice whose text spells `SCREAMING_SNAKE` keys lays the part's settings
+// struct: one private `String` field per key under the prefix every key
+// shares, the key spelled on a field the derive would not read it off, the
+// derive imported, the tests' `provider()` seeding each key with a
+// placeholder, the brief saying how to load and narrow them, and the
+// settings passage quoted; a status name and the part's path constant are
+// no key. A turn covering the requirement with the seeds unfilled is
+// refused with each seed's line named, fills them, and is accepted.
+#[tokio::test]
+async fn omnia_settings_laid() {
+    let project = omnia_tree().await;
+    let mut slice = omnia_slice();
+    slice.requirements[0].statement = vec![
+        "Answers the order by its id, priced through the rates service at `ORDERS_RATE_URL` \
+         under the order type `ORDERS_TYPE`."
+            .to_owned(),
+    ];
+    slice.requirements[0].scenarios[0].and =
+        vec!["the status is `OK` and the rate came from `ORDERS_RATE_URL`".to_owned()];
+    let seeds = "    let settings = [(\"ORDERS_RATE_URL\", \"<value>\"), (\"ORDERS_TYPE\", \
+                 \"<value>\")];\n";
+    let seeded = "    let settings = [(\"ORDERS_RATE_URL\", \"http://rates\"), (\"ORDERS_TYPE\", \
+                  \"retail\")];\n";
+    let loaded = "    let settings = ReadingSettings::load(context.config()).await?;\n    let _ \
+                  = (&id, &settings);\n    Ok(Json(ReadOutput {}))\n";
+    let scaffolded_use = "use omnia_sdk::{Capabilities, Result, Settings};\n";
+    let narrowed_use = "use omnia_sdk::{Capabilities, Config, Result, Settings};\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, loaded),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, "where\n    P: Config,\n"),
+                ("crates/orders/src/reading.rs", scaffolded_use, narrowed_use),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/tests/reading.rs", seeds, seeded)])]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("the seeded tree is accepted");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        narrowed_use,
+        "// The settings the part reads: `ORDERS_RATE_URL`, `ORDERS_TYPE`.\n#[derive(Debug, \
+         Settings)]\n#[setting(prefix = \"ORDERS_\")]\npub(crate) struct ReadingSettings {\n    \
+         rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n}\n",
+        loaded,
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    for absent in ["ok: String", "id: String,\n    #[setting"] {
+        assert!(!module.contains(absent), "`{absent}` is no setting: {module}");
+    }
+    let tests = text(&project, "crates/orders/tests/reading.rs");
+    for carried in [
+        "use omnia_test::guest::{MapConfig, Provider, send};\n",
+        "// The doubles every scenario starts from, the part's settings seeded: give each \
+         its\n// value for the scenarios, and set a response on the doubles in the \
+         arrangement.\nfn provider() -> Provider {\n",
+        "    Provider::default().config(MapConfig::default().with(settings))\n}\n",
+        seeded,
+    ] {
+        assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
+    }
+    assert!(!tests.contains("<value>"), "the seeds are filled: {tests}");
+    assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]);
+
+    let correction = correction(&model);
+    let seeds_at = line_of(&tests, "let settings = [");
+    for line in [
+        "each `\"<value>\"` the file's `provider()` seeds a setting with replaced with the \
+         value the scenarios run under"
+            .to_owned(),
+        format!(
+            "crates/orders/tests/reading.rs:{seeds_at}: REQ-001 is covered and `provider()` \
+             seeds the placeholder `\"<value>\"`"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert!(!correction.contains("unfilled"), "the filled test is no finding: {correction}");
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "The settings `ReadingSettings` in `crates/orders/src/reading.rs` read `ORDERS_RATE_URL` \
+         and `ORDERS_TYPE`, as the slice spells them: load them with \
+         `ReadingSettings::load(context.config()).await?` where a body needs one, narrow each \
+         field from `String` to the type its value parses as, drop a field the slice spells for \
+         something other than a setting, and give each key its value in place of `\"<value>\"` \
+         in the tests' `provider()`.\n",
+        "From `references/omnia-api.md`, under \"Settings — `omnia_sdk::Settings`\":",
+        "impl MapConfig",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
 // A `GET` handler of a slice whose words call for the probe idiom is laid
-// with its route function too, its scenarios stating no status, since a
-// probe's status follows the outcome and the fence the brief quotes names
-// the encoder as the one place to set it; the brief's hint says the status
-// is the slice's to decide there, and the guard keeps the route function's
-// name as it keeps the handler's. The stem's manifest names the crate the
-// quoted tests arrange the store's rows with after the six fixed lines, so
-// the turn edits no manifest for it, and the brief says so.
+// as any handler, answering `Json<Output>` since its scenarios state no
+// status, and the brief quotes the probe's section, whose handler shows the
+// pair a probe answers; the stem's manifest holds the four fixed lines and
+// no crate for the rows the quoted tests arrange, since `Row` is the SDK's.
 #[tokio::test]
 async fn omnia_scaffold_probe() {
     let project = omnia_tree().await;
@@ -1432,7 +2257,7 @@ async fn omnia_scaffold_probe() {
     slice.requirements[0].scenarios[0].when = "GET /health/ready is called".to_owned();
     slice.requirements[0].scenarios[0].then = "the store's readiness is answered".to_owned();
     slice.name = "health".to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#])
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#])
         .calling(0, [write_files(&[("crates/health/src/health.rs", "//! Written over.\n")])]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
@@ -1440,39 +2265,35 @@ async fn omnia_scaffold_probe() {
 
     let health = text(&project, "crates/health/src/health.rs");
     for carried in [
-        "use omnia_sdk::api::http::{DecodeError, MethodFilter, RawRequest, handle_with};\n",
-        "axum::Router::new().route(HEALTH_READY, ready_route())\n",
-        "pub(crate) fn ready_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
-         handle_with(\n        MethodFilter::GET,\n        ready,\n",
-        "|output: ReadyOutput| (StatusCode::OK, Json(output)).into_response(),\n",
+        "Handlers::new().route(HEALTH_READY, get(ready))\n",
+        "pub(crate) async fn ready<P>(context: Context<P>) -> Result<Json<ReadyOutput>>\nwhere\n    \
+         P: Capabilities,\n{\n    let _ = &context;\n",
     ] {
         assert!(health.contains(carried), "the part carries `{carried}`: {health}");
     }
-    assert!(!health.contains("get(ready)"), "the method fn gives way to the route fn: {health}");
+    assert!(!health.contains("StatusCode"), "a probe stating no status answers JSON: {health}");
     assert_parses(&project, &["crates/health/src/health.rs", "crates/health/tests/health.rs"]);
     assert_eq!(
         text(&project, "crates/health/Cargo.toml"),
-        format!("{}{OMNIA_PROBE_DEPENDENCY}", OMNIA_MANIFEST.replace("orders", "health")),
-        "the probe's crate is named after the six fixed lines"
+        OMNIA_MANIFEST.replace("orders", "health"),
+        "the probe's manifest holds the four fixed lines alone"
     );
 
     let brief = &model.seen()[0].messages[0];
     assert!(
         brief.contains(
-            "Its `Ok` is answered as JSON under the status the encoder in `ready_route` names, \
-             `StatusCode::OK`, which is this slice's to decide there"
+            "Its `Ok` is answered `200` as JSON; for another status, change the return type to \
+             `Result<(StatusCode, Json<ReadyOutput>)>` and answer the pair"
         ),
-        "the hint names the encoder: {brief}"
+        "the hint names the pair: {brief}"
     );
     assert!(
         brief.contains("From `references/handlers.md`, under \"A probe\":\n\n"),
         "the probe idiom is quoted: {brief}"
     );
-    let manifest_cited = "- `crates/health/Cargo.toml`: scaffolded, `omnia-wasi-sql.workspace = \
-                          true` among its `[dependencies]` for the `Row` the probe's tests arrange \
-                          the store's answer with. One `<crate>.workspace = true` line at the end \
-                          of `[dependencies]` for each crate your code uses beyond the seven it \
-                          holds;";
+    let manifest_cited = "- `crates/health/Cargo.toml`: scaffolded. One `<crate>.workspace = \
+                          true` line at the end of `[dependencies]` for each crate your code \
+                          uses beyond the four it holds;";
     assert!(brief.contains(manifest_cited), "the brief carries `{manifest_cited}`: {brief}");
     let write = model
         .exchanges()
@@ -1482,19 +2303,16 @@ async fn omnia_scaffold_probe() {
     let refusal = write.outcome.expect_err("a write dropping the skeleton is refused");
     assert!(
         refusal.contains(
-            "`REQ-001`, `fn ready`, `struct ReadyInput`, `struct ReadyOutput`, `const \
-             HEALTH_READY`, `fn ready_route`, `struct Order`, `fn routes`"
+            "`REQ-001`, `fn ready`, `struct ReadyOutput`, `const HEALTH_READY`, `struct Order`, \
+             `fn handlers`"
         ),
-        "the guard keeps the id and every item the scaffold named, the route function among \
-         them: {refusal}"
+        "the guard keeps the id and every item the scaffold named: {refusal}"
     );
 }
 
-// A probing slice of a stem whose manifest an earlier slice left takes the
-// probe's crate as a line at the end of the held manifest, which the guard
-// then keeps, the brief saying it was added; a manifest already naming it
-// stands as it is, the brief saying so, and a whole write of the manifest
-// dropping the line is refused.
+// A slice of a stem whose manifest an earlier slice left finds the
+// manifest held and adds no line to it, the brief saying so, and a whole
+// write of the manifest as held passes the guard.
 #[tokio::test]
 async fn omnia_scaffold_probe_held_manifest() {
     let project = omnia_tree().await;
@@ -1506,44 +2324,23 @@ async fn omnia_scaffold_probe_held_manifest() {
         vec!["Answers whether the store answers a probe within its deadline.".to_owned()];
     slice.requirements[0].trigger = Some(routed("GET", "/health/ready"));
     slice.name = "health".to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#])
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#])
         .calling(0, [write_files(&[("crates/health/Cargo.toml", &held)])]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
-    let extended = format!("{held}{OMNIA_PROBE_DEPENDENCY}");
-    assert_eq!(
-        text(&project, "crates/health/Cargo.toml"),
-        extended,
-        "the probe's crate is added at the end of the held manifest"
-    );
+    assert_eq!(text(&project, "crates/health/Cargo.toml"), held, "the held manifest stands");
     let brief = &model.seen()[0].messages[0];
-    let added = "- `crates/health/Cargo.toml`: held, `omnia-wasi-sql.workspace = true` added at \
-                 the end of its `[dependencies]` for the `Row` the probe's tests arrange the \
-                 store's answer with.";
-    assert!(brief.contains(added), "the brief carries `{added}`: {brief}");
+    let cited = "- `crates/health/Cargo.toml`: held. One `<crate>.workspace = true` line at the \
+                 end of `[dependencies]` for each crate your code uses beyond the four it holds;";
+    assert!(brief.contains(cited), "the brief carries `{cited}`: {brief}");
     let write = model
         .exchanges()
         .into_iter()
         .find(|exchange| exchange.tool == "write_files")
         .expect("the write reached its tool");
-    let refusal = write.outcome.expect_err("a write dropping the added line is refused");
-    assert!(
-        refusal.contains("`omnia-wasi-sql.workspace = true`"),
-        "the guard keeps the line the scaffold added: {refusal}"
-    );
-
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
-    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
-    model.assert_exhausted();
-
-    assert_eq!(text(&project, "crates/health/Cargo.toml"), extended, "the manifest stands");
-    let brief = &model.seen()[0].messages[0];
-    let kept = "- `crates/health/Cargo.toml`: held, `omnia-wasi-sql.workspace = true` already \
-                held among its `[dependencies]` for the `Row` the probe's tests arrange the \
-                store's answer with.";
-    assert!(brief.contains(kept), "the brief carries `{kept}`: {brief}");
+    write.outcome.expect("a write of the manifest as held passes");
 }
 
 // The roles follow the slice, not the design whole: its own text selects a
@@ -1551,8 +2348,8 @@ async fn omnia_scaffold_probe_held_manifest() {
 // or citing none does too, while a paragraph citing other slices' ids alone
 // selects nothing, and the inbound surface's `HTTP`, `REST`, and `API` and
 // the store's `DATABASE_URL` and `order fetch` select no upstream; a SQL
-// store among the roles names the SQL crate in the manifest as a probe
-// does, the brief saying what for.
+// store among the roles quotes the SQL query shape after the doubles and
+// names no crate in the manifest, since `Row` is the SDK's.
 #[tokio::test]
 async fn omnia_scaffold_roles_scoped() {
     let project = omnia_tree().await;
@@ -1569,31 +2366,30 @@ async fn omnia_scaffold_roles_scoped() {
                     REQ-009).\n\nStore (PostgreSQL via `pg:Pool`): connection string from \
                     `DATABASE_URL`; order fetch `SELECT * FROM orders WHERE id = $1`.\n"
         .to_owned();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
     assert_eq!(
         text(&project, "crates/orders/Cargo.toml"),
-        format!("{OMNIA_MANIFEST}{OMNIA_PROBE_DEPENDENCY}"),
-        "the SQL crate is named after the six fixed lines for the store the design names"
+        OMNIA_MANIFEST,
+        "the SQL store names no crate beyond the four fixed lines"
     );
     let brief = &model.seen()[0].messages[0];
     let (_, scaffolded) = brief
         .split_once("What the adapter scaffolded for this slice before this turn:\n\n")
         .expect("the brief carries the scaffold section after the design");
     for carried in [
-        "- `crates/orders/Cargo.toml`: scaffolded, `omnia-wasi-sql.workspace = true` among its \
-         `[dependencies]` for the SQL store the slice reaches. One `<crate>.workspace = true` \
-         line at the end of `[dependencies]` for each crate your code uses beyond the seven it \
-         holds;",
+        "- `crates/orders/Cargo.toml`: scaffolded. One `<crate>.workspace = true` line at the \
+         end of `[dependencies]` for each crate your code uses beyond the four it holds;",
         "pub trait Identity: Send + Sync {",
         "pub trait StateStore: Send + Sync {",
         "pub trait TableStore: Send + Sync {",
         "impl FixedIdentity {",
         "impl Memory {",
         "impl ScriptedTables {",
+        "From `references/handlers.md`, under \"A SQL query\":\n\n",
         "| a secret read from a vault",
         "| a store: a SQL database",
     ] {
@@ -1603,6 +2399,16 @@ async fn omnia_scaffold_roles_scoped() {
              paragraph select `{carried}`: {scaffolded}"
         );
     }
+    let doubles_pos = scaffolded
+        .find("From `references/testing.md`, under \"The doubles\":")
+        .expect("the testing doubles table is quoted");
+    let sql_pos = scaffolded
+        .find("From `references/handlers.md`, under \"A SQL query\":")
+        .expect("the SQL query passage is quoted");
+    assert!(
+        doubles_pos < sql_pos,
+        "the SQL query passage follows `The doubles` so tests keep their doubles under the budget"
+    );
     for absent in [
         "pub trait Publish",
         "pub trait HttpRequest",
@@ -1611,7 +2417,7 @@ async fn omnia_scaffold_roles_scoped() {
         "| a message is consumed",
         "| a message is published",
         "| an upstream REST or GraphQL call",
-        "Messaging — `omnia_sdk::api::messaging`",
+        "Messaging — `Handlers::topic`",
         "under \"A cache-aside read\"",
     ] {
         assert!(
@@ -1630,18 +2436,34 @@ async fn omnia_scaffold_roles_scoped() {
 // names is left out of the design's cut.
 #[tokio::test]
 async fn omnia_scaffold_idioms() {
-    for (subject, statement, carried, absent) in [
+    for (subject, statement, carried, absent, fenced) in [
         (
             "health.ready",
             "Answers whether the store answers a probe within its deadline.",
             "A probe",
             "A cache-aside read",
+            "use axum::Json;",
         ),
         (
             "orders.read",
             "Answers the order from the cache, else from the store, caching it under a TTL.",
             "A cache-aside read",
             "A probe",
+            "use axum::Json;",
+        ),
+        (
+            "orders.amend",
+            "Amends the order under optimistic concurrency, refusing a concurrent write.",
+            "A compare-and-swap update",
+            "A probe",
+            "use axum::Json;",
+        ),
+        (
+            "orders.on-position",
+            "A position for a station the service does not track is skipped.",
+            "A skipped message",
+            "A probe",
+            "use omnia_sdk::api::Context;",
         ),
     ] {
         let project = omnia_tree().await;
@@ -1651,7 +2473,7 @@ async fn omnia_scaffold_idioms() {
         slice.design.push_str(
             "\nType: cache.memory\n```\ninterface Memory {\n  entries: number;\n}\n```\n",
         );
-        let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+        let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
         OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
         model.assert_exhausted();
@@ -1663,7 +2485,7 @@ async fn omnia_scaffold_idioms() {
             "`{subject}` carries the `{carried}` idiom whole: {brief}"
         );
         assert!(
-            brief.contains("```rust\nuse omnia_sdk::api::Context;\nuse omnia_sdk::{StateStore, "),
+            brief.contains(&format!("```rust\n{fenced}\n")),
             "the idiom's fence is quoted: {brief}"
         );
         assert!(
@@ -1723,7 +2545,7 @@ async fn omnia_scaffold_twins() {
             and: Vec::new(),
         }];
     }
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1731,14 +2553,15 @@ async fn omnia_scaffold_twins() {
     let module = text(&project, "crates/orders/src/reading.rs");
     for carried in [
         "pub(crate) const ORDERS_ID: &str = \"/orders/{id}\";\n",
-        "    axum::Router::new().route(ORDERS_ID, get(get_id)).route(ORDERS_ID, delete(delete_id))\n",
+        "    Handlers::new().route(ORDERS_ID, get(get_id)).route(ORDERS_ID, delete(delete_id))\n",
         "// REQ-001 orders.get-id.return-order: GET /orders/{id} answers the order by its id.\n\
          // REQ-002 orders.get-id.refuse-unknown: GET /orders/{id} answers `not_found` for an id \
-         no order holds.\npub(crate) async fn get_id<P: Capabilities>(",
+         no order holds.\npub(crate) async fn get_id<P>(\n    context: Context<P>, Path(id): \
+         Path<String>,\n) -> Result<Json<GetIdOutput>>\nwhere\n    P: Capabilities,\n{\n",
         "    todo!(\"REQ-001 orders.get-id.return-order, REQ-002 orders.get-id.refuse-unknown: \
          the handler\")\n",
         "// REQ-003 orders.delete-id: DELETE /orders/{id} removes the order.\npub(crate) async \
-         fn delete_id<P: Capabilities>(",
+         fn delete_id<P>(\n",
         "    todo!(\"REQ-003 orders.delete-id: the handler\")\n",
     ] {
         assert!(module.contains(carried), "the part carries `{carried}`: {module}");
@@ -1763,7 +2586,7 @@ async fn omnia_scaffold_twins() {
 async fn omnia_scaffold_start() {
     let project = omnia_tree().await;
     let slice = slice_for("start", &["start.refuse-without-secret", "orders.read"]);
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1786,12 +2609,12 @@ async fn omnia_scaffold_start() {
 }
 
 // A requirement carrying no route and no topic is scaffolded as a `pub fn`
-// with a marker, the part declaring no `routes()`, the entry's routes array
+// with a marker, the part declaring no `handlers()`, the entry's array
 // empty, and no test file where no scenario states one.
 #[tokio::test]
 async fn omnia_scaffold_no_route() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice()).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1799,25 +2622,24 @@ async fn omnia_scaffold_no_route() {
     assert_eq!(text(&project, "crates/orders/src/reading.rs"), OMNIA_FUNCTION_MODULE);
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("        reading::routes(),\n", ""),
-        "the entry's routes array is empty"
+        omnia_function_entry(),
+        "the entry's array is empty"
     );
     assert_parses(&project, &["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]);
     assert!(project.read("crates/orders/tests/reading.rs").is_none(), "no test file is scaffolded");
     let brief = &model.seen()[0].messages[0];
     for carried in [
-        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` in its lists.",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` in its list.",
         "- No scenario states a test, so no test file was scaffolded.",
         "1. The function `get_id_return_order` in `crates/orders/src/reading.rs`, key `REQ-001 \
          orders.get-id.return-order: the behaviour`, since the requirement states no route and \
          no message: replace this block with the function whole, the signature the behaviour \
-         needs over its body.\n\n```rust\npub fn get_id_return_order() -> \
-         omnia_sdk::Result<()> {\n    todo!(\"REQ-001 orders.get-id.return-order: the \
-         behaviour\")\n}\n```\n",
+         needs over its body.\n\n```rust\npub fn get_id_return_order() -> Result<()> {\n    \
+         todo!(\"REQ-001 orders.get-id.return-order: the behaviour\")\n}\n```\n",
     ] {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
-    for absent in ["Routing — `omnia_sdk::api::http`", "The doubles"] {
+    for absent in ["Routing — `Handlers::route`", "The doubles"] {
         assert!(
             !brief.contains(absent),
             "no `{absent}` passage for a slice with no route and no test: {brief}"
@@ -1834,7 +2656,7 @@ async fn omnia_scaffold_conflict() {
     let project = omnia_tree().await;
     let mut slice = slice();
     slice.requirements[0].statement = Vec::new();
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -1875,7 +2697,7 @@ async fn omnia_scaffold_conflict() {
 #[tokio::test]
 async fn omnia_scaffold_enum() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.OrderStatus", "pub enum OrderStatus {\n    Placed,\n    Paid,\n}"),
@@ -1959,7 +2781,7 @@ async fn omnia_scaffold_enum() {
 #[tokio::test]
 async fn omnia_scaffold_types() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.design = "# Design\n\nType: orders.Order\n```\n```\n\nType: orders.Address\n```\n```\n\n\
                     Type: orders.OrderLine\n```\n```\n\nType: orders.Page\n```\n```\n"
@@ -1969,7 +2791,7 @@ async fn omnia_scaffold_types() {
             "orders.Order",
             "export interface Order {\n  customerId: string;\n  lines: OrderLine[];\n  shipTo: \
              Address;\n  courierNote?: string;\n  subtotalCents: number;\n  weightKg: number;\n  \
-             meta: Record<string, unknown>;\n}",
+             weightGrams: number;\n  meta: Record<string, unknown>;\n}",
         ),
         (
             "orders.OrderLine",
@@ -1991,7 +2813,8 @@ async fn omnia_scaffold_types() {
     let part = text(&project, "crates/orders/src/reading.rs");
     assert!(
         part.contains(
-            "\n\nuse std::collections::BTreeMap;\n\nuse serde::{Deserialize, Serialize};\n\n"
+            "\n\nuse std::collections::BTreeMap;\n\nuse omnia_sdk::Result;\nuse serde::{Deserialize, \
+             Serialize};\n\n"
         ),
         "the map's import leads the file in the standard library's group: {part}"
     );
@@ -2004,8 +2827,9 @@ async fn omnia_scaffold_types() {
          The `courierNote` field.\n    #[serde(rename = \"courierNote\")]\n    pub courier_note: \
          Option<String>,\n    /// The `subtotalCents` field.\n    #[serde(rename = \
          \"subtotalCents\")]\n    pub subtotal_cents: i64,\n    /// The `weightKg` field.\n    \
-         #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `meta` field.\n    \
-         pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
+         #[serde(rename = \"weightKg\")]\n    pub weight_kg: f64,\n    /// The `weightGrams` \
+         field.\n    #[serde(rename = \"weightGrams\")]\n    pub weight_grams: i64,\n    /// The \
+         `meta` field.\n    pub meta: BTreeMap<String, serde_json::Value>,\n}\n",
         "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\npub struct OrderLine {\n    \
          /// The `codigoSku` field.\n    #[serde(rename = \"codigoSku\")]\n    #[serde(default)]\n    \
          pub sku: String,\n    /// The `quantity` field.\n    pub \
@@ -2040,6 +2864,48 @@ async fn omnia_scaffold_types() {
     );
 }
 
+// A `number` field is laid as the design spells it before its name decides
+// it: a schema column `INTEGER` makes it an `i64` whatever its last word,
+// `NUMERIC` an `f64` though the word counts, another signature's typed
+// declaration of the field decides it, and a sentence calling the field an
+// integer does too; a name the design spells both ways falls back to its
+// last word.
+#[tokio::test]
+async fn omnia_scaffold_spelled_numbers() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    let mut slice = slice();
+    slice.design = "# Design\n\n## Data\n\nThe `weight` is read in grams, as an integer; the \
+                    `tax` is an integer too.\n\nType: orders.Order\n```\n```\n\nType: \
+                    orders.Row\n```rust\npub struct Row {\n    pub rate: f64,\n    pub \
+                    discount: i64,\n}\n```\n\n## Schema\n\n```sql\nCREATE TABLE orders (\n  id \
+                    BIGSERIAL PRIMARY KEY,\n  weight INTEGER NOT NULL,\n  total NUMERIC(10,2) \
+                    NOT NULL,\n  discount DECIMAL(5,2)\n);\n```\n"
+        .to_owned();
+    slice.types = vec![DesignType {
+        key: "orders.Order".to_owned(),
+        signature: "export interface Order {\n  weight: number;\n  total: number;\n  rate: \
+                    number;\n  discount: number;\n  tax: number;\n  depth: number;\n}"
+            .to_owned(),
+    }];
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        part.contains(
+            "#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]\npub struct Order {\n    \
+             /// The `weight` field.\n    pub weight: i64,\n    /// The `total` field.\n    pub \
+             total: f64,\n    /// The `rate` field.\n    pub rate: f64,\n    /// The `discount` \
+             field.\n    pub discount: f64,\n    /// The `tax` field.\n    pub tax: i64,\n    \
+             /// The `depth` field.\n    pub depth: f64,\n}\n"
+        ),
+        "the schema, the typed signature, and the prose decide each number: {part}"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+}
+
 // A default is read whole past the first `=`: a string default spelling
 // `=` is the `serde(default)` fn's answer, a comparison is no literal and
 // leaves the field optional with no default fn, and a field typed by an
@@ -2048,12 +2914,12 @@ async fn omnia_scaffold_types() {
 #[tokio::test]
 async fn omnia_scaffold_type_defaults() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
-            "orders.Query",
-            "export class Query {\n  separator: string = \"=\";\n  strict: boolean = \
+            "orders.Lookup",
+            "export class Lookup {\n  separator: string = \"=\";\n  strict: boolean = \
              process.env.STRICT === \"1\";\n  onDone: () => void;\n  compare: (a: string, b: \
              string) => number = (a, b) => a.localeCompare(b);\n  total: number = 20;\n}",
         ),
@@ -2076,7 +2942,7 @@ async fn omnia_scaffold_type_defaults() {
     let part = text(&project, "crates/orders/src/reading.rs");
     let derives = "#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]\n";
     for declared in [
-        "pub struct Query {\n    /// The `separator` field.\n    #[serde(default = \
+        "pub struct Lookup {\n    /// The `separator` field.\n    #[serde(default = \
          \"default_separator\")]\n    pub separator: String,\n    /// The `strict` field.\n    pub \
          strict: Option<bool>,\n    /// The `total` field.\n    #[serde(default = \
          \"default_total\")]\n    pub total: i64,\n}\n\nfn default_separator() -> String {\n    \
@@ -2103,7 +2969,7 @@ async fn omnia_scaffold_type_defaults() {
 #[tokio::test]
 async fn omnia_scaffold_python_types() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
@@ -2167,7 +3033,7 @@ async fn omnia_scaffold_python_types() {
 #[tokio::test]
 async fn omnia_scaffold_type_fallbacks() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.ListQuery", "export type ListQuery = z.infer<typeof listQuerySchema>;"),
@@ -2224,6 +3090,156 @@ async fn omnia_scaffold_type_fallbacks() {
     }
 }
 
+// The design types of a slice owning a reference table: the element type
+// and the constant array of its rows.
+fn tabled_slice() -> Slice {
+    let mut slice = slice();
+    slice.types = [
+        ("orders.DeliveryZone", OMNIA_ZONE_SIGNATURE),
+        ("orders.ZONES", OMNIA_ZONES_TABLE),
+        (
+            "orders.RATES",
+            "export const RATES: readonly Rate[] = [\n  { code: \"std\", cents: 650 },\n];",
+        ),
+        (
+            "orders.NESTED",
+            "export const NESTED: readonly DeliveryZone[] = [\n  { from: \"0\", to: \"1\", zone: { \
+             name: \"x\" } },\n];",
+        ),
+        ("orders.LIMITS", "export const LIMITS: Readonly<Record<string, number>> = { a: 1 };"),
+    ]
+    .into_iter()
+    .map(|(key, signature)| DesignType {
+        key: key.to_owned(),
+        signature: signature.to_owned(),
+    })
+    .collect();
+    slice
+}
+
+// A constant array of object literals typed over a type the slice owns is
+// a reference table: its rows are laid as a JSON data file beside the
+// crate's sources, one object per line under the wire's keys with each
+// string's escapes read, and the module gains a `pub fn` reading the file
+// into the element type under the table's first line; a table whose
+// element the slice does not own, one whose row nests an object, and a
+// read-only map stay the marker; and the brief names the file and the
+// reader as finished.
+#[tokio::test]
+async fn omnia_table_laid() {
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let part = text(&project, "crates/orders/src/reading.rs");
+    for carried in [
+        "use omnia_sdk::{Error, Result};\n",
+        "pub struct DeliveryZone {\n    /// The `from` field.\n    pub from: String,\n    /// The \
+         `to` field.\n    pub to: String,\n    /// The `zone` field.\n    pub zone: String,\n    \
+         /// The `courier` field.\n    pub courier: String,\n    /// The `minDays` field.\n    \
+         #[serde(rename = \"minDays\")]\n    pub min_days: i64,\n    /// The `rural` field.\n    \
+         pub rural: bool,\n}\n",
+        OMNIA_ZONES_READER,
+        "pub struct Rates {}\n",
+        "pub struct Nested {}\n",
+        "pub struct Limits {}\n",
+    ] {
+        assert!(part.contains(carried), "the part carries `{carried}`: {part}");
+    }
+    assert!(!part.contains("northland"), "no row stands in the part: {part}");
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_DATA);
+    assert!(project.read("crates/orders/data/rates.json").is_none(), "no file for a marker");
+    assert!(project.read("crates/orders/src/zones_data.rs").is_none(), "no module holds the rows");
+    let entry = text(&project, "crates/orders/src/lib.rs");
+    assert!(
+        entry.contains("pub mod reading;\n") && !entry.contains("zones"),
+        "the entry declares the part alone: {entry}"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs"]);
+    let rows: Vec<serde_json::Value> =
+        serde_json::from_str(OMNIA_ZONES_DATA).expect("the file parses as JSON");
+    assert_eq!(rows.len(), 3, "every row is in the file: {rows:?}");
+
+    let brief = &model.seen()[0].messages[0];
+    for cited in [
+        "- `crates/orders/data/zones.json`: scaffolded, every row of the design type \
+         `orders.ZONES` as the wire spells it, one JSON array compiled in and read into `Vec<_>` \
+         by `zones()` in `crates/orders/src/reading.rs`, which is finished. Read the rows \
+         through it where the behaviour needs them, and never type a row again in code.\n",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod reading;` in its list.",
+        "The design types `DeliveryZone` (`orders.DeliveryZone`) in `crates/orders/src/reading.rs` \
+         are scaffolded as their signatures spell",
+        "1. `pub struct Rates {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.RATES`, whose signature the scaffold could not lay",
+        "2. `pub struct Nested {}` in `crates/orders/src/reading.rs`: the design type \
+         `orders.NESTED`, whose signature the scaffold could not lay",
+    ] {
+        assert!(brief.contains(cited), "the brief cites `{cited}`: {brief}");
+    }
+    assert!(!brief.contains("`zones` (`orders.ZONES`)"), "the table is no struct: {brief}");
+    assert!(
+        brief.contains("From `references/handlers.md`, under \"A reference table\":\n\n")
+            && brief.contains("The file is the rows' one home"),
+        "the passage on a reference table is selected: {brief}"
+    );
+}
+
+// A data file already standing where a table's goes is kept as it stands
+// and named held, and a whole write of the file that drops a row is
+// refused as a write of any scaffolded file is, the file's lines its keeps.
+#[tokio::test]
+async fn omnia_table_held() {
+    let project = omnia_tree().await;
+    project.write("crates/orders/data/zones.json", "[]\n");
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), "[]\n", "the held file stands");
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains("- `crates/orders/data/zones.json`: held, every row of the design type"),
+        "the brief names the file held: {brief}"
+    );
+
+    // a whole write dropping a row is refused, and one keeping every row passes
+    let project = omnia_tree().await;
+    let cut = "[\n  {\"from\": \"0110\", \"to\": \"0139\"}\n]\n";
+    let report = r#"{"covered": [], "written": ["crates/orders/data/zones.json"]}"#;
+    let model = ScriptedModel::answering([report]).calling(
+        0,
+        [
+            write_files(&[("crates/orders/data/zones.json", cut)]),
+            write_files(&[("crates/orders/data/zones.json", OMNIA_ZONES_DATA)]),
+        ],
+    );
+
+    OMNIA.build_slice(&project, &model, &tabled_slice()).await.expect("the kept rows pass");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, "crates/orders/data/zones.json"), OMNIA_ZONES_DATA);
+    let writes: Vec<_> = model
+        .exchanges()
+        .into_iter()
+        .filter(|exchange| exchange.tool == "write_files")
+        .map(|exchange| exchange.outcome)
+        .collect();
+    let [Err(refused), Ok(_)] = writes.as_slice() else {
+        panic!("the cut is refused and the whole passes: {writes:?}");
+    };
+    assert!(
+        refused.contains(
+            "`crates/orders/data/zones.json` was scaffolded before this turn and this content \
+             drops what the skeleton holds: `{\"from\": \"0110\", \"to\": \"0139\", \"zone\": \
+             \"northland-kerikeri\", \"courier\": \"nzpost\", \"minDays\": 2, \"rural\": false},`"
+        ),
+        "the refusal names the rows dropped: {refused}"
+    );
+}
+
 // A Rust declaration is laid as the TypeScript one is: a doc line kept, a
 // `serde(rename)` the wire's name, a type parameter carried, `Option`,
 // `Vec`, and a `BTreeMap` their own, an integer `i64`, a float dropping
@@ -2232,7 +3248,7 @@ async fn omnia_scaffold_type_fallbacks() {
 #[tokio::test]
 async fn omnia_scaffold_rust_type() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         (
@@ -2295,7 +3311,7 @@ async fn omnia_scaffold_rust_type() {
 #[tokio::test]
 async fn omnia_scaffold_type_crlf() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = [
         ("orders.Order", "export interface Order {\r\n  id: string;\r\n  note?: string;\r\n}"),
@@ -2337,7 +3353,7 @@ async fn omnia_scaffold_type_crlf() {
 #[tokio::test]
 async fn omnia_scaffold_python_commented_body() {
     let project = omnia_tree().await;
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     let mut slice = slice();
     slice.types = vec![DesignType {
         key: "orders.Order".to_owned(),
@@ -2360,15 +3376,14 @@ async fn omnia_scaffold_python_commented_body() {
 
 // A held entry with no `pub mod` line, as a repair that removed the last
 // part leaves one, takes the part's line before its first `use`, a blank
-// line between, and its routes entry at the end of the array.
+// line between, and its handlers entry in the array.
 #[tokio::test]
 async fn omnia_scaffold_entry_without_mods() {
     let project = omnia_tree().await;
     project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
-    let entry =
-        OMNIA_ENTRY.replace("pub mod reading;\n\n", "").replace("        reading::routes(),\n", "");
+    let entry = omnia_function_entry().replace("pub mod reading;\n\n", "");
     project.write("crates/orders/src/lib.rs", &entry);
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &omnia_slice()).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2376,12 +3391,12 @@ async fn omnia_scaffold_entry_without_mods() {
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
         OMNIA_ENTRY,
-        "the part's `pub mod` line is placed before the first `use` and its routes entry at the \
-         end of the array"
+        "the part's `pub mod` line is placed before the first `use` and its handlers entry in \
+         the array"
     );
     let brief = &model.seen()[0].messages[0];
-    let cited = "- `crates/orders/src/lib.rs`: held, `pub mod reading;` and `reading::routes(),` added to \
-                 its lists.";
+    let cited = "- `crates/orders/src/lib.rs`: held, `pub mod reading;` and `reading::handlers()` \
+                 added to its lists.";
     assert!(brief.contains(cited), "the brief carries `{cited}`: {brief}");
 }
 
@@ -2396,7 +3411,7 @@ async fn omnia_scaffold_link_on_the_way() {
     symlink("../../elsewhere", project.path().join("crates/orders/src"))
         .expect("planting the link");
     let before = files_under(project.path());
-    let model = Scripted::default();
+    let model = ScriptedModel::default();
 
     let refusal = OMNIA
         .build_slice(&project, &model, &omnia_slice())
@@ -2428,7 +3443,8 @@ async fn omnia_scaffold_link_on_the_way() {
 async fn omnia_route_typed() {
     let project = omnia_tree().await;
     let mut slice = slice_for("orders-items", &["orders.items", "orders.lines", "orders.sum"]);
-    slice.requirements[0].statement = vec!["Adding an item appends it to the order.".to_owned()];
+    slice.requirements[0].statement =
+        vec!["Adding an item from the body appends it to the order.".to_owned()];
     slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/items"));
     slice.requirements[0].scenarios = vec![Scenario {
         name: "An item is added".to_owned(),
@@ -2441,7 +3457,7 @@ async fn omnia_route_typed() {
         vec!["PATCH /orders/:orderId/lines/:lineId changes a line's quantity.".to_owned()];
     slice.requirements[2].statement = vec!["Sums the order.".to_owned()];
     slice.requirements[2].trigger = Some(routed("HEAD", "/orders/{id}/sum"));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2449,19 +3465,154 @@ async fn omnia_route_typed() {
     let module = text(&project, "crates/orders/src/items.rs");
     for carried in [
         "pub(crate) const ORDERS_ID_ITEMS: &str = \"/orders/{id}/items\";\n",
-        "    axum::Router::new().route(ORDERS_ID_ITEMS, items_route())\n",
+        "    Handlers::new().route(ORDERS_ID_ITEMS, post(items))\n",
         "/// The input of `POST /orders/{id}/items`.\n#[derive(Debug, Deserialize)]\npub struct \
-         ItemsInput {\n    /// The `id` path parameter.\n    pub id: String,\n}\n",
-        "pub fn lines() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-002 orders.lines: the \
-         behaviour\")\n}\n",
-        "pub fn sum() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-003 orders.sum: the \
-         behaviour\")\n}\n",
+         ItemsInput {}\n",
+        "pub(crate) async fn items<P>(\n    context: Context<P>, Path(id): Path<String>, \
+         Json(input): Json<ItemsInput>,\n) -> Result<Json<ItemsOutput>>\nwhere\n    P: \
+         Capabilities,\n{\n    let _ = (&context, &id, &input);\n",
+        "pub fn lines() -> Result<()> {\n    todo!(\"REQ-002 orders.lines: the behaviour\")\n}\n",
+        "pub fn sum() -> Result<()> {\n    todo!(\"REQ-003 orders.sum: the behaviour\")\n}\n",
     ] {
         assert!(module.contains(carried), "the part carries `{carried}`: {module}");
     }
     for absent in ["ORDERS_ORDER_ID_LINES_LINE_ID", "ORDERS_ID_SUM", "patch("] {
         assert!(!module.contains(absent), "`{absent}` is read from no text: {module}");
     }
+}
+
+// A `POST` whose requirements and scenarios state no body is laid with no
+// input struct and no `Json` extractor, its test sending an empty body with
+// no content type, and the brief saying where a body goes if a scenario's
+// wire carries one; a `POST` beside it whose scenario states a payload keeps
+// its input and its test's JSON body.
+#[tokio::test]
+async fn omnia_scaffold_bodiless_post() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-settling", &["orders.pay", "orders.amend"]);
+    slice.requirements[0].statement = vec!["Settles the order by its id.".to_owned()];
+    slice.requirements[0].trigger = Some(routed("POST", "/orders/{id}/pay"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "An order is paid".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "POST /orders/42/pay is called".to_owned(),
+        then: "the order is paid".to_owned(),
+        and: Vec::new(),
+    }];
+    slice.requirements[1].statement = vec!["Amends the order's lines.".to_owned()];
+    slice.requirements[1].trigger = Some(routed("POST", "/orders/{id}/amend"));
+    slice.requirements[1].scenarios = vec![Scenario {
+        name: "An order is amended".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "POST /orders/42/amend is called with the lines as its payload".to_owned(),
+        then: "the lines are replaced".to_owned(),
+        and: Vec::new(),
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/settling.rs");
+    for carried in [
+        "use serde::{Deserialize, Serialize};\n",
+        "pub(crate) async fn pay<P>(context: Context<P>, Path(id): Path<String>) -> \
+         Result<Json<PayOutput>>\nwhere\n    P: Capabilities,\n{\n    let _ = (&context, \
+         &id);\n",
+        "/// The input of `POST /orders/{id}/amend`.\n#[derive(Debug, Deserialize)]\npub struct \
+         AmendInput {}\n",
+        "pub(crate) async fn amend<P>(\n    context: Context<P>, Path(id): Path<String>, \
+         Json(input): Json<AmendInput>,\n) -> Result<Json<AmendOutput>>\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    assert!(!module.contains("PayInput"), "no input is laid for the bodiless route: {module}");
+    let tests = text(&project, "crates/orders/tests/settling.rs");
+    for carried in [
+        "use axum::http::header::CONTENT_TYPE;\n",
+        "    let request = Request::post(format!(\"/orders/{id}/pay\")).body(Body::empty())\
+         .expect(\"request\");\n",
+        "    let request = Request::post(format!(\"/orders/{id}/amend\"))\n        \
+         .header(CONTENT_TYPE, \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
+         .expect(\"request\");\n",
+    ] {
+        assert!(tests.contains(carried), "the tests carry `{carried}`: {tests}");
+    }
+
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "key `REQ-001 orders.pay: the handler`: fill `PayOutput` with the wire's fields, then \
+         replace this block with the body.",
+        "No input struct was laid, since no requirement or scenario of `POST /orders/{id}/pay` \
+         states a body, and its tests send none: a bodiless `POST` takes no `Json` extractor, \
+         which would refuse the request with `415`; where a scenario's wire does carry a body, \
+         add a `#[derive(Debug, Deserialize)]` input struct and the `Json(input): Json<..>` \
+         extractor, and send it from the test with `CONTENT_TYPE` set.",
+        "key `REQ-002 orders.amend: the handler`: fill `AmendInput` and `AmendOutput` with the \
+         wire's fields",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert_eq!(
+        brief.matches("No input struct was laid").count(),
+        1,
+        "the hint is the bodiless handler's alone: {brief}"
+    );
+}
+
+// A route of several parameters extracts them as one `Path` tuple of
+// `String`s in the route's order, the handler borrowing each, the test
+// binding each to its placeholder and formatting the request path from
+// them, and the brief saying how a typed one is extracted.
+#[tokio::test]
+async fn omnia_path_params() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-lines", &["orders.lines.read"]);
+    slice.requirements[0].trigger = Some(routed("GET", "/orders/{id}/lines/{line_id}"));
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "A line is read".to_owned(),
+        given: vec!["an order 42 with a line 7".to_owned()],
+        when: "GET /orders/42/lines/7 is called".to_owned(),
+        then: "the line is answered".to_owned(),
+        and: Vec::new(),
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/lines.rs");
+    for carried in [
+        "pub(crate) const ORDERS_ID_LINES_LINE_ID: &str = \"/orders/{id}/lines/{line_id}\";\n",
+        "    Handlers::new().route(ORDERS_ID_LINES_LINE_ID, get(lines_read))\n",
+        "pub(crate) async fn lines_read<P>(\n    context: Context<P>, Path((id, line_id)): \
+         Path<(String, String)>,\n) -> Result<Json<LinesReadOutput>>\nwhere\n    P: \
+         Capabilities,\n{\n    let _ = (&context, &id, &line_id);\n    todo!(\"REQ-001 \
+         orders.lines.read: the handler\")\n}\n",
+    ] {
+        assert!(module.contains(carried), "the part carries `{carried}`: {module}");
+    }
+    let tests = text(&project, "crates/orders/tests/lines.rs");
+    assert!(
+        tests.contains(
+            "async fn a_line_is_read() {\n    let id = \"<id>\";\n    let line_id = \
+             \"<line_id>\";\n    let request =\n        \
+             Request::get(format!(\"/orders/{id}/lines/{line_id}\")).body(Body::empty()).expect(\"request\");\n    \
+             let (status, body) = call(&provider(), request).await;\n"
+        ),
+        "the test binds each parameter and formats the path from them: {tests}"
+    );
+    assert_parses(&project, &["crates/orders/src/lines.rs", "crates/orders/tests/lines.rs"]);
+
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            " Each path parameter is extracted as a `String`; where the design keys it as an \
+             integer, extract it typed, `Path<i64>`, and let axum answer `400` for a malformed \
+             one."
+        ),
+        "the brief says how a typed parameter is extracted: {brief}"
+    );
 }
 
 // A `start` requirement carrying a route is laid under the crate of the
@@ -2482,7 +3633,7 @@ async fn omnia_scaffold_start_routed() {
     slice.requirements[0].trigger = Some(routed("GET", "/health/live"));
     slice.requirements[1].statement = vec!["Answers the build's common metadata.".to_owned()];
     slice.requirements[1].trigger = Some(routed("GET", "/common/info"));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
@@ -2513,9 +3664,10 @@ async fn omnia_scaffold_start_routed() {
     let module = text(&project, "crates/health/src/start.rs");
     for carried in [
         "pub(crate) const HEALTH_LIVE: &str = \"/health/live\";\n",
-        "    axum::Router::new().route(HEALTH_LIVE, get(health_live))\n",
+        "    Handlers::new().route(HEALTH_LIVE, get(health_live))\n",
         "// REQ-001 start.health-live: Answers that the process is live.\npub(crate) async fn \
-         health_live<P: Capabilities>(",
+         health_live<P>(context: Context<P>) -> Result<Json<HealthLiveOutput>>\nwhere\n    P: \
+         Capabilities,\n{\n",
         "    todo!(\"REQ-001 start.health-live: the handler\")\n",
     ] {
         assert!(module.contains(carried), "the part carries `{carried}`: {module}");
@@ -2529,12 +3681,16 @@ async fn omnia_scaffold_start_routed() {
             .contains("pub(crate) const COMMON_INFO: &str = \"/common/info\";\n"),
         "the `common-stem` part carries the route"
     );
-    let routes = text(&project, "src/routes.rs");
-    for merged in [
-        "    let router = router.merge(health::router());\n",
-        "    let router = router.merge(common_stem::router());\n",
+    let root = text(&project, "src/lib.rs");
+    for merged in ["health::handlers()", "common_stem::handlers()"] {
+        assert!(root.contains(merged), "the root's array lists `{merged}`: {root}");
+    }
+    let manifest = text(&project, "Cargo.toml");
+    for listed in [
+        "health = { path = \"crates/health\" }\n",
+        "common-stem = { path = \"crates/common-stem\" }\n",
     ] {
-        assert!(routes.contains(merged), "the route list merges `{merged}`: {routes}");
+        assert!(manifest.contains(listed), "the root manifest lists `{listed}`: {manifest}");
     }
     let brief = &model.seen()[0].messages[0];
     for carried in [
@@ -2553,13 +3709,14 @@ async fn omnia_scaffold_start_routed() {
     }
 }
 
-// A requirement carrying a topic is a consumer: the part declares
-// `topics(..)` registering the handler under the table's constant, the
-// handler over the delivery's input with its marker, the constant added at
-// the end of the topic table with its doc, the entry's topics array
-// holding the part, and the brief naming each; two requirements of one
-// topic share the consumer, and a message name outside the topic charset
-// scaffolds a function instead.
+// A requirement carrying a topic is a consumer: the part's `handlers()`
+// registers the handler under the table's constant through `.topic(..)`,
+// the handler over the delivery's input with its marker, the constant added
+// at the end of the topic table with its doc, the stem's manifest naming
+// `common` among its dependencies, the entry's array holding the part, and
+// the brief naming each; two requirements of one topic share the consumer,
+// and a message name outside the topic charset scaffolds a function
+// instead.
 #[tokio::test]
 async fn omnia_scaffold_topic() {
     let project = omnia_tree().await;
@@ -2573,30 +3730,28 @@ async fn omnia_scaffold_topic() {
     }
     slice.requirements[2].trigger =
         Some(Trigger::Message("orders\";#[test]fn/**/injected(){}//".to_owned()));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
     model.assert_exhausted();
 
     let module = text(&project, "crates/orders/src/cancelling.rs");
     for carried in [
-        "//! The `cancelling` part of the `orders` stem.\n\nuse common::{Capabilities, config, \
-         topic};\nuse omnia_sdk::api::{Context, messaging};\nuse serde::Deserialize;\n\n\
-         pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
-         &str,\n) -> messaging::Router<P> {\n    router.route(\n        config::topic_for(env, \
-         topic::ORDERS_CANCEL_REQUESTED),\n        messaging::consume(on_cancel),\n    )\n}\n",
+        "//! The `cancelling` part of the `orders` stem.\n\nuse common::topic;\nuse \
+         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, Result};\nuse \
+         serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+         Handlers::new().topic(topic::ORDERS_CANCEL_REQUESTED, on_cancel)\n}\n",
         "/// A delivery of `orders.cancel-requested`.\n#[derive(Debug, Deserialize)]\npub struct \
          OnCancelInput {}\n\n// REQ-001 orders.cancel: The behaviour `orders.cancel` states.\n// \
          REQ-002 orders.cancel.refuse-paid: The behaviour `orders.cancel.refuse-paid` \
-         states.\npub(crate) async fn on_cancel<P: Capabilities>(\n    input: OnCancelInput, \
-         context: Context<P>,\n) -> omnia_sdk::Result<()> {\n    let _ = (&input, &context);\n    \
+         states.\npub(crate) async fn on_cancel<P>(context: Context<P>, input: OnCancelInput) -> \
+         Result<()>\nwhere\n    P: Capabilities,\n{\n    let _ = (&context, &input);\n    \
          todo!(\"REQ-001 orders.cancel, REQ-002 orders.cancel.refuse-paid: the consumer\")\n}\n",
-        "pub fn count() -> omnia_sdk::Result<()> {\n    todo!(\"REQ-003 orders.count: the \
-         behaviour\")\n}\n",
+        "pub fn count() -> Result<()> {\n    todo!(\"REQ-003 orders.count: the behaviour\")\n}\n",
     ] {
         assert!(module.contains(carried), "the part carries `{carried}`: {module}");
     }
-    assert!(!module.contains("routes"), "no route is served: {module}");
+    assert!(!module.contains(".route("), "no route is served: {module}");
     assert_parses(
         &project,
         &[
@@ -2607,15 +3762,16 @@ async fn omnia_scaffold_topic() {
     );
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY
-            .replace("reading", "cancelling")
-            .replace("        cancelling::routes(),\n", "")
-            .replace(
-                "        // one entry per part with topics, each added at the end\n",
-                "        // one entry per part with topics, each added at the end\n        \
-             cancelling::topics,\n"
-            ),
-        "the entry lists the part under its topics alone"
+        OMNIA_ENTRY.replace("reading", "cancelling"),
+        "the entry lists the part"
+    );
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        OMNIA_MANIFEST.replace(
+            "axum.workspace = true\n",
+            &format!("axum.workspace = true\n{OMNIA_TOPIC_DEPENDENCY}")
+        ),
+        "the manifest names the topic table's crate among the fixed lines"
     );
     assert_eq!(
         text(&project, "crates/common/src/topic.rs"),
@@ -2627,18 +3783,25 @@ async fn omnia_scaffold_topic() {
     );
     let brief = &model.seen()[0].messages[0];
     for carried in [
-        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod cancelling;` and `cancelling::topics,` \
-         in its lists.",
+        "- `crates/orders/Cargo.toml`: scaffolded, `common.workspace = true` among its \
+         `[dependencies]` for the topic table's constants. One `<crate>.workspace = true` line \
+         at the end of `[dependencies]` for each crate your code uses beyond the five it holds;",
+        "- `crates/orders/src/lib.rs`: scaffolded, `pub mod cancelling;` and \
+         `cancelling::handlers()` in its lists.",
         "- `crates/common/src/topic.rs`: the constant `ORDERS_CANCEL_REQUESTED` for the topic \
          `orders.cancel-requested` added at the end of the table: `pub const \
          ORDERS_CANCEL_REQUESTED: &str = \"orders.cancel-requested\";`.",
         "1. The consumer `on_cancel` of the topic `orders.cancel-requested` in \
          `crates/orders/src/cancelling.rs`, key `REQ-001 orders.cancel, REQ-002 \
-         orders.cancel.refuse-paid: the consumer`, registered in the part's `topics(..)` under \
+         orders.cancel.refuse-paid: the consumer`, registered in the part's `handlers()` under \
          `topic::ORDERS_CANCEL_REQUESTED`: fill `OnCancelInput` with the delivery's fields, then \
-         replace this block with the body.\n\n```rust\n    let _ = (&input, &context);\n    \
-         todo!(\"REQ-001 orders.cancel, REQ-002 orders.cancel.refuse-paid: the consumer\")\n```\n",
-        "From `references/omnia-api.md`, under \"Messaging — `omnia_sdk::api::messaging`\":",
+         replace this block with the body, narrowing `P: Capabilities` to the traits the body \
+         reaches. Where the payload is not JSON, register it through \
+         `.topic_with(topic::ORDERS_CANCEL_REQUESTED, on_cancel, decode)` instead, over a `fn \
+         decode(delivery: &Delivery) -> std::result::Result<OnCancelInput, DecodeError>` of the \
+         part.\n\n```rust\n    let _ = (&context, &input);\n    todo!(\"REQ-001 orders.cancel, \
+         REQ-002 orders.cancel.refuse-paid: the consumer\")\n```\n",
+        "From `references/omnia-api.md`, under \"Messaging — `Handlers::topic`\":",
         "From `references/translation.md`, under \"The table\":\n\n| The specification or design \
          says | The guest construct | The slice writes | `covered` |\n| --- | --- | --- | --- |\n| \
          a message is consumed",
@@ -2646,25 +3809,26 @@ async fn omnia_scaffold_topic() {
         assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
     }
     assert!(
-        !brief.contains("Routing — `omnia_sdk::api::http`"),
+        !brief.contains("Routing — `Handlers::route`"),
         "no routing passage for a slice serving no route: {brief}"
     );
 }
 
 // A topic the table already declares, under whatever name an earlier slice
 // gave it, is consumed under that constant and declared again nowhere; a
-// held entry takes the part's `topics,` line at the end of its array.
+// held entry takes the part's `handlers()` entry at the end of its array,
+// and a held manifest the `common` line at the end of its dependencies.
 #[tokio::test]
 async fn omnia_scaffold_topic_declared() {
     let project = omnia_tree().await;
-    let first = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let first = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
     OMNIA.build_slice(&project, &first, &omnia_slice()).await.expect("the first slice's turn");
     first.assert_exhausted();
     let table = format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs"));
     project.write("crates/common/src/topic.rs", table.as_bytes());
     let mut slice = slice_for("orders-placing", &["orders.on-placed"]);
     slice.requirements[0].trigger = Some(Trigger::Message("order-placed".to_owned()));
-    let model = Scripted::answering([r#"{"covered": [], "written": []}"#]);
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
 
     OMNIA.build_slice(&project, &model, &slice).await.expect("the second slice's turn");
     model.assert_exhausted();
@@ -2672,20 +3836,20 @@ async fn omnia_scaffold_topic_declared() {
     assert_eq!(text(&project, "crates/common/src/topic.rs"), table, "the table stands");
     let module = text(&project, "crates/orders/src/placing.rs");
     assert!(
-        module.contains(
-            "    router.route(config::topic_for(env, topic::ORDER_PLACED), \
-             messaging::consume(on_on_placed))\n"
-        ),
+        module.contains("    Handlers::new().topic(topic::ORDER_PLACED, on_on_placed)\n"),
         "the consumer is registered under the held constant: {module}"
     );
     assert_eq!(
         text(&project, "crates/orders/src/lib.rs"),
-        OMNIA_ENTRY.replace("pub mod reading;\n", "pub mod placing;\npub mod reading;\n").replace(
-            "        // one entry per part with topics, each added at the end\n",
-            "        // one entry per part with topics, each added at the end\n        \
-             placing::topics,\n"
-        ),
-        "the held entry takes the part's line at the end of its topics array"
+        OMNIA_ENTRY
+            .replace("pub mod reading;\n", "pub mod placing;\npub mod reading;\n")
+            .replace("reading::handlers()", "reading::handlers(), placing::handlers()"),
+        "the held entry takes the part's entry at the end of its array"
+    );
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        format!("{OMNIA_MANIFEST}{OMNIA_TOPIC_DEPENDENCY}"),
+        "the held manifest takes the topic table's crate at the end of its dependencies"
     );
     let brief = &model.seen()[0].messages[0];
     assert!(
@@ -2697,6 +3861,664 @@ async fn omnia_scaffold_topic_declared() {
     );
 }
 
+// A consumer is scaffolded over a JSON payload, registered through
+// `.topic(..)` with no decoder, and the brief says how a payload that is
+// not JSON is taken instead: the part's own `decode` under `.topic_with(..)`
+// named for the consumer, with the messaging passage carrying the
+// registration's signature and the decoder's error. Where the slice's own
+// scenario says the delivery is XML, the brief says so, with the reader the
+// seed pins, in place of the conditional.
+#[tokio::test]
+async fn omnia_non_json_consumer_hint() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("shipments-dispatching", &["shipments.dispatch"]);
+    slice.requirements[0].trigger = Some(Trigger::Message("shipments.dispatched".to_owned()));
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/shipments/src/dispatching.rs");
+    assert!(
+        module.contains("    Handlers::new().topic(topic::SHIPMENTS_DISPATCHED, on_dispatch)\n"),
+        "the consumer is registered over JSON: {module}"
+    );
+    for absent in ["topic_with", "Delivery", "DecodeError", "fn decode"] {
+        assert!(!module.contains(absent), "`{absent}` is the turn's to write: {module}");
+    }
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "Where the payload is not JSON, register it through \
+         `.topic_with(topic::SHIPMENTS_DISPATCHED, on_dispatch, decode)` instead, over a `fn \
+         decode(delivery: &Delivery) -> std::result::Result<OnDispatchInput, DecodeError>` of \
+         the part.",
+        "    pub fn topic_with<F, I, D>(self, topic: impl Into<String>, handler: F, decode: D) \
+         -> Self\n",
+        "pub struct DecodeError { .. }\n",
+        "- A payload that is not JSON is decoded by the part's own `fn decode(delivery: \
+         &Delivery) -> std::result::Result<Input, DecodeError>` under `.topic_with(topic::NAME, \
+         handler, decode)`",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert!(
+        !brief.contains("The design says the inbound stream's payload is"),
+        "a slice naming no format is told nothing of one: {brief}"
+    );
+
+    // the scenario names the delivery's format
+    let project = omnia_tree().await;
+    slice.requirements[0].scenarios = vec![Scenario {
+        name: "A dispatch is recorded".to_owned(),
+        given: vec!["a shipment 42".to_owned()],
+        when: "an XML dispatch notice for it is delivered".to_owned(),
+        then: "the dispatch is recorded".to_owned(),
+        and: Vec::new(),
+    }];
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+    model.assert_exhausted();
+
+    let module = text(&project, "crates/shipments/src/dispatching.rs");
+    assert!(
+        module.contains("    Handlers::new().topic(topic::SHIPMENTS_DISPATCHED, on_dispatch)\n"),
+        "the decoder is the turn's to write: {module}"
+    );
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        "The design says the payload is XML, so register it through \
+         `.topic_with(topic::SHIPMENTS_DISPATCHED, on_dispatch, decode)` instead, over a `fn \
+         decode(delivery: &Delivery) -> std::result::Result<OnDispatchInput, DecodeError>` of \
+         the part — `quick_xml::de::from_reader(delivery.payload.as_slice())`, with \
+         `quick-xml.workspace = true` in the stem's `[dependencies]`.",
+        "The design says the inbound stream's payload is XML: a consumer this slice registers \
+         goes through `.topic_with(topic::<NAME>, <handler>, decode)`",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert!(
+        !brief.contains("Where the payload is not JSON"),
+        "the format known, the conditional is gone: {brief}"
+    );
+}
+
+// The wire format is read from the design's `## APIs and integrations` and
+// `## Technical logic` paragraphs that speak to the slice's part and from
+// its own words: a sentence naming a format beside an inbound word decides,
+// a format named of an export or in another part's paragraph does not, and
+// a design naming none leaves the slice JSON's with no word of a format. A
+// paragraph citing an id the part's plan entry lists speaks to every slice
+// of the part, the one registering the consumer among them.
+#[tokio::test]
+async fn omnia_wire_read() {
+    let told = "The design says the inbound stream's payload is";
+    let own = "REQ-001";
+    let shipments = "## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                     `shipments`, XML notices (REQ-007 through REQ-009).\n";
+    let cases: [(&str, &str, Option<&str>); 11] = [
+        (
+            "## APIs and integrations\n\n**Message broker (inbound consumer)** — Endpoints \
+             default to `kafka.example.com:9092` from `KAFKA_HOSTS`. Wire payload is XML; \
+             decoding uses `x2js` before `ta-json` deserialisation under the configured root \
+             element. Deliveries drive order processing (REQ-001).\n",
+            own,
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
+             Technical logic\n\nXML deserialization uses `xml2js` under the root element from \
+             `Config.rootElement`, then `TypedJSON.deserialize` into `Message`.\n",
+            own,
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\n**Message broker (inbound consumer)** — topic \
+             `order-placed` from `KAFKA_SOURCE_TOPIC`. A nightly CSV export is written to the \
+             blob store. Deliveries drive order processing (REQ-001).\n",
+            own,
+            None,
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
+             payload XML read through `x2js`; deliveries set off REQ-001.\n",
+            own,
+            Some("XML"),
+        ),
+        (
+            "## APIs and integrations\n\nThe orders arrive over a stream (REQ-001).\n\n## \
+             Technical logic\n\n**Deserialisation** — the incoming message parses as CSV, one \
+             record per line.\n",
+            own,
+            Some("CSV"),
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed` \
+             carries protobuf frames (REQ-001).\n\n**Outbound stream (producer)** — topic \
+             `order-events`, JSON (REQ-001).\n",
+            own,
+            Some("protobuf"),
+        ),
+        (
+            "## APIs and integrations\n\n**Inbound stream (consumer)** — topic `order-placed`, \
+             JSON (REQ-001). **Export** — a nightly XML export is written to the blob store \
+             (REQ-001).\n",
+            own,
+            None,
+        ),
+        (shipments, own, None),
+        (shipments, "REQ-001, REQ-007, REQ-008, REQ-009", Some("XML")),
+        (shipments, "REQ-001, REQ-010", None),
+        ("## Overview\n\nThe program consumes XML train updates.\n", own, None),
+    ];
+    for (design, listed, wire) in cases {
+        let project = omnia_tree().await;
+        let mut slice = slice();
+        slice.design = format!("# Design\n\n{design}");
+        slice.plan = format!(
+            "## Part: orders-reading\n\nID: PART-001\nRequirements: [{listed}]\nTypes: [Order]\n"
+        );
+        // the first of two slices, so a turn filling nothing is held to no
+        // registration and the brief alone is read
+        slice.count = 2;
+        let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+        OMNIA.build_slice(&project, &model, &slice).await.expect("a turn filling nothing");
+        model.assert_exhausted();
+
+        let brief = &model.seen()[0].messages[0];
+        match wire {
+            Some(wire) => assert!(
+                brief.contains(&format!("{told} {wire}: ")),
+                "the brief names {wire} for the design {design:?}: {brief}"
+            ),
+            None => assert!(
+                !brief.contains(told),
+                "no wire is read from the design {design:?}: {brief}"
+            ),
+        }
+    }
+}
+
+// The design says the slice's inbound stream carries XML, so a consumer the
+// turn registers through `.topic(..)`, whose decoder is the SDK's JSON one,
+// comes back on the report at its line with `topic_with` over the part's
+// `decode` and the `quick-xml` line named, and the repair is accepted; the
+// same registration under a design naming no format is no finding.
+#[tokio::test]
+async fn omnia_default_decoder() {
+    let design = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                  `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`; \
+                  deliveries set off REQ-001.\n";
+    let function = "/// The behaviour `orders.get-id.return-order` states.\n///\n/// # \
+                    Errors\n///\n/// As the requirement states.\npub fn get_id_return_order() -> \
+                    Result<()> {\n    todo!(\"REQ-001 orders.get-id.return-order: the \
+                    behaviour\")\n}\n";
+    let consumer = "/// A delivery of `order-placed`.\n#[derive(Debug, Deserialize)]\npub struct \
+                    OnPlacedInput {\n    /// The order's id.\n    pub id: \
+                    String,\n}\n\npub(crate) async fn on_placed<P: StateStore>(context: \
+                    Context<P>, input: OnPlacedInput) -> Result<()> {\n    \
+                    context.state().set(&format!(\"orders/{}\", input.id), b\"placed\").await?;\n    \
+                    Ok(())\n}\n";
+    let imports = "use omnia_sdk::Result;\n";
+    let json = "use common::topic;\nuse omnia_sdk::api::{Context, Handlers};\nuse \
+                omnia_sdk::{Capabilities, Result, StateStore};\nuse \
+                serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> \
+                {\n    Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n";
+    let registration = "    Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n";
+    let decoded = "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, \
+                   decode)\n}\n\nfn decode(delivery: &Delivery) -> \
+                   std::result::Result<OnPlacedInput, DecodeError> {\n    \
+                   quick_xml::de::from_reader(delivery.payload.as_slice())\n        \
+                   .map_err(|error| DecodeError::new(error.to_string()))\n}\n";
+    let edits = |project: &Scratch| {
+        project.write(
+            "crates/common/src/topic.rs",
+            format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs")),
+        );
+        edit_files(&[
+            ("crates/orders/src/reading.rs", imports, json),
+            ("crates/orders/src/reading.rs", function, consumer),
+            (
+                "crates/orders/src/lib.rs",
+                "Handlers::from([])",
+                "Handlers::from([reading::handlers()])",
+            ),
+            (
+                "crates/orders/Cargo.toml",
+                "serde_json.workspace = true\n",
+                "serde_json.workspace = true\ncommon.workspace = true\n",
+            ),
+        ])
+    };
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/lib.rs", "crates/orders/Cargo.toml"]}"#;
+
+    // the JSON decoder under an XML stream is refused, and `topic_with` repairs it
+    let project = omnia_tree().await;
+    let mut xml = slice();
+    xml.design = design.to_owned();
+    let model = ScriptedModel::answering([report, report]).calling(0, [edits(&project)]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", registration, decoded),
+            (
+                "crates/orders/src/reading.rs",
+                "use omnia_sdk::api::{Context, Handlers};\n",
+                "use omnia_sdk::api::{Context, DecodeError, Delivery, Handlers};\n",
+            ),
+            (
+                "crates/orders/Cargo.toml",
+                "common.workspace = true\n",
+                "common.workspace = true\nquick-xml.workspace = true\n",
+            ),
+        ])],
+    );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &xml).await.expect("the decoded consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/reading.rs");
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: `Handlers::new().topic(topic::ORDER_PLACED, on_placed)` \
+         decodes the delivery as JSON, and the design says the inbound stream carries XML",
+        line_of(&module, "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, decode)")
+    );
+    for carried in [
+        "`.topic(topic::<NAME>, <handler>)` registers the SDK's decoder, which reads each \
+         delivery as JSON and refuses a payload of any other format as malformed; the design \
+         says this slice's inbound stream carries XML, so register the consumer through \
+         `.topic_with(topic::<NAME>, <handler>, decode)`",
+        "`quick_xml::de::from_reader(delivery.payload.as_slice())`, with `quick-xml.workspace = \
+         true` in the stem's `[dependencies]`",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(module.contains(decoded), "the registration is repaired: {module}");
+
+    // a design naming no format leaves the JSON decoder unremarked
+    let project = omnia_tree().await;
+    let model = ScriptedModel::answering([report]).calling(0, [edits(&project)]);
+
+    OMNIA.build_slice(&project, &model, &slice()).await.expect("the JSON consumer passes");
+    model.assert_exhausted();
+}
+
+// The design lists an inbound stream whose deliveries set off the slice's
+// requirement, and the slice is its part's last, so a turn that fills the
+// requirement as a function and registers no topic in the stem's crate is
+// refused at the entry's `Handlers::from(` line with the bullet quoted and
+// the decoding registration spelled, registers the consumer through
+// `topic_with`, and is accepted; the same turn at an earlier slice of the
+// part, or under a design listing no stream, is accepted as it stands.
+#[tokio::test]
+async fn omnia_unconsumed_stream() {
+    let design = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                  `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`; \
+                  deliveries set off REQ-001.\n\n**Outbound stream (producer)** — topic \
+                  `order-events`, JSON (REQ-001).\n";
+    let filled = "/// The behaviour `orders.get-id.return-order` states.\n///\n/// # \
+                  Errors\n///\n/// As the requirement states.\npub fn get_id_return_order() -> \
+                  Result<()> {\n    Ok(())\n}\n";
+    let consumer = "/// A delivery of `order-placed`.\n#[derive(Debug, Deserialize)]\npub struct \
+                    OnPlacedInput {\n    /// The order's id.\n    pub id: \
+                    String,\n}\n\npub(crate) async fn on_placed<P: StateStore>(context: \
+                    Context<P>, input: OnPlacedInput) -> Result<()> {\n    \
+                    context.state().set(&format!(\"orders/{}\", input.id), b\"placed\").await?;\n    \
+                    Ok(())\n}\n";
+    let imports = "use omnia_sdk::Result;\n";
+    let registration = "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, decode)\n";
+    let decoded = format!(
+        "use common::topic;\nuse omnia_sdk::api::{{Context, DecodeError, Delivery, \
+         Handlers}};\nuse omnia_sdk::{{Capabilities, Result, StateStore}};\nuse \
+         serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> \
+         {{\n{registration}}}\n\nfn decode(delivery: &Delivery) -> \
+         std::result::Result<OnPlacedInput, DecodeError> {{\n    \
+         quick_xml::de::from_reader(delivery.payload.as_slice())\n        .map_err(|error| \
+         DecodeError::new(error.to_string()))\n}}\n"
+    );
+    let table_doc = "//! the topic by construction.\n";
+    let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let registered = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/lib.rs", "crates/orders/Cargo.toml", "crates/common/src/topic.rs"]}"#;
+
+    // the function alone is refused at the part's last slice, and the
+    // registration repairs it
+    let project = omnia_tree().await;
+    let mut last = slice();
+    last.design = design.to_owned();
+    let model = ScriptedModel::answering([function_only, registered])
+        .calling(0, [edit_files(&[fill_function()])])
+        .calling(
+            1,
+            [edit_files(&[
+                (
+                    "crates/common/src/topic.rs",
+                    table_doc,
+                    &format!("{table_doc}{OMNIA_TABLE_LINE}"),
+                ),
+                ("crates/orders/src/reading.rs", imports, &decoded),
+                ("crates/orders/src/reading.rs", filled, consumer),
+                (
+                    "crates/orders/src/lib.rs",
+                    "Handlers::from([])",
+                    "Handlers::from([reading::handlers()])",
+                ),
+                (
+                    "crates/orders/Cargo.toml",
+                    "serde_json.workspace = true\n",
+                    "serde_json.workspace = true\ncommon.workspace = true\nquick-xml.workspace = \
+                     true\n",
+                ),
+            ])],
+        );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &last).await.expect("the registered consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let entry = text(&project, "crates/orders/src/lib.rs");
+    let expected = format!(
+        "crates/orders/src/lib.rs:{}: `Handlers::from([..])` lists no part consuming the inbound \
+         stream the design lists (\"**Inbound stream (consumer)** — topic `order-placed` from \
+         `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`\")",
+        line_of(&entry, "Handlers::from(")
+    );
+    for carried in [
+        "the host runs a stem through its `handlers()` alone, and this slice is the last of its \
+         part, so the inbound stream the design's `## APIs and integrations` lists for the part \
+         is consumed by a registration in one of these stems now or never",
+        "never a route in its place, a `start` crate, or a requirement of the registration's own",
+        "the topic's constant at the end of `crates/common/src/topic.rs`, \
+         `.topic_with(topic::<NAME>, <handler>, decode)` in the part's `handlers()`",
+        "reading the XML payload the design says the stream carries — \
+         `quick_xml::de::from_reader(delivery.payload.as_slice())`, with `quick-xml.workspace = \
+         true` in the stem's `[dependencies]` — and `<part>::handlers(),` in the entry's array:",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert!(!correction.contains("Outbound stream"), "the producer's bullet is passed over");
+    assert!(
+        text(&project, "crates/orders/src/reading.rs").contains(registration),
+        "the consumer is registered"
+    );
+    assert!(entry.contains("reading::handlers()"), "the entry lists the part");
+
+    // an earlier slice of the part leaves the registration to a later one
+    let project = omnia_tree().await;
+    let mut first = slice();
+    first.design = design.to_owned();
+    first.count = 2;
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &first).await.expect("the first slice passes");
+    model.assert_exhausted();
+
+    // a design listing no stream asks for no registration
+    let project = omnia_tree().await;
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &slice()).await.expect("the function alone passes");
+    model.assert_exhausted();
+}
+
+// The design lists an inbound stream whose deliveries set off the slice's
+// requirement, and the slice is its part's last, so the brief states the
+// registration before the turn, the bullet's lead quoted and the recipe
+// spelled over the wire the design names, and a first candidate that
+// registers the consumer is accepted with no correction; an earlier slice
+// of the part is told nothing of it.
+#[tokio::test]
+async fn omnia_inbound_registration_stated() {
+    let xml = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+               `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read through `x2js`; \
+               deliveries set off REQ-001.\n";
+    let stated = "The design lists an inbound stream for this part (\"**Inbound stream \
+                  (consumer)** — topic `order-placed` from `KAFKA_SOURCE_TOPIC`, payload XML read \
+                  through `x2js`\"), and this slice is the part's last, so the stream is consumed \
+                  by a registration in `crates/orders/` now or never";
+    let recipe = "add it through `edit_files`: the topic's constant at the end of \
+                  `crates/common/src/topic.rs`, `.topic_with(topic::<NAME>, <handler>, decode)` \
+                  in the part's `handlers()`";
+    let filled = "/// The behaviour `orders.get-id.return-order` states.\n///\n/// # \
+                  Errors\n///\n/// As the requirement states.\npub fn get_id_return_order() -> \
+                  Result<()> {\n    Ok(())\n}\n";
+    let decoded = "use common::topic;\nuse omnia_sdk::api::{Context, DecodeError, Delivery, \
+                   Handlers};\nuse omnia_sdk::{Capabilities, Result, StateStore};\nuse \
+                   serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> \
+                   {\n    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, \
+                   decode)\n}\n\nfn decode(delivery: &Delivery) -> \
+                   std::result::Result<OnPlacedInput, DecodeError> {\n    \
+                   quick_xml::de::from_reader(delivery.payload.as_slice())\n        \
+                   .map_err(|error| DecodeError::new(error.to_string()))\n}\n";
+    let table_doc = "//! the topic by construction.\n";
+    let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let registered = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/lib.rs", "crates/orders/Cargo.toml", "crates/common/src/topic.rs"]}"#;
+
+    // the last slice is told the registration, and a first candidate
+    // registering the consumer passes with no correction
+    let project = omnia_tree().await;
+    let mut last = slice();
+    last.design = xml.to_owned();
+    let model = ScriptedModel::answering([registered]).calling(
+        0,
+        [edit_files(&[
+            ("crates/common/src/topic.rs", table_doc, &format!("{table_doc}{OMNIA_TABLE_LINE}")),
+            ("crates/orders/src/reading.rs", "use omnia_sdk::Result;\n", decoded),
+            ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED),
+            ("crates/orders/src/reading.rs", filled, OMNIA_PLACED_CONSUMER),
+            (
+                "crates/orders/src/lib.rs",
+                "Handlers::from([])",
+                "Handlers::from([reading::handlers()])",
+            ),
+            (
+                "crates/orders/Cargo.toml",
+                "serde_json.workspace = true\n",
+                "serde_json.workspace = true\ncommon.workspace = true\nquick-xml.workspace = \
+                 true\n",
+            ),
+        ])],
+    );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &last).await.expect("the registered consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let brief = &model.seen()[0].messages[0];
+    for carried in [
+        stated,
+        "the host runs a stem through its `handlers()` alone, and a stem registering no topic is \
+         never run",
+        "never a route in its place, a `start` crate, or a requirement of the registration's own",
+        recipe,
+        "reading the XML payload the design says the stream carries — \
+         `quick_xml::de::from_reader(delivery.payload.as_slice())`",
+        "the constant spelling the topic the bullet names for the stream",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+    assert!(!brief.contains("consumed already"), "the fresh crate consumes nothing yet: {brief}");
+
+    // an earlier slice of the part is told nothing of the registration
+    let project = omnia_tree().await;
+    let mut first = slice();
+    first.design = xml.to_owned();
+    first.count = 2;
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &first).await.expect("the first slice passes");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        !brief.contains("inbound stream for this part"),
+        "an earlier slice is told nothing: {brief}"
+    );
+}
+
+// A stem whose crate already registers a topic is told at the part's last
+// slice that the stream is consumed there and asked for no second
+// registration, and the function alone passes.
+#[tokio::test]
+async fn omnia_inbound_registration_consumed() {
+    let json = "# Design\n\n## APIs and integrations\n\n**Inbound stream (consumer)** — topic \
+                `order-placed` from `KAFKA_SOURCE_TOPIC`; deliveries set off REQ-001.\n";
+    let consumed = "The inbound stream the design lists for this part (\"**Inbound stream \
+                    (consumer)** — topic `order-placed` from `KAFKA_SOURCE_TOPIC`\") is consumed \
+                    already by a registration in `crates/orders/src/`: register no second one";
+    let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let project = omnia_tree().await;
+    project.write(
+        "crates/common/src/topic.rs",
+        format!("{}{OMNIA_TABLE_LINE}", omnia_seed("crates/common/src/topic.rs")),
+    );
+    project.write(
+        "crates/orders/src/lib.rs",
+        "//! # orders\n//!\n//! The `orders` stem.\n\npub mod inbound;\npub mod reading;\n\nuse \
+         omnia_sdk::Capabilities;\nuse omnia_sdk::api::Handlers;\n\n/// The stem's handlers, \
+         merged onto the root routers.\npub fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+         Handlers::from([inbound::handlers()])\n}\n",
+    );
+    project.write(
+        "crates/orders/src/inbound.rs",
+        format!(
+            "//! Consumes order placements.\n\nuse common::topic;\nuse omnia_sdk::api::{{Context, \
+             Handlers}};\nuse omnia_sdk::{{Capabilities, Result, StateStore}};\nuse \
+             serde::Deserialize;\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {{\n    \
+             Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}}\n\n{OMNIA_PLACED_CONSUMER}"
+        ),
+    );
+    let mut held = slice();
+    held.design = json.to_owned();
+    let model =
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+
+    OMNIA.build_slice(&project, &model, &held).await.expect("the consumed stream passes");
+    model.assert_exhausted();
+
+    let brief = &model.seen()[0].messages[0];
+    assert!(brief.contains(consumed), "the brief names the consumer that stands: {brief}");
+    assert!(!brief.contains("now or never"), "no second registration is asked for: {brief}");
+}
+
+// A requirement whose statement says the message produces no events is a
+// skip, so a consumer that refuses it under its marker is refused with the
+// refusal's line named and the repair spelled, answers `Ok(())` after its
+// counter, and is accepted; a statement naming `invalid` is a refusal's and
+// keeps its `Err`, and a skip under a stem laying no consumer, with no
+// inbound stream listed, is held to nothing.
+#[tokio::test]
+async fn omnia_refused_skip() {
+    let project = omnia_tree().await;
+    let mut consuming = slice_for(
+        "orders-positions",
+        &["orders.skip-station", "orders.skip-after-validation-failure"],
+    );
+    consuming.requirements[0].statement =
+        vec!["A position for a station the service does not track is skipped.".to_owned()];
+    consuming.requirements[0].trigger = Some(Trigger::Message("positions".to_owned()));
+    consuming.requirements[1].statement = vec![
+        "A position whose payload is invalid is skipped once the failure is counted.".to_owned(),
+    ];
+    consuming.requirements[1].trigger = Some(Trigger::Message("validation-failures".to_owned()));
+    let refusing = "        return Err(bad_request!(\"station `{}` is not tracked\", \
+                    input.station));\n";
+    let skipping = "        tracing::info!(station = %input.station, \"position skipped: no stop \
+                    tracked\");\n        return Ok(());\n";
+    let station_stub = "where\n    P: Capabilities,\n{\n    let _ = (&context, &input);\n    \
+                        todo!(\"REQ-001 orders.skip-station: the consumer\")\n}\n";
+    let station_filled = format!(
+        "where\n    P: StateStore,\n{{\n    if \
+         context.state().get(&format!(\"stations/{{}}\", input.station)).await?.is_none() \
+         {{\n{refusing}    }}\n    Ok(())\n}}\n"
+    );
+    let failure_stub = "where\n    P: Capabilities,\n{\n    let _ = (&context, &input);\n    \
+                        todo!(\"REQ-002 orders.skip-after-validation-failure: the consumer\")\n}\n";
+    let failure_filled = "where\n    P: StateStore,\n{\n    if input.reason.is_empty() {\n        \
+                          return Err(bad_request!(\"invalid payload\"));\n    }\n    \
+                          context.state().increment(\"orders/validation-failures\", 1).await?;\n    \
+                          Ok(())\n}\n";
+    let report =
+        r#"{"covered": ["REQ-001", "REQ-002"], "written": ["crates/orders/src/positions.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                (
+                    "crates/orders/src/positions.rs",
+                    "use omnia_sdk::{Capabilities, Result};\n",
+                    "use omnia_sdk::{Capabilities, Result, StateStore, bad_request};\n",
+                ),
+                ("crates/orders/src/positions.rs", station_stub, &station_filled),
+                ("crates/orders/src/positions.rs", failure_stub, failure_filled),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/positions.rs", refusing, skipping)])]);
+
+    let accepted = OMNIA
+        .build_slice(&project, &model, &consuming)
+        .await
+        .expect("the skipping consumer passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001", "REQ-002"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/positions.rs");
+    let expected = format!(
+        "crates/orders/src/positions.rs:{}: REQ-001 orders.skip-station answers a refusal \
+         (`Err(..)`) where its statement says the message produces no events",
+        line_of(&module, "tracing::info!(station")
+    );
+    for carried in [
+        "a requirement whose statement says the message produces no events is a skip, not a \
+         refusal: the consumer answers `Ok(())` after its `tracing` counter event and publishes \
+         nothing, since an `Err` is recorded by the host as a rejected delivery; `Err` is the \
+         malformed or invalid delivery's alone, as the handlers reference shows under \"A \
+         skipped message\"",
+        expected.as_str(),
+    ] {
+        assert!(correction.contains(carried), "the correction carries `{carried}`: {correction}");
+    }
+    assert_eq!(
+        correction.matches("crates/orders/src/positions.rs:").count(),
+        1,
+        "the statement naming `invalid` is a refusal's: {correction}"
+    );
+    assert!(
+        module.contains(skipping)
+            && module.contains("return Err(bad_request!(\"invalid payload\"))"),
+        "the skip is repaired and the refusal stands: {module}"
+    );
+
+    // a skip under a stem laying no consumer, with no stream listed, is unchecked
+    let project = omnia_tree().await;
+    let mut functional = slice();
+    functional.requirements[0].statement =
+        vec!["An order older than the window is skipped and produces no events.".to_owned()];
+    let refused = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([refused]).calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            OMNIA_FUNCTION_MARKER,
+            "    Err(omnia_sdk::bad_request!(\"stale\"))\n",
+        )])],
+    );
+
+    OMNIA.build_slice(&project, &model, &functional).await.expect("a function's refusal passes");
+    model.assert_exhausted();
+}
+
 // A turn that covers a requirement whose marker still stands is refused
 // with the marker's line named, fills it, and is accepted; a requirement
 // left out of `covered` keeps its marker unrefused.
@@ -2706,7 +4528,8 @@ async fn omnia_marker_left() {
     let slice = slice_for("orders-reading", &["orders.get-id.return-order", "orders.count"]);
     let first = r#"{"covered": ["REQ-001", "REQ-002"], "written": []}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired]).calling(1, [edit_files(&[fill_function()])]);
+    let model =
+        ScriptedModel::answering([first, repaired]).calling(1, [edit_files(&[fill_function()])]);
 
     let report =
         OMNIA.build_slice(&project, &model, &slice).await.expect("the filled tree is accepted");
@@ -2715,8 +4538,8 @@ async fn omnia_marker_left() {
     let correction = correction(&model);
     for line in [
         "a covered requirement is implemented, so no marker of its stands",
-        "crates/orders/src/reading.rs:10: REQ-001 is covered and its marker stands",
-        "crates/orders/src/reading.rs:20: REQ-002 is covered and its marker stands",
+        "crates/orders/src/reading.rs:12: REQ-001 is covered and its marker stands",
+        "crates/orders/src/reading.rs:22: REQ-002 is covered and its marker stands",
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
@@ -2737,14 +4560,14 @@ async fn omnia_scenario_ignored() {
                        an_order_is_returned_by_its_id() {\n    assert_eq!(1 + 1, 2);\n}\n";
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([first, first, repaired])
+    let model = ScriptedModel::answering([first, first, repaired])
         .calling(
             0,
-            [edit_files(&[(
-                "crates/orders/src/reading.rs",
-                OMNIA_HANDLER_MARKER,
-                OMNIA_HANDLER_FILLED,
-            )])],
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+            ])],
         )
         .calling(
             1,
@@ -2770,10 +4593,10 @@ async fn omnia_scenario_ignored() {
     let [scaffolded, half] = refused.as_slice() else {
         panic!("two candidates are refused: {refused:?}");
     };
-    let ignored = "crates/orders/tests/reading.rs:38: REQ-001 is covered and the test \
+    let ignored = "crates/orders/tests/reading.rs:40: REQ-001 is covered and the test \
                    `an_order_is_returned_by_its_id` of its scenario `An order is returned by its \
                    id` is ignored";
-    let marker = "crates/orders/tests/reading.rs:43: REQ-001 is covered and the test \
+    let marker = "crates/orders/tests/reading.rs:45: REQ-001 is covered and the test \
                   `an_order_is_returned_by_its_id` of its scenario `An order is returned by its \
                   id` holds its marker";
     for correction in [scaffolded, half] {
@@ -2802,11 +4625,13 @@ async fn omnia_scenario_unattributed() {
     let attributed_marker = format!("#[tokio::test]\n{OMNIA_TEST_MARKER}");
     let attributed_filled = format!("#[tokio::test]\n{OMNIA_TEST_FILLED}");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[
                 ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
                 ("crates/orders/tests/reading.rs", &attributed_marker, OMNIA_TEST_FILLED),
             ])],
         )
@@ -2826,7 +4651,7 @@ async fn omnia_scenario_unattributed() {
     model.assert_exhausted();
 
     let correction = correction(&model);
-    let unattributed = "crates/orders/tests/reading.rs:36: REQ-001 is covered and the test \
+    let unattributed = "crates/orders/tests/reading.rs:38: REQ-001 is covered and the test \
                         `an_order_is_returned_by_its_id` of its scenario `An order is returned \
                         by its id` carries no `#[tokio::test]`";
     assert!(
@@ -2841,6 +4666,61 @@ async fn omnia_scenario_unattributed() {
         text(&project, "crates/orders/tests/reading.rs"),
         OMNIA_TESTS.replace(OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
         "the test runs under its attribute"
+    );
+}
+
+// A turn that removes `#[ignore]` and `todo!` from a covered scenario's test
+// while leaving its scaffolded `let id = "<id>";` path-parameter placeholder
+// binding in place is refused with the placeholder named, replaces `"<id>"`
+// with a concrete value, and is accepted.
+#[tokio::test]
+async fn omnia_scenario_placeholder_unfilled() {
+    let project = omnia_tree().await;
+    let with_placeholder = "async fn an_order_is_returned_by_its_id() {\n    let id = \"<id>\";\n    \
+                            let request = Request::get(format!(\"/orders/{id}\"))\n        \
+                            .body(Body::empty())\n        .expect(\"request\");\n    let (status, \
+                            body) = call(&provider(), request).await;\n    assert_eq!(status, \
+                            StatusCode::OK);\n    assert_eq!(body[\"id\"], \"42\");\n}\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, with_placeholder),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[(
+                "crates/orders/tests/reading.rs",
+                with_placeholder,
+                OMNIA_TEST_FILLED,
+            )])],
+        );
+
+    let report = OMNIA
+        .build_slice(&project, &model, &omnia_slice())
+        .await
+        .expect("the concrete-id test is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    let placeholder = "crates/orders/tests/reading.rs:40: REQ-001 is covered and the test \
+                       `an_order_is_returned_by_its_id` of its scenario `An order is returned by \
+                       its id` leaves the placeholder `\"<id>\"` unfilled";
+    assert!(
+        correction.contains("a covered requirement's scenarios are tests that run and pass")
+            && correction.contains(placeholder),
+        "the correction carries `{placeholder}`: {correction}"
+    );
+    assert_eq!(report.covered, ["REQ-001"]);
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        OMNIA_TESTS.replace(OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        "the placeholder is replaced"
     );
 }
 
@@ -2860,7 +4740,7 @@ async fn omnia_stray_refused() {
     ];
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/pricing.rs", "NOTES.md", "crates/common/src/orders.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/src/pricing.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
@@ -2908,7 +4788,7 @@ async fn omnia_start_only_no_turn() {
     let project = omnia_tree().await;
     let slice = slice_for("start", &["start.refuse-without-secret", "start.listen-port"]);
     let before = files_under(project.path());
-    let model = Scripted::default();
+    let model = ScriptedModel::default();
 
     let report = OMNIA.build_slice(&project, &model, &slice).await.expect("built with no turn");
     model.assert_exhausted();
@@ -2926,7 +4806,8 @@ async fn omnia_start_only_no_turn() {
 
 // The initialisation scaffolds every file of the layout outside `crates/<stem>/`
 // into an empty tree, each at a path the engine seals, the root manifest
-// pinning omnia at one version so a bump is one edit; the template's ignore
+// pinning omnia's own crates at one version so a bump is one edit, the
+// `omnia-ext` crates on their own line beside them; the template's ignore
 // file keeps the build output and the engine's own directory out of a
 // commit.
 #[tokio::test]
@@ -2951,7 +4832,6 @@ async fn omnia_init_files() {
             "Makefile",
             "clippy.toml",
             "crates/common/Cargo.toml",
-            "crates/common/src/config.rs",
             "crates/common/src/lib.rs",
             "crates/common/src/topic.rs",
             "deny.toml",
@@ -2960,8 +4840,6 @@ async fn omnia_init_files() {
             "rust-toolchain.toml",
             "rustfmt.toml",
             "src/lib.rs",
-            "src/messaging.rs",
-            "src/routes.rs",
             "supply-chain/README.md",
             "supply-chain/audits.toml",
             "supply-chain/config.toml",
@@ -2989,9 +4867,15 @@ async fn omnia_init_files() {
     }
 
     let manifest = omnia_seed("Cargo.toml");
+    let omnia_line = |name: &str| {
+        name == "omnia"
+            || name == "omnia-sdk"
+            || name == "omnia-test"
+            || name.starts_with("omnia-wasi-")
+    };
     let pins: Vec<(&str, &str)> = manifest
         .lines()
-        .filter(|line| line.starts_with("omnia"))
+        .filter(|line| line.split_once([' ', '.']).is_some_and(|(name, _)| omnia_line(name)))
         .filter_map(|line| {
             let (name, rest) = line.split_once(" = ")?;
             let version = rest
@@ -3025,8 +4909,7 @@ fn omnia_rules() {
         [
             ("Cargo.lock", MergeStrategy::Ours),
             ("Cargo.toml", MergeStrategy::Union),
-            ("src/routes.rs", MergeStrategy::Union),
-            ("src/messaging.rs", MergeStrategy::Union),
+            ("src/lib.rs", MergeStrategy::Union),
             ("crates/common/src/topic.rs", MergeStrategy::Union),
             ("crates/*/Cargo.toml", MergeStrategy::Union),
             ("crates/*/src/lib.rs", MergeStrategy::Union),
@@ -3089,13 +4972,26 @@ fn omnia_worker() {
     assert_eq!(
         Grant::union(grants).map(SeenWorker::from),
         Some(SeenWorker {
-            egress: vec!["index.crates.io".to_owned(), "static.crates.io".to_owned()],
+            egress: vec![
+                "index.crates.io".to_owned(),
+                "static.crates.io".to_owned(),
+                "github.com".to_owned(),
+            ],
             read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
             env: vec![("RUSTUP_HOME".to_owned(), "~/.rustup".to_owned())],
         }),
         "the worker grant the adapter's turns carry"
     );
     assert_eq!(Grant::findings(grants), Vec::<String>::new());
+}
+
+#[test]
+fn omnia_budget() {
+    assert_eq!(
+        emery_omnia::Adapter::metadata().budget,
+        NonZeroU32::new(12),
+        "the default slice budget the adapter declares"
+    );
 }
 
 #[tokio::test]
@@ -3113,16 +5009,16 @@ async fn omnia_static_drift_refused() {
     let project = omnia_tree().await;
     std::fs::remove_file(project.path().join("examples/runtime.rs"))
         .expect("the seed scaffolded it");
-    let entry = omnia_seed("src/lib.rs");
-    let first = entry.lines().next().expect("the entry opens with a line");
+    let common = omnia_seed("crates/common/src/lib.rs");
+    let first = common.lines().next().expect("the common entry opens with a line");
     let runtime = omnia_seed("examples/runtime.rs");
-    let model = Scripted::answering([PASSED, PASSED])
-        .calling(0, [edit_files(&[("src/lib.rs", first, "//! Edited by a repair.")])])
+    let model = ScriptedModel::answering([PASSED, PASSED])
+        .calling(0, [edit_files(&[("crates/common/src/lib.rs", first, "//! Edited by a repair.")])])
         .calling(
             1,
             [
                 write_files(&[("examples/runtime.rs", &runtime)]),
-                edit_files(&[("src/lib.rs", "//! Edited by a repair.", first)]),
+                edit_files(&[("crates/common/src/lib.rs", "//! Edited by a repair.", first)]),
             ],
         );
 
@@ -3132,7 +5028,8 @@ async fn omnia_static_drift_refused() {
     assert!(verdict.passed);
     let correction = correction(&model);
     for line in [
-        "`src/lib.rs` is a static file of the template and differs from how the template spells it",
+        "`crates/common/src/lib.rs` is a static file of the template and differs from how the \
+         template spells it",
         &format!("- {first}"),
         "+ //! Edited by a repair.",
         "`examples/runtime.rs` is a static file of the template the tree lacks",
@@ -3140,22 +5037,22 @@ async fn omnia_static_drift_refused() {
     ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
-    for path in ["src/lib.rs", "examples/runtime.rs"] {
+    for path in ["crates/common/src/lib.rs", "examples/runtime.rs"] {
         assert_eq!(text(&project, path), omnia_seed(path), "`{path}` is the template's again");
     }
 }
 
-// The root manifest is held to the seed outside its two lists by the
+// The root manifest is held to the seed outside its stem list by the
 // adapter, not by the merge: a slice that edits a pin beside the stem's
-// lines the adapter added is refused with the pin's lines named, puts it
-// back, and its accepted report carries the manifest with the stem's lines
+// line the adapter added is refused with the pin's lines named, puts it
+// back, and its accepted report carries the manifest with the stem's line
 // kept.
 #[tokio::test]
 async fn omnia_manifest_refused() {
     let project = omnia_tree().await;
     let report =
         r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "Cargo.toml"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [edit_files(&[fill_function(), ("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED)])])
         .calling(1, [edit_files(&[("Cargo.toml", OMNIA_PIN_EDITED, OMNIA_PIN)])]);
 
@@ -3164,21 +5061,21 @@ async fn omnia_manifest_refused() {
 
     let correction = correction(&model);
     for line in [
-        "the root `Cargo.toml` changed outside its two stem lists".to_owned(),
+        "the root `Cargo.toml` changed outside its stem list".to_owned(),
         format!("- {}", OMNIA_PIN.trim_end()),
         format!("+ {}", OMNIA_PIN_EDITED.trim_end()),
     ] {
         assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
     }
     assert!(
-        !correction.contains(OMNIA_STEM_LINE.trim_end()),
-        "the stem's lines are the lists' and no drift: {correction}"
+        !correction.contains(OMNIA_PATH_CRATE_LINE.trim_end()),
+        "the stem's line is the list's and no drift: {correction}"
     );
     assert!(report.written.iter().any(|path| path == "Cargo.toml"), "the manifest is reported");
     assert_eq!(
         text(&project, "Cargo.toml"),
         omnia_manifest_with_orders(),
-        "the pin stands as the seed spells it and the stem's lines are kept"
+        "the pin stands as the seed spells it and the stem's line is kept"
     );
 }
 
@@ -3192,10 +5089,7 @@ async fn omnia_verify_process() {
     let project = omnia_tree().await;
     project.write("crates/start/Cargo.toml", "[package]\nname = \"start\"\n");
     project.write("crates/start/src/lib.rs", "//! The `start` stem.\n");
-    project.write(
-        "crates/orders/Cargo.toml",
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n",
-    );
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
     project.write(
         "crates/orders/src/consuming.rs",
         "#![allow(clippy::pedantic)]\n//! Consumes orders.\n\nuse std::env;\n\npub fn consume() {\n    let _ = env::var(\"PORT\");\n    tokio::spawn(async {});\n    std::thread::sleep(std::time::Duration::from_secs(1));\n}\n",
@@ -3207,7 +5101,7 @@ async fn omnia_verify_process() {
     project.write("crates/orders/tests/runner.rs", "#[test]\nfn run() {}\n");
     let removed =
         ["crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/orders/src/main_loop.rs"];
-    let model = Scripted::answering([PASSED, PASSED]).calling(1, [delete_files(&removed)]);
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(1, [delete_files(&removed)]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
     model.assert_exhausted();
@@ -3233,31 +5127,23 @@ async fn omnia_verify_process() {
 
 // A root-manifest entry naming a crate the tree lacks, which the template's
 // drift rule keeps by its shape, is refused at a wave's verify with its line
-// named; the turn drops it and the stem's crate line, and the manifest stands
-// as the seed spells it. An entry whose crate stands is no finding.
+// named; the turn drops it, and the manifest stands as the seed spells it.
+// An entry whose crate stands is no finding.
 #[tokio::test]
 async fn omnia_verify_manifest_dangling() {
     let project = omnia_tree().await;
-    project.write(
-        "crates/orders/Cargo.toml",
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n",
-    );
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n");
     let start_path = "start = { path = \"crates/start\" }\n";
-    let start_crate = "start.workspace = true\n";
-    let manifest = omnia_seed("Cargo.toml")
-        .replace(
-            OMNIA_PATH_CRATE_ANCHOR,
-            &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}{start_path}"),
-        )
-        .replace(OMNIA_STEM_ANCHOR, &format!("{OMNIA_STEM_ANCHOR}{OMNIA_STEM_LINE}{start_crate}"));
+    let manifest = omnia_seed("Cargo.toml").replace(
+        OMNIA_PATH_CRATE_ANCHOR,
+        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}{start_path}"),
+    );
     let number =
         manifest.lines().position(|line| line == start_path.trim_end()).expect("the line") + 1;
     project.write("Cargo.toml", &manifest);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
-        1,
-        [edit_files(&[("Cargo.toml", start_path, ""), ("Cargo.toml", start_crate, "")])],
-    );
+    let model = ScriptedModel::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("Cargo.toml", start_path, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
     model.assert_exhausted();
@@ -3265,19 +5151,203 @@ async fn omnia_verify_manifest_dangling() {
     assert!(verdict.passed);
     let correction = correction(&model);
     for line in [
-        "the root manifest's path list names a crate the tree holds for each stem, and no other"
+        "the root manifest's stem list names a crate the tree holds for each stem, and no other"
             .to_owned(),
         format!("Cargo.toml:{number}: `start` names `crates/start`, which the tree lacks"),
     ] {
         assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["`orders` names", "`common` names", "changed outside its two stem lists"] {
+    for absent in ["`orders` names", "`common` names", "changed outside its stem list"] {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert_eq!(
         text(&project, "Cargo.toml"),
         omnia_manifest_with_orders(),
-        "the dangling lines are gone and the stem's stand"
+        "the dangling line is gone and the stem's stands"
+    );
+}
+
+// A filled handler left bounded `P: Capabilities` is refused at a wave's
+// verify with the traits its body reaches through the context named, while
+// a handler whose marker still stands is no finding; narrowing the bound to
+// the traits named is the repair.
+#[tokio::test]
+async fn omnia_broad_bounds() {
+    let project = omnia_tree().await;
+    let mut slice = slice_for("orders-reading", &["orders.read", "orders.list"]);
+    slice.requirements[0].trigger = Some(routed("GET", "/orders/{id}"));
+    slice.requirements[1].trigger = Some(routed("GET", "/orders"));
+    let scaffold = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &scaffold, &slice).await.expect("a turn filling nothing");
+    scaffold.assert_exhausted();
+    let broad = "    let rate_url = context.config().get(\"ORDERS_RATE_URL\").await.ok();\n    \
+                 let _ = (&id, &rate_url);\n    let _ = \
+                 context.state().get(\"orders/42\").await?;\n    Ok(Json(ReadOutput {}))\n";
+    let bound = ") -> Result<Json<ReadOutput>>\nwhere\n    P: Capabilities,\n";
+    let narrowed = ") -> Result<Json<ReadOutput>>\nwhere\n    P: Config + StateStore,\n";
+    let imported = "use omnia_sdk::{Capabilities, Config, Result, StateStore};\n";
+    let module = text(&project, "crates/orders/src/reading.rs")
+        .replace(OMNIA_HANDLER_MARKER, broad)
+        .replace(OMNIA_SDK_USE, imported);
+    project.write("crates/orders/src/reading.rs", &module);
+    let model = ScriptedModel::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", bound, narrowed)])]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the narrowed tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let read_at = line_of(&module, "pub(crate) async fn read<P>");
+    for line in [
+        "a filled handler is bounded on the traits its body reaches through the context, and no \
+         wider"
+            .to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{read_at}: handler `read` is bounded `P: \
+             Capabilities` and reaches `Config`, `StateStore`"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert!(!correction.contains("handler `list`"), "a marker is no finding: {correction}");
+    assert_eq!(
+        text(&project, "crates/orders/src/reading.rs"),
+        module.replace(bound, narrowed),
+        "the bound is narrowed and the rest stands"
+    );
+}
+
+// The same bound is held at the slice's own build, so a filled handler
+// left `P: Capabilities` comes back on the report with the traits named,
+// while the slice's unfilled stubs pass; narrowing it is the repair.
+#[tokio::test]
+async fn omnia_broad_bounds_at_build() {
+    let project = omnia_tree().await;
+    let mut slice = omnia_slice();
+    slice.requirements.push(Requirement {
+        id: "REQ-002".to_owned(),
+        subject: "orders.list".to_owned(),
+        statement: vec!["Lists every order.".to_owned()],
+        scenarios: Vec::new(),
+        trigger: Some(routed("GET", "/orders")),
+    });
+    let bound = ") -> Result<Json<ReadOutput>>\nwhere\n    P: Capabilities,\n";
+    let narrowed = ") -> Result<Json<ReadOutput>>\nwhere\n    P: StateStore,\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", bound, narrowed),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+            ])],
+        );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the narrowed handler passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let module = text(&project, "crates/orders/src/reading.rs");
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: handler `read` is bounded `P: Capabilities` and reaches \
+         `StateStore`",
+        line_of(&module, "pub(crate) async fn read<P>")
+    );
+    assert!(
+        correction.contains("a filled handler is bounded on the traits its body reaches")
+            && correction.contains(&expected),
+        "the correction names the broad bound at its line: {correction}"
+    );
+    assert!(!correction.contains("handler `list`"), "a marker is no finding: {correction}");
+    assert!(module.contains(narrowed), "the bound is narrowed: {module}");
+    assert!(module.contains(OMNIA_BOUND), "the unfilled handler keeps its bound: {module}");
+}
+
+// A required setting read through `Config::get` under a `pub(crate) const`
+// key, or under a key spelled at the read, is refused at a wave's verify
+// with each read's line named, while a read whose failure the body handles
+// is an optional setting and no finding; declaring the part's settings
+// struct and loading it once is the repair.
+#[tokio::test]
+async fn omnia_old_settings() {
+    let project = omnia_tree().await;
+    let scaffold = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &scaffold, &omnia_slice()).await.expect("a turn filling nothing");
+    scaffold.assert_exhausted();
+    let path_constant = "pub(crate) const ORDERS_ID: &str = \"/orders/{id}\";\n";
+    let key = "pub(crate) const ORDERS_RATE_URL: &str = \"ORDERS_RATE_URL\";\n";
+    let reads = "    let rate_url = context.config().get(ORDERS_RATE_URL).await?;\n    let token \
+                 = Config::get(context.provider(), \"ORDERS_TOKEN\").await?;\n    let region = \
+                 context.config().get(\"ORDERS_REGION\").await.ok();\n    let _ = (&id, \
+                 &rate_url, &token, &region);\n    Ok(Json(ReadOutput {}))\n";
+    let bound = "where\n    P: Config,\n";
+    let imported = "use omnia_sdk::{Capabilities, Config, Result};\n";
+    let module = text(&project, "crates/orders/src/reading.rs")
+        .replace(path_constant, &format!("{path_constant}\n{key}"))
+        .replace(OMNIA_HANDLER_MARKER, reads)
+        .replace(OMNIA_BOUND, bound)
+        .replace(OMNIA_SDK_USE, imported);
+    project.write("crates/orders/src/reading.rs", &module);
+    let settings = "// The settings the part reads: `ORDERS_RATE_URL`, \
+                    `ORDERS_TOKEN`.\n#[derive(Debug, Settings)]\n#[setting(prefix = \
+                    \"ORDERS_\")]\npub(crate) struct ReadingSettings {\n    rate_url: String,\n    \
+                    token: String,\n}\n";
+    let loaded = "    let settings = ReadingSettings::load(context.config()).await?;\n    let \
+                  region = context.config().get(\"ORDERS_REGION\").await.ok();\n    let _ = \
+                  (&id, &settings.rate_url, &settings.token, &region);\n    Ok(Json(ReadOutput \
+                  {}))\n";
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", key, settings),
+            ("crates/orders/src/reading.rs", reads, loaded),
+            (
+                "crates/orders/src/reading.rs",
+                imported,
+                "use omnia_sdk::{Capabilities, Config, Result, Settings};\n",
+            ),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the declared tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    let constant_at = line_of(&module, "get(ORDERS_RATE_URL)");
+    let spelled_at = line_of(&module, "Config::get(context.provider()");
+    for line in [
+        "a deployment setting a part requires is a field of its `#[derive(Settings)]` struct, \
+         loaded once with `<Part>Settings::load(context.config()).await?`"
+            .to_owned(),
+        format!(
+            "crates/orders/src/reading.rs:{constant_at}: a required setting is read under the \
+             `pub(crate) const ORDERS_RATE_URL` key"
+        ),
+        format!(
+            "crates/orders/src/reading.rs:{spelled_at}: a required setting is read under \
+             `\"ORDERS_TOKEN\"` spelled at the read"
+        ),
+    ] {
+        assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
+    }
+    assert!(!correction.contains("ORDERS_REGION"), "an optional read is no finding: {correction}");
+    let repaired = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        repaired.contains(settings)
+            && repaired.contains(loaded)
+            && !repaired.contains("Config::get"),
+        "{repaired}"
     );
 }
 
@@ -3297,7 +5367,7 @@ async fn omnia_build_process_refused() {
         ("crates/orders/src/lib.rs", "pub mod reading;\n", "pub mod reading;\npub mod runner;\n");
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/src/runner.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(0, [write_files(&written), edit_files(&[fill_function(), listed])])
         .calling(
             1,
@@ -3340,7 +5410,7 @@ async fn omnia_stem_without_workspace_lints() {
     let linted = "version.workspace = true\n\n[lints]\nworkspace = true\n";
     let unlinted = "version.workspace = true\nlints.workspace = true\n";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(
             0,
             [edit_files(&[fill_function(), ("crates/orders/Cargo.toml", linted, unlinted)])],
@@ -3351,15 +5421,67 @@ async fn omnia_stem_without_workspace_lints() {
     model.assert_exhausted();
 
     let correction = correction(&model);
-    for line in
-        ["a stem's manifest carries `[lints]` with `workspace = true`", "crates/orders/Cargo.toml"]
-    {
+    for line in [
+        "a stem's manifest changes only inside `[dependencies]`",
+        "`crates/orders/Cargo.toml`:",
+        "- [lints]",
+        "- workspace = true",
+        "+ lints.workspace = true",
+    ] {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
     assert_eq!(
         text(&project, "crates/orders/Cargo.toml"),
         OMNIA_MANIFEST,
         "the manifest inherits the lints as the adapter scaffolded it"
+    );
+}
+
+// A crate a test alone needs, added as a third dev-dependency, is refused
+// with the line named and the repair spelled: the line moves to the end of
+// `[dependencies]`, since the dev-dependency block stands as scaffolded. The
+// turn moves it and the report is accepted with the manifest carrying it
+// among the stem's dependencies.
+#[tokio::test]
+async fn omnia_stem_dev_dependency_added() {
+    let project = omnia_tree().await;
+    let doubles = "tokio.workspace = true\n";
+    let widened = "tokio.workspace = true\nbytes.workspace = true\n";
+    let fixed = "serde_json.workspace = true\n";
+    let moved = "serde_json.workspace = true\nbytes.workspace = true\n";
+    let using = "    let _ = bytes::Bytes::new();\n    Ok(())\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, using),
+                ("crates/orders/Cargo.toml", doubles, widened),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[
+                ("crates/orders/Cargo.toml", widened, doubles),
+                ("crates/orders/Cargo.toml", fixed, moved),
+            ])],
+        );
+
+    OMNIA.build(&project, &model).await.expect("the moved line is accepted");
+    model.assert_exhausted();
+
+    let correction = correction(&model);
+    for line in [
+        "a stem's manifest changes only inside `[dependencies]`",
+        "a crate a test alone needs (`bytes`, `http`) is never a third dev-dependency",
+        "`crates/orders/Cargo.toml`:\n+ bytes.workspace = true",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    assert_eq!(
+        text(&project, "crates/orders/Cargo.toml"),
+        format!("{OMNIA_MANIFEST}bytes.workspace = true\n"),
+        "the test's crate is the last `[dependencies]` line"
     );
 }
 
@@ -3374,14 +5496,13 @@ async fn omnia_stem_without_workspace_lints() {
 async fn omnia_build_start_crate_refused() {
     let project = omnia_tree().await;
     let start_path = "start = { path = \"crates/start\" }\n";
-    let start_crate = "start.workspace = true\n";
     let written = [
         ("crates/start/Cargo.toml", "[package]\nname = \"start\"\n"),
         (
             "crates/start/src/lib.rs",
-            "//! The `start` stem.\n\npub mod start;\n\n/// The stem's routes.\npub fn router<P: \
-             common::Capabilities>() -> axum::Router<omnia_sdk::api::Client<P>> {\n    \
-             axum::Router::new().merge(start::routes())\n}\n",
+            "//! The `start` stem.\n\npub mod start;\n\n/// The stem's handlers.\npub fn \
+             handlers<P: omnia_sdk::Capabilities>() -> omnia_sdk::api::Handlers<P> {\n    \
+             omnia_sdk::api::Handlers::from([start::handlers()])\n}\n",
         ),
         (
             "crates/start/src/start.rs",
@@ -3405,7 +5526,7 @@ async fn omnia_build_start_crate_refused() {
     ];
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/start/Cargo.toml", "crates/start/src/lib.rs", "crates/start/src/start.rs", "crates/start-prefetch/src/lib.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
@@ -3417,14 +5538,13 @@ async fn omnia_build_start_crate_refused() {
                         OMNIA_PATH_CRATE_ANCHOR,
                         &format!("{OMNIA_PATH_CRATE_ANCHOR}{start_path}"),
                     ),
-                    ("Cargo.toml", OMNIA_STEM_LINE, &format!("{OMNIA_STEM_LINE}{start_crate}")),
                 ]),
             ],
         )
         .calling(
             1,
             [
-                edit_files(&[("Cargo.toml", start_path, ""), ("Cargo.toml", start_crate, "")]),
+                edit_files(&[("Cargo.toml", start_path, "")]),
                 delete_files(&[
                     "crates/start/Cargo.toml",
                     "crates/start/src/lib.rs",
@@ -3447,7 +5567,7 @@ async fn omnia_build_start_crate_refused() {
         assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
     }
     for absent in [
-        "`start::router()`",
+        "`start::handlers()`",
         "crates/start/src/lib.rs:",
         "crates/start/src/start.rs:",
         "crates/start-prefetch/src/lib.rs:",
@@ -3494,7 +5614,7 @@ async fn omnia_build_wrappers_refused() {
     let first_tree = module(&format!("{wrapped}\n{direct}"));
     let written = [("crates/stops/src/client.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/stops/src/client.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("stops", "fetching", "client")])
         .calling(1, [edit_files(&[("crates/stops/src/client.rs", &format!("{wrapped}\n"), "")])]);
 
@@ -3568,7 +5688,7 @@ async fn omnia_build_empty_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/rates/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/rates/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("rates", "table", "cache")])
         .calling(1, [edit_files(&[("crates/rates/src/cache.rs", empty, fetched)])]);
 
@@ -3632,7 +5752,7 @@ async fn omnia_build_crate_private_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/zones/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/zones/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("zones", "table", "cache")])
         .calling(1, [edit_files(&[("crates/zones/src/cache.rs", empty, fetched)])]);
 
@@ -3696,7 +5816,7 @@ async fn omnia_build_second_read_miss_refused() {
     let first_tree = module(empty);
     let written = [("crates/zones/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/zones/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("zones", "table", "cache")])
         .calling(1, [edit_files(&[("crates/zones/src/cache.rs", empty, fetched)])]);
 
@@ -3767,7 +5887,7 @@ async fn omnia_build_tail_miss_refused() {
     let first_tree = module(tail, arm);
     let written = [("crates/fees/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/fees/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("fees", "table", "cache")])
         .calling(
             1,
@@ -3819,10 +5939,8 @@ async fn omnia_build_tail_miss_refused() {
 #[tokio::test]
 async fn omnia_build_stem_split() {
     let project = omnia_tree().await;
-    project.write(
-        "crates/shipment/Cargo.toml",
-        "[package]\nname = \"shipment\"\n\n[lints]\nworkspace = true\n",
-    );
+    let shipment_manifest = OMNIA_MANIFEST.replace("orders", "shipment");
+    project.write("crates/shipment/Cargo.toml", &shipment_manifest);
     project.write("crates/shipment/src/lib.rs", "//! The `shipment` stem.\n");
     let slice = slice_for(
         "order-items",
@@ -3830,36 +5948,32 @@ async fn omnia_build_stem_split() {
     );
     let module = "//! Order items.\n\n/// How many lines an order holds.\n#[must_use]\npub fn \
                   count(items: &[u32]) -> usize {\n    items.len()\n}\n";
+    let order_manifest = OMNIA_MANIFEST.replace("orders", "order");
     let split = [
-        ("crates/order/Cargo.toml", "[package]\nname = \"order\"\n\n[lints]\nworkspace = true\n"),
+        ("crates/order/Cargo.toml", order_manifest.as_str()),
         ("crates/order/src/lib.rs", "//! The `order` stem.\n\npub mod items;\n"),
         ("crates/order/src/items.rs", module),
     ];
     let head_path = "order = { path = \"crates/order\" }\n";
-    let head_crate = "order.workspace = true\n";
     let stem_path = "order-items = { path = \"crates/order-items\" }\n";
-    let stem_crate = "order-items.workspace = true\n";
     let first = r#"{"covered": [], "written": ["crates/order/Cargo.toml", "crates/order/src/lib.rs", "crates/order/src/items.rs", "Cargo.toml"]}"#;
     let repaired = r#"{"covered": [], "written": ["Cargo.toml"]}"#;
-    let model = Scripted::answering([first, repaired])
+    let model = ScriptedModel::answering([first, repaired])
         .calling(
             0,
             [
                 write_files(&split),
-                edit_files(&[
-                    (
-                        "Cargo.toml",
-                        OMNIA_PATH_CRATE_ANCHOR,
-                        &format!("{OMNIA_PATH_CRATE_ANCHOR}{head_path}"),
-                    ),
-                    ("Cargo.toml", stem_crate, &format!("{stem_crate}{head_crate}")),
-                ]),
+                edit_files(&[(
+                    "Cargo.toml",
+                    OMNIA_PATH_CRATE_ANCHOR,
+                    &format!("{OMNIA_PATH_CRATE_ANCHOR}{head_path}"),
+                )]),
             ],
         )
         .calling(
             1,
             [
-                edit_files(&[("Cargo.toml", head_path, ""), ("Cargo.toml", head_crate, "")]),
+                edit_files(&[("Cargo.toml", head_path, "")]),
                 delete_files(&[
                     "crates/order/Cargo.toml",
                     "crates/order/src/lib.rs",
@@ -3894,23 +6008,20 @@ async fn omnia_build_stem_split() {
     }
     assert!(project.read("crates/order/src/items.rs").is_none(), "the split crate is emptied");
     let manifest = text(&project, "Cargo.toml");
+    assert!(manifest.contains(stem_path), "the root manifest names the stem: {manifest}");
     assert!(
-        manifest.contains(stem_path) && manifest.contains(stem_crate),
-        "the root manifest names the stem: {manifest}"
-    );
-    assert!(
-        !manifest.contains(head_path) && !manifest.contains(head_crate),
+        !manifest.contains(head_path),
         "the root manifest no longer names the head: {manifest}"
     );
     assert_eq!(report.written, ["Cargo.toml"], "a removed file is not reported");
 }
 
-// A stem whose entry exposes `router()` or `topics(..)` that no statement
-// of the root lists merges compiles clean and serves nothing, so the verdict
-// is refused with the entry named at the line of each unmerged router,
-// whatever the checks answered, a hyphenated stem read as the path it spells
-// and a `pub(crate)` router, or a stem exposing neither, being the
-// compiler's. The statement added is the repair.
+// A stem whose entry exposes a `handlers()` that no entry of the root's
+// array lists compiles clean and serves nothing, so the verdict is refused
+// with the entry named at the line of each unlisted `handlers()`, whatever
+// the checks answered, a hyphenated stem read as the path it spells and a
+// `pub(crate)` fold, or a stem exposing none, being the compiler's. The
+// entry added is the repair.
 #[tokio::test]
 async fn omnia_stem_unmerged() {
     let project = omnia_tree().await;
@@ -3918,15 +6029,15 @@ async fn omnia_stem_unmerged() {
     project.write("crates/orders/src/reading.rs", OMNIA_PART);
     project.write(
         "crates/order-items/src/lib.rs",
-        "//! The `order-items` stem.\n\npub mod adding;\n\n/// The stem's routes.\npub fn \
-         router<P: common::Capabilities>() -> axum::Router<omnia_sdk::api::Client<P>> {\n    \
-         axum::Router::new().merge(adding::routes())\n}\n",
+        "//! The `order-items` stem.\n\npub mod adding;\n\n/// The stem's handlers.\npub fn \
+         handlers<P: omnia_sdk::Capabilities>() -> omnia_sdk::api::Handlers<P> {\n    \
+         omnia_sdk::api::Handlers::from([adding::handlers()])\n}\n",
     );
     project.write(
         "crates/billing/src/lib.rs",
-        "//! The `billing` stem.\n\nmod charging;\n\npub(crate) fn router<P: \
-         common::Capabilities>() -> axum::Router<omnia_sdk::api::Client<P>> {\n    \
-         axum::Router::new().merge(charging::routes())\n}\n",
+        "//! The `billing` stem.\n\nmod charging;\n\npub(crate) fn handlers<P: \
+         omnia_sdk::Capabilities>() -> omnia_sdk::api::Handlers<P> {\n    \
+         omnia_sdk::api::Handlers::from([charging::handlers()])\n}\n",
     );
     project.write(
         "crates/auth/src/lib.rs",
@@ -3935,23 +6046,18 @@ async fn omnia_stem_unmerged() {
          not know.\npub fn authorise(bearer: &str) -> omnia_sdk::Result<()> {\n    todo!()\n}\n",
     );
     project.write(
-        "src/routes.rs",
-        omnia_seed("src/routes.rs").replace(
-            OMNIA_ROUTE_ANCHOR,
-            &format!("{OMNIA_ROUTE_ANCHOR}    let router = router.merge(order_items::router());\n"),
+        "src/lib.rs",
+        omnia_seed("src/lib.rs").replace(
+            OMNIA_ROOT_ANCHOR,
+            "    Handlers::from([order_items::handlers()]).with_state(Client::new(provider))\n",
         ),
     );
-    project.write(
-        "src/messaging.rs",
-        omnia_seed("src/messaging.rs")
-            .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
-    );
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
-            "src/routes.rs",
-            OMNIA_ROUTE_ANCHOR,
-            &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}"),
+            "src/lib.rs",
+            "Handlers::from([order_items::handlers()])",
+            "Handlers::from([order_items::handlers(), orders::handlers()])",
         )])],
     );
 
@@ -3960,22 +6066,22 @@ async fn omnia_stem_unmerged() {
 
     assert!(verdict.passed);
     let correction = correction(&model);
-    let router_at = line_of(OMNIA_ENTRY, "pub fn router");
+    let handlers_at = line_of(OMNIA_ENTRY, "pub fn handlers");
     for line in [
-        "a stem's `router()` and `topics(..)` are reached through the root lists alone".to_owned(),
+        "a stem's `handlers()` is reached through the root list alone".to_owned(),
         format!(
-            "crates/orders/src/lib.rs:{router_at}: `orders::router()` is merged by no statement \
-             of `src/routes.rs`"
+            "crates/orders/src/lib.rs:{handlers_at}: `orders::handlers()` is listed by no entry \
+             of `src/lib.rs`"
         ),
     ] {
         assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["orders::topics", "order_items", "billing", "auth"] {
+    for absent in ["order_items", "billing", "auth"] {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert!(
-        text(&project, "src/routes.rs").contains(OMNIA_ROUTE_LINE),
-        "the route list holds the statement the repair added"
+        text(&project, "src/lib.rs").contains("orders::handlers()"),
+        "the root's array holds the entry the repair added"
     );
 }
 
@@ -3999,8 +6105,8 @@ async fn omnia_verify_parts_undeclared() {
     let entry = format!(
         "{}{folded}",
         OMNIA_ENTRY.replace(
-            "use omnia_sdk::api::{Client, messaging};\n",
-            "use omnia_sdk::api::{Client, Context, messaging};\n"
+            "use omnia_sdk::api::Handlers;\n",
+            "use omnia_sdk::api::{Context, Handlers};\n"
         )
     );
     project.write("crates/orders/src/lib.rs", &entry);
@@ -4016,17 +6122,8 @@ async fn omnia_verify_parts_undeclared() {
          bearer.\n///\n/// # Errors\n///\n/// `unauthorized` for a bearer the deployment does \
          not know.\npub fn authorise(bearer: &str) -> omnia_sdk::Result<()> {\n    todo!()\n}\n",
     );
-    project.write(
-        "src/routes.rs",
-        omnia_seed("src/routes.rs")
-            .replace(OMNIA_ROUTE_ANCHOR, &format!("{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}")),
-    );
-    project.write(
-        "src/messaging.rs",
-        omnia_seed("src/messaging.rs")
-            .replace(OMNIA_TOPICS_ANCHOR, &format!("{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}")),
-    );
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    project.write("src/lib.rs", omnia_root_with_orders());
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/orders/src/lib.rs", folded, ""),
@@ -4035,7 +6132,7 @@ async fn omnia_verify_parts_undeclared() {
                 "pub mod reading;\n",
                 "pub mod pricing;\npub mod reading;\n",
             ),
-            ("crates/orders/src/lib.rs", "{Client, Context, messaging}", "{Client, messaging}"),
+            ("crates/orders/src/lib.rs", "{Context, Handlers}", "Handlers"),
         ])],
     );
 
@@ -4065,8 +6162,7 @@ async fn omnia_verify_parts_undeclared() {
     ] {
         assert!(correction.contains(&line), "the correction carries `{line}`: {correction}");
     }
-    for absent in ["reading.rs:", "`fn router`", "`fn topics`", "`use", "auth", "common/src/lib.rs"]
-    {
+    for absent in ["reading.rs:", "`fn handlers`", "`use", "auth", "common/src/lib.rs"] {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     let repaired = text(&project, "crates/orders/src/lib.rs");
@@ -4092,7 +6188,7 @@ async fn omnia_topic_unnamed() {
         "crates/orders/src/reading.rs",
         format!("{OMNIA_PART}\n// A return lands on `topic::ORDER_RETURNED` once stated.\n"),
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/common/src/topic.rs", returned, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4124,10 +6220,7 @@ async fn omnia_dependency_unused() {
     let project = omnia_tree().await;
     let unused = "uuid.workspace = true\n";
     let manifest = format!(
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
-         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
-         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
-         chrono.workspace = true\nquick-xml = {{ version = \"0.37\", features = \
+        "{OMNIA_MANIFEST}chrono.workspace = true\nquick-xml = {{ version = \"0.37\", features = \
          [\"serialize\"] }}\nhttp.workspace = true\n{unused}"
     );
     project.write("crates/orders/Cargo.toml", &manifest);
@@ -4149,7 +6242,7 @@ async fn omnia_dependency_unused() {
          let request = http::Request::builder().body(()).expect(\"a request\");\n    \
          drop(request);\n}\n",
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4182,12 +6275,7 @@ async fn omnia_dependency_unused() {
 async fn omnia_dependency_unused_in_string() {
     let project = omnia_tree().await;
     let unused = "uuid.workspace = true\n";
-    let manifest = format!(
-        "[package]\nname = \"orders\"\n\n[lints]\nworkspace = true\n\n[dependencies]\n\
-         axum.workspace = true\ncommon.workspace = true\nomnia-sdk.workspace = true\n\
-         serde.workspace = true\nserde_json.workspace = true\ntracing.workspace = true\n\
-         chrono.workspace = true\n{unused}"
-    );
+    let manifest = format!("{OMNIA_MANIFEST}chrono.workspace = true\n{unused}");
     project.write("crates/orders/Cargo.toml", &manifest);
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write(
@@ -4196,7 +6284,7 @@ async fn omnia_dependency_unused_in_string() {
          str {\n    \"uuid\"\n}\n\n/// Logs when an order was read.\npub fn read_at() {\n    \
          tracing::info!(at = %chrono::Utc::now(), \"order read, its id a uuid::Uuid\");\n}\n",
     );
-    let model = Scripted::answering([PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED])
         .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unused, "")])]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("the repaired tree is accepted");
@@ -4221,8 +6309,8 @@ async fn omnia_dependency_unused_in_string() {
 // the part named at its first `Publish` in code, a mention in its doc
 // counting for nothing, while a publishing stem whose entry registers a
 // part and one another stem's module reaches pass. The repair writes the
-// trigger: the topic's constant, the `.route(..)` in the part's
-// `topics(..)`, and the part's entry in the stem's array.
+// trigger: the topic's constant, the `.topic(..)` in the part's
+// `handlers()`, and the part's entry in the stem's array.
 #[tokio::test]
 async fn omnia_publisher_unreached() {
     let project = omnia_tree().await;
@@ -4232,34 +6320,31 @@ async fn omnia_publisher_unreached() {
         "crates/common/src/topic.rs",
         format!("{}{charged}", omnia_seed("crates/common/src/topic.rs")),
     );
-    let topics_anchor = "        // one entry per part with topics, each added at the end\n";
     let entry = OMNIA_ENTRY
         .replace("pub mod reading;", "pub mod publishing;")
-        .replace("        reading::routes(),\n", "")
-        .replace("        reading::topics,\n", "");
-    let handler = "pub(crate) async fn on_placed<P: Config + Publish>(\n    input: Order, context: \
-                   Context<P>,\n) -> omnia_sdk::Result<()> {\n    todo!()\n}\n";
+        .replace("Handlers::from([reading::handlers()])", "Handlers::from([])");
+    let handler = "pub(crate) async fn on_placed<P: Config + Publish>(\n    context: Context<P>, \
+                   input: Order,\n) -> Result<()> {\n    todo!()\n}\n";
     let part = format!(
-        "//! Publishes placed orders.\n\nuse common::{{Capabilities, config, topic}};\nuse \
-         omnia_sdk::api::{{Context, messaging}};\nuse omnia_sdk::{{Config, Publish}};\n\n/// An \
-         order as the wire carries it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    \
-         /// Its id.\n    pub id: String,\n}}\n\n{handler}"
+        "//! Publishes placed orders.\n\nuse common::topic;\nuse omnia_sdk::api::{{Context, \
+         Handlers}};\nuse omnia_sdk::{{Capabilities, Config, Publish, Result}};\n\n/// An order \
+         as the wire carries it.\n#[derive(serde::Deserialize)]\npub struct Order {{\n    /// \
+         Its id.\n    pub id: String,\n}}\n\n{handler}"
     );
     project.write("crates/orders/src/lib.rs", &entry);
     project.write("crates/orders/src/publishing.rs", &part);
     reached_publishers(&project);
-    let route = "pub(crate) fn topics<P: Capabilities>(\n    router: messaging::Router<P>, env: \
-                 &str,\n) -> messaging::Router<P> {\n    router.route(config::topic_for(env, \
-                 topic::ORDER_PLACED), messaging::consume(on_placed))\n}\n\n";
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let registration = "pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                        Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n\n";
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/common/src/topic.rs", charged, &format!("{charged}{OMNIA_TABLE_LINE}")),
-            ("crates/orders/src/publishing.rs", handler, &format!("{route}{handler}")),
+            ("crates/orders/src/publishing.rs", handler, &format!("{registration}{handler}")),
             (
                 "crates/orders/src/lib.rs",
-                topics_anchor,
-                &format!("{topics_anchor}        publishing::topics,\n"),
+                "Handlers::from([])",
+                "Handlers::from([publishing::handlers()])",
             ),
         ])],
     );
@@ -4269,9 +6354,9 @@ async fn omnia_publisher_unreached() {
 
     assert!(verdict.passed);
     let correction = correction(&model);
-    let publish_at = line_of(&part, "use omnia_sdk::{Config, Publish};");
+    let publish_at = line_of(&part, "use omnia_sdk::{Capabilities, Config, Publish, Result};");
     for line in [
-        "the host runs a stem through its `routes()` and `topics(..)` alone".to_owned(),
+        "the host runs a stem through its `handlers()` alone".to_owned(),
         format!(
             "crates/orders/src/publishing.rs:{publish_at}: `Publish` in a stem no route or topic \
              reaches"
@@ -4283,7 +6368,7 @@ async fn omnia_publisher_unreached() {
         assert!(!correction.contains(absent), "`{absent}` is no finding: {correction}");
     }
     assert!(
-        text(&project, "crates/orders/src/lib.rs").contains("publishing::topics,"),
+        text(&project, "crates/orders/src/lib.rs").contains("publishing::handlers()"),
         "the entry's array holds the part the repair added"
     );
     assert!(
@@ -4293,7 +6378,7 @@ async fn omnia_publisher_unreached() {
 }
 
 // Two publishing stems the check credits as reached: `billing`, whose entry
-// registers the part that publishes and which the root lists name, and
+// registers the part that publishes and which the root list names, and
 // `audit`, which no entry registers and `billing`'s handler calls.
 fn reached_publishers(project: &Scratch) {
     project.write(
@@ -4302,15 +6387,12 @@ fn reached_publishers(project: &Scratch) {
     );
     project.write(
         "crates/billing/src/charging.rs",
-        "//! Takes charges.\n\nuse audit::recording::record;\nuse common::{Capabilities, config, \
-         topic};\nuse omnia_sdk::api::{Client, Context, messaging};\nuse omnia_sdk::Publish;\n\n\
-         pub(crate) fn routes<P: Capabilities>() -> axum::Router<Client<P>> {\n    \
-         axum::Router::new()\n}\n\npub(crate) fn topics<P: Capabilities>(\n    router: \
-         messaging::Router<P>, env: &str,\n) -> messaging::Router<P> {\n    \
-         router.route(config::topic_for(env, topic::BILLING_CHARGED), \
-         messaging::consume(on_charged))\n}\n\npub(crate) async fn on_charged<P: Publish>(input: \
-         String, context: Context<P>) -> omnia_sdk::Result<()> {\n    record(context.provider(), \
-         &input).await\n}\n",
+        "//! Takes charges.\n\nuse audit::recording::record;\nuse common::topic;\nuse \
+         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, Publish, \
+         Result};\n\npub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+         Handlers::new().topic(topic::BILLING_CHARGED, on_charged)\n}\n\npub(crate) async fn \
+         on_charged<P: Publish>(context: Context<P>, input: String) -> Result<()> {\n    \
+         record(context.provider(), &input).await\n}\n",
     );
     project.write("crates/audit/src/lib.rs", "//! # audit\n\npub mod recording;\n");
     project.write(
@@ -4321,23 +6403,11 @@ fn reached_publishers(project: &Scratch) {
          todo!()\n}\n",
     );
     project.write(
-        "src/routes.rs",
-        omnia_seed("src/routes.rs").replace(
-            OMNIA_ROUTE_ANCHOR,
-            &format!(
-                "{OMNIA_ROUTE_ANCHOR}{OMNIA_ROUTE_LINE}    let router = \
-                 router.merge(billing::router());\n"
-            ),
-        ),
-    );
-    project.write(
-        "src/messaging.rs",
-        omnia_seed("src/messaging.rs").replace(
-            OMNIA_TOPICS_ANCHOR,
-            &format!(
-                "{OMNIA_TOPICS_ANCHOR}{OMNIA_TOPICS_LINE}    let router = billing::topics(router, \
-                 &env);\n"
-            ),
+        "src/lib.rs",
+        omnia_seed("src/lib.rs").replace(
+            OMNIA_ROOT_ANCHOR,
+            "    Handlers::from([orders::handlers(), billing::handlers()])\n        \
+             .with_state(Client::new(provider))\n",
         ),
     );
 }
@@ -4372,7 +6442,7 @@ async fn omnia_rejection_swallowed() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             (
@@ -4451,7 +6521,7 @@ async fn omnia_rejection_swallowed_on_one_line() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[
             ("crates/orders/src/reading.rs", invalid, "    let order = validate(&input)?;\n"),
@@ -4515,7 +6585,7 @@ async fn omnia_format_setting() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
             "crates/orders/src/reading.rs",
@@ -4560,7 +6630,7 @@ async fn omnia_module_unparsed() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED, PASSED])
+    let model = ScriptedModel::answering([PASSED, PASSED, PASSED])
         .calling(
             1,
             [edit_files(&[(
@@ -4628,7 +6698,7 @@ async fn omnia_rejection_swallowed_across_lines() {
     );
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
     project.write("crates/orders/src/reading.rs", &module);
-    let model = Scripted::answering([PASSED, PASSED]).calling(
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[(
             "crates/orders/src/reading.rs",
@@ -4689,7 +6759,7 @@ async fn omnia_empty_miss_read_across_lines() {
     let first_tree = module(empty);
     let written = [("crates/rates/src/cache.rs", first_tree.as_str())];
     let report = r#"{"covered": [], "written": ["crates/rates/src/cache.rs"]}"#;
-    let model = Scripted::answering([report, report])
+    let model = ScriptedModel::answering([report, report])
         .calling(0, [write_files(&written), declare_module("rates", "table", "cache")])
         .calling(1, [edit_files(&[("crates/rates/src/cache.rs", empty, fetched)])]);
 
@@ -4735,12 +6805,309 @@ async fn omnia_verify_stem_clean() {
         "crates/orders/tests/reading.rs",
         "#[tokio::test]\nasync fn waits() {\n    tokio::time::sleep(std::time::Duration::from_secs(1)).await;\n}\n",
     );
-    let model = Scripted::answering([PASSED]);
+    let model = ScriptedModel::answering([PASSED]);
 
     let verdict = OMNIA.verify(&project, &model).await.expect("verify over the clean stem");
     model.assert_exhausted();
 
     assert!(verdict.passed, "the modules simulate nothing: {:?}", verdict.failures);
+}
+
+// A later serial slice of a part (`index > 1`) extends the held module and
+// test file in place: its new path constants, handlers, functions, and
+// ignored scenario tests are appended byte for byte after what the first
+// slice's turn left, its new route is chained onto `handlers()`, the guard
+// holds the appended items and markers, and the brief names the module and
+// test file as `held, extended`.
+#[tokio::test]
+async fn omnia_scaffold_serial_second_slice() {
+    let project = omnia_tree().await;
+    let mut first = omnia_slice();
+    first.count = 2;
+    let first_report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let first_model = ScriptedModel::answering([first_report]).calling(
+        0,
+        [edit_files(&[
+            ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+            ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+            ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+            ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+        ])],
+    );
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice builds");
+    first_model.assert_exhausted();
+    let held_module = text(&project, "crates/orders/src/reading.rs");
+    let held_tests = text(&project, "crates/orders/tests/reading.rs");
+    let before = files_under(project.path());
+
+    let mut second = slice_for("orders-reading", &["orders.list", "orders.count"]);
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 2;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.requirements[0].statement = vec!["Lists every order.".to_owned()];
+    second.requirements[0].trigger = Some(routed("GET", "/orders"));
+    second.requirements[0].scenarios = vec![Scenario {
+        name: "Every order is listed".to_owned(),
+        given: vec!["an order 42".to_owned()],
+        when: "GET /orders is called".to_owned(),
+        then: "the orders are answered".to_owned(),
+        and: Vec::new(),
+    }];
+    second.requirements[1].id = "REQ-003".to_owned();
+    second.requirements[1].statement = vec!["Counts the orders.".to_owned()];
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &second_model, &second).await.expect("second slice scaffolds");
+    second_model.assert_exhausted();
+
+    assert_eq!(files_under(project.path()), before, "no numbered module or extra file is written");
+    let expected_module = format!(
+        "{}\n\npub(crate) const ORDERS: &str = \"/orders\";\n\n/// The output of `GET \
+         /orders`.\n#[derive(Debug, Serialize)]\npub struct ListOutput {{}}\n\n// REQ-002 \
+         orders.list: Lists every order.\npub(crate) async fn list<P>(context: Context<P>) -> \
+         Result<Json<ListOutput>>\nwhere\n    P: Capabilities,\n{{\n    let _ = &context;\n    \
+         todo!(\"REQ-002 orders.list: the handler\")\n}}\n\n// REQ-003 orders.count: Counts the \
+         orders.\n/// The behaviour `orders.count` states.\n///\n/// # Errors\n///\n/// As the \
+         requirement states.\npub fn count() -> Result<()> {{\n    todo!(\"REQ-003 orders.count: \
+         the behaviour\")\n}}\n",
+        held_module
+            .replace(
+                "Handlers::new().route(ORDERS_ID, get(read))",
+                "Handlers::new().route(ORDERS_ID, get(read)).route(ORDERS, get(list))"
+            )
+            .trim_end()
+    );
+    assert_eq!(
+        text(&project, "crates/orders/src/reading.rs"),
+        expected_module,
+        "the held module is extended byte for byte with the second slice's route, handler, and \
+         function"
+    );
+    let expected_tests = format!(
+        "{}\n\n// REQ-002 orders.list: Every order is listed\n//   Given an order 42\n//   When GET \
+         /orders is called\n//   Then the orders are answered\n#[tokio::test]\n#[ignore = \
+         \"REQ-002 Every order is listed: unfilled\"]\nasync fn every_order_is_listed() {{\n    \
+         let request = Request::get(\"/orders\").body(Body::empty()).expect(\"request\");\n    \
+         let (status, body) = call(&provider(), request).await;\n    let _ = (&status, &body);\n    \
+         todo!(\"REQ-002 Every order is listed: arrange, act, assert\")\n}}\n",
+        held_tests.trim_end()
+    );
+    assert_eq!(
+        text(&project, "crates/orders/tests/reading.rs"),
+        expected_tests,
+        "the held test file is extended byte for byte with the second slice's ignored test"
+    );
+    assert_parses(&project, &["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]);
+    let brief = &second_model.seen()[0].messages[0];
+    for carried in [
+        "- `crates/orders/src/reading.rs`: held, extended. Extended with this slice's markers, \
+         listed below; fill them through `edit_files` and keep what the earlier slice wrote.",
+        "- `crates/orders/tests/reading.rs`: held, extended with one ignored test per scenario of \
+         this slice. Fill each new test through `edit_files`, replacing the block listed below, \
+         and keep the earlier tests passing.",
+        "1. The handler `list` of `GET /orders` in `crates/orders/src/reading.rs`, key `REQ-002 \
+         orders.list: the handler`",
+        "2. The function `count` in `crates/orders/src/reading.rs`, key `REQ-003 orders.count: \
+         the behaviour`",
+        "3. The test `every_order_is_listed` in `crates/orders/tests/reading.rs`, key `REQ-002 \
+         Every order is listed: arrange, act, assert`",
+    ] {
+        assert!(brief.contains(carried), "the brief carries `{carried}`: {brief}");
+    }
+}
+
+// When a later serial slice of a part adds a route or a topic to a held
+// module, each new registration is chained onto the held `handlers()`
+// function (or scaffolded fresh when the first slice had only functions),
+// and when a held `handlers()` chain was rewritten into a shape `syn`
+// cannot anchor, the brief names the unanchored registration for the turn
+// to wire.
+#[tokio::test]
+async fn omnia_scaffold_serial_route_registered() {
+    let project = omnia_tree().await;
+    let mut first = slice_for("orders-reading", &["orders.validate"]);
+    first.count = 3;
+    let first_model = ScriptedModel::answering([
+        r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            "REQ-001 orders.validate: the behaviour",
+            "pub fn validate() -> Result<()> {\n    Ok(())\n}",
+        )])],
+    );
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice of functions");
+    first_model.assert_exhausted();
+
+    let mut second = omnia_slice();
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 3;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.types = Vec::new();
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA
+        .build_slice(&project, &second_model, &second)
+        .await
+        .expect("second slice adds handlers()");
+    second_model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert!(
+        module.contains(
+            "pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+             Handlers::new().route(ORDERS_ID, get(read))\n}\n"
+        ),
+        "a held module with no `handlers()` yet gains `handlers()` on the first routed slice: \
+         {module}"
+    );
+    assert!(
+        text(&project, "crates/orders/src/lib.rs")
+            .contains("Handlers::from([reading::handlers()])"),
+        "the stem's entry gains `reading::handlers()` when the part gains its first route"
+    );
+    assert_parses(&project, &["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]);
+
+    // rewrite `handlers()` to bind a local value so `chain_end` finds no tail chain
+    let custom_routes = module.replace(
+        "    Handlers::new().route(ORDERS_ID, get(read))\n",
+        "    let handlers = Handlers::new().route(ORDERS_ID, get(read));\n    handlers\n",
+    );
+    project.write("crates/orders/src/reading.rs", &custom_routes);
+
+    let mut third = omnia_slice();
+    third.id = "SLICE-003".to_owned();
+    third.index = 3;
+    third.count = 3;
+    third.requirements[0].id = "REQ-003".to_owned();
+    third.requirements[0].subject = "orders.remove".to_owned();
+    third.requirements[0].trigger = Some(routed("DELETE", "/orders/{id}"));
+    third.requirements[0].scenarios.clear();
+    third.types = Vec::new();
+    let third_model = ScriptedModel::answering([
+        r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            "    let handlers = Handlers::new().route(ORDERS_ID, get(read));\n    handlers\n",
+            "    Handlers::new().route(ORDERS_ID, get(read)).route(ORDERS_ID, delete(remove))\n",
+        )])],
+    );
+    OMNIA
+        .build_slice(&project, &third_model, &third)
+        .await
+        .expect("third slice with unanchored chain");
+    third_model.assert_exhausted();
+
+    let brief = &third_model.seen()[0].messages[0];
+    let unanchored = "- `.route(ORDERS_ID, delete(remove))` in `handlers()` of \
+                      `crates/orders/src/reading.rs` holds no chain anchor, so the registration \
+                      was not added: register the handler in the router chain through \
+                      `edit_files`.";
+    assert!(brief.contains(unanchored), "the brief names the unanchored registration: {brief}");
+}
+
+// A part's owned design types travel with its first slice alone: the first
+// slice lays `Order` into the module and points the design's `Type:` block at
+// the scaffold section, while the second slice (`types` empty) leaves `Order`
+// standing in the held module without re-laying it.
+#[tokio::test]
+async fn omnia_serial_types_first_slice_only() {
+    let project = omnia_tree().await;
+    let mut first = omnia_slice();
+    first.count = 2;
+    first.design =
+        "# Design\n\nType: orders.Order\n```ts\ninterface Order {\n  id: string;\n}\n```\n"
+            .to_owned();
+    let first_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA.build_slice(&project, &first_model, &first).await.expect("first slice lays types");
+    first_model.assert_exhausted();
+
+    let first_brief = &first_model.seen()[0].messages[0];
+    assert!(
+        first_brief.contains(
+            "Type: orders.Order — laid in the tree by the adapter before this turn, as the \
+             scaffold section says."
+        ),
+        "the first slice's brief replaces the laid type block with a pointer: {first_brief}"
+    );
+
+    let mut second = omnia_slice();
+    second.id = "SLICE-002".to_owned();
+    second.index = 2;
+    second.count = 2;
+    second.requirements[0].id = "REQ-002".to_owned();
+    second.requirements[0].subject = "orders.archive".to_owned();
+    second.requirements[0].statement = vec!["Archives an Order by its id.".to_owned()];
+    second.requirements[0].trigger = Some(routed("POST", "/orders/{id}/archive"));
+    second.types = Vec::new();
+    second.design = first.design.clone();
+    let second_model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+    OMNIA
+        .build_slice(&project, &second_model, &second)
+        .await
+        .expect("second slice carries no owned types");
+    second_model.assert_exhausted();
+
+    let module = text(&project, "crates/orders/src/reading.rs");
+    assert_eq!(
+        module.matches("pub struct Order {").count(),
+        1,
+        "`Order` is laid once by the first slice and kept on the second: {module}"
+    );
+    let second_brief = &second_model.seen()[0].messages[0];
+    assert!(
+        !second_brief.contains("The design types `Order`"),
+        "the second slice lays no design types of its own: {second_brief}"
+    );
+    assert!(
+        second_brief.contains("Type: orders.Order\n```ts\ninterface Order"),
+        "the second slice's design cut keeps `Order` as a referenced type: {second_brief}"
+    );
+}
+
+// A `pub(crate) async fn` handler in a slice's part that `handlers()` does
+// not register is refused by `check_build` with the handler's line named;
+// registering the handler in `handlers()` repairs the tree.
+#[tokio::test]
+async fn omnia_unregistered_handler_finding() {
+    let project = omnia_tree().await;
+    let slice = omnia_slice();
+    let unchained = "    Handlers::new()\n";
+    let chained = "    Handlers::new().route(ORDERS_ID, get(read))\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/orders/tests/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+                ("crates/orders/src/reading.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+                ("crates/orders/src/reading.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+                ("crates/orders/src/reading.rs", chained, unchained),
+                ("crates/orders/tests/reading.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", unchained, chained)])]);
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("the registered handler passes");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let correction = correction(&model);
+    let expected = format!(
+        "crates/orders/src/reading.rs:{}: handler `read` is registered by no call of `handlers()`",
+        line_of(OMNIA_MODULE, "pub(crate) async fn read")
+    );
+    assert!(
+        correction.contains("every `pub(crate) async fn` handler in a part is registered")
+            && correction.contains(&expected),
+        "the correction names the unregistered handler at its line: {correction}"
+    );
 }
 
 // A tree holding every file of the seed, as the engine's holds it once the
@@ -4775,10 +7142,17 @@ fn files_under(root: &Path) -> BTreeSet<String> {
     files
 }
 
-// The seed's root manifest with the `orders` stem's line in each list.
+// The seed's root manifest with the `orders` stem's line after its anchor,
+// the last line of the seed.
 fn omnia_manifest_with_orders() -> String {
     omnia_seed("Cargo.toml").replace(
         OMNIA_PATH_CRATE_ANCHOR,
         &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-    ) + OMNIA_STEM_LINE
+    )
+}
+
+// The seed's root entry with the `orders` stem's handlers as the one entry
+// of the router's array, under the comment that heads it.
+fn omnia_root_with_orders() -> String {
+    omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
 }

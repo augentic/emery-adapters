@@ -27,14 +27,19 @@ const OMNIA_REPORT: &str = r#"{"covered": ["REQ-001"], "written": ["crates/order
 // The handler and test markers the omnia adapter scaffolds for the slice the
 // driver hands it, and the bodies the scripted turn puts in their place.
 const OMNIA_HANDLER_MARKER: &str =
-    "    let _ = (&input, &context);\n    todo!(\"REQ-001 orders.create: the handler\")\n";
-const OMNIA_HANDLER_FILLED: &str =
-    "    let CreateInput {} = input;\n    let _ = context;\n    Ok(CreateOutput {})\n";
+    "    let _ = (&context, &input);\n    todo!(\"REQ-001 orders.create: the handler\")\n";
+const OMNIA_HANDLER_FILLED: &str = "    let CreateInput {} = input;\n    let _ = \
+                                    context.state().get(\"orders\").await?;\n    \
+                                    Ok(Json(CreateOutput {}))\n";
+const OMNIA_BOUND: &str = "where\n    P: Capabilities,\n";
+const OMNIA_BOUND_NARROWED: &str = "where\n    P: StateStore,\n";
+const OMNIA_SDK_USE: &str = "use omnia_sdk::{Capabilities, Result};\n";
+const OMNIA_SDK_USE_NARROWED: &str = "use omnia_sdk::{Capabilities, Result, StateStore};\n";
 const OMNIA_TEST_MARKER: &str = "#[ignore = \"REQ-001 An order is created: unfilled\"]\nasync fn \
                                  an_order_is_created() {\n    let request = \
                                  Request::post(\"/orders\")\n        .header(CONTENT_TYPE, \
                                  \"application/json\")\n        .body(Body::from(\"{}\"))\n        \
-                                 .expect(\"request\");\n    let (status, body) = send(provider(), \
+                                 .expect(\"request\");\n    let (status, body) = call(&provider(), \
                                  request).await;\n    let _ = (&status, &body);\n    \
                                  todo!(\"REQ-001 An order is created: arrange, act, assert\")\n}\n";
 const OMNIA_TEST_FILLED: &str = "async fn an_order_is_created() {\n    assert_eq!(1 + 1, 2);\n}\n";
@@ -241,16 +246,22 @@ async fn emery_python() {
     );
 }
 
-// The metadata lowers the merge rules; the init scaffolds the root manifests in
-// the lent tree with no turn, the build writes the mount through
-// `write_files`, its turns carry the worker grant, and its report and the
-// verdict lift back to the driver.
+// The metadata lowers the budget and the merge rules; the init scaffolds the
+// root manifests in the lent tree with no turn, the build writes the mount
+// through `write_files`, its turns carry the worker grant, and its report and
+// the verdict lift back to the driver.
 #[tokio::test]
 async fn emery_node() {
     support::build(
         test_programs::TARGET_EMERY_NODE,
         &scratch(),
-        &["metadata", "package-lock.json=ours", "src/index.ts=union", "**/index.ts=union"],
+        &[
+            "metadata",
+            "budget=12",
+            "package-lock.json=ours",
+            "src/index.ts=union",
+            "**/index.ts=union",
+        ],
         ScriptedModel::default(),
     )
     .await;
@@ -289,7 +300,7 @@ async fn emery_vue() {
     support::build(
         test_programs::TARGET_EMERY_VUE,
         &scratch(),
-        &["metadata", "pnpm-lock.yaml=ours"],
+        &["metadata", "budget=12", "pnpm-lock.yaml=ours"],
         ScriptedModel::default(),
     )
     .await;
@@ -325,11 +336,11 @@ async fn emery_vue() {
     assert!(model.seen().is_empty(), "the refusal opens no turn");
 }
 
-// The metadata lowers the seven rules in order; the init scaffolds the
-// template in the lent tree with no turn, the build scaffolds the slice's
-// skeleton from the typed slice the driver lowered — the stem's crate and
-// its lines in the seeded lists — before its turn, the handler from the
-// typed route the driver lowered, which the turn fills with the test
+// The metadata lowers the budget and the six rules in order; the init
+// scaffolds the template in the lent tree with no turn, the build scaffolds
+// the slice's skeleton from the typed slice the driver lowered — the stem's
+// crate and its lines in the seeded lists — before its turn, the handler from
+// the typed route the driver lowered, which the turn fills with the test
 // through `edit_files`, its turns carry the worker grant, and
 // its report and the verdict lift back to the driver, the verify's check
 // finding the static files standing as the template spells them.
@@ -340,10 +351,10 @@ async fn emery_omnia() {
         &scratch(),
         &[
             "metadata",
+            "budget=12",
             "Cargo.lock=ours",
             "Cargo.toml=union",
-            "src/routes.rs=union",
-            "src/messaging.rs=union",
+            "src/lib.rs=union",
             "crates/common/src/topic.rs=union",
             "crates/*/Cargo.toml=union",
             "crates/*/src/lib.rs=union",
@@ -355,6 +366,8 @@ async fn emery_omnia() {
     let project = scratch();
     let edits = serde_json::json!({ "edits": [
         { "path": "crates/orders/src/orders.rs", "find": OMNIA_HANDLER_MARKER, "replace": OMNIA_HANDLER_FILLED },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
         { "path": "crates/orders/tests/orders.rs", "find": OMNIA_TEST_MARKER, "replace": OMNIA_TEST_FILLED },
     ]})
     .to_string();
@@ -392,9 +405,9 @@ async fn emery_omnia() {
     );
     for line in [
         "pub(crate) const ORDERS: &str = \"/orders\";\n",
-        ".route(ORDERS, create_route())",
-        "pub(crate) fn create_route<P: Capabilities>() -> MethodRouter<Client<P>> {\n    \
-         handle_with(\n        MethodFilter::POST,\n        create,\n",
+        "    Handlers::new().route(ORDERS, post(create))\n",
+        "pub(crate) async fn create<P>(\n    context: Context<P>, Json(input): \
+         Json<CreateInput>,\n) -> Result<Json<CreateOutput>>\n",
     ] {
         assert!(
             module.contains(line),
@@ -407,13 +420,17 @@ async fn emery_omnia() {
         "the test the guest scaffolded is filled and run: {tests}"
     );
     assert!(
-        text("src/routes.rs").contains("    let router = router.merge(orders::router());\n"),
-        "the seeded route list holds the stem's line the guest added"
+        text("src/lib.rs").contains(
+            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
+             the end\n        orders::handlers(),\n    ])\n    \
+             .with_state(Client::new(provider))\n"
+        ),
+        "the seeded root router holds the stem's entry the guest added under its comment"
     );
     let seeded = |path: &str| {
         omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.as_bytes()
     };
-    for path in ["src/lib.rs", ".gitignore"] {
+    for path in ["crates/common/src/lib.rs", ".gitignore"] {
         assert_eq!(
             project.read(path).as_deref(),
             Some(seeded(path)),
@@ -424,4 +441,64 @@ async fn emery_omnia() {
         project.read(".github/workflows/ci.yaml").is_some(),
         "a seed under a hidden directory reached the host's tree"
     );
+}
+
+// Two serial slices of one part built over one tree: the first scaffolds the
+// part and lays its owned design type, and the second extends the held module
+// and test file in place with its route, handler, and test without rewriting
+// the first slice's code or creating a numbered module.
+#[tokio::test]
+async fn emery_omnia_serial() {
+    let project = scratch();
+    let first_edits = serde_json::json!({ "edits": [
+        { "path": "crates/orders/src/orders.rs", "find": "REQ-001 orders.create: the handler", "replace": OMNIA_HANDLER_FILLED.trim_end() },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
+        { "path": "crates/orders/tests/orders.rs", "find": "REQ-001 An order is created: arrange, act, assert", "replace": OMNIA_TEST_FILLED.trim_end() },
+    ]})
+    .to_string();
+    let second_edits = serde_json::json!({ "edits": [
+        { "path": "crates/orders/src/orders.rs", "find": "REQ-002 orders.read: the handler", "replace": "    let _ = (&id, context.state().get(\"orders\").await?);\n    Ok(Json(ReadOutput {}))" },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
+        { "path": "crates/orders/tests/orders.rs", "find": "REQ-002 An order is read: arrange, act, assert", "replace": "async fn an_order_is_read() {\n    assert_eq!(2 + 2, 4);\n}" },
+    ]})
+    .to_string();
+    let second_report = r#"{"covered": ["REQ-002"], "written": ["crates/orders/src/orders.rs", "crates/orders/tests/orders.rs"]}"#;
+    let model = ScriptedModel::answering([OMNIA_REPORT, second_report, PASSED])
+        .calling(0, [("edit_files", first_edits)])
+        .calling(1, [("edit_files", second_edits)]);
+
+    let model =
+        support::build(test_programs::TARGET_EMERY_OMNIA, &project, &["serial"], model).await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 3, "two build completions, then the verify");
+    assert!(
+        seen[1].messages[0].contains("Build slice 2 of 2 of part `orders` (PART-001) as SLICE-002"),
+        "the second turn opens with the serial slice position: {}",
+        seen[1].messages[0]
+    );
+    assert!(
+        seen[1].messages[0].contains("- `crates/orders/src/orders.rs`: held, extended."),
+        "the brief names the held module as extended: {}",
+        seen[1].messages[0]
+    );
+    let text = |path: &str| {
+        String::from_utf8(project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`")))
+            .expect("UTF-8")
+    };
+    let module = text("crates/orders/src/orders.rs");
+    for carried in [
+        "pub struct Order {",
+        "Handlers::new().route(ORDERS, post(create)).route(ORDERS_ID, get(read))",
+        "pub(crate) async fn create<P>(",
+        "pub(crate) async fn read<P>(context: Context<P>, Path(id): Path<String>) -> Result<Json<ReadOutput>>",
+    ] {
+        assert!(module.contains(carried), "the extended module carries `{carried}`: {module}");
+    }
+    let tests = text("crates/orders/tests/orders.rs");
+    for carried in ["async fn an_order_is_created()", "async fn an_order_is_read()"] {
+        assert!(tests.contains(carried), "the extended test file carries `{carried}`: {tests}");
+    }
+    assert!(!tests.contains("#[ignore"), "both scenario tests are filled: {tests}");
 }

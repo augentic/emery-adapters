@@ -17,7 +17,7 @@ use emery_sdk::target::{
 };
 use emery_sdk::{Error, body};
 use omnia_sdk::model::{Reply, ToolCall};
-use omnia_test::guest::Scripted;
+use omnia_test::guest::ScriptedModel;
 use omnia_test::host::{Scratch, scratch};
 use sha2::{Digest as _, Sha256};
 use web_rendered_layout::{BUNDLE_MEDIA_TYPE, Facts, FactsFolder, assemble, review};
@@ -39,7 +39,7 @@ async fn vue() {
     let extracted = [("src/Page.vue", EXTRACTED_PAGE)];
     let refactored =
         [("src/Page.vue", REFACTORED_PAGE), ("src/components/ProduceSection.vue", SECTION)];
-    let model = Scripted::answering([REPORT, REFACTORED, PASSED])
+    let model = ScriptedModel::answering([REPORT, REFACTORED, PASSED])
         .calling(0, [turn_files(&extracted, "layout/capture", true)])
         .calling(1, [turn_files(&refactored, "layout/capture", true)])
         .calling(2, [tool_call(&[], &refactored, "layout/verify/capture", false)]);
@@ -91,7 +91,7 @@ async fn vue_refactor_reads_no_structure() {
     let project = scratch();
     init(&project).await;
     let extracted = [("src/Page.vue", EXTRACTED_PAGE)];
-    let model = Scripted::answering([REPORT])
+    let model = ScriptedModel::answering([REPORT])
         .calling(0, [turn_files(&extracted, "layout/capture", true)])
         .then(|| {
             Ok(Reply {
@@ -137,7 +137,7 @@ async fn vue_refactor_positioned_refused() {
     let project = scratch();
     init(&project).await;
     let positioned = "<template>\n  <main style=\"position: absolute\" />\n</template>\n";
-    let model = Scripted::answering([REPORT, REFACTORED])
+    let model = ScriptedModel::answering([REPORT, REFACTORED])
         .calling(0, [turn_files(&[("src/Page.vue", positioned)], "layout/capture", true)])
         .calling(
             1,
@@ -185,7 +185,7 @@ async fn vue_attempts_end_on_the_best() {
         ("src/components/ProduceSection.vue", SECTION),
         ("src/components/Later.vue", SECTION),
     ];
-    let model = Scripted::answering([REPORT, REPORT, REFACTORED, REFACTORED])
+    let model = ScriptedModel::answering([REPORT, REPORT, REFACTORED, REFACTORED])
         .calling(0, [turn_files(&first, "layout/capture", true)])
         .calling(1, [turn_files(&later, "layout/capture", true)])
         .calling(2, [turn_files(&first_refactor, "layout/capture", true)])
@@ -241,7 +241,7 @@ async fn vue_other_browser_refused() {
     index["search"]["browser"] = serde_json::json!({ "channel": "chrome", "version": "1.0" });
     chrome.insert("index.json", index.to_string().into_bytes()).expect("the index is replaced");
     let extracted = [("src/Page.vue", EXTRACTED_PAGE)];
-    let model = Scripted::answering([REPORT])
+    let model = ScriptedModel::answering([REPORT])
         .calling(0, [turn_files(&extracted, "layout/capture", true)])
         .then(|| {
             Ok(Reply {
@@ -268,7 +268,7 @@ async fn vue_verify_held_to_the_score() {
     let extracted = [("src/Page.vue", EXTRACTED_PAGE)];
     let refactored =
         [("src/Page.vue", REFACTORED_PAGE), ("src/components/ProduceSection.vue", SECTION)];
-    let model = Scripted::answering([REPORT, REFACTORED])
+    let model = ScriptedModel::answering([REPORT, REFACTORED])
         .calling(0, [turn_files(&extracted, "layout/capture", true)])
         .calling(1, [turn_files(&refactored, "layout/capture", true)]);
     build(&project, &model, &slice(&original())).await.expect("the build passes its checks");
@@ -285,7 +285,7 @@ async fn vue_verify_held_to_the_score() {
     };
     assert!(!expected.is_empty(), "the moved original fails the score");
     let failed = serde_json::json!({ "passed": false, "failures": expected }).to_string();
-    let model = Scripted::answering([PASSED, failed.as_str()])
+    let model = ScriptedModel::answering([PASSED, failed.as_str()])
         .calling(0, [tool_call(&[], &refactored, "layout/verify/capture", false)]);
 
     let verdict = verify(&project, &model).await.expect("the verification answers");
@@ -310,13 +310,13 @@ async fn init(project: &Scratch) {
         adapter_id: "vue",
         workspace: root(project),
     };
-    match emery_vue::Adapter::run(Task::<Scripted>::Init(ctx)).await.expect("init") {
+    match emery_vue::Adapter::run(Task::<ScriptedModel>::Init(ctx)).await.expect("init") {
         Outcome::Initialised => {}
         outcome => panic!("an init answers an initialised tree, not {outcome}"),
     }
 }
 
-async fn build(project: &Scratch, model: &Scripted, slice: &Slice) -> Result<Report, Error> {
+async fn build(project: &Scratch, model: &ScriptedModel, slice: &Slice) -> Result<Report, Error> {
     let ctx = BuildContext {
         adapter_id: "vue",
         slice,
@@ -331,7 +331,7 @@ async fn build(project: &Scratch, model: &Scripted, slice: &Slice) -> Result<Rep
     }
 }
 
-async fn verify(project: &Scratch, model: &Scripted) -> Result<Verdict, Error> {
+async fn verify(project: &Scratch, model: &ScriptedModel) -> Result<Verdict, Error> {
     let ctx = VerifyContext {
         adapter_id: "vue",
         workspace: root(project),
@@ -349,7 +349,10 @@ fn slice(original: &FactsFolder) -> Slice {
     let body = original.to_bundle().expect("the facts bundle");
     Slice {
         id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
         name: "farm-page".to_owned(),
+        index: 1,
+        count: 1,
         base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
         requirements: vec![Requirement {
             id: "REQ-001".to_owned(),
@@ -362,7 +365,7 @@ fn slice(original: &FactsFolder) -> Slice {
         brief: Vec::new(),
         spec: "# Specification\n\n## Requirement: page.render\n\nID: REQ-001\n".to_owned(),
         design: "# Design\n".to_owned(),
-        plan: "## Slice: farm-page\n\nID: SLICE-001\nRequirements: REQ-001\n".to_owned(),
+        plan: "## Part: farm-page\n\nID: PART-001\nRequirements: REQ-001\n".to_owned(),
         layouts: vec![AttachedLayout {
             digest: format!("sha256:{}", hex(&Sha256::digest(&body))),
             media_type: BUNDLE_MEDIA_TYPE.to_owned(),
@@ -450,7 +453,7 @@ fn fixture_files(dir: &Path, prefix: &str) -> Vec<(String, String)> {
 }
 
 // The corrections the adapter's checks put to the model, in order.
-fn refusals(model: &Scripted) -> Vec<String> {
+fn refusals(model: &ScriptedModel) -> Vec<String> {
     model
         .exchanges()
         .into_iter()

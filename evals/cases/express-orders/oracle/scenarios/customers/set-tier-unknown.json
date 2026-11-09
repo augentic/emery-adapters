@@ -1,0 +1,19 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "PUT",
+        "path": "/api/customers/00000000-0000-4000-8000-000000000000/tier",
+        "body": {
+          "tier": "trade"
+        }
+      },
+      "expect": {
+        "status": 404,
+        "body": {
+          "error": "not-found"
+        }
+      }
+    }
+  ]
+}

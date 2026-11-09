@@ -7,7 +7,7 @@ use test_programs::{ADAPTER, Caller, WORKSPACE, arguments, check_version, maxima
 
 const SOURCE: &str = "source";
 
-omnia_sdk::command!(scenario);
+omnia_sdk::api::command::export!(scenario);
 
 async fn scenario() {
     let metadata = Caller.metadata(ADAPTER);

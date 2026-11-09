@@ -1,0 +1,47 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/orders",
+        "body": {
+          "customerId": "{customer}",
+          "lines": [
+            {
+              "sku": "WID-001",
+              "quantity": 0
+            }
+          ],
+          "shipTo": {
+            "line1": "1 Queen Street",
+            "suburb": "Auckland Central",
+            "city": "Auckland",
+            "postcode": "1010"
+          }
+        }
+      },
+      "expect": {
+        "status": 400,
+        "body": {
+          "error": "invalid-request"
+        }
+      }
+    }
+  ]
+}

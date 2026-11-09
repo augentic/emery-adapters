@@ -13,6 +13,7 @@ use serde_json::Value;
 use crate::build::{Build, apply, build, strings};
 use crate::case::{Behaviour, Case, ExpectedClaim};
 use crate::grade::{Holders, Stated, citations, cites, held, mechanism, stem, under};
+use crate::plan::{PlanShape, format_wave_shape};
 use crate::stage::retarget;
 use crate::{Rung, Settings, Turns, emery};
 
@@ -25,12 +26,15 @@ pub struct Run {
     pub wall: Duration,
     pub exit: Option<i32>,
     pub tail: String,
-    // the staged plan's slices grouped into the sets ready to build at
+    // the staged plan's parts grouped into the sets ready to build at
     // once, as the specify envelope reports them
     pub waves: Option<Value>,
     // each seam's accepted evidence, under the source it was mined from
     pub evidence: Vec<(String, Evidence)>,
     pub completions: Vec<Completion>,
+    // the `slicing` completions that exhausted their retry budget over a
+    // size or pair-merge finding
+    pub cap_exhausted: usize,
     // the surfaces each source's seams were cut from, as its adapter logged them
     pub surveyed: BTreeMap<String, Vec<Surveyed>>,
     // the modules each source's survey placed under no surface, by the
@@ -422,7 +426,32 @@ impl Run {
     }
 
     pub fn slices(&self) -> usize {
-        self.plan.as_ref().and_then(|plan| plan["slices"].as_array()).map_or(0, Vec::len)
+        self.plan
+            .as_ref()
+            .and_then(|plan| plan["parts"].as_array().or_else(|| plan["slices"].as_array()))
+            .map_or(0, Vec::len)
+    }
+
+    pub fn plan_shape(&self) -> PlanShape {
+        PlanShape::of(
+            self.plan.as_ref(),
+            self.spec.as_ref(),
+            self.design.as_ref(),
+            self.waves.as_ref(),
+        )
+    }
+
+    // The `slicing` turn's summary for the plan-shape table: its outcome and
+    // duration, or `no turn` when a single-stem specification took the code
+    // shortcut.
+    pub fn slicing_cell(&self) -> String {
+        let slicing: Vec<&Completion> =
+            self.completions.iter().filter(|c| c.label == "slicing").collect();
+        let Some(last) = slicing.last() else {
+            return if self.plan.is_some() { "no turn".to_owned() } else { "—".to_owned() };
+        };
+        let duration: Duration = slicing.iter().map(|c| c.duration).sum();
+        format!("{} ({}s)", last.outcome, duration.as_secs())
     }
 
     pub fn wave_count(&self) -> usize {
@@ -432,19 +461,13 @@ impl Run {
     // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
     // is three waves of one, two, and one slices; `0` where no plan was staged.
     pub fn waves(&self) -> String {
-        let widths: Vec<String> = self
+        let widths: Vec<usize> = self
             .waves
             .as_ref()
             .and_then(Value::as_array)
-            .map(|waves| {
-                waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len).to_string()).collect()
-            })
+            .map(|waves| waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len)).collect())
             .unwrap_or_default();
-        if widths.is_empty() {
-            "0".to_owned()
-        } else {
-            format!("{} ({})", widths.len(), widths.join("/"))
-        }
+        format_wave_shape(&widths)
     }
 
     pub fn tokens(&self) -> Tokens {
@@ -478,7 +501,7 @@ impl Display for Landing {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Tokens {
     pub input: u64,
     pub cached: u64,
@@ -589,6 +612,7 @@ pub fn run(
         waves: envelope.as_ref().and_then(|out| out.get("waves").cloned()),
         evidence: accepted(&stderr),
         completions: completions(&stderr),
+        cap_exhausted: cap_exhaustions(&stderr),
         surveyed: surveyed(&stderr),
         unreached: unreached(&stderr),
         spec: None,
@@ -762,7 +786,7 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
     let mut completions = Vec::new();
     let mut shells: BTreeMap<u64, ShellUse> = BTreeMap::new();
     let mut started: BTreeMap<(u64, String), Vec<u64>> = BTreeMap::new();
-    let mut open: BTreeMap<String, (Writes, BTreeMap<String, Option<u64>>)> = BTreeMap::new();
+    let mut open: BTreeMap<String, (Writes, BTreeMap<String, u64>)> = BTreeMap::new();
     for line in stderr.lines() {
         if let Some((head, tail)) = line.split_once(": completion outcome=") {
             let label = head
@@ -819,17 +843,59 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
     completions
 }
 
+// How many `slicing` completions exhausted their retry budget over a size or
+// pair-merge finding (`SLICE_CAP` / `verify_cut`).
+pub fn cap_exhaustions(stderr: &str) -> usize {
+    let mut count = 0;
+    let mut pending_cap_finding = false;
+    let mut unhandled_exhausted = 0usize;
+    for line in stderr.lines() {
+        if line.contains("candidate rejected")
+            && (line.contains("question=\"slicing") || !line.contains("question=\""))
+            && is_cap_finding(line)
+        {
+            pending_cap_finding = true;
+        } else if let Some((head, tail)) = line.split_once(": completion outcome=") {
+            let label = head
+                .split_once("label=\"")
+                .and_then(|(_, rest)| rest.split_once('"'))
+                .map_or("", |(label, _)| label);
+            if label == "slicing" {
+                let outcome = tail.split(' ').next().unwrap_or("").trim_matches('"');
+                if outcome == "exhausted" {
+                    if pending_cap_finding {
+                        count += 1;
+                    } else {
+                        unhandled_exhausted += 1;
+                    }
+                }
+                pending_cap_finding = false;
+            }
+        }
+    }
+    if unhandled_exhausted > 0 && is_cap_finding(stderr) {
+        count += unhandled_exhausted;
+    }
+    count
+}
+
+fn is_cap_finding(text: &str) -> bool {
+    text.contains("fit one slice")
+        || text.contains("fit one part")
+        || text.contains("within the cap")
+        || text.contains("merge the stem's")
+        || text.contains("past the cap")
+}
+
 // The `n` of the `complete{n=…}` span a backend line sits under.
 fn span_n(head: &str) -> Option<u64> {
     field(head, "complete{n=")?.trim_end_matches(|c: char| !c.is_ascii_digit()).parse().ok()
 }
 
 // One `responded` line of the SDK's writer, after `turn=<id> `, folded into
-// the turn's counts: a `write_files` call (`wrote=Some(["path"=bytes, ..])`,
-// or `files=Some(["path", ..]) … bytes=<total>` before the SDK logged each
-// file, where a one-file call's total is the file's), an `edit_files` call
-// (`edited=Some([..])`), or either refused (`error=Some(..)`).
-fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, Option<u64>>) {
+// the turn's counts: a `write_files` call (`wrote=Some(["path"=bytes, ..])`),
+// an `edit_files` call (`edited=Some([..])`), or either refused (`error=Some(..)`).
+fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, u64>) {
     if rest.contains("error=Some(") {
         writes.refused += 1;
         return;
@@ -840,46 +906,30 @@ fn responded(rest: &str, writes: &mut Writes, sizes: &mut BTreeMap<String, Optio
     }
     writes.calls += 1;
     for (path, bytes) in written_in(rest) {
-        if let Some(last) = sizes.get(&path) {
+        if let Some(&last) = sizes.get(&path) {
             writes.rewrites += 1;
-            if let (Some(bytes), Some(last)) = (bytes, *last)
-                && last > 0
-                && bytes * 2 < last
-            {
+            if last > 0 && bytes * 2 < last {
                 writes.shrinking += 1;
             }
         }
-        if bytes == Some(0) {
+        if bytes == 0 {
             writes.empty += 1;
         }
         sizes.insert(path, bytes);
     }
 }
 
-// The files a `write_files` line wrote, each with its bytes where the line
-// says: `wrote=Some(["path"=bytes, ..])`, or the earlier `files=Some(["path",
-// ..]) … bytes=<total>`, whose total is the file's when the call wrote one.
-fn written_in(rest: &str) -> Vec<(String, Option<u64>)> {
-    if let Some(list) = between(rest, "wrote=Some([") {
-        return list
-            .split(", ")
-            .filter_map(|entry| {
-                let (path, bytes) = entry.trim().rsplit_once("\"=")?;
-                Some((path.trim_start_matches('"').to_owned(), bytes.trim().parse().ok()))
-            })
-            .collect();
-    }
-    let Some(list) = between(rest, "files=Some([") else {
+// The files a `write_files` line wrote, each with its bytes: `wrote=Some(["path"=bytes, ..])`.
+fn written_in(rest: &str) -> Vec<(String, u64)> {
+    let Some(list) = between(rest, "wrote=Some([") else {
         return Vec::new();
     };
-    let paths: Vec<String> = list
-        .split(',')
-        .map(|path| path.trim().trim_matches('"').to_owned())
-        .filter(|path| !path.is_empty())
-        .collect();
-    let total = field(rest, "bytes=").and_then(|b| b.parse::<u64>().ok());
-    let one = (paths.len() == 1).then_some(total).flatten();
-    paths.into_iter().map(|path| (path, one)).collect()
+    list.split(", ")
+        .filter_map(|entry| {
+            let (path, bytes) = entry.trim().rsplit_once("\"=")?;
+            Some((path.trim_start_matches('"').to_owned(), bytes.trim().parse().ok()?))
+        })
+        .collect()
 }
 
 // The text between `key` and the `])` closing its list.

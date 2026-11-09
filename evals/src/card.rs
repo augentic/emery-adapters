@@ -23,9 +23,11 @@ pub fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, nam
         let jobs = settings
             .jobs
             .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
+        let budget =
+            settings.budget.map_or_else(String::new, |budget| format!(", `--budget {budget}`"));
         format!(
             " · each landed plan built through `{}` into a repository the engine created under \
-             {jobs} at {} (`EVAL_BUILD_RUNG`)",
+             {jobs}{budget} at {} (`EVAL_BUILD_RUNG`)",
             target.name(),
             settings.build_rung
         )
@@ -153,13 +155,25 @@ impl Display for Card<'_> {
             }
         }
 
+        plan_shape_section(f, runs)?;
+        if self.built {
+            schedule_section(f, runs)?;
+        }
+
         // where each run landed on the ladder
         if self.ladder.len() > 1 {
             ladder(f, runs, self.ladder, self.backend)?;
         }
 
-        // stability across runs: at the first rung when two landed there,
-        // else across the attempts that landed anywhere
+        self.stability_section(f)
+    }
+}
+
+impl Card<'_> {
+    // Stability across runs: at the first rung when two landed there, else
+    // across the attempts that landed anywhere.
+    fn stability_section(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let runs = &self.report.runs;
         let landed: Vec<&Attempt> = runs
             .iter()
             .filter_map(|attempts| attempts.first())
@@ -167,19 +181,17 @@ impl Display for Card<'_> {
             .collect();
         if landed.len() >= 2 {
             let label = format!("across {} runs at {}", landed.len(), self.ladder[0]);
-            stability(f, &label, &landed)?;
-        } else {
-            let landed: Vec<&Attempt> = runs
-                .iter()
-                .filter_map(|attempts| attempts.last())
-                .filter(|attempt| attempt.run.exit == Some(0))
-                .collect();
-            if landed.len() >= 2 {
-                let label = format!("across the {} attempts that landed", landed.len());
-                stability(f, &label, &landed)?;
-            }
+            return stability(f, &label, &landed);
         }
-
+        let landed: Vec<&Attempt> = runs
+            .iter()
+            .filter_map(|attempts| attempts.last())
+            .filter(|attempt| attempt.run.exit == Some(0))
+            .collect();
+        if landed.len() >= 2 {
+            let label = format!("across the {} attempts that landed", landed.len());
+            return stability(f, &label, &landed);
+        }
         Ok(())
     }
 }
@@ -263,8 +275,10 @@ fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         return write!(f, " — | — | — | — | — | — | — |");
     };
     let integrated = build.integrated();
+    let total_slices = build.scheduled_count(run.slices());
+    let total_waves = build.schedule_wave_count(run.wave_count());
     let resolved = integrated.iter().filter(|slice| !slice.resolved.is_empty()).count();
-    let mut merged = format!("{}/{}", integrated.len(), run.slices());
+    let mut merged = format!("{}/{total_slices}", integrated.len());
     if resolved > 0 {
         let _ = write!(merged, " ~{resolved}");
     }
@@ -279,9 +293,9 @@ fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
     };
     // a landed build reads against the plan's factor; one that did not says
     // how far it got, since a partial path compares with nothing
-    let against = match (build.landed(), run.wave_count()) {
+    let against = match (build.landed(), total_waves) {
         (_, 0) => String::new(),
-        (true, waves) => format!(" (plan {})", factor(run.slices() * 100 / waves)),
+        (true, waves) => format!(" (plan {})", factor(total_slices * 100 / waves)),
         (false, waves) => format!(" ({} of {waves} waves)", build.waves()),
     };
     let speedup = build
@@ -568,6 +582,7 @@ fn build_findings(
 // How the build ended: where the label stands, or the failure's code, exit,
 // and first line; then, for a build that resumed, where it resumed from.
 fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) -> fmt::Result {
+    let total_slices = build.scheduled_count(run.slices());
     let exit = build.exit.map_or_else(|| "killed".to_owned(), |code| format!("exit {code}"));
     match (&build.failure, build.exit) {
         (_, Some(0)) => {
@@ -584,8 +599,7 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
             };
             writeln!(
                 f,
-                "\nBuild: {merged}/{} slices merged in {} waves in {}s{resumed}; `{label}` at `{}`",
-                run.slices(),
+                "\nBuild: {merged}/{total_slices} slices merged in {} waves in {}s{resumed}; `{label}` at `{}`",
                 build.waves(),
                 build.wall.as_secs(),
                 short(head),
@@ -595,10 +609,9 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
             let first = failure.message.lines().next().unwrap_or("");
             writeln!(
                 f,
-                "\nBuild failed `{}` ({exit}) after {}s, {merged}/{} slices merged{}: {first}",
+                "\nBuild failed `{}` ({exit}) after {}s, {merged}/{total_slices} slices merged{}: {first}",
                 failure.code,
                 build.wall.as_secs(),
-                run.slices(),
                 build.resumption(),
             )?;
         }
@@ -718,6 +731,134 @@ fn behaviour_notes(f: &mut Formatter<'_>, behaviours: &Behaviours) -> fmt::Resul
             behaviours.premerged.join("; ")
         )
     }
+}
+
+pub fn plan_shape_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
+    let relevant: Vec<(bool, &Attempt)> = runs
+        .iter()
+        .flat_map(|attempts| {
+            attempts.iter().enumerate().map(|(index, attempt)| (index > 0, attempt))
+        })
+        .filter(|(_, attempt)| {
+            attempt.run.plan.is_some()
+                || attempt.run.completions.iter().any(|c| c.label == "slicing")
+        })
+        .collect();
+    if relevant.is_empty() {
+        return Ok(());
+    }
+    let legacy = relevant
+        .iter()
+        .any(|(_, attempt)| attempt.run.plan.is_some() && !attempt.grade.plan.uses_edges);
+    let edge_headers = if legacy {
+        "type-backed edges | unbacked edges | unbacked onto start"
+    } else {
+        "derived edges | named edges | onto typeless"
+    };
+    writeln!(
+        f,
+        "\n## Plan shape\n\n\
+         | run | slicing | cap exhausted | parts | waves | widest | merged stems | {edge_headers} |\n\
+         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    )?;
+    for (climbed, attempt) in relevant {
+        let label = if climbed {
+            format!("{} @ {}", attempt.run.n, attempt.run.rung)
+        } else {
+            attempt.run.n.to_string()
+        };
+        let shape = &attempt.grade.plan;
+        let (first, second, third) = if legacy {
+            (shape.type_backed_cell(), shape.unbacked_cell(), shape.unbacked_start)
+        } else {
+            (shape.derived_cell(), shape.named_cell(), shape.onto_typeless)
+        };
+        writeln!(
+            f,
+            "| {label} | {} | {} | {} | {} | {} | {} | {first} | {second} | {third} |",
+            attempt.run.slicing_cell(),
+            attempt.run.cap_exhausted,
+            shape.parts,
+            shape.wave_shape,
+            shape.widest,
+            shape.merged_cell(),
+        )?;
+    }
+    Ok(())
+}
+
+pub fn schedule_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
+    let built: Vec<(bool, &Attempt, &Build)> = runs
+        .iter()
+        .flat_map(|attempts| {
+            attempts.iter().enumerate().filter_map(|(index, attempt)| {
+                Some((index > 0, attempt, attempt.run.build.as_ref()?))
+            })
+        })
+        .collect();
+    if built.is_empty() {
+        return Ok(());
+    }
+    writeln!(f, "\n## Schedule")?;
+    for (climbed, attempt, build) in built {
+        let label = if climbed {
+            format!("{} @ {}", attempt.run.n, attempt.run.rung)
+        } else {
+            attempt.run.n.to_string()
+        };
+        let metrics = build.slice_metrics(attempt.run.spec.as_ref());
+        let budget_text = match (build.budget, build.budget_source.as_deref()) {
+            (Some(budget), Some(source)) => format!("budget {budget} ({source})"),
+            (Some(budget), None) => format!("budget {budget}"),
+            (None, _) => "budget default".to_owned(),
+        };
+        let over: Vec<String> =
+            build.over_budget().into_iter().map(|slice| format!("`{}`", slice.id)).collect();
+        let over_text = if over.is_empty() {
+            "0 over budget".to_owned()
+        } else {
+            format!("{} over budget ({})", over.len(), over.join(", "))
+        };
+        writeln!(
+            f,
+            "\nRun {label}: {budget_text} · {} slices in {} waves · widest {} · {over_text}\n",
+            metrics.len(),
+            build.schedule_waves(),
+            build.schedule_widest(),
+        )?;
+        if metrics.is_empty() {
+            continue;
+        }
+        writeln!(
+            f,
+            "| slice | part | wave | req | scenarios | over budget | duration | input | cached | output | reasoning |\n\
+             | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+        )?;
+        for slice in &metrics {
+            let position = if slice.count > 1 {
+                format!(" ({}/{})", slice.index, slice.count)
+            } else {
+                String::new()
+            };
+            let over = if slice.over_budget { "yes" } else { "no" };
+            writeln!(
+                f,
+                "| `{}` `{}`{position} | `{}` | {} | {} | {} | {over} | {}s | {} | {} | {} | {} |",
+                slice.id,
+                slice.name,
+                slice.part,
+                slice.wave,
+                slice.requirements,
+                slice.scenario_count,
+                slice.duration.as_secs(),
+                slice.tokens.input,
+                slice.tokens.cached,
+                slice.tokens.output,
+                slice.tokens.reasoning,
+            )?;
+        }
+    }
+    Ok(())
 }
 
 // One row per run: pass or fail at each rung attempted, `—` past the rung
