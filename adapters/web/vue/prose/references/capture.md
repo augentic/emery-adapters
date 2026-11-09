@@ -2,7 +2,7 @@
 
 A turn's answer is scored from a capture of the page as it stands: the same measurement the original page's facts were taken with, run over your page in a headless browser. Run every step in `$WORKSPACE`.
 
-1. **Install**, once per turn: `pnpm install --ignore-scripts`. The flag is required: no package's install script runs. The browser is not downloaded: the turn is lent the Playwright browsers already installed on the host, and the capture script finds them itself.
+1. **Install**, once per turn: `XDG_RUNTIME_DIR="$TMPDIR" pnpm install --ignore-scripts`. The flag is required: no package's install script runs. pnpm keeps its store lock under `XDG_RUNTIME_DIR`, else under `/tmp`, which the turn cannot write; `$TMPDIR` is the turn's own scratch. The browser is not downloaded: the turn is lent the Playwright browsers already installed on the host, and the capture script finds them itself.
 2. **Serve** the page in the background: `pnpm run dev > layout/dev.log 2>&1 &`, then wait until `curl -sf http://127.0.0.1:5173/ > /dev/null` succeeds. It serves `index.html` at `http://127.0.0.1:5173/`, the only URL any step opens, and reloads as `src/` changes. A compile error shows in `layout/dev.log` and in the capture's page errors.
 3. **Capture**, after the last change to `src/`:
 

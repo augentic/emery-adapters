@@ -17,7 +17,7 @@ Nothing outside `$WORKSPACE` is reachable. Decide the markup, the components, an
 - **No invented content.** Keep every visible text and its order, every image, every link target (`attrs.href`), and every image description (`attrs.alt`).
 - **The host.** `src/main.js` mounts `src/Page.vue` into `<div id="app">`, the only element of an otherwise empty `<body>`, with no other CSS; both stay as the seed wrote them.
 - **Assets.** Fonts and images are under `public/facts/assets/`; refer to each as `/facts/assets/<file>`. The page reads nothing under `layout/`.
-- **The network.** Only `pnpm install --ignore-scripts`, from the npm registry, and the page at `http://127.0.0.1:5173/`. Open no other URL, the Vue documentation included.
+- **The network.** Only `XDG_RUNTIME_DIR="$TMPDIR" pnpm install --ignore-scripts`, from the npm registry, and the page at `http://127.0.0.1:5173/`. Open no other URL, the Vue documentation included.
 
 ## Code
 
