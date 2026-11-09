@@ -12,7 +12,7 @@ Experiment / non-production. One page, rebuilt as a Vue 3 app served by Vite.
 - `layout/` — everything else the adapter and the captures put there: the facts a turn reads, the captures, the scores and their overlays. The page never reads it: Vite refuses to serve it, and a source file that names `layout/` is refused.
 - `package.json`, `vite.config.js`, `eslint.config.js`, `stylelint.config.js`, `.gitignore` — scaffolded when the repository was initialised.
 
-`layout/capture.mjs` and every file below but `.gitignore` are held byte for byte to what the seed wrote: a turn whose tree changed one is refused, naming it. Nothing is added to `package.json`; `npm install --ignore-scripts` installs what it names.
+`layout/capture.mjs` and every file below but `.gitignore` are held byte for byte to what the seed wrote: a turn whose tree changed one is refused, naming it. Nothing is added to `package.json`; `pnpm install --ignore-scripts` installs what it names.
 
 `package.json`:
 

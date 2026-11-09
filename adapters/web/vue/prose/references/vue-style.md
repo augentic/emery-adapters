@@ -57,6 +57,6 @@ guide.
 - Every component's `<style>` is `scoped`. Only `html`, `body`, `:root`, and
   `@font-face` may sit in a non-scoped `<style>`, and only in `src/Page.vue`.
 - Nothing under `src/` uses `position: absolute` or `position: fixed`.
-- `npm run lint` (eslint-plugin-vue `flat/recommended`) passes.
+- `pnpm run lint` (eslint-plugin-vue `flat/recommended`) passes.
 
 Where this document and the prompt's Code rules disagree, the Code rules win.

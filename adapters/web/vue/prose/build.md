@@ -19,7 +19,7 @@ Nothing outside `$WORKSPACE` is reachable, and nothing in it but `layout/facts/`
 - **The host.** `src/main.js` mounts `src/Page.vue` with `createApp(Page).mount('#app')` into `<div id="app">`, the only element of an otherwise empty `<body>`, with no other CSS; it and `index.html` stay as the seed wrote them. Render the children of the original `<body>`. Styles for `html` and `body` go in a non-scoped `<style>` block.
    20|- **Assets.** Fonts and images are under `public/facts/assets/`; refer to each as `/facts/assets/<file>`. The page reads nothing under `layout/`.
 - **The facts.** Read `layout/facts/index.json` first, then the parts you need with `jq`; some are large.
-- **The network.** Only `npm install --ignore-scripts`, from the npm registry, and the page at `http://127.0.0.1:5173/`. Open no other URL.
+- **The network.** Only `pnpm install --ignore-scripts`, from the npm registry, and the page at `http://127.0.0.1:5173/`. Open no other URL.
 
 ## Attempts
 

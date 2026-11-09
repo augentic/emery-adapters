@@ -289,7 +289,7 @@ async fn emery_vue() {
     support::build(
         test_programs::TARGET_EMERY_VUE,
         &scratch(),
-        &["metadata", "package-lock.json=ours"],
+        &["metadata", "pnpm-lock.yaml=ours"],
         ScriptedModel::default(),
     )
     .await;

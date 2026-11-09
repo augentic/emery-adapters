@@ -14,7 +14,7 @@ mod tree;
 use emery_sdk::target::{Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Doc, Error, Model};
 
-const RULES: &[MergeRule] = &[MergeRule::ours("package-lock.json")];
+const RULES: &[MergeRule] = &[MergeRule::ours("pnpm-lock.yaml")];
 const NPM: Grant = Grant {
     egress: &["registry.npmjs.org"],
     read: &[],
