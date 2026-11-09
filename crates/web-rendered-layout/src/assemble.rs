@@ -17,6 +17,7 @@ use std::path::Path;
 
 use serde_json::{Map, Value, json};
 
+use crate::folder::json_line;
 use crate::{Error, FactsFolder};
 
 /// The largest part, in bytes of its nodes as JSON, before it is split into its children.
@@ -731,9 +732,9 @@ pub fn assemble(dir: &Path) -> Result<FactsFolder, Error> {
 
     let mut folder = FactsFolder::default();
     let (index, parts) = split(&document, MAX_PART_BYTES);
-    folder.insert("index.json", line(&index))?;
+    folder.insert("index.json", json_line(&index))?;
     for (id, part) in &parts {
-        folder.insert(&format!("parts/{id}.json"), line(part))?;
+        folder.insert(&format!("parts/{id}.json"), json_line(part))?;
     }
     for sub in ["assets", "ax"] {
         let Ok(entries) = fs::read_dir(dir.join(sub)) else {
@@ -748,12 +749,6 @@ pub fn assemble(dir: &Path) -> Result<FactsFolder, Error> {
         }
     }
     Ok(folder)
-}
-
-fn line(value: &Value) -> Vec<u8> {
-    let mut bytes = value.to_string().into_bytes();
-    bytes.push(b'\n');
-    bytes
 }
 
 fn subtree<'a>(nodes: &'a Map<String, Value>, id: &str, out: &mut Vec<&'a str>) {

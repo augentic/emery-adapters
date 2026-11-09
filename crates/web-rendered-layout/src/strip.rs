@@ -1,5 +1,6 @@
 use serde_json::{Map, Value, json};
 
+use crate::folder::json_line;
 use crate::{Error, FactsFolder};
 
 const KEPT_ATTRIBUTES: [&str; 2] = ["href", "alt"];
@@ -30,14 +31,14 @@ pub fn without_structure(folder: &FactsFolder) -> Result<FactsFolder, Error> {
     held.insert("parts".to_owned(), parts.iter().map(|file| json!({ "file": file })).collect());
 
     let mut out = FactsFolder::default();
-    out.insert("index.json", line(&index))?;
+    out.insert("index.json", json_line(&index))?;
     for file in &parts {
         let Value::Object(nodes) = folder.json(file)? else {
             return Err(Error::new(format!("`{file}` is not a JSON object of nodes")));
         };
         let stripped: Map<String, Value> =
             nodes.into_iter().map(|(id, node)| (id, strip_node(node))).collect();
-        out.insert(file, line(&Value::Object(stripped)))?;
+        out.insert(file, json_line(&Value::Object(stripped)))?;
     }
     for path in folder.paths().filter(|path| path.starts_with("assets/")) {
         out.insert(path, folder.get(path).unwrap_or_default().to_vec())?;
@@ -66,10 +67,4 @@ fn strip_node(node: Value) -> Value {
         }
     }
     Value::Object(node)
-}
-
-fn line(value: &Value) -> Vec<u8> {
-    let mut bytes = value.to_string().into_bytes();
-    bytes.push(b'\n');
-    bytes
 }

@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::{Component, Path};
-
 use std::io::Read as _;
+use std::path::{Component, Path};
 
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
@@ -124,9 +123,7 @@ impl FactsFolder {
                 (path.clone(), held)
             })
             .collect();
-        let mut bytes = json!({ "format": BUNDLE_FORMAT, "files": files }).to_string().into_bytes();
-        bytes.push(b'\n');
-        bytes
+        json_line(&json!({ "format": BUNDLE_FORMAT, "files": files }))
     }
 
     /// Reads a bundle [`to_bundle`](Self::to_bundle) wrote.
@@ -167,6 +164,13 @@ impl FactsFolder {
         }
         Ok(folder)
     }
+}
+
+// `value` as one line of JSON, the way every facts file is written.
+pub fn json_line(value: &Value) -> Vec<u8> {
+    let mut bytes = value.to_string().into_bytes();
+    bytes.push(b'\n');
+    bytes
 }
 
 fn walk(dir: &Path, prefix: &str, folder: &mut FactsFolder) -> Result<(), Error> {
