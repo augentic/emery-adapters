@@ -747,10 +747,18 @@ pub fn plan_shape_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt
     if relevant.is_empty() {
         return Ok(());
     }
+    let legacy = relevant
+        .iter()
+        .any(|(_, attempt)| attempt.run.plan.is_some() && !attempt.grade.plan.uses_edges);
+    let edge_headers = if legacy {
+        "type-backed edges | unbacked edges | unbacked onto start"
+    } else {
+        "derived edges | named edges | onto typeless"
+    };
     writeln!(
         f,
         "\n## Plan shape\n\n\
-         | run | slicing | cap exhausted | parts | waves | widest | merged stems | type-backed edges | unbacked edges | unbacked onto start |\n\
+         | run | slicing | cap exhausted | parts | waves | widest | merged stems | {edge_headers} |\n\
          | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
     )?;
     for (climbed, attempt) in relevant {
@@ -760,18 +768,20 @@ pub fn plan_shape_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt
             attempt.run.n.to_string()
         };
         let shape = &attempt.grade.plan;
+        let (first, second, third) = if legacy {
+            (shape.type_backed_cell(), shape.unbacked_cell(), shape.unbacked_start)
+        } else {
+            (shape.derived_cell(), shape.named_cell(), shape.onto_typeless)
+        };
         writeln!(
             f,
-            "| {label} | {} | {} | {} | {} | {} | {} | {} | {} | {} |",
+            "| {label} | {} | {} | {} | {} | {} | {} | {first} | {second} | {third} |",
             attempt.run.slicing_cell(),
             attempt.run.cap_exhausted,
             shape.parts,
             shape.wave_shape,
             shape.widest,
             shape.merged_cell(),
-            shape.type_backed_cell(),
-            shape.unbacked_cell(),
-            shape.unbacked_start,
         )?;
     }
     Ok(())

@@ -2859,10 +2859,92 @@ mod tests {
         plan_shape_section(&mut text, &[vec![attempt]]).unwrap();
         assert!(text.contains("## Plan shape"), "{text}");
         assert!(
+            text.contains("| type-backed edges | unbacked edges | unbacked onto start |"),
+            "{text}"
+        );
+        assert!(
             text.contains(
                 "| 1 | ok (14s) | 0 | 5 | 3 (2/2/1) | 2 | 1 (`auth`: `auth` + `session`) | \
                  1 (`orders` → `customers` (`Customer`)) | 3 (`health` → `start`, `customers` → \
                  `start`, `orders` → `start`) | 3 |"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn plan_shape_uses_edges() {
+        let spec_doc = serde_json::json!({
+            "requirements": [
+                {"id": "REQ-001", "subject": "start.require-db", "trigger": null},
+                {"id": "REQ-002", "subject": "customers.get", "trigger": null},
+                {"id": "REQ-003", "subject": "orders.create", "trigger": null},
+                {"id": "REQ-004", "subject": "audit.record", "trigger": null},
+            ]
+        });
+        let design_doc = serde_json::json!({
+            "sections": [{
+                "kind": "domain-model",
+                "blocks": [
+                    {"type": {"key": "Customer (src/customers.ts#L3)", "signature": "interface Customer { id: string; }", "role": "data"}},
+                    {"type": {"key": "Order (src/orders.ts#L10)", "signature": "interface Order { id: string; customer: Customer; }", "role": "data"}},
+                ]
+            }]
+        });
+        let plan_doc = serde_json::json!({
+            "parts": [
+                {"id": "PART-001", "name": "start", "requirements": ["REQ-001"],
+                 "types": [], "uses": [], "depends-on": []},
+                {"id": "PART-002", "name": "customers", "requirements": ["REQ-002"],
+                 "types": ["Customer (src/customers.ts#L3)"], "uses": [], "depends-on": []},
+                {"id": "PART-003", "name": "orders", "requirements": ["REQ-003"],
+                 "types": ["Order (src/orders.ts#L10)"], "uses": [], "depends-on": ["PART-002"]},
+                {"id": "PART-004", "name": "audit", "requirements": ["REQ-004"],
+                 "types": [], "uses": ["Order (src/orders.ts#L10)"], "depends-on": ["PART-003"]},
+            ]
+        });
+
+        let plan_shape = PlanShape::of(Some(&plan_doc), Some(&spec_doc), Some(&design_doc), None);
+        assert!(plan_shape.uses_edges);
+        assert_eq!(plan_shape.parts, 4);
+        assert_eq!(plan_shape.waves, 3);
+        assert_eq!(plan_shape.widest, 2);
+        assert_eq!(plan_shape.wave_shape, "3 (2/1/1)");
+        assert_eq!(
+            plan_shape.derived,
+            vec![Edge {
+                from: "orders".to_owned(),
+                to: "customers".to_owned(),
+                types: vec!["Customer".to_owned()],
+            }]
+        );
+        assert_eq!(plan_shape.derived_cell(), "1 (`orders` → `customers` (`Customer`))");
+        assert_eq!(
+            plan_shape.named,
+            vec![Edge {
+                from: "audit".to_owned(),
+                to: "orders".to_owned(),
+                types: vec!["Order".to_owned()],
+            }]
+        );
+        assert_eq!(plan_shape.named_cell(), "1 (`audit` → `orders` (`Order`))");
+        assert_eq!(plan_shape.onto_typeless, 0);
+
+        let expected = case("[[source]]\nadapter = \"typescript\"\nfixture = \"f\"\n").unwrap();
+        let mut run = run_from(Some(0), &timed("slicing", "ok", 14_000), Some(spec_doc));
+        run.design = Some(design_doc);
+        run.plan = Some(plan_doc);
+        let attempt = Attempt {
+            grade: grade(&expected, &run),
+            run,
+        };
+        let mut text = String::new();
+        plan_shape_section(&mut text, &[vec![attempt]]).unwrap();
+        assert!(text.contains("| derived edges | named edges | onto typeless |"), "{text}");
+        assert!(
+            text.contains(
+                "| 1 | ok (14s) | 0 | 4 | 3 (2/1/1) | 2 | 0 | \
+                 1 (`orders` → `customers` (`Customer`)) | 1 (`audit` → `orders` (`Order`)) | 0 |"
             ),
             "{text}"
         );
