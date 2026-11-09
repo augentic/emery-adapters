@@ -14,7 +14,7 @@ Run all commands from the `emery-adapters` repository root (which `emery` mounts
 | [`documentation/emery.toml`](documentation/emery.toml) | `emery:documentation` | [`documentation/docs/orders-api.md`](documentation/docs/orders-api.md) |
 | [`intent/emery.toml`](intent/emery.toml) | `emery:intent` | Inline `description` |
 | [`amend/emery.toml`](amend/emery.toml) | `emery:typescript` (`scope = "whole"`), `emery:omnia` | `evals/cases/orders/fixture/` |
-| [`web/emery.toml`](web/emery.toml) (experiment / non-production) | `emery:rendered-layout`, `emery:intent`, `emery:vue` | `evals/cases/greenfield-farm/fixture/` (gitignored; captured first) |
+| [`web/emery.toml`](web/emery.toml) (experiment / non-production) | `emery:rendered-layout`, `emery:intent`, `emery:vue` | `evals/cases/fastapi-template-web/fixture/` (gitignored; captured first, as [Fetching vendored fixtures](../evals/README.md#fetching-vendored-fixtures) says) |
 
 The store names a component `<namespace>_<name>@<version>.wasm` with the package's hyphens, while cargo writes underscores: copy `emery_rendered_layout.wasm` as `emery_rendered-layout@<version>.wasm`.
 

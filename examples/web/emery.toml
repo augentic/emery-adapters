@@ -1,16 +1,19 @@
 # Experiment / non-production: one web page, from its rendered-layout facts
 # and an operator's brief, rebuilt as Vue. The facts are the gitignored
-# `greenfield-farm` eval fixture, captured as `evals/README.md` says.
+# `fastapi-template-web` eval fixture, the Full Stack FastAPI Template's
+# login page, captured as `evals/README.md` says. Another page is another
+# recipe: `tools/web-layout-capture/capture-site.sh <site> <dir>`, then
+# `path` naming the dir and the brief naming the page.
 
 [[source]]
 name = "page"
 adapter = "emery:rendered-layout@0.12.0"
-path = "../../evals/cases/greenfield-farm/fixture/"
+path = "../../evals/cases/fastapi-template-web/fixture/"
 
 [[source]]
 name = "brief"
 adapter = "emery:intent@0.12.0"
-description = "Rebuild the Greenfield Farm landing page exactly as its recorded layout shows it, at every recorded viewport width and height: every text, image, link, and section where the recording has it, nothing added and nothing left out. One page, with no behaviour beyond what the page shows."
+description = "Rebuild the Full Stack FastAPI Template's login page exactly as its recorded layout shows it, at every recorded viewport width and height: every text, image, link, field, and button where the recording has it, nothing added and nothing left out. One page, with no behaviour beyond what the page shows."
 
 [target]
 adapter = "emery:vue@0.12.0"
