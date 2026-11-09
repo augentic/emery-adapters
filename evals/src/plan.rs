@@ -1,6 +1,7 @@
 //! Measures a staged plan's parts, waves, merged stems, and dependency edges.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::{self, Display, Formatter};
 
 use serde_json::Value;
 
@@ -8,6 +9,7 @@ use crate::build::strings;
 use crate::grade::stem;
 
 const BOOTSTRAP: &str = "start";
+const KEYWORDS: &[&str] = &["interface", "type", "class", "struct", "enum", "const", "def"];
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct PlanShape {
@@ -17,6 +19,11 @@ pub struct PlanShape {
     pub wave_shape: String,
     // Each part that merges two or more domain stems: `(part_name, stems)`.
     pub merged: Vec<(String, Vec<String>)>,
+    // Whether the plan JSON carries grammar 10's `uses` field on its parts.
+    pub uses_edges: bool,
+    pub derived: Vec<Edge>,
+    pub named: Vec<Edge>,
+    pub onto_typeless: usize,
     pub type_backed: Vec<Edge>,
     pub unbacked: Vec<Edge>,
     pub unbacked_start: usize,
@@ -26,9 +33,20 @@ pub struct PlanShape {
 pub struct Edge {
     pub from: String,
     pub to: String,
-    // The dependency's type names spelled in the dependent part's type
-    // signatures; empty for an unbacked edge.
+    // The dependency's type names or keys explaining the edge; empty for an
+    // unbacked edge.
     pub types: Vec<String>,
+}
+
+impl Display for Edge {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.types.is_empty() {
+            write!(f, "`{}` → `{}`", self.from, self.to)
+        } else {
+            let types: Vec<String> = self.types.iter().map(|t| format!("`{t}`")).collect();
+            write!(f, "`{}` → `{}` ({})", self.from, self.to, types.join(", "))
+        }
+    }
 }
 
 struct PartNode {
@@ -36,7 +54,18 @@ struct PartNode {
     name: String,
     requirements: Vec<String>,
     types: Vec<String>,
+    uses: Vec<String>,
     depends_on: Vec<String>,
+}
+
+#[derive(Default)]
+struct ClassifiedEdges {
+    derived: Vec<Edge>,
+    named: Vec<Edge>,
+    onto_typeless: usize,
+    type_backed: Vec<Edge>,
+    unbacked: Vec<Edge>,
+    unbacked_start: usize,
 }
 
 impl PlanShape {
@@ -48,16 +77,8 @@ impl PlanShape {
         else {
             return Self::default();
         };
-        let parts: Vec<PartNode> = entries
-            .iter()
-            .map(|entry| PartNode {
-                id: entry["id"].as_str().unwrap_or("").to_owned(),
-                name: entry["name"].as_str().unwrap_or("").to_owned(),
-                requirements: strings(&entry["requirements"]),
-                types: strings(&entry["types"]),
-                depends_on: strings(&entry["depends-on"]),
-            })
-            .collect();
+        let uses_edges = entries.iter().any(|entry| entry.get("uses").is_some());
+        let parts: Vec<PartNode> = entries.iter().map(PartNode::of).collect();
 
         // waves and widest
         let widths = wave_widths(&parts, waves);
@@ -78,7 +99,7 @@ impl PlanShape {
             .collect();
 
         let merged = merged_parts(&parts, &by_req);
-        let (type_backed, unbacked, unbacked_start) = classify_edges(&parts, &by_req, design);
+        let classified = ClassifiedEdges::of(&parts, &by_req, design);
 
         Self {
             parts: parts.len(),
@@ -86,9 +107,13 @@ impl PlanShape {
             widest,
             wave_shape,
             merged,
-            type_backed,
-            unbacked,
-            unbacked_start,
+            uses_edges,
+            derived: classified.derived,
+            named: classified.named,
+            onto_typeless: classified.onto_typeless,
+            type_backed: classified.type_backed,
+            unbacked: classified.unbacked,
+            unbacked_start: classified.unbacked_start,
         }
     }
 
@@ -112,32 +137,43 @@ impl PlanShape {
         format!("{} ({})", self.merged_stems(), detail.join(", "))
     }
 
+    pub fn derived_cell(&self) -> String {
+        edges_cell(&self.derived)
+    }
+
+    pub fn named_cell(&self) -> String {
+        edges_cell(&self.named)
+    }
+
     pub fn type_backed_cell(&self) -> String {
-        if self.type_backed.is_empty() {
-            return "0".to_owned();
-        }
-        let detail: Vec<String> = self
-            .type_backed
-            .iter()
-            .map(|edge| {
-                let types: Vec<String> = edge.types.iter().map(|t| format!("`{t}`")).collect();
-                format!("`{}` → `{}` ({})", edge.from, edge.to, types.join(", "))
-            })
-            .collect();
-        format!("{} ({})", self.type_backed.len(), detail.join(", "))
+        edges_cell(&self.type_backed)
     }
 
     pub fn unbacked_cell(&self) -> String {
-        if self.unbacked.is_empty() {
-            return "0".to_owned();
-        }
-        let detail: Vec<String> =
-            self.unbacked.iter().map(|edge| format!("`{}` → `{}`", edge.from, edge.to)).collect();
-        format!("{} ({})", self.unbacked.len(), detail.join(", "))
+        edges_cell(&self.unbacked)
     }
 }
 
+fn edges_cell(edges: &[Edge]) -> String {
+    if edges.is_empty() {
+        return "0".to_owned();
+    }
+    let detail: Vec<String> = edges.iter().map(Edge::to_string).collect();
+    format!("{} ({})", edges.len(), detail.join(", "))
+}
+
 impl PartNode {
+    fn of(entry: &Value) -> Self {
+        Self {
+            id: entry["id"].as_str().unwrap_or("").to_owned(),
+            name: entry["name"].as_str().unwrap_or("").to_owned(),
+            requirements: strings(&entry["requirements"]),
+            types: strings(&entry["types"]),
+            uses: strings(&entry["uses"]),
+            depends_on: strings(&entry["depends-on"]),
+        }
+    }
+
     fn is_bootstrap(&self, by_req: &BTreeMap<&str, (&str, Option<&Value>)>) -> bool {
         self.name == BOOTSTRAP
             || (!self.requirements.is_empty()
@@ -158,10 +194,15 @@ pub fn format_wave_shape(widths: &[usize]) -> String {
     format!("{} ({})", widths.len(), joined.join("/"))
 }
 
+// A design type key without its trailing `(path#Ln)` source citation.
+fn bare_key(key: &str) -> &str {
+    key.split(" (").next().unwrap_or(key).trim()
+}
+
 // The bare identifier a design type key declares: `Order` for `Order`,
 // `orders.Order`, or `Order (src/orders.ts#L10-L20)`.
 pub fn type_name(key: &str) -> &str {
-    let dotted = key.split(" (").next().unwrap_or(key).trim();
+    let dotted = bare_key(key);
     dotted.rsplit_once('.').map_or(dotted, |(_, name)| name)
 }
 
@@ -248,90 +289,171 @@ fn merged_parts(
     merged
 }
 
-fn classify_edges(
-    parts: &[PartNode], by_req: &BTreeMap<&str, (&str, Option<&Value>)>, design: Option<&Value>,
-) -> (Vec<Edge>, Vec<Edge>, usize) {
-    let signatures: BTreeMap<&str, &str> = design
-        .and_then(|design| design["sections"].as_array())
-        .into_iter()
-        .flatten()
-        .filter_map(|section| section["blocks"].as_array())
-        .flatten()
-        .filter_map(|block| {
-            let ty = block.get("type")?;
-            Some((ty["key"].as_str()?, ty["signature"].as_str()?))
-        })
-        .collect();
-    let by_id: BTreeMap<&str, &PartNode> =
-        parts.iter().map(|part| (part.id.as_str(), part)).collect();
+struct DesignTypes<'a> {
+    signatures: BTreeMap<&'a str, &'a str>,
+    declared: BTreeMap<&'a str, &'a str>,
+    counts: BTreeMap<&'a str, usize>,
+}
 
-    let mut type_backed = Vec::new();
-    let mut unbacked = Vec::new();
-    let mut unbacked_start = 0;
-
-    for part in parts {
-        for dep_id in &part.depends_on {
-            if dep_id == &part.id {
-                continue;
-            }
-            let Some(&dep) = by_id.get(dep_id.as_str()) else {
-                continue;
-            };
-            let mut backed = Vec::new();
-            for dep_key in &dep.types {
-                let target = type_name(dep_key);
-                if target.is_empty() || backed.iter().any(|seen| seen == target) {
-                    continue;
+impl<'a> DesignTypes<'a> {
+    fn of(design: Option<&'a Value>) -> Self {
+        let signatures: BTreeMap<&str, &str> = design
+            .and_then(|design| design["sections"].as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|section| section["blocks"].as_array())
+            .flatten()
+            .filter_map(|block| {
+                let ty = block.get("type")?;
+                if ty.get("role").and_then(Value::as_str).is_some_and(|role| role != "data") {
+                    return None;
                 }
-                let referenced = part.types.iter().any(|own_key| {
-                    let Some(&sig) = signatures.get(own_key.as_str()) else {
-                        return false;
-                    };
-                    let required = if type_name(own_key) == target { 2 } else { 1 };
-                    word_count(sig, target) >= required
-                });
-                if referenced {
-                    backed.push(target.to_owned());
-                }
-            }
-            if backed.is_empty() {
-                if dep.is_bootstrap(by_req) {
-                    unbacked_start += 1;
-                }
-                unbacked.push(Edge {
-                    from: part.name.clone(),
-                    to: dep.name.clone(),
-                    types: Vec::new(),
-                });
-            } else {
-                type_backed.push(Edge {
-                    from: part.name.clone(),
-                    to: dep.name.clone(),
-                    types: backed,
-                });
-            }
+                Some((ty["key"].as_str()?, ty["signature"].as_str()?))
+            })
+            .collect();
+        let declared: BTreeMap<&str, &str> =
+            signatures.iter().map(|(&key, &sig)| (key, declared_name(sig, key))).collect();
+        let mut counts: BTreeMap<&str, usize> = BTreeMap::new();
+        for &name in declared.values() {
+            *counts.entry(name).or_default() += 1;
+        }
+        Self {
+            signatures,
+            declared,
+            counts,
         }
     }
 
-    (type_backed, unbacked, unbacked_start)
+    fn name(&self, key: &'a str) -> &'a str {
+        self.declared.get(key).copied().unwrap_or_else(|| type_name(key))
+    }
+
+    fn references(&self, own_key: &str, dep_key: &'a str) -> Option<&'a str> {
+        if own_key == dep_key {
+            return None;
+        }
+        let target = self.name(dep_key);
+        if target.is_empty() || self.counts.get(target).is_some_and(|&count| count > 1) {
+            return None;
+        }
+        let &sig = self.signatures.get(own_key)?;
+        let required = if self.name(own_key) == target { 2 } else { 1 };
+        (word_count(sig, target) >= required).then_some(target)
+    }
+
+    fn edge_types(&self, from: &PartNode, to: &'a PartNode) -> (Vec<String>, Vec<String>) {
+        let mut backed = Vec::new();
+        let mut used = Vec::new();
+        for dep_key in &to.types {
+            if let Some(target) =
+                from.types.iter().find_map(|own_key| self.references(own_key, dep_key))
+            {
+                if !backed.iter().any(|seen| seen == target) {
+                    backed.push(target.to_owned());
+                }
+            } else if from.uses.contains(dep_key) {
+                let bare = bare_key(dep_key);
+                if !used.iter().any(|seen| seen == bare) {
+                    used.push(bare.to_owned());
+                }
+            }
+        }
+        (backed, used)
+    }
+}
+
+impl ClassifiedEdges {
+    fn of(
+        parts: &[PartNode], by_req: &BTreeMap<&str, (&str, Option<&Value>)>, design: Option<&Value>,
+    ) -> Self {
+        let types = DesignTypes::of(design);
+        let by_id: BTreeMap<&str, &PartNode> =
+            parts.iter().map(|part| (part.id.as_str(), part)).collect();
+        let mut out = Self::default();
+
+        for part in parts {
+            for dep_id in &part.depends_on {
+                if dep_id == &part.id {
+                    continue;
+                }
+                let Some(&dep) = by_id.get(dep_id.as_str()) else {
+                    continue;
+                };
+                if dep.types.is_empty() {
+                    out.onto_typeless += 1;
+                }
+                let (backed, used) = types.edge_types(part, dep);
+                if !backed.is_empty() {
+                    let edge = Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: backed,
+                    };
+                    out.derived.push(edge.clone());
+                    out.type_backed.push(edge);
+                } else if !used.is_empty() {
+                    out.named.push(Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: used,
+                    });
+                } else {
+                    if dep.is_bootstrap(by_req) {
+                        out.unbacked_start += 1;
+                    }
+                    out.unbacked.push(Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: Vec::new(),
+                    });
+                }
+            }
+        }
+
+        out
+    }
+}
+
+fn declared_name<'a>(signature: &'a str, key: &'a str) -> &'a str {
+    for line in signature.lines() {
+        let trimmed = line.trim_start();
+        if trimmed.starts_with("//")
+            || trimmed.starts_with('#')
+            || trimmed.starts_with("/*")
+            || trimmed.starts_with('*')
+            || trimmed.starts_with('@')
+        {
+            continue;
+        }
+        let head = trimmed.split(['{', '=']).next().unwrap_or(trimmed);
+        let mut iter = head
+            .split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+            .filter(|token| !token.is_empty());
+        while let Some(token) = iter.next() {
+            if KEYWORDS.contains(&token)
+                && let Some(name) = iter.find(|candidate| {
+                    !KEYWORDS.contains(candidate)
+                        && candidate
+                            .chars()
+                            .next()
+                            .is_some_and(|ch| ch.is_alphabetic() || ch == '_')
+                })
+            {
+                return name;
+            }
+        }
+        if trimmed.contains(['{', '=']) {
+            break;
+        }
+    }
+    type_name(key)
 }
 
 fn word_count(text: &str, word: &str) -> usize {
     if word.is_empty() {
         return 0;
     }
-    let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
-    let mut count = 0;
-    let mut from = 0;
-    while let Some(at) = text[from..].find(word) {
-        let start = from + at;
-        let end = start + word.len();
-        let before = text[..start].chars().next_back().is_none_or(|ch| !ident(ch));
-        let after = text[end..].chars().next().is_none_or(|ch| !ident(ch));
-        if before && after {
-            count += 1;
-        }
-        from = end;
-    }
-    count
+    text.split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
+        .filter(|&token| token == word)
+        .count()
 }

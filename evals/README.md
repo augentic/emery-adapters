@@ -481,9 +481,9 @@ Below the per-run notes, the scorecard renders two structural tables for each ca
   | `waves` | Wave count and per-wave part widths (`3 (1/2/1)`). |
   | `widest` | Maximum number of parts ready to build in a single wave. |
   | `merged stems` | Count and names of domain stems merged into another stem's part (`0` when each domain stem is one part; a `start` requirement placed into another stem's part by a shared route/topic trigger is not counted as a merged stem). |
-  | `type-backed edges` | Inter-part `depends-on` edges where a type owned by the dependent part references a type owned by the dependency part in its signature (`1 (\`orders\` → \`customers\` (\`Customer\`))`). |
-  | `unbacked edges` | Inter-part `depends-on` edges not backed by any owned design type signature (`3 (\`customers\` → \`start\`, ...)`). |
-  | `unbacked onto start` | Count of unbacked inter-part edges pointing at the `start` part. |
+  | `derived edges` | Inter-part `depends-on` edges derived from a type owned by the dependent part referencing a type owned by the dependency part in its signature (`1 (\`orders\` → \`customers\` (\`Customer\`))`; rendered as `type-backed edges` on pre-grammar-10 plans without `uses`). |
+  | `named edges` | Inter-part `depends-on` edges explained by the dependent part's `uses` list alone (`1 (\`audit\` → \`orders\` (\`Order\`))`; rendered as `unbacked edges` on pre-grammar-10 plans without `uses`). |
+  | `onto typeless` | Count of inter-part `depends-on` edges whose target part owns no data type, expected to be `0` (`unbacked onto start` on pre-grammar-10 plans without `uses`). |
 
 - **`## Schedule`** (rendered on `--build`, `--rebuild`, and `--resume` runs):
   - Summarizes the resolved requirement `budget` and its source (`flag`, `config`, `adapter`, `default`), total scheduled slices, schedule wave shape, `widest` wave, and the count and IDs of slices flagged `over budget`.
