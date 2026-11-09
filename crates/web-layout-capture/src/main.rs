@@ -163,8 +163,8 @@ fn score(options: &Options) -> Result<ExitCode, String> {
     let reviewed = review(&original, &render).map_err(|err| err.to_string())?;
     replace(&out)?;
     reviewed.write(&out).map_err(|err| err.to_string())?;
-    let findings = reviewed
-        .findings(|width| out.join(Review::overlay_name(width)).display().to_string());
+    let findings =
+        reviewed.findings(|width| out.join(Review::overlay_name(width)).display().to_string());
     if findings.is_empty() {
         println!("pass: lowest score {}", reviewed.comparison.lowest());
         return Ok(ExitCode::SUCCESS);
