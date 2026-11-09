@@ -342,7 +342,7 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 
 ### `expected.toml` schema
 
-- `[[source]]`: Configures `adapter` (`typescript`, `python`, `documentation`, `intent`), `fixture` path (or inline `description`), optional `name` and authority `rank`, expected `stems`, and `[[source.surface]]` pairs (`entry`, `stem`).
+- `[[source]]`: Configures `adapter` (`typescript`, `python`, `documentation`, `intent`, `rendered-layout`), `fixture` path (or inline `description`), optional `name` and authority `rank`, expected `stems`, and `[[source.surface]]` pairs (`entry`, `stem`).
 - `[[requirement]]`, `[[criterion]]`, `[[decision]]`: Expected claims, each with `stem`, source `anchor` (`path#Ln` or `path#Ln-Lm`), one-line `gloss`, and `source` name.
 - `[[absent]]`: Source spans (`anchor`, `gloss`) where **no** `requirement` claim should anchor (such as startup credential fetching, client construction, or signal handlers that belong in the design document rather than behavioral requirements).
 - `[[behaviour]]` (multi-source cases): Expected reconciled requirements across sources, specifying contributing `claims`, expected authority `status` (`agreed`, `unknown`, `divergence`, `conflict`), and optional `loser` source name.
@@ -400,6 +400,12 @@ Every benchmark case lives under [`evals/cases/<name>/`](cases/) with an `expect
 | [`nestjs-pair`](cases/nestjs-pair/expected.toml) | `nestjs-docs` combined with the 177-module `nestjs-boilerplate` codebase. | 14 shared behaviors, 3 doc-only behaviors. |
 | [`train-pair`](cases/train-pair/expected.toml) | Multi-repo pipeline combining the SOAP `connector` and Kafka `train` services into one Omnia guest. | `inbound` and `train` stems; `reference/` guest with both crates. |
 
+### `web` cases (experiment / non-production)
+
+| Case | What it probes | Expected stems |
+| --- | --- | --- |
+| [`fastapi-template-web`](cases/fastapi-template-web/expected.toml) | The FastAPI template frontend's login page as rendered-layout facts beside an intent brief: the design's one layout and its `ui-layout` tree. `--build` builds through `node` and `omnia` only; the Vue build runs through [`examples/web/emery.toml`](../examples/web/emery.toml) over the same fixture. | `login` (the brief's); `page` has none |
+
 ### Fetching vendored fixtures
 
 Four external open-source fixtures are gitignored and fetched at pinned commits before running scale evaluations:
@@ -416,11 +422,15 @@ curl -sL https://github.com/HackSoftware/Django-Styleguide-Example/archive/a70ef
   | tar -xz --strip-components=1 -C evals/cases/django-styleguide/fixture
 ```
 
-The `greenfield-farm` case (experiment / non-production) reads a page's rendered-layout facts, which no archive holds: capture them from the served page with the capture CLI, its Playwright installed first with `npm ci --ignore-scripts --prefix tools/web-layout-capture` and its browser with `npx --prefix tools/web-layout-capture playwright install chromium-headless-shell`:
+The `fastapi-template-web` case (experiment / non-production) reads a page's rendered-layout facts, which no archive holds: they are captured from the page served. `tools/web-layout-capture/capture-site.sh <site> <out>` does the whole of it for a site named by a recipe under [`tools/web-layout-capture/sites/`](../tools/web-layout-capture/sites/) — fetches the source at the recipe's pinned commit, installs it with `--ignore-scripts`, builds and serves it on `127.0.0.1:4173` (`CAPTURE_SITE_PORT` to move it), captures the recipe's route, and stops the server. The `fastapi-template` recipe is the template's `frontend/` at the commit above, built and served with `bun` 1.2 or later, and its login page. The capture script's Playwright is installed first, and its browser:
 
 ```bash
-cargo run -p web-layout-capture -- capture --url <the served page> --out evals/cases/greenfield-farm/fixture
+npm ci --ignore-scripts --prefix tools/web-layout-capture
+npx --prefix tools/web-layout-capture playwright install chromium-headless-shell
+tools/web-layout-capture/capture-site.sh fastapi-template evals/cases/fastapi-template-web/fixture
 ```
+
+Two captures on one machine are byte for byte the same. The build compares its page against these facts in the browser they were captured in, so capture on the machine that builds. Another site is another recipe: a file under `sites/` setting `ARCHIVE`, `ROUTE`, and `REQUIRES` and defining `site_fetch`, `site_install`, `site_build`, and `site_serve <port>`, run with `capture-site.sh` and no arguments to list them.
 
 ---
 
