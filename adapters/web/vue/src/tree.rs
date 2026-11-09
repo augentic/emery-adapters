@@ -148,6 +148,7 @@ pub async fn build<P: Model>(ctx: &BuildContext<'_, P>) -> Result<Report, Error>
             }
         }
     }
+    // the refactor was set up without `layout/attempts/`, the extraction's record with it
     extraction.write_record()?;
 
     write_folder(&original, &root.join(ORIGINAL))?;
