@@ -116,6 +116,38 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
     json
 }
 
+// The body of the first fence after `label`'s line, whatever its language tag.
+fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
+    let (_, section) = doc
+        .split_once(&format!("\n{label}\n"))
+        .unwrap_or_else(|| panic!("the document carries no `{label}` line"));
+    let (_, fenced) = section.split_once("```").expect("the label is followed by a fence");
+    let (_, body) = fenced.split_once('\n').expect("the fence opens on a line of its own");
+    let (body, _) = body.split_once("\n```").expect("the fence closes");
+    body
+}
+
+fn surveying(docs: &[Doc]) {
+    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
+    capped("survey.md", prompt);
+    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .unwrap_or_else(|err| {
+            panic!("`survey.md`: the worked example is not the SDK's Inventory: {err}")
+        });
+    assert!(!inventory.surfaces.is_empty(), "`survey.md`: the worked example names no surface");
+    for surface in &inventory.surfaces {
+        surface.anchor().unwrap_or_else(|err| {
+            panic!("`survey.md`: surface `{}`'s anchor `{}` {err}", surface.name, surface.anchor)
+        });
+        assert!(
+            emery_sdk::is_kebab(&surface.stem),
+            "`survey.md`: surface `{}`'s stem `{}` is not kebab-case",
+            surface.name,
+            surface.stem
+        );
+    }
+}
+
 #[test]
 fn emery_documentation() {
     corpus(emery_documentation::PROSE, "documentation", &["extract.md", "survey.md"]);
@@ -164,39 +196,7 @@ fn emery_node() {
     }
 }
 
-// The body of the first fence after `label`'s line, whatever its language tag.
-fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
-    let (_, section) = doc
-        .split_once(&format!("\n{label}\n"))
-        .unwrap_or_else(|| panic!("the document carries no `{label}` line"));
-    let (_, fenced) = section.split_once("```").expect("the label is followed by a fence");
-    let (_, body) = fenced.split_once('\n').expect("the fence opens on a line of its own");
-    let (body, _) = body.split_once("\n```").expect("the fence closes");
-    body
-}
-
 #[test]
 fn emery_omnia() {
     target_corpus(emery_omnia::PROSE, "omnia");
-}
-
-fn surveying(docs: &[Doc]) {
-    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
-    capped("survey.md", prompt);
-    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
-        .unwrap_or_else(|err| {
-            panic!("`survey.md`: the worked example is not the SDK's Inventory: {err}")
-        });
-    assert!(!inventory.surfaces.is_empty(), "`survey.md`: the worked example names no surface");
-    for surface in &inventory.surfaces {
-        surface.anchor().unwrap_or_else(|err| {
-            panic!("`survey.md`: surface `{}`'s anchor `{}` {err}", surface.name, surface.anchor)
-        });
-        assert!(
-            emery_sdk::is_kebab(&surface.stem),
-            "`survey.md`: surface `{}`'s stem `{}` is not kebab-case",
-            surface.name,
-            surface.stem
-        );
-    }
 }

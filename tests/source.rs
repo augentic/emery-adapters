@@ -43,13 +43,6 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
-const DOCUMENTATION: Shipped<emery_documentation::Adapter> =
-    Shipped::new("documentation", emery_documentation::PROSE);
-const INTENT: Shipped<emery_intent::Adapter> = Shipped::new("intent", emery_intent::PROSE);
-const TYPESCRIPT: Shipped<emery_typescript::Adapter> =
-    Shipped::new("typescript", emery_typescript::PROSE);
-const PYTHON: Shipped<emery_python::Adapter> = Shipped::new("python", emery_python::PROSE);
-
 impl<A: SourceAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
         Self {
@@ -201,6 +194,13 @@ impl<A: SourceAdapter> Shipped<A> {
         })
     }
 }
+
+const DOCUMENTATION: Shipped<emery_documentation::Adapter> =
+    Shipped::new("documentation", emery_documentation::PROSE);
+const INTENT: Shipped<emery_intent::Adapter> = Shipped::new("intent", emery_intent::PROSE);
+const TYPESCRIPT: Shipped<emery_typescript::Adapter> =
+    Shipped::new("typescript", emery_typescript::PROSE);
+const PYTHON: Shipped<emery_python::Adapter> = Shipped::new("python", emery_python::PROSE);
 
 fn workspace(project: &Scratch) -> SourceInput {
     SourceInput::workspace(KEY, project.path().to_str().expect("a UTF-8 scratch root"))

@@ -18,20 +18,6 @@ use tracing::Instrument as _;
 // guest issued together.
 const HOLD: Duration = Duration::from_secs(5);
 
-/// A host model the runner holds to its script.
-///
-/// Every scripted turn is consumed, and none is requested past it.
-pub trait Strict: ModelClient + Clone {
-    /// Returns the script and its consumption record.
-    fn script(&self) -> &ScriptedModel;
-}
-
-impl Strict for ScriptedModel {
-    fn script(&self) -> &ScriptedModel {
-        self
-    }
-}
-
 /// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
 ///
 /// Concurrent requests pass the barrier together. A serial host reaches the
@@ -70,12 +56,6 @@ impl Barrier {
     }
 }
 
-impl Strict for Barrier {
-    fn script(&self) -> &ScriptedModel {
-        &self.inner
-    }
-}
-
 impl ModelClient for Barrier {
     fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let this = self.clone();
@@ -94,6 +74,26 @@ impl ModelClient for Barrier {
     fn limits(&self) -> Limits {
         // HACK: the inherent `limits(self, Limits)` builder shadows the trait method
         ModelClient::limits(&self.inner)
+    }
+}
+
+/// A host model the runner holds to its script.
+///
+/// Every scripted turn is consumed, and none is requested past it.
+pub trait Strict: ModelClient + Clone {
+    /// Returns the script and its consumption record.
+    fn script(&self) -> &ScriptedModel;
+}
+
+impl Strict for ScriptedModel {
+    fn script(&self) -> &ScriptedModel {
+        self
+    }
+}
+
+impl Strict for Barrier {
+    fn script(&self) -> &ScriptedModel {
+        &self.inner
     }
 }
 
@@ -128,36 +128,6 @@ impl OtelClient for Recording {
     fn export_metrics(&self, _request: ExportMetricsServiceRequest) -> FutureResult<()> {
         Box::pin(async { Ok(()) })
     }
-}
-
-#[derive(Clone, Debug)]
-struct Traced<M> {
-    model: M,
-    otel: Recording,
-}
-
-impl<M: ModelClient + Clone> Provides<WasiModel> for Traced<M> {
-    fn borrow(&mut self) -> <WasiModel as HostCtx>::Borrow<'_> {
-        &mut self.model
-    }
-}
-
-impl<M: ModelClient + Clone> Provides<WasiOtel> for Traced<M> {
-    fn borrow(&mut self) -> <WasiOtel as HostCtx>::Borrow<'_> {
-        &mut self.otel
-    }
-}
-
-// No level is named: command mode's `info` default is the shipped runtime's on a bare run.
-fn deployment(
-    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str],
-) -> Deployment {
-    Deployment::new()
-        .guest("caller", driver)
-        .guest(test_programs::ADAPTER, adapter)
-        .command("caller")
-        .mount(project.mount(writable))
-        .args(args.iter().copied())
 }
 
 /// Runs the source driver in the mode `args` names against `adapter`.
@@ -201,6 +171,18 @@ async fn drive<M: Strict>(
     model
 }
 
+// No level is named: command mode's `info` default is the shipped runtime's on a bare run.
+fn deployment(
+    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str],
+) -> Deployment {
+    Deployment::new()
+        .guest("caller", driver)
+        .guest(test_programs::ADAPTER, adapter)
+        .command("caller")
+        .mount(project.mount(writable))
+        .args(args.iter().copied())
+}
+
 /// Runs an adapter under recording telemetry and returns its model and spans.
 ///
 /// Host telemetry is installed here, once per test process. The host grafts
@@ -234,4 +216,22 @@ pub async fn traced<M: Strict>(
     assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed against `{adapter}`");
     model.script().assert_exhausted();
     (model, otel)
+}
+
+#[derive(Clone, Debug)]
+struct Traced<M> {
+    model: M,
+    otel: Recording,
+}
+
+impl<M: ModelClient + Clone> Provides<WasiModel> for Traced<M> {
+    fn borrow(&mut self) -> <WasiModel as HostCtx>::Borrow<'_> {
+        &mut self.model
+    }
+}
+
+impl<M: ModelClient + Clone> Provides<WasiOtel> for Traced<M> {
+    fn borrow(&mut self) -> <WasiOtel as HostCtx>::Borrow<'_> {
+        &mut self.otel
+    }
 }

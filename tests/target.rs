@@ -294,10 +294,6 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
-const NODE: Shipped<emery_node::Adapter> = Shipped::new("node", emery_node::PROSE);
-
-const OMNIA: Shipped<emery_omnia::Adapter> = Shipped::new("omnia", emery_omnia::PROSE);
-
 impl<A: TargetAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
         Self {
@@ -514,6 +510,10 @@ impl<A: TargetAdapter> Shipped<A> {
     }
 }
 
+const NODE: Shipped<emery_node::Adapter> = Shipped::new("node", emery_node::PROSE);
+
+const OMNIA: Shipped<emery_omnia::Adapter> = Shipped::new("omnia", emery_omnia::PROSE);
+
 // The slice every build is handed: one requirement under the `orders` stem,
 // stating no route, in a slice named for a part of it.
 fn slice() -> Slice {
@@ -669,6 +669,53 @@ fn correction(model: &ScriptedModel) -> String {
 
 fn root(project: &Scratch) -> &str {
     project.path().to_str().expect("a UTF-8 scratch root")
+}
+
+// A tree holding every file of the seed, as the engine's holds it once the
+// adapter has initialised the repository and before any slice builds.
+async fn omnia_tree() -> Scratch {
+    let project = scratch();
+    OMNIA.init(&project).await.expect("init over the empty tree");
+    project
+}
+
+fn omnia_seed(path: &str) -> String {
+    omnia_template::entry(path).unwrap_or_else(|| panic!("the seed holds `{path}`")).body.to_owned()
+}
+
+// Every regular file beneath `root`, root-relative, in path order; a link
+// is none.
+fn files_under(root: &Path) -> BTreeSet<String> {
+    fn walk(root: &Path, dir: &Path, files: &mut BTreeSet<String>) {
+        for entry in std::fs::read_dir(dir).expect("a readable directory") {
+            let path = entry.expect("a readable entry").path();
+            let kind = std::fs::symlink_metadata(&path).expect("a readable entry").file_type();
+            if kind.is_dir() {
+                walk(root, &path, files);
+            } else if kind.is_file() {
+                let relative = path.strip_prefix(root).expect("beneath the root");
+                files.insert(relative.to_str().expect("a UTF-8 path").to_owned());
+            }
+        }
+    }
+    let mut files = BTreeSet::new();
+    walk(root, root, &mut files);
+    files
+}
+
+// The seed's root manifest with the `orders` stem's line after its anchor,
+// the last line of the seed.
+fn omnia_manifest_with_orders() -> String {
+    omnia_seed("Cargo.toml").replace(
+        OMNIA_PATH_CRATE_ANCHOR,
+        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+    )
+}
+
+// The seed's root entry with the `orders` stem's handlers as the one entry
+// of the router's array, under the comment that heads it.
+fn omnia_root_with_orders() -> String {
+    omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
 }
 
 // The three root files are scaffolded by the initialisation, before the
@@ -6767,51 +6814,4 @@ async fn omnia_unwired_handler() {
             && correction.contains(&expected),
         "the correction names the unregistered handler at its line: {correction}"
     );
-}
-
-// A tree holding every file of the seed, as the engine's holds it once the
-// adapter has initialised the repository and before any slice builds.
-async fn omnia_tree() -> Scratch {
-    let project = scratch();
-    OMNIA.init(&project).await.expect("init over the empty tree");
-    project
-}
-
-fn omnia_seed(path: &str) -> String {
-    omnia_template::entry(path).unwrap_or_else(|| panic!("the seed holds `{path}`")).body.to_owned()
-}
-
-// Every regular file beneath `root`, root-relative, in path order; a link
-// is none.
-fn files_under(root: &Path) -> BTreeSet<String> {
-    fn walk(root: &Path, dir: &Path, files: &mut BTreeSet<String>) {
-        for entry in std::fs::read_dir(dir).expect("a readable directory") {
-            let path = entry.expect("a readable entry").path();
-            let kind = std::fs::symlink_metadata(&path).expect("a readable entry").file_type();
-            if kind.is_dir() {
-                walk(root, &path, files);
-            } else if kind.is_file() {
-                let relative = path.strip_prefix(root).expect("beneath the root");
-                files.insert(relative.to_str().expect("a UTF-8 path").to_owned());
-            }
-        }
-    }
-    let mut files = BTreeSet::new();
-    walk(root, root, &mut files);
-    files
-}
-
-// The seed's root manifest with the `orders` stem's line after its anchor,
-// the last line of the seed.
-fn omnia_manifest_with_orders() -> String {
-    omnia_seed("Cargo.toml").replace(
-        OMNIA_PATH_CRATE_ANCHOR,
-        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-    )
-}
-
-// The seed's root entry with the `orders` stem's handlers as the one entry
-// of the router's array, under the comment that heads it.
-fn omnia_root_with_orders() -> String {
-    omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
 }
