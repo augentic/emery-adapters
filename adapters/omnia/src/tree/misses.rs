@@ -325,11 +325,6 @@ struct Swallowed<'m> {
     lines: Vec<String>,
 }
 
-struct Catch {
-    opened: &'static str,
-    line: usize,
-}
-
 impl Swallowed<'_> {
     fn caught(&mut self, catch: Catch, body: impl FnOnce(&mut Self)) {
         self.open.push(catch);
@@ -417,6 +412,62 @@ impl<'ast> Visit<'ast> for Swallowed<'_> {
     }
 }
 
+struct Catch {
+    opened: &'static str,
+    line: usize,
+}
+
+// Whether `pat` leads with the tuple struct `name`: `Ok(..)`, `Some(..) | None`.
+fn pat_leads(pat: &Pat, name: &str) -> bool {
+    match pat {
+        Pat::TupleStruct(tuple) => path_ends(&tuple.path, &[name]),
+        Pat::Or(or) => or.cases.first().is_some_and(|case| pat_leads(case, name)),
+        Pat::Paren(paren) => pat_leads(&paren.pat, name),
+        Pat::Guard(guard) => pat_leads(&guard.pat, name),
+        _ => false,
+    }
+}
+
+// Whether `expr` calls the method `name` with no arguments anywhere within it.
+fn calls(expr: &Expr, name: &str) -> bool {
+    struct Calls<'n> {
+        name: &'n str,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for Calls<'_> {
+        fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
+            self.found |= node.method == self.name && node.args.is_empty();
+            visit::visit_expr_method_call(self, node);
+        }
+    }
+
+    let mut calls = Calls { name, found: false };
+    calls.visit_expr(expr);
+    calls.found
+}
+
+// The line a pattern starts on, for the shapes a catch opens with.
+fn pat_line(pat: &Pat) -> Option<usize> {
+    match pat {
+        Pat::TupleStruct(tuple) => {
+            tuple.path.segments.first().map(|segment| syntax::line(segment.ident.span()))
+        }
+        Pat::Or(or) => or.cases.first().and_then(pat_line),
+        Pat::Paren(paren) => Some(syntax::line(paren.paren_token.span.open())),
+        Pat::Guard(guard) => pat_line(&guard.pat),
+        _ => None,
+    }
+}
+
+// Whether `call` is `Ok(())`.
+fn is_unit_ok(call: &ExprCall) -> bool {
+    let Expr::Path(func) = &*call.func else { return false };
+    path_ends(&func.path, &["Ok"])
+        && call.args.len() == 1
+        && matches!(call.args.first(), Some(Expr::Tuple(tuple)) if tuple.elems.is_empty())
+}
+
 // The settings a module reads: a `const KEY: &str = "KEY"` and each field
 // of a `#[derive(Settings)]` struct, keyed as the derive spells it.
 #[derive(Default)]
@@ -500,6 +551,14 @@ impl<'ast> Visit<'ast> for Wrappers {
             self.found.push((syntax::line(node.struct_token.span), node.ident.to_string()));
         }
     }
+}
+
+// Whether a `#[derive(..)]` among `attrs` names `name`.
+fn derives(attrs: &[Attribute], name: &str) -> bool {
+    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
+        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
+            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
+    })
 }
 
 // Each function body read for its misses on its own, nested functions
@@ -658,93 +717,6 @@ impl<'ast> Visit<'ast> for Misses<'_> {
     }
 }
 
-// Whether `pat` leads with the tuple struct `name`: `Ok(..)`, `Some(..) | None`.
-fn pat_leads(pat: &Pat, name: &str) -> bool {
-    match pat {
-        Pat::TupleStruct(tuple) => path_ends(&tuple.path, &[name]),
-        Pat::Or(or) => or.cases.first().is_some_and(|case| pat_leads(case, name)),
-        Pat::Paren(paren) => pat_leads(&paren.pat, name),
-        Pat::Guard(guard) => pat_leads(&guard.pat, name),
-        _ => false,
-    }
-}
-
-// Whether `pat` names `name` anywhere within it: `None`, `Ok(None)`, `Some(..) | None`.
-fn pat_names(pat: &Pat, name: &str) -> bool {
-    struct Names<'n> {
-        name: &'n str,
-        found: bool,
-    }
-
-    impl<'ast> Visit<'ast> for Names<'_> {
-        fn visit_pat_ident(&mut self, node: &'ast PatIdent) {
-            self.found |= node.ident == self.name;
-            visit::visit_pat_ident(self, node);
-        }
-
-        fn visit_path(&mut self, node: &'ast Path) {
-            self.found |= path_ends(node, &[self.name]);
-            visit::visit_path(self, node);
-        }
-
-        fn visit_pat_guard(&mut self, node: &'ast PatGuard) {
-            self.visit_pat(&node.pat);
-        }
-    }
-
-    let mut names = Names { name, found: false };
-    names.visit_pat(pat);
-    names.found
-}
-
-// The line a pattern starts on, for the shapes a catch opens with.
-fn pat_line(pat: &Pat) -> Option<usize> {
-    match pat {
-        Pat::TupleStruct(tuple) => {
-            tuple.path.segments.first().map(|segment| syntax::line(segment.ident.span()))
-        }
-        Pat::Or(or) => or.cases.first().and_then(pat_line),
-        Pat::Paren(paren) => Some(syntax::line(paren.paren_token.span.open())),
-        Pat::Guard(guard) => pat_line(&guard.pat),
-        _ => None,
-    }
-}
-
-// Whether `call` is `Ok(())`.
-fn is_unit_ok(call: &ExprCall) -> bool {
-    let Expr::Path(func) = &*call.func else { return false };
-    path_ends(&func.path, &["Ok"])
-        && call.args.len() == 1
-        && matches!(call.args.first(), Some(Expr::Tuple(tuple)) if tuple.elems.is_empty())
-}
-
-// Whether `expr` calls the method `name` with no arguments anywhere within it.
-fn calls(expr: &Expr, name: &str) -> bool {
-    struct Calls<'n> {
-        name: &'n str,
-        found: bool,
-    }
-
-    impl<'ast> Visit<'ast> for Calls<'_> {
-        fn visit_expr_method_call(&mut self, node: &'ast ExprMethodCall) {
-            self.found |= node.method == self.name && node.args.is_empty();
-            visit::visit_expr_method_call(self, node);
-        }
-    }
-
-    let mut calls = Calls { name, found: false };
-    calls.visit_expr(expr);
-    calls.found
-}
-
-// Whether a `#[derive(..)]` among `attrs` names `name`.
-fn derives(attrs: &[Attribute], name: &str) -> bool {
-    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
-        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
-            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
-    })
-}
-
 // The reads of a store that answer `None` on a miss: the trait's method and
 // the extension's, each by the trait it is called through.
 const READS: &[&[&str]] = &[
@@ -812,6 +784,19 @@ fn is_hit(pat: &Pat) -> bool {
     }
 }
 
+// An empty collection answered bare or under `Ok(..)`, spelled.
+fn empty_answer(expr: &Expr) -> Option<String> {
+    if let Some(spelling) = nothing(expr) {
+        return Some(spelling.to_owned());
+    }
+    let Expr::Call(call) = expr else { return None };
+    let Expr::Path(func) = &*call.func else { return None };
+    if !path_ends(&func.path, &["Ok"]) || call.args.len() != 1 {
+        return None;
+    }
+    call.args.first().and_then(nothing).map(|spelling| format!("Ok({spelling})"))
+}
+
 // An empty collection, spelled as `NOTHING` has it.
 fn nothing(expr: &Expr) -> Option<&'static str> {
     match expr {
@@ -827,19 +812,6 @@ fn nothing(expr: &Expr) -> Option<&'static str> {
         }
         _ => None,
     }
-}
-
-// An empty collection answered bare or under `Ok(..)`, spelled.
-fn empty_answer(expr: &Expr) -> Option<String> {
-    if let Some(spelling) = nothing(expr) {
-        return Some(spelling.to_owned());
-    }
-    let Expr::Call(call) = expr else { return None };
-    let Expr::Path(func) = &*call.func else { return None };
-    if !path_ends(&func.path, &["Ok"]) || call.args.len() != 1 {
-        return None;
-    }
-    call.args.first().and_then(nothing).map(|spelling| format!("Ok({spelling})"))
 }
 
 // A method call that defaults a miss, spelled as `DEFAULTED_WITH` has it.
@@ -867,4 +839,32 @@ fn defaulted(call: &ExprMethodCall) -> Option<&'static str> {
         return Some(".unwrap_or(Vec::new())");
     }
     None
+}
+
+// Whether `pat` names `name` anywhere within it: `None`, `Ok(None)`, `Some(..) | None`.
+fn pat_names(pat: &Pat, name: &str) -> bool {
+    struct Names<'n> {
+        name: &'n str,
+        found: bool,
+    }
+
+    impl<'ast> Visit<'ast> for Names<'_> {
+        fn visit_pat_ident(&mut self, node: &'ast PatIdent) {
+            self.found |= node.ident == self.name;
+            visit::visit_pat_ident(self, node);
+        }
+
+        fn visit_path(&mut self, node: &'ast Path) {
+            self.found |= path_ends(node, &[self.name]);
+            visit::visit_path(self, node);
+        }
+
+        fn visit_pat_guard(&mut self, node: &'ast PatGuard) {
+            self.visit_pat(&node.pat);
+        }
+    }
+
+    let mut names = Names { name, found: false };
+    names.visit_pat(pat);
+    names.found
 }

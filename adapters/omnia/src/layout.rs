@@ -120,10 +120,6 @@ pub fn is_start_stem(name: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('-') || rest.starts_with('_'))
 }
 
-fn is_start_crate(dir: &Path) -> bool {
-    dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
-}
-
 // Whether a crate directory under `crates/` is a stem's: `common` is the
 // shared crate and a `start` crate the process rule's.
 pub fn is_stem_crate(dir: &str) -> bool {
@@ -151,20 +147,6 @@ pub fn relative(root: &Path, file: &Path) -> String {
     file.strip_prefix(root).unwrap_or(file).display().to_string()
 }
 
-fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let listing = match fs::read_dir(dir) {
-        Ok(listing) => listing,
-        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(err) => return Err(server_error!("listing `{}`: {err}", dir.display())),
-    };
-    let mut paths = listing
-        .map(|entry| entry.map(|entry| entry.path()))
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
-    paths.sort();
-    Ok(paths)
-}
-
 // The directories under `crates/` that hold a file, by name; an empty one
 // `delete` left behind is none.
 pub fn crates(root: &Path) -> Result<Vec<String>, Error> {
@@ -182,40 +164,18 @@ pub fn crates(root: &Path) -> Result<Vec<String>, Error> {
     Ok(names)
 }
 
-// Every file under a `start` crate, root-relative and sorted.
-pub fn start_files(root: &Path) -> Result<Vec<String>, Error> {
-    let mut found = Vec::new();
-    for dir in entries(&root.join("crates"))? {
-        if !is_start_crate(&dir) {
-            continue;
-        }
-        for file in files(&dir)? {
-            found.push(relative(root, &file));
-        }
-    }
-    found.sort();
-    Ok(found)
-}
-
-// Every file of the tree, root-relative with `/` between segments, as a
-// commit would carry it: nothing under `.git` or `.emery`, and nothing
-// under the root's `target/`, which the checks fill.
-pub fn listing(root: &Path) -> Result<BTreeSet<String>, Error> {
-    let mut found = BTreeSet::new();
-    let skip = |dir: &Path, name: &str| {
-        name == ".git" || name == ".emery" || (dir == root && name == "target")
+fn entries(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let listing = match fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(err) if err.kind() == ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(err) => return Err(server_error!("listing `{}`: {err}", dir.display())),
     };
-    walk(root, skip, |path, _| {
-        let relative: Vec<String> = path
-            .strip_prefix(root)
-            .unwrap_or(&path)
-            .components()
-            .map(|part| part.as_os_str().to_string_lossy().into_owned())
-            .collect();
-        found.insert(relative.join("/"));
-        ControlFlow::Continue(())
-    })?;
-    Ok(found)
+    let mut paths = listing
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| server_error!("listing `{}`: {err}", dir.display()))?;
+    paths.sort();
+    Ok(paths)
 }
 
 fn has_files(dir: &Path) -> Result<bool, Error> {
@@ -228,23 +188,6 @@ fn has_files(dir: &Path) -> Result<bool, Error> {
             if found { ControlFlow::Break(()) } else { ControlFlow::Continue(()) }
         },
     )?;
-    Ok(found)
-}
-
-// Every regular file under `dir`, sorted; a link is none.
-pub fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
-    let mut found = Vec::new();
-    walk(
-        dir,
-        |_, _| false,
-        |path, meta| {
-            if meta.is_file() {
-                found.push(path);
-            }
-            ControlFlow::Continue(())
-        },
-    )?;
-    found.sort();
     Ok(found)
 }
 
@@ -274,6 +217,63 @@ fn walk(
         }
     }
     Ok(())
+}
+
+// Every file under a `start` crate, root-relative and sorted.
+pub fn start_files(root: &Path) -> Result<Vec<String>, Error> {
+    let mut found = Vec::new();
+    for dir in entries(&root.join("crates"))? {
+        if !is_start_crate(&dir) {
+            continue;
+        }
+        for file in files(&dir)? {
+            found.push(relative(root, &file));
+        }
+    }
+    found.sort();
+    Ok(found)
+}
+
+fn is_start_crate(dir: &Path) -> bool {
+    dir.file_name().and_then(|name| name.to_str()).is_some_and(is_start_stem)
+}
+
+// Every file of the tree, root-relative with `/` between segments, as a
+// commit would carry it: nothing under `.git` or `.emery`, and nothing
+// under the root's `target/`, which the checks fill.
+pub fn listing(root: &Path) -> Result<BTreeSet<String>, Error> {
+    let mut found = BTreeSet::new();
+    let skip = |dir: &Path, name: &str| {
+        name == ".git" || name == ".emery" || (dir == root && name == "target")
+    };
+    walk(root, skip, |path, _| {
+        let relative: Vec<String> = path
+            .strip_prefix(root)
+            .unwrap_or(&path)
+            .components()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        found.insert(relative.join("/"));
+        ControlFlow::Continue(())
+    })?;
+    Ok(found)
+}
+
+// Every regular file under `dir`, sorted; a link is none.
+pub fn files(dir: &Path) -> Result<Vec<PathBuf>, Error> {
+    let mut found = Vec::new();
+    walk(
+        dir,
+        |_, _| false,
+        |path, meta| {
+            if meta.is_file() {
+                found.push(path);
+            }
+            ControlFlow::Continue(())
+        },
+    )?;
+    found.sort();
+    Ok(found)
 }
 
 pub fn sources(dir: &Path) -> Result<Vec<PathBuf>, Error> {

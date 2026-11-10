@@ -18,19 +18,6 @@ pub struct Source {
     items: Vec<Item>,
 }
 
-pub enum Item {
-    // The `//!` lines a file opens with.
-    ModuleDoc(Doc),
-    // One `pub mod <name>;` line per name.
-    Mods(Vec<String>),
-    Uses(Uses),
-    Consts(Consts),
-    Fn(Fn),
-    Struct(Struct),
-    Enum(Enum),
-    Impl(Impl),
-}
-
 // An `impl` block: its head, `impl From<E> for T`, and its items as lines
 // relative to the block, indented once when rendered.
 pub struct Impl {
@@ -156,6 +143,19 @@ pub struct Chain {
 // A Markdown fence longer than any run of backticks in the text it holds.
 pub struct Fence(String);
 
+pub enum Item {
+    // The `//!` lines a file opens with.
+    ModuleDoc(Doc),
+    // One `pub mod <name>;` line per name.
+    Mods(Vec<String>),
+    Uses(Uses),
+    Consts(Consts),
+    Fn(Fn),
+    Struct(Struct),
+    Enum(Enum),
+    Impl(Impl),
+}
+
 impl Source {
     pub fn push(&mut self, item: impl Into<Item>) {
         self.items.push(item.into());
@@ -170,31 +170,6 @@ impl Source {
             item.render(&mut out);
         }
         out
-    }
-}
-
-impl Item {
-    fn render(&self, out: &mut String) {
-        match self {
-            Self::ModuleDoc(doc) => doc.render("//!", out),
-            Self::Mods(names) => {
-                for name in names {
-                    let _ = writeln!(out, "pub mod {name};");
-                }
-            }
-            Self::Uses(uses) => uses.render(out),
-            Self::Consts(consts) => consts.render(out),
-            Self::Fn(item) => item.render(out),
-            Self::Struct(item) => item.render(out),
-            Self::Enum(item) => item.render(out),
-            Self::Impl(item) => item.render(out),
-        }
-    }
-}
-
-impl From<Impl> for Item {
-    fn from(item: Impl) -> Self {
-        Self::Impl(item)
     }
 }
 
@@ -255,6 +230,31 @@ impl From<Struct> for Item {
 impl From<Enum> for Item {
     fn from(item: Enum) -> Self {
         Self::Enum(item)
+    }
+}
+
+impl Item {
+    fn render(&self, out: &mut String) {
+        match self {
+            Self::ModuleDoc(doc) => doc.render("//!", out),
+            Self::Mods(names) => {
+                for name in names {
+                    let _ = writeln!(out, "pub mod {name};");
+                }
+            }
+            Self::Uses(uses) => uses.render(out),
+            Self::Consts(consts) => consts.render(out),
+            Self::Fn(item) => item.render(out),
+            Self::Struct(item) => item.render(out),
+            Self::Enum(item) => item.render(out),
+            Self::Impl(item) => item.render(out),
+        }
+    }
+}
+
+impl From<Impl> for Item {
+    fn from(item: Impl) -> Self {
+        Self::Impl(item)
     }
 }
 
@@ -333,6 +333,13 @@ impl Uses {
     }
 }
 
+// The formatter's order over two `use` lines: by group, then segment by
+// segment, a name before a brace list where one path runs on past the
+// other.
+fn use_order(a: &(String, Vec<String>), b: &(String, Vec<String>)) -> Ordering {
+    group(&a.0).cmp(&group(&b.0)).then_with(|| segments(&a.0, &a.1).cmp(&segments(&b.0, &b.1)))
+}
+
 // The formatter's group of a `use` path under `group_imports =
 // "StdExternalCrate"`: the standard library, the other crates, the crate's
 // own paths.
@@ -371,13 +378,6 @@ fn segments<'s>(path: &'s str, names: &'s [String]) -> Vec<Segment<'s>> {
         _ => Segment::List,
     });
     segments
-}
-
-// The formatter's order over two `use` lines: by group, then segment by
-// segment, a name before a brace list where one path runs on past the
-// other.
-fn use_order(a: &(String, Vec<String>), b: &(String, Vec<String>)) -> Ordering {
-    group(&a.0).cmp(&group(&b.0)).then_with(|| segments(&a.0, &a.1).cmp(&segments(&b.0, &b.1)))
 }
 
 impl Consts {
@@ -757,24 +757,6 @@ impl Vis {
     }
 }
 
-impl From<String> for Expr {
-    fn from(text: String) -> Self {
-        Self::Text(text)
-    }
-}
-
-impl From<&str> for Expr {
-    fn from(text: &str) -> Self {
-        Self::Text(text.to_owned())
-    }
-}
-
-impl From<Call> for Expr {
-    fn from(call: Call) -> Self {
-        Self::Call(call)
-    }
-}
-
 impl Expr {
     // The expression as the tail of a block whose statements stand `at`
     // columns into the body.
@@ -797,6 +779,24 @@ impl Expr {
             Self::Call(call) => call.within(width, at, true),
             Self::Macro(call) => call.within(width, at, false),
         }
+    }
+}
+
+impl From<String> for Expr {
+    fn from(text: String) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl From<&str> for Expr {
+    fn from(text: &str) -> Self {
+        Self::Text(text.to_owned())
+    }
+}
+
+impl From<Call> for Expr {
+    fn from(call: Call) -> Self {
+        Self::Call(call)
     }
 }
 

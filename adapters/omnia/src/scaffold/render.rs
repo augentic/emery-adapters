@@ -21,13 +21,166 @@ use crate::layout::{HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER
 use crate::syntax;
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
+
 // The derives of a type a float reaches, which `Eq` cannot hold.
 const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserialize";
+
 // The bound every scaffolded handler and consumer opens with: the turn
 // narrows it to the capabilities the body reaches.
 const BOUND: &str = "P: Capabilities";
+
 // The value a seeded setting holds until the turn fills it.
 const PLACEHOLDER: &str = "<value>";
+
+// The body of the laid gate as the file holds it: the one block the turn
+// replaces.
+pub fn gate_stub(gate: &Gate) -> String {
+    block(gate_stub_lines(gate)).collect::<Vec<_>>().join("\n")
+}
+
+fn gate_stub_lines(gate: &Gate) -> Vec<String> {
+    let mut lines = vec!["let _ = (context, headers);".to_owned()];
+    lines.extend(marker_lines(&gate.marker()));
+    lines
+}
+
+// A table's data file, relative to the stem's crate: the rows the reader
+// of that name compiles in from beside the sources.
+pub fn data_file(reader: &str) -> String {
+    format!("data/{reader}.json")
+}
+
+// The line a stem's `[dependencies]` names a crate the root manifest pins
+// by.
+pub fn dependency_line(name: &str) -> String {
+    format!("{name}.workspace = true")
+}
+
+// The crate a `[dependencies]` line names, before its `.workspace` or its
+// ` =`.
+fn dependency_name(line: &str) -> &str {
+    line.split(['.', ' ', '=']).next().unwrap_or(line)
+}
+
+// The topic table's constant for `topic`, under its doc line, as the lines
+// added at the end of the table.
+pub fn topic_constant(constant: &str, topic: &str) -> String {
+    let topic = escape(topic);
+    let mut source = Source::default();
+    source.push(Consts::new([Const::new(constant, "&str", format!("\"{topic}\""))
+        .docs([format!("The `{topic}` topic.")])
+        .vis(Vis::Pub)]));
+    source.render().trim_end().to_owned()
+}
+
+// The body of a handler or a consumer as the file holds it: the borrow of
+// `names` that keeps the lints quiet and the marker, the one block the
+// turn replaces.
+pub fn stub(names: &[String], marker: &str) -> String {
+    block(stub_lines(names, marker)).collect::<Vec<_>>().join("\n")
+}
+
+fn stub_lines(names: &[String], marker: &str) -> Vec<String> {
+    let borrowed: Vec<String> = names.iter().map(|name| format!("&{name}")).collect();
+    let borrow = match borrowed.as_slice() {
+        [one] => format!("let _ = {one};"),
+        several => format!("let _ = ({});", several.join(", ")),
+    };
+    let mut lines = vec![borrow];
+    lines.extend(marker_lines(marker));
+    lines
+}
+
+// The body of a function as scaffolded: its marker alone.
+fn marker_lines(marker: &str) -> Vec<String> {
+    Expr::Macro(Call::new("todo!", [format!("\"{}\"", escape(marker))])).tail(0)
+}
+
+// `text` in a fence longer than any run of backticks it holds.
+pub fn fenced(lang: &str, text: &str) -> String {
+    let fence = Fence::around(text);
+    format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
+}
+
+// The doubles every scenario starts from, each setting the part reads
+// seeded with a placeholder the turn fills.
+fn provider(keys: &[&str]) -> Fn {
+    let item = Fn::new("provider").returns("Provider");
+    if keys.is_empty() {
+        return item
+            .comments([
+                "The doubles every scenario starts from: set a setting or a response on them in \
+                 the arrangement.",
+            ])
+            .body(["Provider::default()"]);
+    }
+    let seeds: Vec<String> =
+        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
+    let inline = format!("[{}]", seeds.join(", "));
+    let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
+    let body = if joined.chars().count() <= BODY_WIDTH {
+        vec![joined]
+    } else {
+        let mut lines = seeded(&seeds, &inline);
+        lines.push("Provider::default().config(MapConfig::default().with(settings))".to_owned());
+        lines
+    };
+    item.comments([
+        "The doubles every scenario starts from, the part's settings seeded: give each its",
+        "value for the scenarios, and set a response on the doubles in the arrangement.",
+    ])
+    .body(body)
+}
+
+// `let settings = [..];` as the formatter lays an array: on one line where
+// it fits, beneath the binding where it fits there, else one seed per line.
+fn seeded(seeds: &[String], inline: &str) -> Vec<String> {
+    let joined = format!("let settings = {inline};");
+    if joined.chars().count() <= BODY_WIDTH {
+        return vec![joined];
+    }
+    if TAB + inline.chars().count() < BODY_WIDTH {
+        return vec!["let settings =".to_owned(), format!("{}{inline};", pad(TAB))];
+    }
+    let mut lines = vec!["let settings = [".to_owned()];
+    lines.extend(seeds.iter().map(|seed| format!("{}{seed},", pad(TAB))));
+    lines.push("];".to_owned());
+    lines
+}
+
+// The stem's router over the doubles, built as the guest builds it.
+fn router(ident: &str) -> Fn {
+    Fn::new("router")
+        .comments(["The stem's router over the doubles, as the guest builds it."])
+        .params(["provider: &Provider"])
+        .returns("Router<Provider>")
+        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
+}
+
+// One request through the stem's router, its body read as JSON so a test
+// asserts fields and never bytes.
+fn call() -> Fn {
+    Fn::new("call")
+        .comments([
+            "One request through the stem's router, answered as its status and its body as JSON:",
+            "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
+        ])
+        .asynchronous()
+        .params(["provider: &Provider", "request: Request<Body>"])
+        .returns("(StatusCode, Value)")
+        .body([
+            "let response = send(&router(provider), request).await;",
+            "let status = response.status();",
+            "let body = response.into_body();",
+            "let body = if body.is_empty() {",
+            "    Value::Null",
+            "} else {",
+            "    serde_json::from_slice(&body)",
+            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))",
+            "};",
+            "(status, body)",
+        ])
+}
 
 impl Stem {
     pub fn render(&self, kind: Kind) -> String {
@@ -396,6 +549,58 @@ impl Stem {
     }
 }
 
+// The imports of `uses` that `file` does not already bring into scope.
+fn missing_uses(mut uses: Uses, file: Option<&syn::File>) -> Uses {
+    if let Some(mentions) = file.map(syntax::Mentions::of) {
+        uses.retain(|path, name| {
+            let ident = name.split_whitespace().next().unwrap_or(name);
+            let tail = [path.rsplit("::").next().unwrap_or(path), ident];
+            !(mentions.path_ends(&tail) || mentions.contains(ident))
+        });
+    }
+    uses
+}
+
+fn insert_uses(text: &mut String, uses: Uses, file: Option<&syn::File>) {
+    if uses.is_empty() {
+        return;
+    }
+    let mut source = Source::default();
+    source.push(uses);
+    let rendered = source.render();
+    let trimmed = rendered.trim_end();
+    let mut lines: Vec<&str> = text.lines().collect();
+    if let Some(last) = file
+        .and_then(syntax::last_use_line)
+        .and_then(|line| line.checked_sub(1))
+        .or_else(|| lines.iter().rposition(|line| line.starts_with("use ")))
+    {
+        lines.insert(last + 1, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    if let Some(last) = lines.iter().rposition(|line| line.starts_with("//!")) {
+        lines.insert(last + 1, "");
+        lines.insert(last + 2, trimmed);
+        *text = lines.join("\n") + "\n";
+        return;
+    }
+    *text = format!("{rendered}\n{text}");
+}
+
+fn append_source(text: &mut String, appended: &Source) {
+    let rendered = appended.render();
+    if rendered.is_empty() {
+        return;
+    }
+    let trimmed = text.trim_end();
+    if trimmed.is_empty() {
+        *text = rendered;
+    } else {
+        *text = format!("{trimmed}\n\n{rendered}");
+    }
+}
+
 impl Handler {
     // The `.route(..)` call that registers the handler under the method
     // router for its method.
@@ -468,6 +673,14 @@ impl Handler {
     }
 }
 
+// `// <id> <subject>: <statement>`, one per requirement an item stands for.
+fn stated(stated: &[Stated]) -> Vec<String> {
+    stated
+        .iter()
+        .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
+        .collect()
+}
+
 impl Gate {
     // The gate as the module lays it: its settings where the design spells
     // keys, its error answering the refusal under the design's code and
@@ -536,18 +749,6 @@ impl Gate {
             .bounds(["P: Config"])
             .body(gate_stub_lines(self))
     }
-}
-
-// The body of the laid gate as the file holds it: the one block the turn
-// replaces.
-pub fn gate_stub(gate: &Gate) -> String {
-    block(gate_stub_lines(gate)).collect::<Vec<_>>().join("\n")
-}
-
-fn gate_stub_lines(gate: &Gate) -> Vec<String> {
-    let mut lines = vec!["let _ = (context, headers);".to_owned()];
-    lines.extend(marker_lines(&gate.marker()));
-    lines
 }
 
 impl Consumer {
@@ -736,10 +937,21 @@ impl Type {
     }
 }
 
-// A table's data file, relative to the stem's crate: the rows the reader
-// of that name compiles in from beside the sources.
-pub fn data_file(reader: &str) -> String {
-    format!("data/{reader}.json")
+fn laid_field(field: &LaidField) -> Field {
+    Field::new(&field.name, &field.ty)
+        .docs(field.docs.clone())
+        .attrs(field.attrs.iter().cloned())
+        .vis(Vis::Pub)
+}
+
+fn laid_variant(variant: &LaidVariant) -> Variant {
+    Variant::new(&variant.name).docs(variant.docs.clone()).attrs(variant.attrs.iter().cloned())
+}
+
+// The fn a field's `serde(default)` names, `const` where its value allows.
+fn default_fn(default: &DefaultFn) -> Fn {
+    let item = Fn::new(&default.name).returns(&default.ret).body([default.value.as_str()]);
+    if default.constant { item.constant() } else { item }
 }
 
 impl Test {
@@ -851,214 +1063,5 @@ impl Test {
                 vec!["let provider = provider();".to_owned(), "let _ = &provider;".to_owned()]
             }
         }
-    }
-}
-
-// The line a stem's `[dependencies]` names a crate the root manifest pins
-// by.
-pub fn dependency_line(name: &str) -> String {
-    format!("{name}.workspace = true")
-}
-
-// The crate a `[dependencies]` line names, before its `.workspace` or its
-// ` =`.
-fn dependency_name(line: &str) -> &str {
-    line.split(['.', ' ', '=']).next().unwrap_or(line)
-}
-
-// The topic table's constant for `topic`, under its doc line, as the lines
-// added at the end of the table.
-pub fn topic_constant(constant: &str, topic: &str) -> String {
-    let topic = escape(topic);
-    let mut source = Source::default();
-    source.push(Consts::new([Const::new(constant, "&str", format!("\"{topic}\""))
-        .docs([format!("The `{topic}` topic.")])
-        .vis(Vis::Pub)]));
-    source.render().trim_end().to_owned()
-}
-
-// The doubles every scenario starts from, each setting the part reads
-// seeded with a placeholder the turn fills.
-fn provider(keys: &[&str]) -> Fn {
-    let item = Fn::new("provider").returns("Provider");
-    if keys.is_empty() {
-        return item
-            .comments([
-                "The doubles every scenario starts from: set a setting or a response on them in \
-                 the arrangement.",
-            ])
-            .body(["Provider::default()"]);
-    }
-    let seeds: Vec<String> =
-        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
-    let inline = format!("[{}]", seeds.join(", "));
-    let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
-    let body = if joined.chars().count() <= BODY_WIDTH {
-        vec![joined]
-    } else {
-        let mut lines = seeded(&seeds, &inline);
-        lines.push("Provider::default().config(MapConfig::default().with(settings))".to_owned());
-        lines
-    };
-    item.comments([
-        "The doubles every scenario starts from, the part's settings seeded: give each its",
-        "value for the scenarios, and set a response on the doubles in the arrangement.",
-    ])
-    .body(body)
-}
-
-// `let settings = [..];` as the formatter lays an array: on one line where
-// it fits, beneath the binding where it fits there, else one seed per line.
-fn seeded(seeds: &[String], inline: &str) -> Vec<String> {
-    let joined = format!("let settings = {inline};");
-    if joined.chars().count() <= BODY_WIDTH {
-        return vec![joined];
-    }
-    if TAB + inline.chars().count() < BODY_WIDTH {
-        return vec!["let settings =".to_owned(), format!("{}{inline};", pad(TAB))];
-    }
-    let mut lines = vec!["let settings = [".to_owned()];
-    lines.extend(seeds.iter().map(|seed| format!("{}{seed},", pad(TAB))));
-    lines.push("];".to_owned());
-    lines
-}
-
-// The stem's router over the doubles, built as the guest builds it.
-fn router(ident: &str) -> Fn {
-    Fn::new("router")
-        .comments(["The stem's router over the doubles, as the guest builds it."])
-        .params(["provider: &Provider"])
-        .returns("Router<Provider>")
-        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
-}
-
-// One request through the stem's router, its body read as JSON so a test
-// asserts fields and never bytes.
-fn call() -> Fn {
-    Fn::new("call")
-        .comments([
-            "One request through the stem's router, answered as its status and its body as JSON:",
-            "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
-        ])
-        .asynchronous()
-        .params(["provider: &Provider", "request: Request<Body>"])
-        .returns("(StatusCode, Value)")
-        .body([
-            "let response = send(&router(provider), request).await;",
-            "let status = response.status();",
-            "let body = response.into_body();",
-            "let body = if body.is_empty() {",
-            "    Value::Null",
-            "} else {",
-            "    serde_json::from_slice(&body)",
-            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))",
-            "};",
-            "(status, body)",
-        ])
-}
-
-// The body of a handler or a consumer as the file holds it: the borrow of
-// `names` that keeps the lints quiet and the marker, the one block the
-// turn replaces.
-pub fn stub(names: &[String], marker: &str) -> String {
-    block(stub_lines(names, marker)).collect::<Vec<_>>().join("\n")
-}
-
-fn stub_lines(names: &[String], marker: &str) -> Vec<String> {
-    let borrowed: Vec<String> = names.iter().map(|name| format!("&{name}")).collect();
-    let borrow = match borrowed.as_slice() {
-        [one] => format!("let _ = {one};"),
-        several => format!("let _ = ({});", several.join(", ")),
-    };
-    let mut lines = vec![borrow];
-    lines.extend(marker_lines(marker));
-    lines
-}
-
-// The body of a function as scaffolded: its marker alone.
-fn marker_lines(marker: &str) -> Vec<String> {
-    Expr::Macro(Call::new("todo!", [format!("\"{}\"", escape(marker))])).tail(0)
-}
-
-// `text` in a fence longer than any run of backticks it holds.
-pub fn fenced(lang: &str, text: &str) -> String {
-    let fence = Fence::around(text);
-    format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
-}
-
-fn laid_field(field: &LaidField) -> Field {
-    Field::new(&field.name, &field.ty)
-        .docs(field.docs.clone())
-        .attrs(field.attrs.iter().cloned())
-        .vis(Vis::Pub)
-}
-
-fn laid_variant(variant: &LaidVariant) -> Variant {
-    Variant::new(&variant.name).docs(variant.docs.clone()).attrs(variant.attrs.iter().cloned())
-}
-
-// The fn a field's `serde(default)` names, `const` where its value allows.
-fn default_fn(default: &DefaultFn) -> Fn {
-    let item = Fn::new(&default.name).returns(&default.ret).body([default.value.as_str()]);
-    if default.constant { item.constant() } else { item }
-}
-
-// `// <id> <subject>: <statement>`, one per requirement an item stands for.
-fn stated(stated: &[Stated]) -> Vec<String> {
-    stated
-        .iter()
-        .map(|stated| format!("{} {}: {}", stated.id, stated.subject, stated.statement))
-        .collect()
-}
-
-// The imports of `uses` that `file` does not already bring into scope.
-fn missing_uses(mut uses: Uses, file: Option<&syn::File>) -> Uses {
-    if let Some(mentions) = file.map(syntax::Mentions::of) {
-        uses.retain(|path, name| {
-            let ident = name.split_whitespace().next().unwrap_or(name);
-            let tail = [path.rsplit("::").next().unwrap_or(path), ident];
-            !(mentions.path_ends(&tail) || mentions.contains(ident))
-        });
-    }
-    uses
-}
-
-fn insert_uses(text: &mut String, uses: Uses, file: Option<&syn::File>) {
-    if uses.is_empty() {
-        return;
-    }
-    let mut source = Source::default();
-    source.push(uses);
-    let rendered = source.render();
-    let trimmed = rendered.trim_end();
-    let mut lines: Vec<&str> = text.lines().collect();
-    if let Some(last) = file
-        .and_then(syntax::last_use_line)
-        .and_then(|line| line.checked_sub(1))
-        .or_else(|| lines.iter().rposition(|line| line.starts_with("use ")))
-    {
-        lines.insert(last + 1, trimmed);
-        *text = lines.join("\n") + "\n";
-        return;
-    }
-    if let Some(last) = lines.iter().rposition(|line| line.starts_with("//!")) {
-        lines.insert(last + 1, "");
-        lines.insert(last + 2, trimmed);
-        *text = lines.join("\n") + "\n";
-        return;
-    }
-    *text = format!("{rendered}\n{text}");
-}
-
-fn append_source(text: &mut String, appended: &Source) {
-    let rendered = appended.render();
-    if rendered.is_empty() {
-        return;
-    }
-    let trimmed = text.trim_end();
-    if trimmed.is_empty() {
-        *text = rendered;
-    } else {
-        *text = format!("{trimmed}\n\n{rendered}");
     }
 }

@@ -13,15 +13,6 @@ pub struct Settings {
     pub fields: Vec<Field>,
 }
 
-// One setting: its field, its key, and whether the key must be spelled on
-// the field because the derive would not read it off the field's name.
-#[derive(Clone)]
-pub struct Field {
-    pub name: String,
-    pub key: String,
-    pub explicit: bool,
-}
-
 // The names `axum::http::StatusCode` declares, which a scenario spells for
 // a status and never for a setting.
 const STATUSES: &[&str] = &[
@@ -154,4 +145,13 @@ fn shared_prefix(keys: &BTreeSet<&str>) -> Option<String> {
     let mut leads = keys.iter().map(|key| key.split_once('_').map(|(lead, _)| lead));
     let lead = leads.next().flatten()?;
     leads.all(|other| other == Some(lead)).then(|| format!("{lead}_"))
+}
+
+// One setting: its field, its key, and whether the key must be spelled on
+// the field because the derive would not read it off the field's name.
+#[derive(Clone)]
+pub struct Field {
+    pub name: String,
+    pub key: String,
+    pub explicit: bool,
 }

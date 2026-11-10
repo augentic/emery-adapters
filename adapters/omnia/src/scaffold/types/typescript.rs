@@ -62,6 +62,92 @@ pub fn read(signature: &str) -> Option<Parsed> {
     None
 }
 
+// A type expression as the reader lays it.
+pub fn parse(text: &str) -> Type {
+    let text = text.trim();
+    if text.starts_with('(')
+        && let Some((inner, after)) = between(text, '(', ')')
+        && after.trim().is_empty()
+        && !inner.trim().is_empty()
+    {
+        return parse(inner);
+    }
+
+    // a union: nullable where a part is `null` or `undefined`
+    let parts: Vec<&str> =
+        split_top(text, '|').map(str::trim).filter(|part| !part.is_empty()).collect();
+    if parts.len() > 1 {
+        let nullable = parts.iter().any(|part| matches!(*part, "null" | "undefined"));
+        let rest: Vec<&str> =
+            parts.iter().copied().filter(|part| !matches!(*part, "null" | "undefined")).collect();
+        let inner = match rest.as_slice() {
+            [] => Type::Any,
+            [one] => parse(one),
+            many if many.iter().all(|part| literal(part).is_some()) => Type::Text,
+            many if many.iter().all(|part| number(part).is_some()) => Type::Number,
+            many if many.iter().all(|part| matches!(*part, "true" | "false")) => Type::Bool,
+            _ => Type::Any,
+        };
+        return if nullable { Type::Nullable(Box::new(inner)) } else { inner };
+    }
+    if split_top(text, '&').count() > 1 {
+        return Type::Any;
+    }
+
+    let text = text.strip_prefix("readonly ").unwrap_or(text).trim();
+    if let Some(element) = text.strip_suffix("[]") {
+        return Type::Array(Box::new(parse(element)));
+    }
+    if text.starts_with(['{', '[']) || text.contains("=>") {
+        return Type::Any;
+    }
+    if literal(text).is_some() {
+        return Type::Text;
+    }
+    if number(text).is_some() {
+        return Type::Number;
+    }
+    if let Some((generic, after)) = between(text, '<', '>')
+        && after.trim().is_empty()
+        && let Some(head) = text.split('<').next().map(str::trim)
+    {
+        let name = head.rsplit('.').next().unwrap_or(head);
+        if !is_ident(name) {
+            return Type::Any;
+        }
+        let args: Vec<&str> = split_top(generic, ',').map(str::trim).collect();
+        return match name {
+            "Array" | "ReadonlyArray" | "Set" | "ReadonlySet" => {
+                Type::Array(Box::new(args.first().map_or(Type::Any, |arg| parse(arg))))
+            }
+            "Record" | "Map" | "ReadonlyMap" => {
+                Type::Map(Box::new(args.get(1).map_or(Type::Any, |arg| parse(arg))))
+            }
+            _ if UNWRAPPED.contains(&name) => args.first().map_or(Type::Any, |arg| parse(arg)),
+            _ if OPAQUE.contains(&name) => Type::Any,
+            _ => Type::Named(name.to_owned(), args.iter().map(|arg| parse(arg)).collect()),
+        };
+    }
+    let name = text.rsplit('.').next().unwrap_or(text);
+    match name {
+        "string" => Type::Text,
+        "number" => Type::Number,
+        "boolean" | "true" | "false" => Type::Bool,
+        "bigint" => Type::Int,
+        "Date" => Type::Date,
+        "Buffer" | "Uint8Array" => Type::Bytes,
+        _ if is_ident(name)
+            && !matches!(
+                name,
+                "any" | "unknown" | "object" | "never" | "void" | "null" | "undefined" | "symbol"
+            ) =>
+        {
+            Type::Named(name.to_owned(), Vec::new())
+        }
+        _ => Type::Any,
+    }
+}
+
 // `NAME: readonly T[] = [{ k: v, .. }, ..]` read as a table: an array typed
 // over one named element whose every row is an object literal of strings,
 // numbers, and booleans. An untyped array, a row spelling anything else, or
@@ -490,92 +576,6 @@ fn default_of(value: &str) -> Option<Literal> {
         return Some(Literal::Member(owner.to_owned(), member.to_owned()));
     }
     None
-}
-
-// A type expression as the reader lays it.
-pub fn parse(text: &str) -> Type {
-    let text = text.trim();
-    if text.starts_with('(')
-        && let Some((inner, after)) = between(text, '(', ')')
-        && after.trim().is_empty()
-        && !inner.trim().is_empty()
-    {
-        return parse(inner);
-    }
-
-    // a union: nullable where a part is `null` or `undefined`
-    let parts: Vec<&str> =
-        split_top(text, '|').map(str::trim).filter(|part| !part.is_empty()).collect();
-    if parts.len() > 1 {
-        let nullable = parts.iter().any(|part| matches!(*part, "null" | "undefined"));
-        let rest: Vec<&str> =
-            parts.iter().copied().filter(|part| !matches!(*part, "null" | "undefined")).collect();
-        let inner = match rest.as_slice() {
-            [] => Type::Any,
-            [one] => parse(one),
-            many if many.iter().all(|part| literal(part).is_some()) => Type::Text,
-            many if many.iter().all(|part| number(part).is_some()) => Type::Number,
-            many if many.iter().all(|part| matches!(*part, "true" | "false")) => Type::Bool,
-            _ => Type::Any,
-        };
-        return if nullable { Type::Nullable(Box::new(inner)) } else { inner };
-    }
-    if split_top(text, '&').count() > 1 {
-        return Type::Any;
-    }
-
-    let text = text.strip_prefix("readonly ").unwrap_or(text).trim();
-    if let Some(element) = text.strip_suffix("[]") {
-        return Type::Array(Box::new(parse(element)));
-    }
-    if text.starts_with(['{', '[']) || text.contains("=>") {
-        return Type::Any;
-    }
-    if literal(text).is_some() {
-        return Type::Text;
-    }
-    if number(text).is_some() {
-        return Type::Number;
-    }
-    if let Some((generic, after)) = between(text, '<', '>')
-        && after.trim().is_empty()
-        && let Some(head) = text.split('<').next().map(str::trim)
-    {
-        let name = head.rsplit('.').next().unwrap_or(head);
-        if !is_ident(name) {
-            return Type::Any;
-        }
-        let args: Vec<&str> = split_top(generic, ',').map(str::trim).collect();
-        return match name {
-            "Array" | "ReadonlyArray" | "Set" | "ReadonlySet" => {
-                Type::Array(Box::new(args.first().map_or(Type::Any, |arg| parse(arg))))
-            }
-            "Record" | "Map" | "ReadonlyMap" => {
-                Type::Map(Box::new(args.get(1).map_or(Type::Any, |arg| parse(arg))))
-            }
-            _ if UNWRAPPED.contains(&name) => args.first().map_or(Type::Any, |arg| parse(arg)),
-            _ if OPAQUE.contains(&name) => Type::Any,
-            _ => Type::Named(name.to_owned(), args.iter().map(|arg| parse(arg)).collect()),
-        };
-    }
-    let name = text.rsplit('.').next().unwrap_or(text);
-    match name {
-        "string" => Type::Text,
-        "number" => Type::Number,
-        "boolean" | "true" | "false" => Type::Bool,
-        "bigint" => Type::Int,
-        "Date" => Type::Date,
-        "Buffer" | "Uint8Array" => Type::Bytes,
-        _ if is_ident(name)
-            && !matches!(
-                name,
-                "any" | "unknown" | "object" | "never" | "void" | "null" | "undefined" | "symbol"
-            ) =>
-        {
-            Type::Named(name.to_owned(), Vec::new())
-        }
-        _ => Type::Any,
-    }
 }
 
 // The type parameters a head declares, `T` and `U` for `Page<T, U extends Base>`.

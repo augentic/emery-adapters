@@ -8,22 +8,6 @@ pub struct Toml<'a> {
     keys: Vec<Key<'a>>,
 }
 
-// A `name = value` line: its table, empty at the top level, its name as
-// written, and its value.
-struct Key<'a> {
-    line: usize,
-    table: &'a str,
-    name: &'a str,
-    value: &'a str,
-}
-
-// A `<stem> = { path = "crates/<dir>" }` entry of the root manifest.
-pub struct PathEntry<'a> {
-    pub line: usize,
-    pub stem: &'a str,
-    pub dir: &'a str,
-}
-
 impl<'a> Toml<'a> {
     pub fn read(text: &'a str) -> Self {
         let mut toml = Self {
@@ -108,6 +92,22 @@ impl<'a> Toml<'a> {
         }
         out
     }
+}
+
+// A `name = value` line: its table, empty at the top level, its name as
+// written, and its value.
+struct Key<'a> {
+    line: usize,
+    table: &'a str,
+    name: &'a str,
+    value: &'a str,
+}
+
+// A `<stem> = { path = "crates/<dir>" }` entry of the root manifest.
+pub struct PathEntry<'a> {
+    pub line: usize,
+    pub stem: &'a str,
+    pub dir: &'a str,
 }
 
 // `line` up to a `#` outside its quotes; a `\"` in a basic string closes
