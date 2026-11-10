@@ -93,30 +93,6 @@ impl TypeScript {
     }
 }
 
-// The route a registration serves, typed, where its verb is one HTTP
-// method: `all`, and a path the grammar refuses, leave the surface unrouted.
-fn typed_route(verb: &str, path: &str) -> Option<Trigger> {
-    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
-}
-
-// The message a registration subscribes its handler to, typed, where its
-// method listens or subscribes by name: a lifecycle event, a stream's payload
-// event, and a name the grammar refuses leave the surface with no trigger.
-fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
-    let name = literal.filter(|name| is_message(name))?;
-    let subscribing = DIALECT.listeners.contains(&method) || SUBSCRIBING.contains(&method);
-    let named = !DIALECT.lifecycle_events.contains(&name) && !GENERIC_EVENTS.contains(&name);
-    (subscribing && named).then(|| Trigger::message(name).ok()).flatten()
-}
-
-fn is_message(name: &str) -> bool {
-    let name = name.trim();
-    !name.is_empty()
-        && name.chars().all(|ch| {
-            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
-        })
-}
-
 impl Recogniser for TypeScript {
     type Module = Module;
 
@@ -269,6 +245,30 @@ impl Recogniser for TypeScript {
         }
         Derived::named(tree, module, lines, name, stem)
     }
+}
+
+// The route a registration serves, typed, where its verb is one HTTP
+// method: `all`, and a path the grammar refuses, leave the surface unrouted.
+fn typed_route(verb: &str, path: &str) -> Option<Trigger> {
+    Route::parse(&format!("{verb} {path}")).ok().map(Trigger::Http)
+}
+
+// The message a registration subscribes its handler to, typed, where its
+// method listens or subscribes by name: a lifecycle event, a stream's payload
+// event, and a name the grammar refuses leave the surface with no trigger.
+fn typed_message(method: &str, literal: Option<&str>) -> Option<Trigger> {
+    let name = literal.filter(|name| is_message(name))?;
+    let subscribing = DIALECT.listeners.contains(&method) || SUBSCRIBING.contains(&method);
+    let named = !DIALECT.lifecycle_events.contains(&name) && !GENERIC_EVENTS.contains(&name);
+    (subscribing && named).then(|| Trigger::message(name).ok()).flatten()
+}
+
+fn is_message(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.chars().all(|ch| {
+            ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '~' | '%' | '@')
+        })
 }
 
 fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {

@@ -17,103 +17,6 @@ pub struct Gating {
     pub source: Source,
 }
 
-// How a stem's handlers reach the gate.
-pub enum Source {
-    // Laid in this stem's module by this slice.
-    Laid,
-    // Declared in this module by an earlier slice of the stem.
-    Held,
-    // Exported by another module, imported from `path`, with the crate's
-    // line in the manifest where the module is another crate's.
-    Imported { path: String, dependency: Option<Dependency> },
-    // A function taking the request's headers that another slice wrote
-    // outside the laid shape: named to the turn, called by no laid code.
-    Named { path: String },
-}
-
-// A stem crate another stem depends on through its manifest.
-pub struct Dependency {
-    pub package: String,
-    pub dir: String,
-}
-
-// A `pub fn` taking the request's headers that a stem crate's module
-// already exports.
-pub struct Found {
-    dir: String,
-    module: String,
-    pub name: String,
-    pub file: String,
-    // Whether it is the laid shape: `authenticate` beside a `GateError`.
-    pub shape: bool,
-}
-
-// What a stem resolves its gate against: the gate read, the one the tree
-// holds, and the stem of this slice that lays it where the tree holds none.
-pub struct Gated<'g> {
-    pub gate: &'g Gate,
-    pub found: Option<&'g Found>,
-    pub first: Option<&'g Laying>,
-}
-
-// The stem of the slice that lays the gate: the first with a route under
-// the prefix.
-pub struct Laying {
-    pub module: String,
-    pub dir: String,
-}
-
-impl Found {
-    // The gate the tree holds: the first `pub fn` taking a `HeaderMap` in a
-    // module of a stem crate, in crate and path order, the slice's own part
-    // modules passed over since they are this slice's to write, and a file
-    // `syn` refuses passed over since the checks name it.
-    pub fn scan(
-        root: &Path, crates: &BTreeSet<String>, own: &[String],
-    ) -> Result<Option<Self>, Error> {
-        for dir in crates.iter().filter(|dir| layout::is_stem_crate(dir)) {
-            for source in layout::sources(&root.join("crates").join(dir).join("src"))? {
-                let Some(module) = source.file_stem().and_then(|stem| stem.to_str()) else {
-                    continue;
-                };
-                let relative = layout::relative(root, &source);
-                if module == "lib" || own.contains(&relative) {
-                    continue;
-                }
-                let text = layout::read(&source)?;
-                let Ok(file) = syntax::parse(&text) else { continue };
-                let declared = syntax::Declared::of(&file);
-                for exported in syntax::exported_fns(&file) {
-                    if !syntax::signature(&text, &exported).contains("HeaderMap") {
-                        continue;
-                    }
-                    let shape = exported.name == Gate::FN
-                        && declared.types.iter().any(|name| name == Gate::ERROR);
-                    return Ok(Some(Self {
-                        dir: dir.clone(),
-                        module: module.to_owned(),
-                        name: exported.name,
-                        file: relative,
-                        shape,
-                    }));
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    // The module's path from a stem crate `dir`: the crate's own where it
-    // stands in it, else through the crate's package.
-    fn path_from(&self, dir: &str) -> String {
-        let lead = if self.dir == dir { "crate".to_owned() } else { ident(&self.dir) };
-        format!("{lead}::{}", self.module)
-    }
-
-    fn dependency_from(&self, dir: &str) -> Option<Dependency> {
-        (self.dir != dir).then(|| dependency(&self.dir))
-    }
-}
-
 impl Gating {
     // Where the stem at `dir`, whose part module is `module` at `file`,
     // reaches the gate: the one its held module declares, else the one the
@@ -193,10 +96,92 @@ impl Gating {
     }
 }
 
+// How a stem's handlers reach the gate.
+pub enum Source {
+    // Laid in this stem's module by this slice.
+    Laid,
+    // Declared in this module by an earlier slice of the stem.
+    Held,
+    // Exported by another module, imported from `path`, with the crate's
+    // line in the manifest where the module is another crate's.
+    Imported { path: String, dependency: Option<Dependency> },
+    // A function taking the request's headers that another slice wrote
+    // outside the laid shape: named to the turn, called by no laid code.
+    Named { path: String },
+}
+
+// A stem crate another stem depends on through its manifest.
+pub struct Dependency {
+    pub package: String,
+    pub dir: String,
+}
+
 impl Dependency {
     // `<package> = { path = "../<dir>" }`, the stem's line for the crate.
     pub fn line(&self) -> String {
         format!("{} = {{ path = \"../{}\" }}", self.package, self.dir)
+    }
+}
+
+// A `pub fn` taking the request's headers that a stem crate's module
+// already exports.
+pub struct Found {
+    dir: String,
+    module: String,
+    pub name: String,
+    pub file: String,
+    // Whether it is the laid shape: `authenticate` beside a `GateError`.
+    pub shape: bool,
+}
+
+impl Found {
+    // The gate the tree holds: the first `pub fn` taking a `HeaderMap` in a
+    // module of a stem crate, in crate and path order, the slice's own part
+    // modules passed over since they are this slice's to write, and a file
+    // `syn` refuses passed over since the checks name it.
+    pub fn scan(
+        root: &Path, crates: &BTreeSet<String>, own: &[String],
+    ) -> Result<Option<Self>, Error> {
+        for dir in crates.iter().filter(|dir| layout::is_stem_crate(dir)) {
+            for source in layout::sources(&root.join("crates").join(dir).join("src"))? {
+                let Some(module) = source.file_stem().and_then(|stem| stem.to_str()) else {
+                    continue;
+                };
+                let relative = layout::relative(root, &source);
+                if module == "lib" || own.contains(&relative) {
+                    continue;
+                }
+                let text = layout::read(&source)?;
+                let Ok(file) = syntax::parse(&text) else { continue };
+                let declared = syntax::Declared::of(&file);
+                for exported in syntax::exported_fns(&file) {
+                    if !syntax::signature(&text, &exported).contains("HeaderMap") {
+                        continue;
+                    }
+                    let shape = exported.name == Gate::FN
+                        && declared.types.iter().any(|name| name == Gate::ERROR);
+                    return Ok(Some(Self {
+                        dir: dir.clone(),
+                        module: module.to_owned(),
+                        name: exported.name,
+                        file: relative,
+                        shape,
+                    }));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    // The module's path from a stem crate `dir`: the crate's own where it
+    // stands in it, else through the crate's package.
+    fn path_from(&self, dir: &str) -> String {
+        let lead = if self.dir == dir { "crate".to_owned() } else { ident(&self.dir) };
+        format!("{lead}::{}", self.module)
+    }
+
+    fn dependency_from(&self, dir: &str) -> Option<Dependency> {
+        (self.dir != dir).then(|| dependency(&self.dir))
     }
 }
 
@@ -214,4 +199,19 @@ fn dependency(dir: &str) -> Dependency {
         package: layout::package(stem_of(dir)),
         dir: dir.to_owned(),
     }
+}
+
+// What a stem resolves its gate against: the gate read, the one the tree
+// holds, and the stem of this slice that lays it where the tree holds none.
+pub struct Gated<'g> {
+    pub gate: &'g Gate,
+    pub found: Option<&'g Found>,
+    pub first: Option<&'g Laying>,
+}
+
+// The stem of the slice that lays the gate: the first with a route under
+// the prefix.
+pub struct Laying {
+    pub module: String,
+    pub dir: String,
 }

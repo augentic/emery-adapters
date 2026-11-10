@@ -116,6 +116,78 @@ fn fenced_json<'d>(doc: &'d str, heading: &str) -> &'d str {
     json
 }
 
+// The body of the first fence after `label`'s line, whatever its language tag.
+fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
+    let (_, section) = doc
+        .split_once(&format!("\n{label}\n"))
+        .unwrap_or_else(|| panic!("the document carries no `{label}` line"));
+    let (_, fenced) = section.split_once("```").expect("the label is followed by a fence");
+    let (_, body) = fenced.split_once('\n').expect("the fence opens on a line of its own");
+    let (body, _) = body.split_once("\n```").expect("the fence closes");
+    body
+}
+
+// The relative link targets of `doc` outside its code fences, without anchors.
+fn links(doc: &str) -> Vec<&str> {
+    let mut targets = Vec::new();
+    let mut fenced = false;
+    for line in doc.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        for (at, _) in line.match_indices("](") {
+            let rest = &line[at + 2..];
+            let target =
+                rest[..rest.find(')').unwrap_or(rest.len())].split('#').next().unwrap_or("");
+            if !target.is_empty() && !target.contains("://") {
+                targets.push(target);
+            }
+        }
+    }
+    targets
+}
+
+// `target` resolved against the directory of `from`.
+fn resolved(from: &str, target: &str) -> String {
+    let mut segments: Vec<&str> =
+        from.rsplit_once('/').map_or_else(Vec::new, |(dir, _)| dir.split('/').collect());
+    for segment in target.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." => {
+                segments.pop();
+            }
+            name => segments.push(name),
+        }
+    }
+    segments.join("/")
+}
+
+fn surveying(docs: &[Doc]) {
+    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
+    capped("survey.md", prompt);
+    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
+        .unwrap_or_else(|err| {
+            panic!("`survey.md`: the worked example is not the SDK's Inventory: {err}")
+        });
+    assert!(!inventory.surfaces.is_empty(), "`survey.md`: the worked example names no surface");
+    for surface in &inventory.surfaces {
+        surface.anchor().unwrap_or_else(|err| {
+            panic!("`survey.md`: surface `{}`'s anchor `{}` {err}", surface.name, surface.anchor)
+        });
+        assert!(
+            emery_sdk::is_kebab(&surface.stem),
+            "`survey.md`: surface `{}`'s stem `{}` is not kebab-case",
+            surface.name,
+            surface.stem
+        );
+    }
+}
+
 #[test]
 fn emery_documentation() {
     corpus(emery_documentation::PROSE, "documentation", &["extract.md", "survey.md"]);
@@ -168,17 +240,6 @@ fn emery_node() {
             "`layout.md` fences `{file}` as `adapters/node/seed/{file}` spells it"
         );
     }
-}
-
-// The body of the first fence after `label`'s line, whatever its language tag.
-fn fenced_after<'d>(doc: &'d str, label: &str) -> &'d str {
-    let (_, section) = doc
-        .split_once(&format!("\n{label}\n"))
-        .unwrap_or_else(|| panic!("the document carries no `{label}` line"));
-    let (_, fenced) = section.split_once("```").expect("the label is followed by a fence");
-    let (_, body) = fenced.split_once('\n').expect("the fence opens on a line of its own");
-    let (body, _) = body.split_once("\n```").expect("the fence closes");
-    body
 }
 
 // Experiment / non-production. The refactor turn puts `refactor.md` under the
@@ -234,68 +295,7 @@ fn emery_vue() {
     }
 }
 
-// The relative link targets of `doc` outside its code fences, without anchors.
-fn links(doc: &str) -> Vec<&str> {
-    let mut targets = Vec::new();
-    let mut fenced = false;
-    for line in doc.lines() {
-        if line.trim_start().starts_with("```") {
-            fenced = !fenced;
-            continue;
-        }
-        if fenced {
-            continue;
-        }
-        for (at, _) in line.match_indices("](") {
-            let rest = &line[at + 2..];
-            let target =
-                rest[..rest.find(')').unwrap_or(rest.len())].split('#').next().unwrap_or("");
-            if !target.is_empty() && !target.contains("://") {
-                targets.push(target);
-            }
-        }
-    }
-    targets
-}
-
-// `target` resolved against the directory of `from`.
-fn resolved(from: &str, target: &str) -> String {
-    let mut segments: Vec<&str> =
-        from.rsplit_once('/').map_or_else(Vec::new, |(dir, _)| dir.split('/').collect());
-    for segment in target.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop();
-            }
-            name => segments.push(name),
-        }
-    }
-    segments.join("/")
-}
-
 #[test]
 fn emery_omnia() {
     target_corpus(emery_omnia::PROSE, "omnia");
-}
-
-fn surveying(docs: &[Doc]) {
-    let prompt = body(docs, "survey.md").expect("the survey prompt is listed");
-    capped("survey.md", prompt);
-    let inventory: Inventory = serde_json::from_str(fenced_json(prompt, "## Worked example"))
-        .unwrap_or_else(|err| {
-            panic!("`survey.md`: the worked example is not the SDK's Inventory: {err}")
-        });
-    assert!(!inventory.surfaces.is_empty(), "`survey.md`: the worked example names no surface");
-    for surface in &inventory.surfaces {
-        surface.anchor().unwrap_or_else(|err| {
-            panic!("`survey.md`: surface `{}`'s anchor `{}` {err}", surface.name, surface.anchor)
-        });
-        assert!(
-            emery_sdk::is_kebab(&surface.stem),
-            "`survey.md`: surface `{}`'s stem `{}` is not kebab-case",
-            surface.name,
-            surface.stem
-        );
-    }
 }

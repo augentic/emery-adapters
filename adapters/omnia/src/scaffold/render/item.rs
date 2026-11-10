@@ -18,144 +18,6 @@ pub struct Source {
     items: Vec<Item>,
 }
 
-pub enum Item {
-    // The `//!` lines a file opens with.
-    ModuleDoc(Doc),
-    // One `pub mod <name>;` line per name.
-    Mods(Vec<String>),
-    Uses(Uses),
-    Consts(Consts),
-    Fn(Fn),
-    Struct(Struct),
-    Enum(Enum),
-    Impl(Impl),
-}
-
-// An `impl` block: its head, `impl From<E> for T`, and its items as lines
-// relative to the block, indented once when rendered.
-pub struct Impl {
-    head: String,
-    body: Vec<String>,
-}
-
-// The lines of a doc comment, an empty one its marker alone.
-#[derive(Default)]
-pub struct Doc(Vec<String>);
-
-// The `use` lines of a file, one per module with the names taken from it.
-#[derive(Default)]
-pub struct Uses(Vec<(String, Vec<String>)>);
-
-// Constants under one `//` comment.
-#[derive(Default)]
-pub struct Consts {
-    comments: Vec<String>,
-    consts: Vec<Const>,
-}
-
-pub struct Const {
-    docs: Doc,
-    vis: Vis,
-    name: String,
-    ty: String,
-    value: String,
-}
-
-// A function: the `//` lines above it, its docs and attributes, its
-// signature, the bounds of its `where` clause, and its body as lines
-// relative to the block, indented once when rendered.
-#[derive(Default)]
-pub struct Fn {
-    comments: Vec<String>,
-    docs: Doc,
-    attrs: Vec<String>,
-    vis: Vis,
-    is_const: bool,
-    is_async: bool,
-    name: String,
-    generics: String,
-    params: Vec<String>,
-    ret: String,
-    bounds: Vec<String>,
-    body: Vec<String>,
-}
-
-// A struct: the `//` lines above it, its docs and attributes, and its
-// generics, `<T>`, printed after the name where it has any.
-#[derive(Default)]
-pub struct Struct {
-    comments: Vec<String>,
-    docs: Doc,
-    attrs: Vec<String>,
-    vis: Vis,
-    name: String,
-    generics: String,
-    fields: Vec<Field>,
-}
-
-pub struct Field {
-    docs: Doc,
-    attrs: Vec<String>,
-    vis: Vis,
-    name: String,
-    ty: String,
-}
-
-#[derive(Default)]
-pub struct Enum {
-    docs: Doc,
-    attrs: Vec<String>,
-    vis: Vis,
-    name: String,
-    variants: Vec<Variant>,
-}
-
-// A variant under its docs and attributes: a unit one, or a tuple one over
-// the fields its payload spells, `Host(#[from] omnia_sdk::Error)`.
-pub struct Variant {
-    docs: Doc,
-    attrs: Vec<String>,
-    name: String,
-    payload: Option<String>,
-}
-
-#[derive(Clone, Copy, Default)]
-pub enum Vis {
-    #[default]
-    Private,
-    Crate,
-    Pub,
-}
-
-// An expression as the printer lays it in a fn body: text it never breaks,
-// a call it breaks by its arguments, or a macro call, broken the same way
-// with no comma after its last argument. Every column the printer takes is
-// counted from the body's indent, so a statement stands at `0`.
-pub enum Expr {
-    Text(String),
-    Call(Call),
-    Macro(Call),
-}
-
-// A call: `callee(a, b)` where it fits, else one argument per line, or a
-// sole call argument broken in place behind the callee's parenthesis.
-pub struct Call {
-    callee: String,
-    args: Vec<Expr>,
-}
-
-// Method calls chained on a receiver, `.await` after the last where the
-// chain is awaited. A receiver shorter than the indent, which the formatter
-// extends the first call onto, is none the scaffold chains on.
-pub struct Chain {
-    receiver: Expr,
-    calls: Vec<Call>,
-    awaited: bool,
-}
-
-// A Markdown fence longer than any run of backticks in the text it holds.
-pub struct Fence(String);
-
 impl Source {
     pub fn push(&mut self, item: impl Into<Item>) {
         self.items.push(item.into());
@@ -173,90 +35,9 @@ impl Source {
     }
 }
 
-impl Item {
-    fn render(&self, out: &mut String) {
-        match self {
-            Self::ModuleDoc(doc) => doc.render("//!", out),
-            Self::Mods(names) => {
-                for name in names {
-                    let _ = writeln!(out, "pub mod {name};");
-                }
-            }
-            Self::Uses(uses) => uses.render(out),
-            Self::Consts(consts) => consts.render(out),
-            Self::Fn(item) => item.render(out),
-            Self::Struct(item) => item.render(out),
-            Self::Enum(item) => item.render(out),
-            Self::Impl(item) => item.render(out),
-        }
-    }
-}
-
-impl From<Impl> for Item {
-    fn from(item: Impl) -> Self {
-        Self::Impl(item)
-    }
-}
-
-impl Impl {
-    pub fn new(head: impl Into<String>) -> Self {
-        Self {
-            head: head.into(),
-            body: Vec::new(),
-        }
-    }
-
-    // The block's items as lines relative to it, an empty line between
-    // two.
-    pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
-        self.body = lines.into_iter().map(Into::into).collect();
-        self
-    }
-
-    fn render(&self, out: &mut String) {
-        let _ = writeln!(out, "{} {{", self.head);
-        for line in block(&self.body) {
-            let _ = writeln!(out, "{line}");
-        }
-        out.push_str("}\n");
-    }
-}
-
-impl From<Doc> for Item {
-    fn from(doc: Doc) -> Self {
-        Self::ModuleDoc(doc)
-    }
-}
-
-impl From<Uses> for Item {
-    fn from(uses: Uses) -> Self {
-        Self::Uses(uses)
-    }
-}
-
-impl From<Consts> for Item {
-    fn from(consts: Consts) -> Self {
-        Self::Consts(consts)
-    }
-}
-
-impl From<Fn> for Item {
-    fn from(item: Fn) -> Self {
-        Self::Fn(item)
-    }
-}
-
-impl From<Struct> for Item {
-    fn from(item: Struct) -> Self {
-        Self::Struct(item)
-    }
-}
-
-impl From<Enum> for Item {
-    fn from(item: Enum) -> Self {
-        Self::Enum(item)
-    }
-}
+// The lines of a doc comment, an empty one its marker alone.
+#[derive(Default)]
+pub struct Doc(Vec<String>);
 
 impl Doc {
     pub fn new<L: Into<String>>(lines: impl IntoIterator<Item = L>) -> Self {
@@ -283,6 +64,10 @@ impl From<Vec<String>> for Doc {
         Self(lines)
     }
 }
+
+// The `use` lines of a file, one per module with the names taken from it.
+#[derive(Default)]
+pub struct Uses(Vec<(String, Vec<String>)>);
 
 impl Uses {
     // The names taken from `path`, each once in sorted order.
@@ -333,6 +118,13 @@ impl Uses {
     }
 }
 
+// The formatter's order over two `use` lines: by group, then segment by
+// segment, a name before a brace list where one path runs on past the
+// other.
+fn use_order(a: &(String, Vec<String>), b: &(String, Vec<String>)) -> Ordering {
+    group(&a.0).cmp(&group(&b.0)).then_with(|| segments(&a.0, &a.1).cmp(&segments(&b.0, &b.1)))
+}
+
 // The formatter's group of a `use` path under `group_imports =
 // "StdExternalCrate"`: the standard library, the other crates, the crate's
 // own paths.
@@ -343,17 +135,6 @@ fn group(path: &str) -> u8 {
         "crate" | "self" | "super" => 2,
         _ => 1,
     }
-}
-
-// A segment of a `use` as the formatter orders them: `self`, `super`, and
-// `crate` first, then a name, then a brace list.
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-enum Segment<'s> {
-    Slf,
-    Super,
-    Crate,
-    Ident(&'s str),
-    List,
 }
 
 fn segments<'s>(path: &'s str, names: &'s [String]) -> Vec<Segment<'s>> {
@@ -373,11 +154,22 @@ fn segments<'s>(path: &'s str, names: &'s [String]) -> Vec<Segment<'s>> {
     segments
 }
 
-// The formatter's order over two `use` lines: by group, then segment by
-// segment, a name before a brace list where one path runs on past the
-// other.
-fn use_order(a: &(String, Vec<String>), b: &(String, Vec<String>)) -> Ordering {
-    group(&a.0).cmp(&group(&b.0)).then_with(|| segments(&a.0, &a.1).cmp(&segments(&b.0, &b.1)))
+// A segment of a `use` as the formatter orders them: `self`, `super`, and
+// `crate` first, then a name, then a brace list.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Segment<'s> {
+    Slf,
+    Super,
+    Crate,
+    Ident(&'s str),
+    List,
+}
+
+// Constants under one `//` comment.
+#[derive(Default)]
+pub struct Consts {
+    comments: Vec<String>,
+    consts: Vec<Const>,
 }
 
 impl Consts {
@@ -399,6 +191,14 @@ impl Consts {
             item.render(out);
         }
     }
+}
+
+pub struct Const {
+    docs: Doc,
+    vis: Vis,
+    name: String,
+    ty: String,
+    value: String,
 }
 
 impl Const {
@@ -429,6 +229,25 @@ impl Const {
             let _ = writeln!(out, "{line}");
         }
     }
+}
+
+// A function: the `//` lines above it, its docs and attributes, its
+// signature, the bounds of its `where` clause, and its body as lines
+// relative to the block, indented once when rendered.
+#[derive(Default)]
+pub struct Fn {
+    comments: Vec<String>,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    is_const: bool,
+    is_async: bool,
+    name: String,
+    generics: String,
+    params: Vec<String>,
+    ret: String,
+    bounds: Vec<String>,
+    body: Vec<String>,
 }
 
 impl Fn {
@@ -564,6 +383,19 @@ impl Fn {
     }
 }
 
+// A struct: the `//` lines above it, its docs and attributes, and its
+// generics, `<T>`, printed after the name where it has any.
+#[derive(Default)]
+pub struct Struct {
+    comments: Vec<String>,
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    generics: String,
+    fields: Vec<Field>,
+}
+
 impl Struct {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
@@ -624,6 +456,14 @@ impl Struct {
     }
 }
 
+pub struct Field {
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    ty: String,
+}
+
 impl Field {
     pub fn new(name: impl Into<String>, ty: impl Into<String>) -> Self {
         Self {
@@ -658,6 +498,15 @@ impl Field {
         }
         let _ = writeln!(out, "{indent}{}{}: {},", self.vis.prefix(), self.name, self.ty);
     }
+}
+
+#[derive(Default)]
+pub struct Enum {
+    docs: Doc,
+    attrs: Vec<String>,
+    vis: Vis,
+    name: String,
+    variants: Vec<Variant>,
 }
 
 impl Enum {
@@ -704,6 +553,15 @@ impl Enum {
     }
 }
 
+// A variant under its docs and attributes: a unit one, or a tuple one over
+// the fields its payload spells, `Host(#[from] omnia_sdk::Error)`.
+pub struct Variant {
+    docs: Doc,
+    attrs: Vec<String>,
+    name: String,
+    payload: Option<String>,
+}
+
 impl Variant {
     pub fn new(name: impl Into<String>) -> Self {
         Self {
@@ -747,6 +605,119 @@ impl Variant {
     }
 }
 
+// An `impl` block: its head, `impl From<E> for T`, and its items as lines
+// relative to the block, indented once when rendered.
+pub struct Impl {
+    head: String,
+    body: Vec<String>,
+}
+
+impl Impl {
+    pub fn new(head: impl Into<String>) -> Self {
+        Self {
+            head: head.into(),
+            body: Vec::new(),
+        }
+    }
+
+    // The block's items as lines relative to it, an empty line between
+    // two.
+    pub fn body<L: Into<String>>(mut self, lines: impl IntoIterator<Item = L>) -> Self {
+        self.body = lines.into_iter().map(Into::into).collect();
+        self
+    }
+
+    fn render(&self, out: &mut String) {
+        let _ = writeln!(out, "{} {{", self.head);
+        for line in block(&self.body) {
+            let _ = writeln!(out, "{line}");
+        }
+        out.push_str("}\n");
+    }
+}
+
+pub enum Item {
+    // The `//!` lines a file opens with.
+    ModuleDoc(Doc),
+    // One `pub mod <name>;` line per name.
+    Mods(Vec<String>),
+    Uses(Uses),
+    Consts(Consts),
+    Fn(Fn),
+    Struct(Struct),
+    Enum(Enum),
+    Impl(Impl),
+}
+
+impl Item {
+    fn render(&self, out: &mut String) {
+        match self {
+            Self::ModuleDoc(doc) => doc.render("//!", out),
+            Self::Mods(names) => {
+                for name in names {
+                    let _ = writeln!(out, "pub mod {name};");
+                }
+            }
+            Self::Uses(uses) => uses.render(out),
+            Self::Consts(consts) => consts.render(out),
+            Self::Fn(item) => item.render(out),
+            Self::Struct(item) => item.render(out),
+            Self::Enum(item) => item.render(out),
+            Self::Impl(item) => item.render(out),
+        }
+    }
+}
+
+impl From<Doc> for Item {
+    fn from(doc: Doc) -> Self {
+        Self::ModuleDoc(doc)
+    }
+}
+
+impl From<Uses> for Item {
+    fn from(uses: Uses) -> Self {
+        Self::Uses(uses)
+    }
+}
+
+impl From<Consts> for Item {
+    fn from(consts: Consts) -> Self {
+        Self::Consts(consts)
+    }
+}
+
+impl From<Fn> for Item {
+    fn from(item: Fn) -> Self {
+        Self::Fn(item)
+    }
+}
+
+impl From<Struct> for Item {
+    fn from(item: Struct) -> Self {
+        Self::Struct(item)
+    }
+}
+
+impl From<Enum> for Item {
+    fn from(item: Enum) -> Self {
+        Self::Enum(item)
+    }
+}
+
+impl From<Impl> for Item {
+    fn from(item: Impl) -> Self {
+        Self::Impl(item)
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub enum Vis {
+    #[default]
+    Private,
+    Crate,
+    Pub,
+}
+
 impl Vis {
     const fn prefix(self) -> &'static str {
         match self {
@@ -757,22 +728,14 @@ impl Vis {
     }
 }
 
-impl From<String> for Expr {
-    fn from(text: String) -> Self {
-        Self::Text(text)
-    }
-}
-
-impl From<&str> for Expr {
-    fn from(text: &str) -> Self {
-        Self::Text(text.to_owned())
-    }
-}
-
-impl From<Call> for Expr {
-    fn from(call: Call) -> Self {
-        Self::Call(call)
-    }
+// An expression as the printer lays it in a fn body: text it never breaks,
+// a call it breaks by its arguments, or a macro call, broken the same way
+// with no comma after its last argument. Every column the printer takes is
+// counted from the body's indent, so a statement stands at `0`.
+pub enum Expr {
+    Text(String),
+    Call(Call),
+    Macro(Call),
 }
 
 impl Expr {
@@ -798,6 +761,31 @@ impl Expr {
             Self::Macro(call) => call.within(width, at, false),
         }
     }
+}
+
+impl From<String> for Expr {
+    fn from(text: String) -> Self {
+        Self::Text(text)
+    }
+}
+
+impl From<&str> for Expr {
+    fn from(text: &str) -> Self {
+        Self::Text(text.to_owned())
+    }
+}
+
+impl From<Call> for Expr {
+    fn from(call: Call) -> Self {
+        Self::Call(call)
+    }
+}
+
+// A call: `callee(a, b)` where it fits, else one argument per line, or a
+// sole call argument broken in place behind the callee's parenthesis.
+pub struct Call {
+    callee: String,
+    args: Vec<Expr>,
 }
 
 impl Call {
@@ -860,6 +848,15 @@ impl Call {
         }
         lines
     }
+}
+
+// Method calls chained on a receiver, `.await` after the last where the
+// chain is awaited. A receiver shorter than the indent, which the formatter
+// extends the first call onto, is none the scaffold chains on.
+pub struct Chain {
+    receiver: Expr,
+    calls: Vec<Call>,
+    awaited: bool,
 }
 
 impl Chain {
@@ -965,6 +962,9 @@ impl Chain {
         lines
     }
 }
+
+// A Markdown fence longer than any run of backticks in the text it holds.
+pub struct Fence(String);
 
 impl Fence {
     pub fn around(text: &str) -> Self {

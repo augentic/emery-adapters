@@ -60,6 +60,19 @@ pub struct Recall {
     pub misplaced: Vec<String>,
 }
 
+impl Display for Recall {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.expected == 0 {
+            return f.write_str("—");
+        }
+        write!(f, "{}/{} ({}%)", self.matched, self.expected, self.matched * 100 / self.expected)?;
+        if self.placed + self.misplaced.len() > 0 {
+            write!(f, ", {} in stem", self.placed)?;
+        }
+        Ok(())
+    }
+}
+
 // The (entry, stem) pairs the survey decided against the ones expected: the
 // pairs met, the entries found under another stem, the pairs met by nothing
 // at their entry, and the surveyed surfaces no expected entry accounts for.
@@ -74,6 +87,25 @@ pub struct Surfaces {
     pub restemmed: Vec<String>,
     pub missed: Vec<String>,
     pub extra: Vec<String>,
+}
+
+impl Display for Surfaces {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.expected == 0 {
+            return f.write_str("—");
+        }
+        if !self.surveyed {
+            return f.write_str("no survey");
+        }
+        write!(f, "{}/{}", self.matched, self.expected)?;
+        if !self.restemmed.is_empty() {
+            write!(f, " ~{}", self.restemmed.len())?;
+        }
+        if !self.extra.is_empty() {
+            write!(f, " +{}", self.extra.len())?;
+        }
+        Ok(())
+    }
 }
 
 // The specification's requirements against the behaviours expected: each
@@ -105,6 +137,24 @@ pub struct Behaviours {
     // the requirements the engine pre-merged on a byte-equal id across
     // sources, by their subject and the id
     pub premerged: Vec<String>,
+}
+
+// `met/expected`, then `~k` behaviours split across requirements and `!k`
+// requirements merging two, each where any.
+impl Display for Behaviours {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.expected == 0 {
+            return f.write_str("—");
+        }
+        write!(f, "{}/{}", self.met, self.expected)?;
+        if !self.split.is_empty() {
+            write!(f, " ~{}", self.split.len())?;
+        }
+        if !self.wrong.is_empty() {
+            write!(f, " !{}", self.wrong.len())?;
+        }
+        Ok(())
+    }
 }
 
 pub fn grade(expected: &Expected, run: &Run) -> Grade {
@@ -140,45 +190,6 @@ pub fn grade(expected: &Expected, run: &Run) -> Grade {
         leaks: run.leaks(),
         plan: run.plan_shape(),
     }
-}
-
-// An absent span is hit by every accepted requirement claim of its source
-// whose anchor is held to it (`held`): a claim half or more within the
-// span states what the span does, while one a line wider than it does not.
-// A span naming no lines is hit by any claim in its file. Each hit is
-// labelled by the span and the claim, so the card's reading names the
-// passage of the prompt the claim passed through.
-pub fn absent(items: &[Item], expected: &Expected, run: &Run) -> Absent {
-    let mut absent = Absent {
-        expected: items.len(),
-        ..Absent::default()
-    };
-    for item in items {
-        let source = match (&item.source, expected.sources.len()) {
-            (Some(source), _) => format!("{source}:"),
-            (None, 1) => String::new(),
-            (None, _) => "?:".to_owned(),
-        };
-        let (Ok(of), Ok(span)) =
-            (expected.source(item.source.as_deref()), Anchor::parse(&item.anchor))
-        else {
-            continue;
-        };
-        for claim in run.claims_of(of.name(), ClaimKind::Requirement) {
-            let Some(Ok(anchor)) = claim.anchor() else { continue };
-            if held(anchor, span) {
-                absent.hits.push(format!(
-                    "{source}`{}` — {} (`{}` at `{}`)",
-                    item.anchor,
-                    item.gloss,
-                    claim.id.as_deref().unwrap_or("?"),
-                    claim.path.as_deref().unwrap_or("?"),
-                ));
-            }
-        }
-    }
-
-    absent
 }
 
 // An expected item is met by a claim of its kind, from its source, whose
@@ -239,6 +250,16 @@ fn recall(items: &[Item], expected: &Expected, run: &Run, kind: ClaimKind) -> Re
     recall
 }
 
+// Two anchors meet in one file when either names no lines or their ranges
+// overlap.
+fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
+    a.path == b.path
+        && match (a.lines, b.lines) {
+            (Some((a, b)), Some((c, d))) => a <= d && c <= b,
+            _ => true,
+        }
+}
+
 // An expected surface is met when the survey decided a surface at its entry
 // under its stem; one the survey decided at the entry under another stem is
 // restemmed — found, and stemmed differently, which is how a survey that is
@@ -272,6 +293,45 @@ fn surfaces(
         missed,
         extra: open.iter().map(label).collect(),
     }
+}
+
+// An absent span is hit by every accepted requirement claim of its source
+// whose anchor is held to it (`held`): a claim half or more within the
+// span states what the span does, while one a line wider than it does not.
+// A span naming no lines is hit by any claim in its file. Each hit is
+// labelled by the span and the claim, so the card's reading names the
+// passage of the prompt the claim passed through.
+pub fn absent(items: &[Item], expected: &Expected, run: &Run) -> Absent {
+    let mut absent = Absent {
+        expected: items.len(),
+        ..Absent::default()
+    };
+    for item in items {
+        let source = match (&item.source, expected.sources.len()) {
+            (Some(source), _) => format!("{source}:"),
+            (None, 1) => String::new(),
+            (None, _) => "?:".to_owned(),
+        };
+        let (Ok(of), Ok(span)) =
+            (expected.source(item.source.as_deref()), Anchor::parse(&item.anchor))
+        else {
+            continue;
+        };
+        for claim in run.claims_of(of.name(), ClaimKind::Requirement) {
+            let Some(Ok(anchor)) = claim.anchor() else { continue };
+            if held(anchor, span) {
+                absent.hits.push(format!(
+                    "{source}`{}` — {} (`{}` at `{}`)",
+                    item.anchor,
+                    item.gloss,
+                    claim.id.as_deref().unwrap_or("?"),
+                    claim.path.as_deref().unwrap_or("?"),
+                ));
+            }
+        }
+    }
+
+    absent
 }
 
 // The requirements holding one behaviour, by how: `citing` cite one of its
@@ -403,16 +463,6 @@ pub fn held(citation: Anchor<'_>, lines: Anchor<'_>) -> bool {
                 let shared = to.min(end).saturating_add(1).saturating_sub(from.max(start));
                 shared.saturating_mul(2) >= to.saturating_sub(from).saturating_add(1)
             }
-            _ => true,
-        }
-}
-
-// Two anchors meet in one file when either names no lines or their ranges
-// overlap.
-fn overlaps(a: Anchor<'_>, b: Anchor<'_>) -> bool {
-    a.path == b.path
-        && match (a.lines, b.lines) {
-            (Some((a, b)), Some((c, d))) => a <= d && c <= b,
             _ => true,
         }
 }
@@ -571,54 +621,4 @@ pub fn cited_alike((source, a): (&str, Anchor<'_>), (other, b): (&str, Anchor<'_
             (None, None) => true,
             _ => false,
         }
-}
-
-impl Display for Recall {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.expected == 0 {
-            return f.write_str("—");
-        }
-        write!(f, "{}/{} ({}%)", self.matched, self.expected, self.matched * 100 / self.expected)?;
-        if self.placed + self.misplaced.len() > 0 {
-            write!(f, ", {} in stem", self.placed)?;
-        }
-        Ok(())
-    }
-}
-
-impl Display for Surfaces {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.expected == 0 {
-            return f.write_str("—");
-        }
-        if !self.surveyed {
-            return f.write_str("no survey");
-        }
-        write!(f, "{}/{}", self.matched, self.expected)?;
-        if !self.restemmed.is_empty() {
-            write!(f, " ~{}", self.restemmed.len())?;
-        }
-        if !self.extra.is_empty() {
-            write!(f, " +{}", self.extra.len())?;
-        }
-        Ok(())
-    }
-}
-
-// `met/expected`, then `~k` behaviours split across requirements and `!k`
-// requirements merging two, each where any.
-impl Display for Behaviours {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.expected == 0 {
-            return f.write_str("—");
-        }
-        write!(f, "{}/{}", self.met, self.expected)?;
-        if !self.split.is_empty() {
-            write!(f, " ~{}", self.split.len())?;
-        }
-        if !self.wrong.is_empty() {
-            write!(f, " !{}", self.wrong.len())?;
-        }
-        Ok(())
-    }
 }

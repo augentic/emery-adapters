@@ -197,6 +197,10 @@ pub fn pub_consts(file: &syn::File) -> Vec<Const> {
         .collect()
 }
 
+const fn is_pub(vis: &Visibility) -> bool {
+    matches!(vis, Visibility::Public(_))
+}
+
 // The line of the bare `pub fn <name>` among the items of `file`, the `pub`
 // bare: a `pub(crate)` one nothing calls is the compiler's to refuse.
 pub fn pub_fn(file: &syn::File, name: &str) -> Option<usize> {
@@ -204,10 +208,6 @@ pub fn pub_fn(file: &syn::File, name: &str) -> Option<usize> {
         let Item::Fn(item) = item else { return None };
         (is_pub(&item.vis) && item.sig.ident == name).then(|| line(item.sig.fn_token.span))
     })
-}
-
-const fn is_pub(vis: &Visibility) -> bool {
-    matches!(vis, Visibility::Public(_))
 }
 
 // A bare `pub fn` among the items of a file: its name, the lines its
@@ -388,6 +388,10 @@ impl Declared {
     }
 }
 
+fn is_crate(vis: &Visibility) -> bool {
+    matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
+}
+
 // The closing line of the last top-level `use` item in `file`.
 pub fn last_use_line(file: &syn::File) -> Option<usize> {
     file.items
@@ -468,41 +472,6 @@ pub fn json_registrations(file: &syn::File) -> Vec<usize> {
     registrations(file, &["topic"], &stubs)
 }
 
-// Every `.topic(..)` and `.topic_with(..)` registration of the top-level
-// `fn handlers` in `file`, at its line, a stub's among them: the part
-// consumes a stream whatever decodes it.
-pub fn topic_registrations(file: &syn::File) -> Vec<usize> {
-    registrations(file, &["topic", "topic_with"], &BTreeSet::new())
-}
-
-// The line of the `Handlers::from(..)` fold in the top-level `fn handlers`
-// of an entry, where a part's `handlers()` is listed.
-pub fn handlers_from(file: &syn::File) -> Option<usize> {
-    struct Fold(Option<usize>);
-
-    impl<'ast> Visit<'ast> for Fold {
-        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
-            if self.0.is_none()
-                && let Expr::Path(path) = &*call.func
-                && path_ends(&path.path, &["Handlers", "from"])
-            {
-                self.0 = Some(line(call.paren_token.span.open()));
-            }
-            visit::visit_expr_call(self, call);
-        }
-    }
-
-    let mut fold = Fold(None);
-    for item in &file.items {
-        if let Item::Fn(item) = item
-            && item.sig.ident == "handlers"
-        {
-            fold.visit_block(&item.block);
-        }
-    }
-    fold.0
-}
-
 // The lines of the calls of `methods` in the top-level `fn handlers`, less
 // those registering a handler of `stubs`.
 fn registrations(file: &syn::File, methods: &[&str], stubs: &BTreeSet<String>) -> Vec<usize> {
@@ -540,6 +509,41 @@ impl<'ast> Visit<'ast> for Registrations<'_> {
         }
         visit::visit_expr_method_call(self, call);
     }
+}
+
+// Every `.topic(..)` and `.topic_with(..)` registration of the top-level
+// `fn handlers` in `file`, at its line, a stub's among them: the part
+// consumes a stream whatever decodes it.
+pub fn topic_registrations(file: &syn::File) -> Vec<usize> {
+    registrations(file, &["topic", "topic_with"], &BTreeSet::new())
+}
+
+// The line of the `Handlers::from(..)` fold in the top-level `fn handlers`
+// of an entry, where a part's `handlers()` is listed.
+pub fn handlers_from(file: &syn::File) -> Option<usize> {
+    struct Fold(Option<usize>);
+
+    impl<'ast> Visit<'ast> for Fold {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if self.0.is_none()
+                && let Expr::Path(path) = &*call.func
+                && path_ends(&path.path, &["Handlers", "from"])
+            {
+                self.0 = Some(line(call.paren_token.span.open()));
+            }
+            visit::visit_expr_call(self, call);
+        }
+    }
+
+    let mut fold = Fold(None);
+    for item in &file.items {
+        if let Item::Fn(item) = item
+            && item.sig.ident == "handlers"
+        {
+            fold.visit_block(&item.block);
+        }
+    }
+    fold.0
 }
 
 // Whether `block` holds a `todo!("REQ-..")` marker, so the item is a stub
@@ -600,22 +604,6 @@ pub fn unregistered_handlers(file: &syn::File) -> Vec<(usize, String)> {
         .collect()
 }
 
-fn is_crate(vis: &Visibility) -> bool {
-    matches!(vis, Visibility::Restricted(restricted) if restricted.path.is_ident("crate"))
-}
-
-// A handler takes the context first: a `pub(crate) async fn` whose first
-// parameter is a `Context<..>`.
-pub fn is_handler_fn(item: &ItemFn) -> bool {
-    if !is_crate(&item.vis) || item.sig.asyncness.is_none() {
-        return false;
-    }
-    let Some(FnArg::Typed(first)) = item.sig.inputs.first() else {
-        return false;
-    };
-    matches!(&*first.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
-}
-
 #[derive(Default)]
 struct Idents(BTreeSet<String>);
 
@@ -631,4 +619,16 @@ impl<'ast> Visit<'ast> for Idents {
     fn visit_ident(&mut self, node: &'ast Ident) {
         self.0.insert(node.to_string());
     }
+}
+
+// A handler takes the context first: a `pub(crate) async fn` whose first
+// parameter is a `Context<..>`.
+pub fn is_handler_fn(item: &ItemFn) -> bool {
+    if !is_crate(&item.vis) || item.sig.asyncness.is_none() {
+        return false;
+    }
+    let Some(FnArg::Typed(first)) = item.sig.inputs.first() else {
+        return false;
+    };
+    matches!(&*first.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
 }

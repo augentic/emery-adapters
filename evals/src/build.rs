@@ -336,241 +336,6 @@ pub struct Build {
     pub rewound: Option<Rewound>,
 }
 
-// One slice of a build's `schedule`, cut from one part of the plan.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Scheduled {
-    pub id: String,
-    pub part: String,
-    pub name: String,
-    pub index: u32,
-    pub count: u32,
-    pub wave: usize,
-    pub requirements: Vec<String>,
-    pub types: Vec<String>,
-    pub over_budget: bool,
-}
-
-// One scheduled slice paired with its build turn's duration, token usage,
-// and the scenario count of its requirements in `spec.json`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SliceMetrics {
-    pub id: String,
-    pub part: String,
-    pub name: String,
-    pub index: u32,
-    pub count: u32,
-    pub wave: usize,
-    pub requirements: usize,
-    pub scenario_count: usize,
-    pub over_budget: bool,
-    pub duration: Duration,
-    pub tokens: Tokens,
-}
-
-// Where a `--resume` build started: the card whose chain it resumed, the
-// wave it resumed at, the commit the label was moved to, and the slices
-// that chain names, which the engine resumed rather than built.
-pub struct Rewound {
-    pub card: String,
-    pub wave: usize,
-    pub commit: String,
-    pub subject: String,
-    pub slices: Vec<String>,
-}
-
-// A slice an earlier build merged as nothing, read from its envelope: no
-// commit names it in the chain, so a resume builds it again unless a commit
-// does.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Empty {
-    pub id: String,
-    part: String,
-    name: String,
-    wave: usize,
-    budget: usize,
-    requirements: Vec<String>,
-    covered: Vec<String>,
-}
-
-impl Empty {
-    // The message the engine seals a slice under, as `emery_engine::vcs::Message`
-    // spells it, over `base`: the first line `<id> <name>`, then the nine
-    // trailers, every one present, so the engine's resume reads the slice
-    // back from the label's chain.
-    pub fn message(&self, revision: &str, base: &str) -> String {
-        format!(
-            "{id} {name}\n\nSlice: {id}\nPart: {part}\nRevision: {revision}\nBudget: \
-             {budget}\nRequirements: {requirements}\nCovered: {covered}\nAdapter: \
-             {TARGET_NAME}\nBase: {base}\nWave: {wave}",
-            id = self.id,
-            part = self.part,
-            name = self.name,
-            budget = self.budget,
-            requirements = self.requirements.join(", "),
-            covered = self.covered.join(", "),
-            wave = self.wave,
-        )
-    }
-}
-
-// The slices of `envelope`, a landed build's, merged as nothing in a wave
-// before `wave`, in wave then id order.
-pub fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
-    let budget =
-        envelope["budget"].as_u64().and_then(|budget| usize::try_from(budget).ok()).unwrap_or(12);
-    let mut empty: Vec<Empty> = envelope["slices"]
-        .as_array()
-        .map(|slices| {
-            slices
-                .iter()
-                .filter(|slice| slice["commit"].is_null())
-                .filter_map(|slice| {
-                    let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
-                    (landed < wave).then(|| {
-                        let id = slice["id"].as_str().unwrap_or("").to_owned();
-                        let part = slice["part"]
-                            .as_str()
-                            .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned);
-                        let covered = strings(&slice["covered"]);
-                        let mut requirements = covered.clone();
-                        requirements.extend(strings(&slice["uncovered"]));
-                        Empty {
-                            id,
-                            part,
-                            name: slice["name"].as_str().unwrap_or("").to_owned(),
-                            wave: landed,
-                            budget,
-                            requirements,
-                            covered,
-                        }
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    empty.sort_by(|a, b| (a.wave, &a.id).cmp(&(b.wave, &b.id)));
-    empty
-}
-
-// The failure envelope: its code and message.
-pub struct Failure {
-    pub code: String,
-    pub message: String,
-}
-
-// One commit on the build's first-parent chain: a slice's merge, read from
-// its trailers, a `Wave <k> verified` seal, `Initialise`, or the `Revision`
-// root `apply` sealed.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Landed {
-    pub commit: String,
-    pub subject: String,
-    // the `Revision:` trailer a merge, a wave seal, and the `Revision` root
-    // carry; `Initialise` none
-    pub revision: Option<String>,
-    pub slice: Option<String>,
-    pub wave: Option<usize>,
-    pub requirements: Vec<String>,
-    pub covered: Vec<String>,
-    pub files: Vec<String>,
-}
-
-impl Landed {
-    // The wave a `Wave <k> verified` seal closed; a merge, `Initialise`, and
-    // the root none.
-    pub fn sealed(&self) -> Option<usize> {
-        self.subject.strip_prefix("Wave ")?.strip_suffix(" verified")?.parse().ok()
-    }
-
-    // Whether a build of `revision` made this commit — a slice merge or a
-    // wave seal — rather than the `Revision` root `apply` sealed before it
-    // or `Initialise`.
-    fn built(&self, revision: &str) -> bool {
-        self.revision.as_deref() == Some(revision)
-            && (self.slice.is_some() || self.sealed().is_some())
-    }
-}
-
-// One slice as the build landed it: from the envelope when the run landed,
-// else from the merge commit's trailers.
-pub struct Integrated {
-    pub id: String,
-    pub name: String,
-    pub wave: usize,
-    pub requirements: Vec<String>,
-    pub covered: Vec<String>,
-    pub files: Vec<String>,
-    pub commit: Option<String>,
-    pub resolved: Vec<String>,
-}
-
-impl Integrated {
-    pub fn uncovered(&self) -> Vec<&str> {
-        self.requirements
-            .iter()
-            .filter(|id| !self.covered.contains(id))
-            .map(String::as_str)
-            .collect()
-    }
-}
-
-// The build turns of one wave with the verify that closed it: the
-// completions between two `verify` completions, since a wave's builds all
-// finish before its verify opens and the next wave's open after it.
-#[derive(Default)]
-pub struct WaveTurns<'a> {
-    pub builds: Vec<&'a Completion>,
-    pub verifies: Vec<&'a Completion>,
-}
-
-impl WaveTurns<'_> {
-    // The wave's line tail: its build durations, its verify's duration with
-    // the shell part, and what the verify sealed — `(lock only)` for the
-    // lock rewrite alone, else `repaired` with the files.
-    pub fn spent(&self, sealed: Option<&Vec<String>>) -> String {
-        let builds: Vec<String> =
-            self.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
-        let verify: Duration = self.verifies.iter().map(|v| v.duration).sum();
-        let shell = self.verifies.iter().fold(ShellUse::default(), |mut sum, v| {
-            sum.calls += v.shell.calls;
-            sum.time += v.shell.time;
-            sum.bytes += v.shell.bytes;
-            sum
-        });
-        let shelled = if shell.calls == 0 {
-            String::new()
-        } else {
-            format!(
-                " (shell {}s over {} calls, {} KB back)",
-                shell.time.as_secs(),
-                shell.calls,
-                shell.bytes / 1024
-            )
-        };
-        let sealed = match sealed {
-            Some(files) if files.is_empty() => " (lock only)".to_owned(),
-            Some(files) => format!(", repaired {}", files.join(", ")),
-            None => String::new(),
-        };
-        format!(
-            "; builds {} then verify {}s{shelled}{sealed}",
-            builds.join(" / "),
-            verify.as_secs()
-        )
-    }
-
-    // The wave's time on the critical path: the slowest build, every
-    // round of it, then the verify.
-    pub fn critical(&self) -> Duration {
-        let mut per_slice: BTreeMap<&str, Duration> = BTreeMap::new();
-        for build in &self.builds {
-            *per_slice.entry(&build.label).or_default() += build.duration;
-        }
-        let slowest = per_slice.values().max().copied().unwrap_or_default();
-        slowest + self.verifies.iter().map(|verify| verify.duration).sum::<Duration>()
-    }
-}
-
 impl Build {
     // A build read back from the files `build` kept beside its run, with the
     // chain it left where it stands: the exit is the envelope's success or
@@ -949,6 +714,241 @@ impl Build {
             .iter()
             .map(|completion| completion.tokens)
             .fold(Tokens::default(), Tokens::add)
+    }
+}
+
+// One slice of a build's `schedule`, cut from one part of the plan.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Scheduled {
+    pub id: String,
+    pub part: String,
+    pub name: String,
+    pub index: u32,
+    pub count: u32,
+    pub wave: usize,
+    pub requirements: Vec<String>,
+    pub types: Vec<String>,
+    pub over_budget: bool,
+}
+
+// One scheduled slice paired with its build turn's duration, token usage,
+// and the scenario count of its requirements in `spec.json`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SliceMetrics {
+    pub id: String,
+    pub part: String,
+    pub name: String,
+    pub index: u32,
+    pub count: u32,
+    pub wave: usize,
+    pub requirements: usize,
+    pub scenario_count: usize,
+    pub over_budget: bool,
+    pub duration: Duration,
+    pub tokens: Tokens,
+}
+
+// Where a `--resume` build started: the card whose chain it resumed, the
+// wave it resumed at, the commit the label was moved to, and the slices
+// that chain names, which the engine resumed rather than built.
+pub struct Rewound {
+    pub card: String,
+    pub wave: usize,
+    pub commit: String,
+    pub subject: String,
+    pub slices: Vec<String>,
+}
+
+// A slice an earlier build merged as nothing, read from its envelope: no
+// commit names it in the chain, so a resume builds it again unless a commit
+// does.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Empty {
+    pub id: String,
+    part: String,
+    name: String,
+    wave: usize,
+    budget: usize,
+    requirements: Vec<String>,
+    covered: Vec<String>,
+}
+
+impl Empty {
+    // The message the engine seals a slice under, as `emery_engine::vcs::Message`
+    // spells it, over `base`: the first line `<id> <name>`, then the nine
+    // trailers, every one present, so the engine's resume reads the slice
+    // back from the label's chain.
+    pub fn message(&self, revision: &str, base: &str) -> String {
+        format!(
+            "{id} {name}\n\nSlice: {id}\nPart: {part}\nRevision: {revision}\nBudget: \
+             {budget}\nRequirements: {requirements}\nCovered: {covered}\nAdapter: \
+             {TARGET_NAME}\nBase: {base}\nWave: {wave}",
+            id = self.id,
+            part = self.part,
+            name = self.name,
+            budget = self.budget,
+            requirements = self.requirements.join(", "),
+            covered = self.covered.join(", "),
+            wave = self.wave,
+        )
+    }
+}
+
+// The slices of `envelope`, a landed build's, merged as nothing in a wave
+// before `wave`, in wave then id order.
+pub fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
+    let budget =
+        envelope["budget"].as_u64().and_then(|budget| usize::try_from(budget).ok()).unwrap_or(12);
+    let mut empty: Vec<Empty> = envelope["slices"]
+        .as_array()
+        .map(|slices| {
+            slices
+                .iter()
+                .filter(|slice| slice["commit"].is_null())
+                .filter_map(|slice| {
+                    let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
+                    (landed < wave).then(|| {
+                        let id = slice["id"].as_str().unwrap_or("").to_owned();
+                        let part = slice["part"]
+                            .as_str()
+                            .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned);
+                        let covered = strings(&slice["covered"]);
+                        let mut requirements = covered.clone();
+                        requirements.extend(strings(&slice["uncovered"]));
+                        Empty {
+                            id,
+                            part,
+                            name: slice["name"].as_str().unwrap_or("").to_owned(),
+                            wave: landed,
+                            budget,
+                            requirements,
+                            covered,
+                        }
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    empty.sort_by(|a, b| (a.wave, &a.id).cmp(&(b.wave, &b.id)));
+    empty
+}
+
+// The failure envelope: its code and message.
+pub struct Failure {
+    pub code: String,
+    pub message: String,
+}
+
+// One commit on the build's first-parent chain: a slice's merge, read from
+// its trailers, a `Wave <k> verified` seal, `Initialise`, or the `Revision`
+// root `apply` sealed.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Landed {
+    pub commit: String,
+    pub subject: String,
+    // the `Revision:` trailer a merge, a wave seal, and the `Revision` root
+    // carry; `Initialise` none
+    pub revision: Option<String>,
+    pub slice: Option<String>,
+    pub wave: Option<usize>,
+    pub requirements: Vec<String>,
+    pub covered: Vec<String>,
+    pub files: Vec<String>,
+}
+
+impl Landed {
+    // The wave a `Wave <k> verified` seal closed; a merge, `Initialise`, and
+    // the root none.
+    pub fn sealed(&self) -> Option<usize> {
+        self.subject.strip_prefix("Wave ")?.strip_suffix(" verified")?.parse().ok()
+    }
+
+    // Whether a build of `revision` made this commit — a slice merge or a
+    // wave seal — rather than the `Revision` root `apply` sealed before it
+    // or `Initialise`.
+    fn built(&self, revision: &str) -> bool {
+        self.revision.as_deref() == Some(revision)
+            && (self.slice.is_some() || self.sealed().is_some())
+    }
+}
+
+// One slice as the build landed it: from the envelope when the run landed,
+// else from the merge commit's trailers.
+pub struct Integrated {
+    pub id: String,
+    pub name: String,
+    pub wave: usize,
+    pub requirements: Vec<String>,
+    pub covered: Vec<String>,
+    pub files: Vec<String>,
+    pub commit: Option<String>,
+    pub resolved: Vec<String>,
+}
+
+impl Integrated {
+    pub fn uncovered(&self) -> Vec<&str> {
+        self.requirements
+            .iter()
+            .filter(|id| !self.covered.contains(id))
+            .map(String::as_str)
+            .collect()
+    }
+}
+
+// The build turns of one wave with the verify that closed it: the
+// completions between two `verify` completions, since a wave's builds all
+// finish before its verify opens and the next wave's open after it.
+#[derive(Default)]
+pub struct WaveTurns<'a> {
+    pub builds: Vec<&'a Completion>,
+    pub verifies: Vec<&'a Completion>,
+}
+
+impl WaveTurns<'_> {
+    // The wave's line tail: its build durations, its verify's duration with
+    // the shell part, and what the verify sealed — `(lock only)` for the
+    // lock rewrite alone, else `repaired` with the files.
+    pub fn spent(&self, sealed: Option<&Vec<String>>) -> String {
+        let builds: Vec<String> =
+            self.builds.iter().map(|b| format!("{}s", b.duration.as_secs())).collect();
+        let verify: Duration = self.verifies.iter().map(|v| v.duration).sum();
+        let shell = self.verifies.iter().fold(ShellUse::default(), |mut sum, v| {
+            sum.calls += v.shell.calls;
+            sum.time += v.shell.time;
+            sum.bytes += v.shell.bytes;
+            sum
+        });
+        let shelled = if shell.calls == 0 {
+            String::new()
+        } else {
+            format!(
+                " (shell {}s over {} calls, {} KB back)",
+                shell.time.as_secs(),
+                shell.calls,
+                shell.bytes / 1024
+            )
+        };
+        let sealed = match sealed {
+            Some(files) if files.is_empty() => " (lock only)".to_owned(),
+            Some(files) => format!(", repaired {}", files.join(", ")),
+            None => String::new(),
+        };
+        format!(
+            "; builds {} then verify {}s{shelled}{sealed}",
+            builds.join(" / "),
+            verify.as_secs()
+        )
+    }
+
+    // The wave's time on the critical path: the slowest build, every
+    // round of it, then the verify.
+    pub fn critical(&self) -> Duration {
+        let mut per_slice: BTreeMap<&str, Duration> = BTreeMap::new();
+        for build in &self.builds {
+            *per_slice.entry(&build.label).or_default() += build.duration;
+        }
+        let slowest = per_slice.values().max().copied().unwrap_or_default();
+        slowest + self.verifies.iter().map(|verify| verify.duration).sum::<Duration>()
     }
 }
 

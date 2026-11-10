@@ -42,20 +42,6 @@ pub struct Module {
     all: Option<Vec<String>>,
 }
 
-impl Deref for Module {
-    type Target = code::Module;
-
-    fn deref(&self) -> &Self::Target {
-        &self.core
-    }
-}
-
-impl DerefMut for Module {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.core
-    }
-}
-
 impl Module {
     pub fn parse(path: &str, text: String) -> Self {
         let mut module = walk::read(path, &text);
@@ -137,6 +123,20 @@ impl Module {
 
     pub fn statements(&self) -> Vec<Statement> {
         self.tests.iter().map(TestDef::statement).collect()
+    }
+}
+
+impl Deref for Module {
+    type Target = code::Module;
+
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+impl DerefMut for Module {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.core
     }
 }
 

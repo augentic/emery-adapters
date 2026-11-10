@@ -119,8 +119,8 @@ omnia-wasi-model = "0.38.0"
 omnia-wasi-otel = "0.38.0"
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery", rev = "af792266eb1254a2d6723a5bfbb015d93c3dbc65" }
-emery-sdk = { git = "https://github.com/augentic/emery", rev = "af792266eb1254a2d6723a5bfbb015d93c3dbc65" }
+emery-prose = { git = "https://github.com/augentic/emery", rev = "2119c91d4c46307f3aa3b7216eaa42acaffa4dd5" }
+emery-sdk = { git = "https://github.com/augentic/emery", rev = "2119c91d4c46307f3aa3b7216eaa42acaffa4dd5" }
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-backend = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }

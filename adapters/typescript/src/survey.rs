@@ -56,10 +56,6 @@ const TEST_DIRS: &[&str] = &["test", "tests", "__tests__"];
 const TEST_INFIXES: &[&str] = &["spec", "test"];
 const NEVER_DIRS: &[&str] = &["node_modules", "vendor", "target", "dist", "build"];
 
-fn skipped_dir(name: &str) -> bool {
-    NEVER_DIRS.contains(&name) || TEST_DIRS.contains(&name)
-}
-
 fn is_module(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
@@ -88,6 +84,10 @@ fn is_data(entry: Entry<'_>) -> bool {
         return !skipped_dir(entry.name());
     }
     entry.extension() == Some("json")
+}
+
+fn skipped_dir(name: &str) -> bool {
+    NEVER_DIRS.contains(&name) || TEST_DIRS.contains(&name)
 }
 
 fn is_test(entry: Entry<'_>) -> bool {

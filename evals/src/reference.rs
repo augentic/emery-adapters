@@ -17,35 +17,6 @@ pub struct Reference {
     name: String,
     kind: Kind,
 }
-
-// What a reference directory holds: a hand-written guest beside its
-// recorded fixtures, measured and driven, or `oracle.toml` over recorded
-// scenarios of the source itself, driven alone.
-enum Kind {
-    Guest,
-    Scenarios(Spec),
-}
-
-// What `oracle.toml` declares over a reference of recorded scenarios: the
-// bearer its guarded paths take, and the configuration the scenarios were
-// recorded under.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Spec {
-    kind: String,
-    auth: Auth,
-    #[serde(default)]
-    config: BTreeMap<String, String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Auth {
-    header: String,
-    token: String,
-    guarded: String,
-}
-
 impl Reference {
     // The reference `named` relative to `root`, where its tree exists; one
     // the root lacks is reported and left out, since a reference is
@@ -267,6 +238,94 @@ impl Reference {
         Ok(Ok(scenarios.len()))
     }
 }
+pub struct Comparison {
+    name: String,
+    measures: Vec<Measure>,
+    oracle: Oracle,
+    log: String,
+}
+
+impl Comparison {
+    // What `cargo test` printed as the harness ran, the guest's own events
+    // among it; empty where the harness could not run.
+    pub fn log(&self) -> &str {
+        &self.log
+    }
+
+    // The one line the card's build findings carry.
+    pub fn finding(&self) -> String {
+        let measures: Vec<String> = self
+            .measures
+            .iter()
+            .filter(|measure| {
+                matches!(measure.name, "crates" | "Rust lines (non-blank)" | "dependencies")
+            })
+            .map(|measure| {
+                let name = if measure.name == "Rust lines (non-blank)" {
+                    "Rust lines"
+                } else {
+                    measure.name
+                };
+                format!("{name} {} vs {}", measure.built, measure.reference)
+            })
+            .collect();
+        let oracle = format!("reference oracle {}", self.oracle.cell());
+        if measures.is_empty() { oracle } else { format!("{oracle}; {}", measures.join(", ")) }
+    }
+}
+
+impl Display for Comparison {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.measures.is_empty() {
+            writeln!(
+                f,
+                "\n## Reference comparison\n\nAgainst `{}`, the source's behaviour recorded as \
+                 scenarios, each driven through the built guest over one fresh store.",
+                self.name
+            )?;
+            return write!(f, "{}", self.oracle);
+        }
+        writeln!(
+            f,
+            "\n## Reference comparison\n\nAgainst `{}`, the hand-written guest of the same \
+             behaviour; a count is the tree's, a name one side alone spells.\n",
+            self.name
+        )?;
+        writeln!(
+            f,
+            "| measure | built | reference | only built | only reference |\n| --- | --- | --- | \
+             --- | --- |"
+        )?;
+        for measure in &self.measures {
+            writeln!(
+                f,
+                "| {} | {} | {} | {} | {} |",
+                measure.name,
+                measure.built,
+                measure.reference,
+                spelled(&measure.only_built),
+                spelled(&measure.only_reference)
+            )?;
+        }
+        write!(f, "{}", self.oracle)
+    }
+}
+enum Kind {
+    Guest,
+    Scenarios(Spec),
+}
+
+// What `oracle.toml` declares over a reference of recorded scenarios: the
+// bearer its guarded paths take, and the configuration the scenarios were
+// recorded under.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Spec {
+    kind: String,
+    auth: Auth,
+    #[serde(default)]
+    config: BTreeMap<String, String>,
+}
 
 impl Spec {
     fn parse(text: &str) -> Result<Self, String> {
@@ -279,6 +338,14 @@ impl Spec {
         }
         Ok(spec)
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Auth {
+    header: String,
+    token: String,
+    guarded: String,
 }
 
 // What a scenario must hold to be driven: steps, each one request with its
@@ -894,78 +961,6 @@ fn inbound_candidates(topics: &BTreeSet<String>, config: &BTreeMap<String, Strin
 
 // The built tree beside the reference: each measure on both sides, what
 // the oracle found, and everything the harness printed as it ran.
-pub struct Comparison {
-    name: String,
-    measures: Vec<Measure>,
-    oracle: Oracle,
-    log: String,
-}
-
-impl Comparison {
-    // What `cargo test` printed as the harness ran, the guest's own events
-    // among it; empty where the harness could not run.
-    pub fn log(&self) -> &str {
-        &self.log
-    }
-
-    // The one line the card's build findings carry.
-    pub fn finding(&self) -> String {
-        let measures: Vec<String> = self
-            .measures
-            .iter()
-            .filter(|measure| {
-                matches!(measure.name, "crates" | "Rust lines (non-blank)" | "dependencies")
-            })
-            .map(|measure| {
-                let name = if measure.name == "Rust lines (non-blank)" {
-                    "Rust lines"
-                } else {
-                    measure.name
-                };
-                format!("{name} {} vs {}", measure.built, measure.reference)
-            })
-            .collect();
-        let oracle = format!("reference oracle {}", self.oracle.cell());
-        if measures.is_empty() { oracle } else { format!("{oracle}; {}", measures.join(", ")) }
-    }
-}
-
-impl Display for Comparison {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.measures.is_empty() {
-            writeln!(
-                f,
-                "\n## Reference comparison\n\nAgainst `{}`, the source's behaviour recorded as \
-                 scenarios, each driven through the built guest over one fresh store.",
-                self.name
-            )?;
-            return write!(f, "{}", self.oracle);
-        }
-        writeln!(
-            f,
-            "\n## Reference comparison\n\nAgainst `{}`, the hand-written guest of the same \
-             behaviour; a count is the tree's, a name one side alone spells.\n",
-            self.name
-        )?;
-        writeln!(
-            f,
-            "| measure | built | reference | only built | only reference |\n| --- | --- | --- | \
-             --- | --- |"
-        )?;
-        for measure in &self.measures {
-            writeln!(
-                f,
-                "| {} | {} | {} | {} | {} |",
-                measure.name,
-                measure.built,
-                measure.reference,
-                spelled(&measure.only_built),
-                spelled(&measure.only_reference)
-            )?;
-        }
-        write!(f, "{}", self.oracle)
-    }
-}
 
 // One measure on both sides: its count on each, and the names one side
 // alone spells where the measure is of names.
@@ -1016,14 +1011,6 @@ struct Oracle {
     outbound: Vec<String>,
     shared: Vec<String>,
     note: Option<String>,
-}
-
-// One fixture or scenario driven through the guest: what it recorded, and
-// every way the guest's answer differed, none for a pass.
-struct Outcome {
-    fixture: String,
-    expected: String,
-    reasons: Vec<String>,
 }
 
 impl Oracle {
@@ -1133,13 +1120,6 @@ impl Oracle {
     }
 }
 
-// The text after `marker` where the line opens with it, or where the test
-// runner's `test <name> ... ` opened the line the harness printed first.
-fn marked<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
-    line.strip_prefix(marker)
-        .or_else(|| line.split_once("... ").and_then(|(_, rest)| rest.strip_prefix(marker)))
-}
-
 impl Display for Oracle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "\n### Oracle\n")?;
@@ -1205,6 +1185,21 @@ impl Display for Oracle {
         }
         Ok(())
     }
+}
+
+// The text after `marker` where the line opens with it, or where the test
+// runner's `test <name> ... ` opened the line the harness printed first.
+fn marked<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
+    line.strip_prefix(marker)
+        .or_else(|| line.split_once("... ").and_then(|(_, rest)| rest.strip_prefix(marker)))
+}
+
+// One fixture or scenario driven through the guest: what it recorded, and
+// every way the guest's answer differed, none for a pass.
+struct Outcome {
+    fixture: String,
+    expected: String,
+    reasons: Vec<String>,
 }
 
 // The test the eval writes into the built tree as `tests/reference_oracle.rs`,
@@ -2750,7 +2745,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn oracle_lines() {
+    fn oracle_output() {
         let output = "\
    Compiling guest v0.1.0
 test reference_fixtures ... oracle-inbound dev-realtime-train.v1
@@ -2771,17 +2766,14 @@ test reference_fixtures ... ok
         let text = oracle.to_string();
         assert!(text.contains("- 1/3 fixtures pass: 1/2 static, 0/1 replay"), "{text}");
         assert!(text.contains("| `static/0006` | a refusal | fail: published 2 events"), "{text}");
-    }
 
-    #[test]
-    fn oracle_shared_reads() {
         let output = "\
-oracle-inbound dev-orders.v1
-oracle static/0001 | 2 events | fail: published 0 events, 2 recorded; logged: WARN orders::inbound: rates missing route=12
-oracle replay/4247 | 0 events | pass
-oracle-outbound dev-order-positions.v1
-oracle-shared /stops, /routes?all=true
-";
+        oracle-inbound dev-orders.v1
+        oracle static/0001 | 2 events | fail: published 0 events, 2 recorded; logged: WARN orders::inbound: rates missing route=12
+        oracle replay/4247 | 0 events | pass
+        oracle-outbound dev-order-positions.v1
+        oracle-shared /stops, /routes?all=true
+        ";
         let oracle = Oracle::parse(output);
         assert_eq!(oracle.shared, ["/stops", "/routes?all=true"]);
         assert_eq!(
@@ -2794,19 +2786,13 @@ oracle-shared /stops, /routes?all=true
             "{text}"
         );
         assert_eq!(Oracle::parse("oracle-outbound \n").shared, Vec::<String>::new());
-    }
 
-    #[test]
-    fn oracle_without_a_topic() {
         let oracle = Oracle::parse("oracle-none no inbound topic consumed among: dev-a, a\n");
         assert_eq!(oracle.cell(), "not run");
         assert!(
             oracle.to_string().contains("- not run: no inbound topic consumed among: dev-a, a")
         );
-    }
 
-    #[test]
-    fn oracle_harness_silent() {
         let check = HostCheck {
             name: "cargo test",
             exit: Some(101),
@@ -2819,51 +2805,52 @@ oracle-shared /stops, /routes?all=true
             Some("the harness answered nothing (exit 101): error[E0433]: failed to resolve")
         );
         assert_eq!(oracle.cell(), "not run");
+
+        let output = "\
+        oracle-kind scenarios
+        oracle orders/place-standard | 2 steps to 201 | pass
+        oracle orders/cancel-shipped | 4 steps to 409 | fail: step 3 of 4: status 200, 409 expected (answered {}); sql: no such column: foo in `SELECT foo`
+        oracle start/missing-bearer | 1 steps to 401 | fail: step 1 of 1: status 201, 401 expected
+        ";
+        let oracle = Oracle::parse(output);
+        assert_eq!(oracle.kind.as_deref(), Some("scenarios"));
+        assert_eq!(oracle.cell(), "1/3");
+        assert_eq!(oracle.groups(), [("orders".to_owned(), 1, 2), ("start".to_owned(), 0, 1)]);
+        assert_eq!(oracle.outcomes[1].reasons.len(), 2);
+        let text = oracle.to_string();
+        assert!(text.contains("- 1/3 scenarios pass: 1/2 orders, 0/1 start."), "{text}");
+        assert!(text.contains("| scenario | steps | outcome |"), "{text}");
+        assert!(!text.contains("consumed under"), "{text}");
     }
 
     #[test]
-    fn str_consts_of_a_catalog() {
+    fn config_and_topics() {
         let text = "pub const ENV: &str = \"ENV\";\n/// doc\npub const URL: &str = \"BLOCK_MGT_URL\";\npub const N: u32 = 3;\n";
         let consts = str_consts(text);
         assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["BLOCK_MGT_URL", "ENV"]);
-    }
 
-    #[test]
-    fn setting_consts_of_a_part() {
         let text = "// Where the upstream answers.\npub(crate) const RATES_URL: &str = \"RATES_URL\";\npub(crate) const ORDERS: &str = \"/orders\";\nconst TTL: u64 = 600;\npub const KEY: &str = \"orders/rates\";\n";
         let consts = setting_consts(text);
         assert_eq!(consts.into_iter().collect::<Vec<_>>(), ["RATES_URL"]);
-    }
 
-    // A prefixed struct's fields read under its prefix, a field's own key
-    // over it, an unprefixed struct's bare; a struct deriving no `Settings`
-    // and a field comment spelling a colon add nothing.
-    #[test]
-    fn setting_fields_of_a_part() {
         let text = "// The settings the part reads: `ORDERS_RATE_URL`, `ORDERS_TYPE`.\n\
-                    #[derive(Debug, Settings)]\n#[setting(prefix = \"ORDERS_\")]\n\
-                    pub(crate) struct PlacingSettings {\n    // Where the rates are: the upstream.\n    \
-                    rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n    \
-                    ttl_secs: u64,\n}\n\n#[derive(Debug, Deserialize)]\npub struct Order {\n    \
-                    pub id: String,\n}\n\n#[derive(Settings)]\nstruct Probe {\n    pub(crate) \
-                    deadline_ms: u64,\n}\n";
+                            #[derive(Debug, Settings)]\n#[setting(prefix = \"ORDERS_\")]\n\
+                            pub(crate) struct PlacingSettings {\n    // Where the rates are: the upstream.\n    \
+                            rate_url: String,\n    #[setting(key = \"ORDERS_TYPE\")]\n    type_: String,\n    \
+                            ttl_secs: u64,\n}\n\n#[derive(Debug, Deserialize)]\npub struct Order {\n    \
+                            pub id: String,\n}\n\n#[derive(Settings)]\nstruct Probe {\n    pub(crate) \
+                            deadline_ms: u64,\n}\n";
         let keys = setting_fields(text);
         assert_eq!(
             keys.into_iter().collect::<Vec<_>>(),
             ["DEADLINE_MS", "ORDERS_RATE_URL", "ORDERS_TTL_SECS", "ORDERS_TYPE"]
         );
-    }
 
-    #[test]
-    fn topic_module_block() {
         let text = "pub mod http {}\n\npub mod topic {\n    pub const TRAIN: &str = \"realtime-train.v1\";\n    pub mod inner { pub const X: &str = \"x\"; }\n}\npub const OUT: &str = \"outside\";\n";
         let topics = str_consts(&module_block(text, "topic"));
         assert_eq!(topics.into_iter().collect::<Vec<_>>(), ["realtime-train.v1", "x"]);
         assert_eq!(module_block(text, "absent"), "");
-    }
 
-    #[test]
-    fn config_seeded_by_pattern() {
         let keys: BTreeSet<String> = [
             "ENV",
             "GTFS_URL",
@@ -2883,10 +2870,7 @@ oracle-shared /stops, /routes?all=true
         assert_eq!(seed["KAFKA_SOURCE_TOPIC"], "realtime-train.v1");
         assert_eq!(seed["MIN_MESSAGE_DELAY_IN_SECONDS"], "-30");
         assert!(!seed.contains_key("UNRELATED"));
-    }
 
-    #[test]
-    fn inbound_candidates_lead_with_the_source() {
         let topics: BTreeSet<String> = ["realtime-train-positions.v1", "realtime-train.v1"]
             .into_iter()
             .map(str::to_owned)
@@ -2898,10 +2882,42 @@ oracle-shared /stops, /routes?all=true
         assert!(candidates.contains(&"dev-realtime-train-positions.v1".to_owned()));
         let distinct: BTreeSet<&String> = candidates.iter().collect();
         assert_eq!(distinct.len(), candidates.len());
+
+        let table: BTreeMap<String, String> = [
+            ("GST_RATE", "0.15"),
+            ("SHIPPING_API_URL", "http://api.test"),
+            ("API_TOKENS", "test-token"),
+        ]
+        .into_iter()
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+        let keys: BTreeSet<String> = [
+            "ORDERS_GST_RATE",
+            "RATES_SHIPPING_API_URL",
+            "START_API_TOKENS",
+            "ORDERS_CACHE_TTL_SECONDS",
+            "HEALTH_DEADLINE_MS",
+            "START_BEARER_TOKEN",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+        let seed = scenario_config(&table, "test-token", &keys);
+        assert_eq!(seed["GST_RATE"], "0.15");
+        assert_eq!(seed["ORDERS_GST_RATE"], "0.15");
+        assert_eq!(seed["RATES_SHIPPING_API_URL"], "http://api.test");
+        assert_eq!(seed["START_API_TOKENS"], "test-token");
+        assert_eq!(seed["ORDERS_CACHE_TTL_SECONDS"], "60");
+        assert_eq!(seed["START_BEARER_TOKEN"], "test-token");
+        assert!(!seed.contains_key("HEALTH_DEADLINE_MS"));
     }
 
+    // A prefixed struct's fields read under its prefix, a field's own key
+    // over it, an unprefixed struct's bare; a struct deriving no `Settings`
+    // and a field comment spelling a colon add nothing.
+
     #[test]
-    fn dev_dependencies_added_once() {
+    fn dev_dependencies() {
         let manifest: toml::Table = "\
 [package]
 name = \"guest\"
@@ -2961,7 +2977,7 @@ tokio = \"1\"
     }
 
     #[test]
-    fn spec_parsed() {
+    fn oracle_spec() {
         let spec = Spec::parse(
             "kind = \"http\"\n[auth]\nheader = \"authorization\"\ntoken = \"t\"\nguarded = \
              \"/api\"\n[config]\nGST_RATE = \"0.15\"\n",
@@ -2983,7 +2999,7 @@ tokio = \"1\"
     }
 
     #[test]
-    fn scenario_checked() {
+    fn scenario_schema() {
         let sound = serde_json::json!({
             "seed": { "http": [{ "path": "/rates", "query": { "zone": "z" } }] },
             "steps": [
@@ -3029,58 +3045,9 @@ tokio = \"1\"
     // The table's own keys stand; a built key the table lacks takes the
     // value of its longest suffix in the table, else the pattern seed, and
     // is left unset where neither reads it.
-    #[test]
-    fn scenario_config_seeded_by_suffix() {
-        let table: BTreeMap<String, String> = [
-            ("GST_RATE", "0.15"),
-            ("SHIPPING_API_URL", "http://api.test"),
-            ("API_TOKENS", "test-token"),
-        ]
-        .into_iter()
-        .map(|(key, value)| (key.to_owned(), value.to_owned()))
-        .collect();
-        let keys: BTreeSet<String> = [
-            "ORDERS_GST_RATE",
-            "RATES_SHIPPING_API_URL",
-            "START_API_TOKENS",
-            "ORDERS_CACHE_TTL_SECONDS",
-            "HEALTH_DEADLINE_MS",
-            "START_BEARER_TOKEN",
-        ]
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-        let seed = scenario_config(&table, "test-token", &keys);
-        assert_eq!(seed["GST_RATE"], "0.15");
-        assert_eq!(seed["ORDERS_GST_RATE"], "0.15");
-        assert_eq!(seed["RATES_SHIPPING_API_URL"], "http://api.test");
-        assert_eq!(seed["START_API_TOKENS"], "test-token");
-        assert_eq!(seed["ORDERS_CACHE_TTL_SECONDS"], "60");
-        assert_eq!(seed["START_BEARER_TOKEN"], "test-token");
-        assert!(!seed.contains_key("HEALTH_DEADLINE_MS"));
-    }
 
     #[test]
-    fn scenario_oracle_lines() {
-        let output = "\
-oracle-kind scenarios
-oracle orders/place-standard | 2 steps to 201 | pass
-oracle orders/cancel-shipped | 4 steps to 409 | fail: step 3 of 4: status 200, 409 expected (answered {}); sql: no such column: foo in `SELECT foo`
-oracle start/missing-bearer | 1 steps to 401 | fail: step 1 of 1: status 201, 401 expected
-";
-        let oracle = Oracle::parse(output);
-        assert_eq!(oracle.kind.as_deref(), Some("scenarios"));
-        assert_eq!(oracle.cell(), "1/3");
-        assert_eq!(oracle.groups(), [("orders".to_owned(), 1, 2), ("start".to_owned(), 0, 1)]);
-        assert_eq!(oracle.outcomes[1].reasons.len(), 2);
-        let text = oracle.to_string();
-        assert!(text.contains("- 1/3 scenarios pass: 1/2 orders, 0/1 start."), "{text}");
-        assert!(text.contains("| scenario | steps | outcome |"), "{text}");
-        assert!(!text.contains("consumed under"), "{text}");
-    }
-
-    #[test]
-    fn scenario_comparison_finding() {
+    fn comparison_summary() {
         let comparison = Comparison {
             name: "evals/cases/express-orders/oracle".to_owned(),
             measures: Vec::new(),
@@ -3093,10 +3060,7 @@ oracle start/missing-bearer | 1 steps to 401 | fail: step 1 of 1: status 201, 40
         let text = comparison.to_string();
         assert!(text.contains("recorded as scenarios"), "{text}");
         assert!(!text.contains("| measure |"), "{text}");
-    }
 
-    #[test]
-    fn comparison_finding() {
         let built: BTreeSet<String> =
             ["common", "train-update"].into_iter().map(str::to_owned).collect();
         let reference: BTreeSet<String> =

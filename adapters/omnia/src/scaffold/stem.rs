@@ -58,149 +58,6 @@ pub struct Stem {
     held_fns: BTreeSet<String>,
 }
 
-#[derive(Clone, Copy)]
-pub enum Kind {
-    Manifest,
-    Entry,
-    Module,
-    Tests,
-}
-
-impl Kind {
-    pub const ALL: [Self; 4] = [Self::Manifest, Self::Entry, Self::Module, Self::Tests];
-}
-
-pub struct File {
-    pub path: String,
-    pub held: bool,
-    pub extended: bool,
-    // What the tree holds at the path, where it holds a file.
-    text: String,
-}
-
-pub struct Handler {
-    pub name: String,
-    // The type the body is read into, where the method carries one.
-    pub input: Option<String>,
-    pub output: String,
-    pub constant: String,
-    pub route: Route,
-    pub params: Vec<Param>,
-    // Whether a scenario states a status other than `200`, so the handler
-    // answers its output under a status of its own.
-    pub status: bool,
-    // Whether the handler takes the request's headers and calls the gate
-    // before anything else, its route falling under the gate's prefix.
-    pub gated: bool,
-    pub stated: Vec<Stated>,
-    pub marker: String,
-}
-
-pub struct Consumer {
-    pub name: String,
-    pub input: String,
-    pub constant: String,
-    pub topic: String,
-    pub declared: bool,
-    pub stated: Vec<Stated>,
-    pub marker: String,
-}
-
-pub struct Param {
-    pub field: String,
-}
-
-pub struct Stated {
-    pub id: String,
-    pub subject: String,
-    pub statement: String,
-}
-
-pub struct Function {
-    pub name: String,
-    pub stated: Stated,
-    pub marker: String,
-}
-
-pub struct Type {
-    pub name: String,
-    pub key: String,
-    pub signature: String,
-    pub body: types::Body,
-}
-
-// A table's data file: its path from the tree's root and its text, the
-// rows as one JSON array.
-pub struct Data {
-    pub path: String,
-    pub text: String,
-    // The design key of the table the file holds, and the fn reading it.
-    pub key: String,
-    pub reader: String,
-}
-
-pub struct Test {
-    pub name: String,
-    pub id: String,
-    pub subject: String,
-    pub scenario: Scenario,
-    pub ignore: String,
-    pub marker: String,
-    pub act: Act,
-}
-
-// What a scenario's test acts through: the route or the topic its
-// requirement carries, or the provider alone for a function.
-#[derive(Clone)]
-pub enum Act {
-    Route(Route),
-    Topic(String),
-    Call,
-}
-
-// The namespaces a part's items are named in, one per kind of item, the
-// module's imports and its functions reserved.
-struct Namespaces {
-    values: Names,
-    types: Names,
-    constants: Names,
-    tests: Names,
-}
-
-impl Default for Namespaces {
-    fn default() -> Self {
-        Self {
-            values: Names::taken(&[
-                "handlers", "get", "post", "put", "patch", "delete", "provider", "router", "call",
-                "send", "deliver", "load",
-            ]),
-            types: Names::taken(&[
-                "Capabilities",
-                "Client",
-                "Context",
-                "DecodeError",
-                "Delivery",
-                "Deserialize",
-                "Handlers",
-                "IntoResponse",
-                "Json",
-                "MapConfig",
-                "Path",
-                "Provider",
-                "Query",
-                "Result",
-                "Router",
-                "Serialize",
-                "Settings",
-                "StatusCode",
-                "Value",
-            ]),
-            constants: Names::default(),
-            tests: Names::taken(&["provider", "router", "call", "send", "deliver"]),
-        }
-    }
-}
-
 impl Stem {
     pub fn new(name: &str, slice: &Slice) -> Self {
         let part = part_of(&slice.name, name);
@@ -757,130 +614,47 @@ impl Stem {
     }
 }
 
-// The crates the laid gate's error type uses beyond the fixed four, each
-// pinned by the root manifest.
-const GATE_DEPENDENCIES: [&str; 2] = ["anyhow", "thiserror"];
+// The namespaces a part's items are named in, one per kind of item, the
+// module's imports and its functions reserved.
+struct Namespaces {
+    values: Names,
+    types: Names,
+    constants: Names,
+    tests: Names,
+}
 
-impl File {
-    const fn at(path: String) -> Self {
+impl Default for Namespaces {
+    fn default() -> Self {
         Self {
-            path,
-            held: false,
-            extended: false,
-            text: String::new(),
+            values: Names::taken(&[
+                "handlers", "get", "post", "put", "patch", "delete", "provider", "router", "call",
+                "send", "deliver", "load",
+            ]),
+            types: Names::taken(&[
+                "Capabilities",
+                "Client",
+                "Context",
+                "DecodeError",
+                "Delivery",
+                "Deserialize",
+                "Handlers",
+                "IntoResponse",
+                "Json",
+                "MapConfig",
+                "Path",
+                "Provider",
+                "Query",
+                "Result",
+                "Router",
+                "Serialize",
+                "Settings",
+                "StatusCode",
+                "Value",
+            ]),
+            constants: Names::default(),
+            tests: Names::taken(&["provider", "router", "call", "send", "deliver"]),
         }
     }
-
-    // Reads what stands at the path, following no link on the way: a link
-    // or a directory there, or on the way, is refused before any write.
-    fn read(&mut self, root: &Path) -> Result<(), Error> {
-        self.held = match standing(root, &self.path) {
-            Ok(Standing::File) => {
-                self.text = layout::read(&root.join(&self.path))?;
-                true
-            }
-            Ok(Standing::Absent) => false,
-            Err(NoFollow::Io { path, source }) => {
-                return Err(server_error!("reading `{path}`: {source}"));
-            }
-            Err(err) => {
-                return Err(bad_request!(
-                    "`{}` {err}, where the slice's scaffold writes a file",
-                    self.path
-                ));
-            }
-        };
-        Ok(())
-    }
-
-    // Where the file came from, as the brief names it.
-    pub const fn origin(&self) -> &'static str {
-        if self.extended {
-            "held, extended"
-        } else if self.held {
-            "held"
-        } else {
-            "scaffolded"
-        }
-    }
-
-    // Whether the scaffold laid this slice's items into the file: a fresh
-    // file it created, or a held one it extended in place.
-    pub const fn laid(&self) -> bool {
-        !self.held || self.extended
-    }
-
-    fn extend(&mut self, next: String) {
-        if next != self.text {
-            self.text = next;
-            self.extended = true;
-        }
-    }
-}
-
-impl Handler {
-    // The names the body borrows as laid, the context first, then each
-    // path parameter and the input, so the lints stay quiet.
-    pub fn borrowed(&self) -> Vec<String> {
-        let mut names = vec!["context".to_owned()];
-        names.extend(self.params.iter().map(|param| param.field.clone()));
-        names.extend(self.input.as_ref().map(|_| "input".to_owned()));
-        names
-    }
-
-    // The body as the file holds it: the borrow and the marker, the one
-    // block the turn replaces.
-    pub fn stub(&self) -> String {
-        render::stub(&self.borrowed(), &self.marker)
-    }
-}
-
-impl Consumer {
-    pub fn stub(&self) -> String {
-        render::stub(&["context".to_owned(), "input".to_owned()], &self.marker)
-    }
-}
-
-impl Type {
-    // `struct Order` or `enum Status`, as the marker declares it, or `fn
-    // zones` for a table's reader.
-    pub fn declaration(&self) -> String {
-        let keyword = if self.body.is_table() {
-            "fn"
-        } else if self.body.is_enum() {
-            "enum"
-        } else {
-            "struct"
-        };
-        format!("{keyword} {}", self.name)
-    }
-}
-
-impl Stated {
-    // A requirement the engine lowers with no statement is one its sources
-    // conflict over, so its line says so rather than ending at the colon.
-    const CONFLICT: &str = "[conflict] the sources disagree; the specification's notes under this id say what each \
-         states";
-
-    fn of(requirement: &Requirement) -> Self {
-        let statement = requirement
-            .statement
-            .first()
-            .map(|line| flat(line))
-            .filter(|line| !line.is_empty())
-            .unwrap_or_else(|| Self::CONFLICT.to_owned());
-        Self {
-            id: requirement.id.clone(),
-            subject: requirement.subject.clone(),
-            statement,
-        }
-    }
-}
-
-// Every non-blank line of `text`, trimmed, as the tokens a whole write of a
-// list or a fixed file must keep.
-pub fn lines_of(text: &str) -> Vec<String> {
-    text.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToOwned::to_owned).collect()
 }
 
 // The slice's name less the stem and the hyphen after it where it leads
@@ -986,4 +760,230 @@ fn shared_lead<'a>(tails: &[Vec<&'a str>]) -> Vec<&'a str> {
         shared.min(first.iter().zip(tail).take_while(|(a, b)| a == b).count())
     });
     first[..shared].to_vec()
+}
+
+#[derive(Clone, Copy)]
+pub enum Kind {
+    Manifest,
+    Entry,
+    Module,
+    Tests,
+}
+
+impl Kind {
+    pub const ALL: [Self; 4] = [Self::Manifest, Self::Entry, Self::Module, Self::Tests];
+}
+
+pub struct File {
+    pub path: String,
+    pub held: bool,
+    pub extended: bool,
+    // What the tree holds at the path, where it holds a file.
+    text: String,
+}
+
+impl File {
+    const fn at(path: String) -> Self {
+        Self {
+            path,
+            held: false,
+            extended: false,
+            text: String::new(),
+        }
+    }
+
+    // Reads what stands at the path, following no link on the way: a link
+    // or a directory there, or on the way, is refused before any write.
+    fn read(&mut self, root: &Path) -> Result<(), Error> {
+        self.held = match standing(root, &self.path) {
+            Ok(Standing::File) => {
+                self.text = layout::read(&root.join(&self.path))?;
+                true
+            }
+            Ok(Standing::Absent) => false,
+            Err(NoFollow::Io { path, source }) => {
+                return Err(server_error!("reading `{path}`: {source}"));
+            }
+            Err(err) => {
+                return Err(bad_request!(
+                    "`{}` {err}, where the slice's scaffold writes a file",
+                    self.path
+                ));
+            }
+        };
+        Ok(())
+    }
+
+    // Where the file came from, as the brief names it.
+    pub const fn origin(&self) -> &'static str {
+        if self.extended {
+            "held, extended"
+        } else if self.held {
+            "held"
+        } else {
+            "scaffolded"
+        }
+    }
+
+    // Whether the scaffold laid this slice's items into the file: a fresh
+    // file it created, or a held one it extended in place.
+    pub const fn laid(&self) -> bool {
+        !self.held || self.extended
+    }
+
+    fn extend(&mut self, next: String) {
+        if next != self.text {
+            self.text = next;
+            self.extended = true;
+        }
+    }
+}
+
+pub struct Handler {
+    pub name: String,
+    // The type the body is read into, where the method carries one.
+    pub input: Option<String>,
+    pub output: String,
+    pub constant: String,
+    pub route: Route,
+    pub params: Vec<Param>,
+    // Whether a scenario states a status other than `200`, so the handler
+    // answers its output under a status of its own.
+    pub status: bool,
+    // Whether the handler takes the request's headers and calls the gate
+    // before anything else, its route falling under the gate's prefix.
+    pub gated: bool,
+    pub stated: Vec<Stated>,
+    pub marker: String,
+}
+
+impl Handler {
+    // The names the body borrows as laid, the context first, then each
+    // path parameter and the input, so the lints stay quiet.
+    pub fn borrowed(&self) -> Vec<String> {
+        let mut names = vec!["context".to_owned()];
+        names.extend(self.params.iter().map(|param| param.field.clone()));
+        names.extend(self.input.as_ref().map(|_| "input".to_owned()));
+        names
+    }
+
+    // The body as the file holds it: the borrow and the marker, the one
+    // block the turn replaces.
+    pub fn stub(&self) -> String {
+        render::stub(&self.borrowed(), &self.marker)
+    }
+}
+
+pub struct Consumer {
+    pub name: String,
+    pub input: String,
+    pub constant: String,
+    pub topic: String,
+    pub declared: bool,
+    pub stated: Vec<Stated>,
+    pub marker: String,
+}
+
+impl Consumer {
+    pub fn stub(&self) -> String {
+        render::stub(&["context".to_owned(), "input".to_owned()], &self.marker)
+    }
+}
+
+pub struct Param {
+    pub field: String,
+}
+
+pub struct Stated {
+    pub id: String,
+    pub subject: String,
+    pub statement: String,
+}
+
+impl Stated {
+    // A requirement the engine lowers with no statement is one its sources
+    // conflict over, so its line says so rather than ending at the colon.
+    const CONFLICT: &str = "[conflict] the sources disagree; the specification's notes under this id say what each \
+         states";
+
+    fn of(requirement: &Requirement) -> Self {
+        let statement = requirement
+            .statement
+            .first()
+            .map(|line| flat(line))
+            .filter(|line| !line.is_empty())
+            .unwrap_or_else(|| Self::CONFLICT.to_owned());
+        Self {
+            id: requirement.id.clone(),
+            subject: requirement.subject.clone(),
+            statement,
+        }
+    }
+}
+
+pub struct Function {
+    pub name: String,
+    pub stated: Stated,
+    pub marker: String,
+}
+
+pub struct Type {
+    pub name: String,
+    pub key: String,
+    pub signature: String,
+    pub body: types::Body,
+}
+
+impl Type {
+    // `struct Order` or `enum Status`, as the marker declares it, or `fn
+    // zones` for a table's reader.
+    pub fn declaration(&self) -> String {
+        let keyword = if self.body.is_table() {
+            "fn"
+        } else if self.body.is_enum() {
+            "enum"
+        } else {
+            "struct"
+        };
+        format!("{keyword} {}", self.name)
+    }
+}
+
+// A table's data file: its path from the tree's root and its text, the
+// rows as one JSON array.
+pub struct Data {
+    pub path: String,
+    pub text: String,
+    // The design key of the table the file holds, and the fn reading it.
+    pub key: String,
+    pub reader: String,
+}
+
+pub struct Test {
+    pub name: String,
+    pub id: String,
+    pub subject: String,
+    pub scenario: Scenario,
+    pub ignore: String,
+    pub marker: String,
+    pub act: Act,
+}
+
+// What a scenario's test acts through: the route or the topic its
+// requirement carries, or the provider alone for a function.
+#[derive(Clone)]
+pub enum Act {
+    Route(Route),
+    Topic(String),
+    Call,
+}
+
+// The crates the laid gate's error type uses beyond the fixed four, each
+// pinned by the root manifest.
+const GATE_DEPENDENCIES: [&str; 2] = ["anyhow", "thiserror"];
+
+// Every non-blank line of `text`, trimmed, as the tokens a whole write of a
+// list or a fixed file must keep.
+pub fn lines_of(text: &str) -> Vec<String> {
+    text.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToOwned::to_owned).collect()
 }

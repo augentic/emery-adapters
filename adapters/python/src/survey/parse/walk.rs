@@ -135,18 +135,6 @@ struct Walker<'s> {
     type_checking: bool,
 }
 
-struct Frame {
-    id: u32,
-    name: Option<String>,
-    depth: usize,
-    saved_nesting: usize,
-}
-
-struct ClassContext {
-    name: String,
-    frames: usize,
-}
-
 impl<'s> Walker<'s> {
     fn line(&self, offset: u32) -> u32 {
         u32::try_from(self.starts.partition_point(|&start| start <= offset)).unwrap_or(u32::MAX)
@@ -1001,6 +989,18 @@ impl<'s> Visitor<'s> for Walker<'s> {
         }
         visitor::walk_elif_else_clause(self, elif_else_clause);
     }
+}
+
+struct Frame {
+    id: u32,
+    name: Option<String>,
+    depth: usize,
+    saved_nesting: usize,
+}
+
+struct ClassContext {
+    name: String,
+    frames: usize,
 }
 
 fn hidden(name: &str) -> bool {

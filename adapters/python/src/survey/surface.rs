@@ -73,13 +73,6 @@ pub struct Python {
     manifest: resolve::Manifest,
 }
 
-enum At<'m> {
-    Registration(&'m Call),
-    Class(&'m Decorated),
-    Def(&'m Decorated),
-    Export(&'m Export),
-}
-
 impl Python {
     pub fn new(parsed: &Parsed<Module>) -> Self {
         let manifest = resolve::Manifest::read(&parsed.root);
@@ -504,6 +497,13 @@ impl Recogniser for Python {
             None => Derived::named(tree, module, lines, name, stem),
         }
     }
+}
+
+enum At<'m> {
+    Registration(&'m Call),
+    Class(&'m Decorated),
+    Def(&'m Decorated),
+    Export(&'m Export),
 }
 
 fn routed(mount: &str, method: &str, literal: Option<&str>) -> Option<String> {

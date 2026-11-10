@@ -43,13 +43,6 @@ struct Shipped<A> {
     adapter: PhantomData<fn() -> A>,
 }
 
-const DOCUMENTATION: Shipped<emery_documentation::Adapter> =
-    Shipped::new("documentation", emery_documentation::PROSE);
-const INTENT: Shipped<emery_intent::Adapter> = Shipped::new("intent", emery_intent::PROSE);
-const TYPESCRIPT: Shipped<emery_typescript::Adapter> =
-    Shipped::new("typescript", emery_typescript::PROSE);
-const PYTHON: Shipped<emery_python::Adapter> = Shipped::new("python", emery_python::PROSE);
-
 impl<A: SourceAdapter> Shipped<A> {
     const fn new(name: &'static str, docs: &'static [Doc]) -> Self {
         Self {
@@ -201,6 +194,13 @@ impl<A: SourceAdapter> Shipped<A> {
         })
     }
 }
+
+const DOCUMENTATION: Shipped<emery_documentation::Adapter> =
+    Shipped::new("documentation", emery_documentation::PROSE);
+const INTENT: Shipped<emery_intent::Adapter> = Shipped::new("intent", emery_intent::PROSE);
+const TYPESCRIPT: Shipped<emery_typescript::Adapter> =
+    Shipped::new("typescript", emery_typescript::PROSE);
+const PYTHON: Shipped<emery_python::Adapter> = Shipped::new("python", emery_python::PROSE);
 
 fn workspace(project: &Scratch) -> SourceInput {
     SourceInput::workspace(KEY, project.path().to_str().expect("a UTF-8 scratch root"))
@@ -473,7 +473,7 @@ async fn documentation() {
 // and the one seam within the budget is held to every stem, the document
 // placed under no subject named as context and inlined for no call.
 #[tokio::test]
-async fn documentation_subjects() {
+async fn docs_subjects() {
     let project = scratch();
     modules(
         &project,
@@ -575,7 +575,7 @@ async fn documentation_subjects() {
 // the evidence anchored at the line, so the design lands the product and the
 // specification keeps the rule.
 #[tokio::test]
-async fn documentation_decision() {
+async fn docs_decision() {
     const RULE: &str = "Reset tokens are kept in Redis and expire with the link.";
     let project = scratch();
     project.write("docs/password-reset.md", format!("# Password reset\n\n{RULE}\n"));
@@ -633,7 +633,7 @@ async fn documentation_decision() {
 // reaching the evidence anchored at the line under the id of the behaviour
 // withdrawn.
 #[tokio::test]
-async fn documentation_retire() {
+async fn docs_retire() {
     const WITHDRAWAL: &str =
         "Security questions are no longer offered as a way to reset a password.";
     let project = scratch();
@@ -703,7 +703,7 @@ async fn documentation_retire() {
 // its subjects anchor in, held to that stem alone and told the others are
 // other calls'.
 #[tokio::test]
-async fn documentation_stems() {
+async fn docs_stems() {
     let project = scratch();
     padded(&project, "orders.md", "# Orders\n\n", "Orders are placed at the counter.\n");
     project.write("returns.md", "# Returns\n\nA tool is returned at the counter.\n");
@@ -750,7 +750,7 @@ async fn documentation_stems() {
 // entry nor listed as unreached, are findings the answer comes back with
 // together; the corrected answer is accepted, and the run goes on to mine.
 #[tokio::test]
-async fn documentation_survey_check() {
+async fn docs_survey_check() {
     let project = scratch();
     modules(
         &project,
@@ -803,7 +803,7 @@ async fn documentation_survey_check() {
 // of its own but is no seam, and the root's own document folds in with a
 // directory of one; a dot entry is no document.
 #[tokio::test]
-async fn documentation_fallback_directories() {
+async fn docs_dir_cut() {
     let project = scratch();
     let docs = [
         "README.md",
@@ -842,7 +842,7 @@ async fn documentation_fallback_directories() {
 // Under the directory cut, a directory of more than sixteen documents is cut
 // once more by its subdirectories, one level only and only where it can.
 #[tokio::test]
-async fn documentation_fallback_large_directory() {
+async fn docs_subdir_cut() {
     let v1: Vec<String> = (0..10).map(|i| format!("api/v1/endpoint-{i:02}.md")).collect();
     let v2: Vec<String> = (0..8).map(|i| format!("api/v2/endpoint-{i:02}.md")).collect();
     let v1: Vec<&str> = v1.iter().map(String::as_str).collect();
@@ -901,7 +901,7 @@ async fn documentation_fallback_large_directory() {
 // A tree holding no document that reads as text puts no survey turn: it is
 // cut by directory, and a tree of one file is one seam over the whole.
 #[tokio::test]
-async fn documentation_no_documents() {
+async fn docs_no_text() {
     let project = scratch();
     project.write("logo.png", [0x89, b'P', b'N', b'G', 0xFF, 0xFE]);
 
@@ -1276,7 +1276,7 @@ async fn typescript() {
 // finding, naming the stems the adapter chose, and the corrected answer is the
 // seam's; the inline value is held to none.
 #[tokio::test]
-async fn typescript_stem() {
+async fn ts_stem() {
     let project = scratch();
     modules(&project, &APP);
     let survey = app_inventory();
@@ -1307,7 +1307,7 @@ async fn typescript_stem() {
 // stops there — and each surface line says so. A module past the budget is
 // listed, the rest inlined.
 #[tokio::test]
-async fn typescript_closure() {
+async fn ts_closure() {
     let project = scratch();
     modules(&project, &APP);
     bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
@@ -1346,7 +1346,7 @@ async fn typescript_closure() {
 // handler, so the service reaches the `start` turn — and the handler's,
 // which the code reads through the class the registration sits in.
 #[tokio::test]
-async fn typescript_constructed() {
+async fn ts_constructed() {
     let project = scratch();
     modules(
         &project,
@@ -1402,7 +1402,7 @@ async fn typescript_constructed() {
 // the first entry named that runs, not the first that resolves, and the
 // barrel is a module the survey lists as reached by no surface.
 #[tokio::test]
-async fn typescript_bootstrap() {
+async fn ts_bootstrap() {
     const SOURCES: [(&str, &str); 3] = [
         ("src/index.ts", "export { ordersRouter } from \"./routes\";\n"),
         (
@@ -1448,7 +1448,7 @@ async fn typescript_bootstrap() {
 // worker's queue — and under the `nightly` stem the command and the schedule
 // are told apart by the registering method.
 #[tokio::test]
-async fn typescript_fixture_cli_jobs() {
+async fn ts_cli_jobs() {
     let project = scratch();
     fixture(&project, "cli-jobs");
     let survey = inventory(
@@ -1577,7 +1577,7 @@ const EXPRESS_CUSTOMERS: [&str; 6] = [
 // the router's mount, and each is told apart by its verb and the path past
 // the resource.
 #[tokio::test]
-async fn typescript_fixture_express_orders() {
+async fn ts_express_orders() {
     let project = scratch();
     fixture(&project, "express-orders");
     let survey = inventory(
@@ -1719,7 +1719,7 @@ const JOBS: [(&str, &str); 5] = [
 // left unnamed is no surface, and neither is the handler handed to the
 // tree's own class (`bus.on`).
 #[tokio::test]
-async fn typescript_callbacks() {
+async fn ts_callbacks() {
     let project = scratch();
     modules(&project, &JOBS);
     let survey = inventory(
@@ -1766,7 +1766,7 @@ async fn typescript_callbacks() {
 // literal that led it and the package — and the production modules; the
 // manifest and the modules that locate a surface are inlined into it whole.
 #[tokio::test]
-async fn typescript_survey_facts() {
+async fn ts_survey_facts() {
     let project = scratch();
     modules(&project, &JOBS);
     let survey = inventory(&[("import command", "src/cli.ts#L6", "import")], &[]);
@@ -1814,7 +1814,7 @@ async fn typescript_survey_facts() {
 // sit in `start`'s closure under the note that claims the bootstrap for what
 // those it serves observe and leaves its readiness to the design.
 #[tokio::test]
-async fn emery_typescript_bootstrap_clients() {
+async fn ts_bootstrap_clients() {
     let project = scratch();
     modules(
         &project,
@@ -1910,7 +1910,7 @@ async fn emery_typescript_bootstrap_clients() {
 // statement spelling the store's package comes back too, while the inline
 // value is held to the fixed names alone.
 #[tokio::test]
-async fn typescript_survey_technology_stem() {
+async fn ts_tech_stem() {
     let project = scratch();
     modules(
         &project,
@@ -1997,7 +1997,7 @@ async fn typescript_survey_technology_stem() {
 // a route's resource under its mount replaces the survey's reading, so the
 // seam's stems are the code's.
 #[tokio::test]
-async fn typescript_survey_stem_derived() {
+async fn ts_derived_stem() {
     let project = scratch();
     modules(&project, &APP[1..]);
     modules(
@@ -2097,7 +2097,7 @@ const AUTOLOAD: [(&str, &str); 7] = [
 ];
 
 #[tokio::test]
-async fn typescript_autoload_routes() {
+async fn ts_autoload() {
     let project = scratch();
     modules(&project, &AUTOLOAD);
     let survey = inventory(
@@ -2158,7 +2158,7 @@ async fn typescript_autoload_routes() {
 // stem of what a caller does through the surface; the corrected answer is
 // accepted, and the run goes on to mine.
 #[tokio::test]
-async fn typescript_survey_start_stem() {
+async fn ts_start_stem() {
     let project = scratch();
     modules(&project, &APP);
     let strayed = inventory(
@@ -2199,7 +2199,7 @@ async fn typescript_survey_start_stem() {
 // a finding, naming the module; the answer that names the worker's surface
 // is accepted, and the module is that surface's to reach.
 #[tokio::test]
-async fn typescript_survey_unplaced() {
+async fn ts_unplaced() {
     let project = scratch();
     modules(&project, &JOBS);
     project.write(
@@ -2252,7 +2252,7 @@ async fn typescript_survey_unplaced() {
 // method under two is one surface; the method's name tells it apart, and its
 // modules are read through the class it sits in.
 #[tokio::test]
-async fn typescript_decorated() {
+async fn ts_decorated() {
     let project = scratch();
     modules(&project, &NEST);
     let survey = inventory(
@@ -2292,7 +2292,7 @@ async fn typescript_decorated() {
 // beside the surface's own, and the decorators section of the survey turn
 // is where the model read them.
 #[tokio::test]
-async fn typescript_survey_methods() {
+async fn ts_controller_class() {
     let project = scratch();
     modules(&project, &NEST);
     let survey =
@@ -2336,7 +2336,7 @@ async fn typescript_survey_methods() {
 // two drivers' modules — are told apart by the nearest segment of their
 // entries' paths that spells neither the stem nor the id's own tail.
 #[tokio::test]
-async fn typescript_survey_alike() {
+async fn ts_alike_surfaces() {
     const CONTROLLER: &str = "import { Controller, Post } from \"@nestjs/common\";\n\n\
                               @Controller(\"files\")\nexport class FilesController {\n  \
                               @Post(\"upload\")\n  upload() {\n    return { stored: true };\n  \
@@ -2376,7 +2376,7 @@ async fn typescript_survey_alike() {
     }
 }
 
-// The Nest service `typescript_decorated` and `typescript_survey_methods`
+// The Nest service `ts_decorated` and `ts_controller_class`
 // read: a controller under a package's decorators, and the service it
 // constructs.
 const NEST: [(&str, &str); 4] = [
@@ -2410,7 +2410,7 @@ const NEST: [(&str, &str); 4] = [
 // carries no prefix, and one that shapes a method's answer
 // (`@SerializeOptions`) does not stand in for the verb beneath it.
 #[tokio::test]
-async fn typescript_decorated_object_path() {
+async fn ts_object_path() {
     let project = scratch();
     modules(
         &project,
@@ -2466,7 +2466,7 @@ async fn typescript_decorated_object_path() {
 // per public method beside its own, a private method none; a function
 // reaches what it imports.
 #[tokio::test]
-async fn typescript_exports() {
+async fn ts_exports() {
     let project = scratch();
     modules(
         &project,
@@ -2538,7 +2538,7 @@ async fn typescript_exports() {
 // answers gives way to them; an inline value's declarations are copied too,
 // with no file to anchor in.
 #[tokio::test]
-async fn typescript_types() {
+async fn ts_types() {
     let project = scratch();
     modules(
         &project,
@@ -2590,7 +2590,7 @@ async fn typescript_types() {
 // call — anchored from the first assignment to the last; a class the tree
 // declares keeps its declaration's claim and gets no assigned one.
 #[tokio::test]
-async fn typescript_assigned_types() {
+async fn ts_assigned_types() {
     let project = scratch();
     modules(
         &project,
@@ -2680,7 +2680,7 @@ async fn typescript_assigned_types() {
 // spelled it, anchored at the registration under the surface's id; the
 // bootstrap serves none, and a value is never surveyed, so it carries none.
 #[tokio::test]
-async fn typescript_contracts() {
+async fn ts_contracts() {
     let project = scratch();
     modules(&project, &APP);
     let survey = app_inventory();
@@ -2707,7 +2707,7 @@ async fn typescript_contracts() {
 // subscription under the surface's id; a listener on a stream's payload
 // event (`message`) names no message, so its surface carries none.
 #[tokio::test]
-async fn typescript_contracts_messaged() {
+async fn ts_message_contracts() {
     let project = scratch();
     modules(
         &project,
@@ -2766,7 +2766,7 @@ async fn typescript_contracts_messaged() {
 // routes nothing, and a verb the grammar has no method for (`All`) is left
 // unrouted rather than guessed.
 #[tokio::test]
-async fn typescript_contracts_decorated() {
+async fn ts_route_decorators() {
     let project = scratch();
     modules(&project, &NEST);
     let survey = inventory(
@@ -2801,7 +2801,7 @@ async fn typescript_contracts_decorated() {
 // claim of its own, the declaration whole less its blank lines; an empty
 // one, a scalar, and one the module does not export are none.
 #[tokio::test]
-async fn typescript_type_tables() {
+async fn ts_type_tables() {
     let project = scratch();
     modules(
         &project,
@@ -2872,7 +2872,7 @@ fn table_claim<'e>(evidence: &'e Evidence, name: &str) -> (Option<&'e str>, Opti
 // import with the names bound to them; a construction, a reference to a
 // value spelled elsewhere, and a function's working local are none.
 #[tokio::test]
-async fn typescript_boundaries() {
+async fn ts_boundaries() {
     let project = scratch();
     modules(&project, &APP);
     modules(
@@ -2942,7 +2942,7 @@ async fn typescript_boundaries() {
 // — and none of what is structure: the registration of a route, the mount,
 // the listen, the construction bound at module level.
 #[tokio::test]
-async fn typescript_calls() {
+async fn ts_calls() {
     let project = scratch();
     modules(&project, &APP);
     modules(
@@ -2988,7 +2988,7 @@ async fn typescript_calls() {
 // tree's own. The finding at a line that only builds a URL names the seam's
 // anchors in the file: the function heads, the inherited calls, the return.
 #[tokio::test]
-async fn typescript_inherited() {
+async fn ts_inherited() {
     let project = scratch();
     modules(&project, &APP);
     modules(
@@ -3057,7 +3057,7 @@ async fn typescript_inherited() {
 // The config `extends` a base with no `compilerOptions`, which leaves the
 // child's own in place.
 #[tokio::test]
-async fn typescript_paths() {
+async fn ts_paths() {
     let project = scratch();
     modules(
         &project,
@@ -3109,7 +3109,7 @@ async fn typescript_paths() {
 // modules: what they register is no surface, and — a test stating nothing
 // included — they are neither inlined nor listed.
 #[tokio::test]
-async fn typescript_non_production() {
+async fn ts_non_production() {
     const REFUSED: [&str; 9] = [
         "src/orders.test.ts",
         "src/orders.spec.ts",
@@ -3172,7 +3172,7 @@ fn deciding_inventory() -> String {
 // the function they run in, so a requirement anchors where a behaviour
 // starts.
 #[tokio::test]
-async fn typescript_decisions() {
+async fn ts_decisions() {
     let project = scratch();
     modules(&project, &DECIDING);
 
@@ -3207,7 +3207,7 @@ async fn typescript_decisions() {
 // there is not, the corrected answer is accepted, and the inline value is
 // held to no anchor.
 #[tokio::test]
-async fn typescript_anchors() {
+async fn ts_anchors() {
     let project = scratch();
     modules(&project, &DECIDING);
     let guarded = serde_json::json!({
@@ -3298,7 +3298,7 @@ const STEPPING: [(&str, &str); 4] = [
 // constructs, or on a parameter typed by one, as on `this` or a module
 // import; the construction the local holds only wires, and is refused.
 #[tokio::test]
-async fn typescript_steps() {
+async fn ts_steps() {
     let project = scratch();
     modules(&project, &STEPPING);
     let inserted = serde_json::json!({
@@ -3355,7 +3355,7 @@ async fn typescript_steps() {
 // — and the test file itself follows the seam's modules, inlined or listed as
 // they are; a skipped case states nothing.
 #[tokio::test]
-async fn typescript_stated() {
+async fn ts_stated_tests() {
     let project = scratch();
     modules(&project, &APP);
     bulk(&project, "src/db.ts", "export const pool = \"o-1\";\n");
@@ -3430,7 +3430,7 @@ async fn typescript_stated() {
 // budget every module is inlined already, so the brief says only what could
 // not be followed.
 #[tokio::test]
-async fn typescript_unresolved() {
+async fn ts_unresolved() {
     const ORDERS: &str = "import { pool } from \"./db\";\nimport { seed } from \
                           \"./generated\";\n\nexport async function createOrder(input: unknown) \
                           {\n  return { id: pool, input, seed };\n}\n\nexport function \
@@ -3488,7 +3488,7 @@ async fn typescript_unresolved() {
 // closure, in path order, and the brief names the directory the load
 // spells; a module beside the loader is not inlined for it.
 #[tokio::test]
-async fn typescript_dynamic() {
+async fn ts_dynamic() {
     const ORDERS: &str = "import { pool } from \"./db\";\n\nexport async function \
                           createOrder(input: unknown) {\n  return { id: pool, input };\n}\n\nexport \
                           function loadPlugin(name: string) {\n  return import(`./plugins/${name}`);\n}\n\nexport \
@@ -3535,7 +3535,7 @@ async fn typescript_dynamic() {
 // widened for it, the brief says nothing could not be followed, and the
 // helper is inlined among neither the modules nor the stated tests.
 #[tokio::test]
-async fn typescript_skipped_import() {
+async fn ts_skipped_import() {
     let project = scratch();
     modules(&project, &APP);
     project.write(
@@ -3571,7 +3571,7 @@ async fn typescript_skipped_import() {
 // importing it when small, and a file a `criterion` may cite a value in —
 // while a `requirement` there is at no anchor and comes back.
 #[tokio::test]
-async fn typescript_data() {
+async fn ts_data() {
     let project = scratch();
     modules(&project, &APP);
     project.write(
@@ -3636,7 +3636,7 @@ async fn typescript_data() {
 
 // *.config.* files are production modules: inlined beside the app's own.
 #[tokio::test]
-async fn typescript_config_module() {
+async fn ts_config_module() {
     let project = scratch();
     modules(&project, &APP);
     project.write(
@@ -3654,7 +3654,7 @@ async fn typescript_config_module() {
 // over the module, listed when it is past the budget, the export the survey
 // names its surface.
 #[tokio::test]
-async fn typescript_one_module() {
+async fn ts_one_module() {
     const REFUSED: [&str; 7] = [
         "src/orders.test.ts",
         "src/types.d.ts",
@@ -3692,7 +3692,7 @@ async fn typescript_one_module() {
 
 // A tree with no production module is refused before the model is reached.
 #[tokio::test]
-async fn typescript_no_module() {
+async fn ts_no_module() {
     let project = scratch();
     tree(
         &project,
@@ -3714,7 +3714,7 @@ async fn typescript_no_module() {
 // within the budget, one extract over every module, told no surface was
 // found and held to the one stem the manifest's package name gives.
 #[tokio::test]
-async fn typescript_no_surface() {
+async fn ts_no_surface() {
     let project = scratch();
     modules(
         &project,
@@ -3725,55 +3725,55 @@ async fn typescript_no_surface() {
         ],
     );
     let survey = inventory(&[], &["src/lib/config.ts", "src/lib/db.ts"]);
-    let answer = claim("shared-helpers.pool");
+    let claimed = claim("shared-helpers.pool");
 
     let model =
-        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
+        TYPESCRIPT.run(&project, ScriptedModel::answering([&survey, &claimed, &claimed])).await;
 
     let turns = TYPESCRIPT.surveyed(&model, 1);
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
     assert!(turns[0].contains("No surface was found"), "{}", turns[0]);
     assert!(turns[0].contains("the one stem `shared-helpers`"), "{}", turns[0]);
     inlined(&turns[0], &["src/lib/config.ts", "src/lib/db.ts"], &[]);
-}
 
-// Past the budget, a tree with no surface is one extract per top-level
-// directory beneath `src/`, under the directory's name, the root's own
-// modules joined to the first; a directory's seam inlines its own modules and
-// no other's.
-#[tokio::test]
-async fn typescript_no_surface_directories() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            ("src/index.ts", "export const version = \"1\";\n"),
-            ("src/lib/config.ts", "export const retries = 3;\n"),
-            ("src/util/format.ts", "export const SEPARATOR = \", \";\n"),
-        ],
-    );
-    bulk(&project, "src/lib/db.ts", "export const pool = 1;\n");
-    let survey = inventory(&[], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
-    let neutral = decision();
-    let answer = answer();
+    // past the budget
+    {
+        let project = scratch();
+        modules(
+            &project,
+            &[
+                ("src/index.ts", "export const version = \"1\";\n"),
+                ("src/lib/config.ts", "export const retries = 3;\n"),
+                ("src/util/format.ts", "export const SEPARATOR = \", \";\n"),
+            ],
+        );
+        bulk(&project, "src/lib/db.ts", "export const pool = 1;\n");
+        let survey = inventory(&[], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
+        let neutral = decision();
+        let extract = answer();
 
-    let model = TYPESCRIPT
-        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
-        .await;
+        let model = TYPESCRIPT
+            .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &extract]))
+            .await;
 
-    let turns = TYPESCRIPT.surveyed(&model, 2);
-    let seam = |stem: &str| {
-        let naming: Vec<&String> =
-            turns.iter().filter(|turn| turn.contains(&format!("the stem `{stem}`"))).collect();
-        assert_eq!(naming.len(), 1, "`{stem}` is one seam's alone, got {naming:?}");
-        naming[0]
-    };
-    let lib = seam("lib");
-    assert!(lib.contains("`src/lib/`, with the root's own modules"), "{lib}");
-    inlined(lib, &["src/index.ts", "src/lib/config.ts"], &["src/util/format.ts"]);
-    assert!(lib.contains("- `src/lib/db.ts`"), "the store past the budget is listed: {lib}");
-    let util = seam("util");
-    inlined(util, &["src/util/format.ts"], &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"]);
+        let turns = TYPESCRIPT.surveyed(&model, 2);
+        let seam = |stem: &str| {
+            let naming: Vec<&String> =
+                turns.iter().filter(|turn| turn.contains(&format!("the stem `{stem}`"))).collect();
+            assert_eq!(naming.len(), 1, "`{stem}` is one seam's alone, got {naming:?}");
+            naming[0]
+        };
+        let lib = seam("lib");
+        assert!(lib.contains("`src/lib/`, with the root's own modules"), "{lib}");
+        inlined(lib, &["src/index.ts", "src/lib/config.ts"], &["src/util/format.ts"]);
+        assert!(lib.contains("- `src/lib/db.ts`"), "the store past the budget is listed: {lib}");
+        let util = seam("util");
+        inlined(
+            util,
+            &["src/util/format.ts"],
+            &["src/index.ts", "src/lib/config.ts", "src/lib/db.ts"],
+        );
+    }
 }
 
 // A FastAPI service the way one is written: the entry includes two routers
@@ -3886,7 +3886,7 @@ async fn python() {
 // finding, naming the stems the adapter chose, and the corrected answer is the
 // seam's; the inline value is held to none.
 #[tokio::test]
-async fn python_stem() {
+async fn py_stem() {
     let project = scratch();
     modules(&project, &PY_APP);
     let survey = py_app_inventory();
@@ -3918,7 +3918,7 @@ async fn python_stem() {
 // includes and stops there; the health route's reaches nothing — and each
 // surface line says so. A module past the budget is listed, the rest inlined.
 #[tokio::test]
-async fn python_closure() {
+async fn py_closure() {
     let project = scratch();
     modules(&project, &PY_APP);
     py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
@@ -3967,7 +3967,11 @@ async fn python_closure() {
 // over the conventional entry constructing the application at load; with
 // no manifest, the conventional entry that runs under its `__main__` guard.
 #[tokio::test]
-async fn python_bootstrap() {
+#[expect(
+    clippy::too_many_lines,
+    reason = "bootstrap shapes for console script, guard, import target, and factory share one test"
+)]
+async fn py_bootstrap() {
     const SHOP: [(&str, &str); 3] = [
         ("shop/__init__.py", ""),
         (
@@ -4053,6 +4057,101 @@ async fn python_bootstrap() {
         "{}",
         turns[0]
     );
+
+    // the imported script target
+    {
+        let project = scratch();
+        modules(
+            &project,
+            &[
+                (
+                    "pyproject.toml",
+                    "[project]\nname = \"ledger\"\n\n[project.scripts]\nledger = \"ledger.cli:cli\"\n",
+                ),
+                ("ledger/__init__.py", ""),
+                ("ledger/cli.py", "from .app import cli\n"),
+                (
+                    "ledger/app.py",
+                    "import click\n\nfrom .importer import run_import\n\n\n@click.group()\ndef cli() -> \
+                         None:\n    pass\n\n\n@cli.command(\"import\")\n@click.argument(\"file\")\ndef \
+                         import_command(file: str) -> None:\n    run_import(file)\n",
+                ),
+                ("ledger/importer.py", "def run_import(file: str) -> None:\n    print(file)\n"),
+            ],
+        );
+        let survey =
+            inventory(&[("import command", "ledger/app.py#L11-L14", "ledger-import")], &[]);
+        let answer = claim("import.file");
+
+        let model =
+            PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
+
+        let seen = model.seen();
+        let facts = &seen[0].messages[0];
+        assert!(
+            facts.contains(
+                "The bootstrap — the entry that runs something — is `ledger/cli.py`: the console \
+                     script `ledger` calls its `cli()`."
+            ),
+            "{facts}"
+        );
+        let turns = PYTHON.surveyed(&model, 1);
+        assert_eq!(
+            surfaces(&turns[0]),
+            [("start", "ledger/cli.py", "start"), ("import command", "ledger/app.py", "import")]
+        );
+        assert!(
+            turns[0].contains(
+                "the process bootstrap, run by the console script `ledger`, which calls `cli()`: "
+            ) && turns[0].contains("; id `start`; reaches `ledger/app.py`."),
+            "{}",
+            turns[0]
+        );
+    }
+
+    // the factory
+    {
+        let project = scratch();
+        modules(
+            &project,
+            &[
+                ("app/__init__.py", ""),
+                (
+                    "app/main.py",
+                    "from flask import Flask\n\nfrom .views import health\n\n\ndef create_app() -> \
+                         Flask:\n    app = Flask(__name__)\n    app.add_url_rule(\"/health\", \
+                         view_func=health)\n    return app\n",
+                ),
+                ("app/views.py", "def health() -> dict:\n    return {\"ok\": True}\n"),
+            ],
+        );
+        let survey = inventory(&[("GET /health", "app/main.py#L8", "health")], &[]);
+        let answer = claim("health.ok");
+
+        let model =
+            PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
+
+        let seen = model.seen();
+        let facts = &seen[0].messages[0];
+        assert!(facts.contains("No bootstrap runs at load"), "{facts}");
+        assert!(
+            facts.contains(
+                "- `app/main.py#L8` — `app.add_url_rule` led by `\"/health\"` handed a function, \
+                     through `flask` as `Flask`"
+            ),
+            "{facts}"
+        );
+        let turns = PYTHON.surveyed(&model, 1);
+        assert_eq!(surfaces(&turns[0]), [("GET /health", "app/main.py", "health")]);
+        assert!(
+            turns[0].contains(
+                ": registered L8 in `create_app`; through `flask`; id `health`; reaches \
+                     `app/views.py`."
+            ),
+            "{}",
+            turns[0]
+        );
+    }
 }
 
 // An upstream API client and a secret retriever the bootstrap alone
@@ -4061,7 +4160,7 @@ async fn python_bootstrap() {
 // sit in `start`'s closure under the note that claims the bootstrap for what
 // those it serves observe and leaves its readiness to the design.
 #[tokio::test]
-async fn emery_python_bootstrap_clients() {
+async fn py_bootstrap_clients() {
     let project = scratch();
     modules(
         &project,
@@ -4158,106 +4257,6 @@ async fn emery_python_bootstrap_clients() {
             "quotes/routes.py",
         ],
         &[],
-    );
-}
-
-// A console script whose function the entry module imports from a module of
-// the tree rather than declares — `ledger = "ledger.cli:cli"` over a `cli.py`
-// of `from .app import cli` — is still the bootstrap: the manifest names a
-// running entry, and a module of the tree declares what it runs. The
-// `start` reaches the module the function is imported from.
-#[tokio::test]
-async fn python_bootstrap_imported() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            (
-                "pyproject.toml",
-                "[project]\nname = \"ledger\"\n\n[project.scripts]\nledger = \"ledger.cli:cli\"\n",
-            ),
-            ("ledger/__init__.py", ""),
-            ("ledger/cli.py", "from .app import cli\n"),
-            (
-                "ledger/app.py",
-                "import click\n\nfrom .importer import run_import\n\n\n@click.group()\ndef cli() -> \
-                 None:\n    pass\n\n\n@cli.command(\"import\")\n@click.argument(\"file\")\ndef \
-                 import_command(file: str) -> None:\n    run_import(file)\n",
-            ),
-            ("ledger/importer.py", "def run_import(file: str) -> None:\n    print(file)\n"),
-        ],
-    );
-    let survey = inventory(&[("import command", "ledger/app.py#L11-L14", "ledger-import")], &[]);
-    let answer = claim("import.file");
-
-    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
-
-    let seen = model.seen();
-    let facts = &seen[0].messages[0];
-    assert!(
-        facts.contains(
-            "The bootstrap — the entry that runs something — is `ledger/cli.py`: the console \
-             script `ledger` calls its `cli()`."
-        ),
-        "{facts}"
-    );
-    let turns = PYTHON.surveyed(&model, 1);
-    assert_eq!(
-        surfaces(&turns[0]),
-        [("start", "ledger/cli.py", "start"), ("import command", "ledger/app.py", "import")]
-    );
-    assert!(
-        turns[0].contains(
-            "the process bootstrap, run by the console script `ledger`, which calls `cli()`: "
-        ) && turns[0].contains("; id `start`; reaches `ledger/app.py`."),
-        "{}",
-        turns[0]
-    );
-}
-
-// An entry that only declares — a factory a server imports — is no
-// bootstrap, so the tree has no `start` and its surfaces are what the
-// factory registers.
-#[tokio::test]
-async fn python_bootstrap_factory() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            ("app/__init__.py", ""),
-            (
-                "app/main.py",
-                "from flask import Flask\n\nfrom .views import health\n\n\ndef create_app() -> \
-                 Flask:\n    app = Flask(__name__)\n    app.add_url_rule(\"/health\", \
-                 view_func=health)\n    return app\n",
-            ),
-            ("app/views.py", "def health() -> dict:\n    return {\"ok\": True}\n"),
-        ],
-    );
-    let survey = inventory(&[("GET /health", "app/main.py#L8", "health")], &[]);
-    let answer = claim("health.ok");
-
-    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
-
-    let seen = model.seen();
-    let facts = &seen[0].messages[0];
-    assert!(facts.contains("No bootstrap runs at load"), "{facts}");
-    assert!(
-        facts.contains(
-            "- `app/main.py#L8` — `app.add_url_rule` led by `\"/health\"` handed a function, \
-             through `flask` as `Flask`"
-        ),
-        "{facts}"
-    );
-    let turns = PYTHON.surveyed(&model, 1);
-    assert_eq!(surfaces(&turns[0]), [("GET /health", "app/main.py", "health")]);
-    assert!(
-        turns[0].contains(
-            ": registered L8 in `create_app`; through `flask`; id `health`; reaches \
-             `app/views.py`."
-        ),
-        "{}",
-        turns[0]
     );
 }
 
@@ -4367,7 +4366,7 @@ fn django_inventory() -> String {
 // hook what they decorate onto a site a package serves, so none is a fact
 // and the admin module is asked after by no finding.
 #[tokio::test]
-async fn python_string_imports() {
+async fn py_string_imports() {
     let project = scratch();
     modules(&project, &DJANGO);
     modules(
@@ -4472,7 +4471,7 @@ const FLASK: [(&str, &str); 6] = [
 // its bare name. The factory's construction at load makes the server the
 // bootstrap.
 #[tokio::test]
-async fn python_mounts() {
+async fn py_mounts() {
     let project = scratch();
     modules(&project, &FLASK);
     let survey = inventory(
@@ -4520,7 +4519,7 @@ async fn python_mounts() {
 // stem its routes spell is the resource the outer include names, and the
 // path past it tells them apart.
 #[tokio::test]
-async fn python_mounts_nested() {
+async fn py_mounts_nested() {
     let project = scratch();
     modules(
         &project,
@@ -4580,7 +4579,7 @@ async fn python_mounts_nested() {
 // with — in place of the survey's — and the verb and the path past it tell
 // them apart.
 #[tokio::test]
-async fn python_mounts_local() {
+async fn py_mounts_local() {
     let project = scratch();
     modules(
         &project,
@@ -4634,7 +4633,7 @@ async fn python_mounts_local() {
 // `orders/`, so a route on `create/` there is `orders`, the resource past
 // `api`, in place of the survey's own.
 #[tokio::test]
-async fn python_mounts_namespaced() {
+async fn py_mounts_namespaced() {
     let project = scratch();
     modules(
         &project,
@@ -4715,7 +4714,7 @@ async fn python_mounts_namespaced() {
 // member (`dataclass`, attrs' `define`, pydantic's `computed_field`)
 // registers nothing, and is no fact.
 #[tokio::test]
-async fn python_decorated() {
+async fn py_decorated() {
     let project = scratch();
     modules(
         &project,
@@ -4843,7 +4842,7 @@ fn ledger_inventory() -> String {
 // handed to the scheduler the survey left unnamed is no surface, and
 // neither is the handler handed to the tree's own class (`Bus().on`).
 #[tokio::test]
-async fn python_registrations() {
+async fn py_registrations() {
     let project = scratch();
     modules(&project, &LEDGER);
     let survey = ledger_inventory();
@@ -4883,7 +4882,7 @@ async fn python_registrations() {
 // through `mock` — so a stubs module handing lambdas to it registers
 // nothing.
 #[tokio::test]
-async fn python_registrations_patch() {
+async fn py_patch_routes() {
     let project = scratch();
     modules(
         &project,
@@ -4959,7 +4958,7 @@ async fn python_registrations_patch() {
 // whole. A function handed to the tree's own class, a wrapper, a lifecycle
 // hook, or a hook keyword is no fact.
 #[tokio::test]
-async fn python_survey_facts() {
+async fn py_survey_facts() {
     let project = scratch();
     modules(&project, &LEDGER);
     let survey = ledger_inventory();
@@ -5017,7 +5016,7 @@ async fn python_survey_facts() {
 // resource under its router's prefix and the prefix it is included under
 // replace the survey's reading, so the seam's stems are the code's.
 #[tokio::test]
-async fn python_survey_stem_derived() {
+async fn py_derived_stem() {
     let project = scratch();
     modules(&project, &LEDGER);
     let survey = inventory(
@@ -5073,7 +5072,7 @@ async fn python_survey_stem_derived() {
 // routes under its first tag, whatever each path spells, so one router is
 // one stem; a prefix, its own or its inclusion's, stands over the tag.
 #[tokio::test]
-async fn python_survey_stem_tagged() {
+async fn py_tagged_router() {
     let project = scratch();
     modules(
         &project,
@@ -5137,7 +5136,7 @@ async fn python_survey_stem_tagged() {
 // stem of what a caller does through the surface; the corrected answer is
 // accepted, and the run goes on to mine.
 #[tokio::test]
-async fn python_survey_start_stem() {
+async fn py_start_stem() {
     let project = scratch();
     modules(&project, &PY_APP);
     let strayed = inventory(
@@ -5179,7 +5178,7 @@ async fn python_survey_start_stem() {
 // `unreached` is a finding, naming the module; the answer that names the
 // task's surface is accepted, and the module is that surface's to reach.
 #[tokio::test]
-async fn python_survey_unplaced() {
+async fn py_unplaced() {
     let project = scratch();
     modules(&project, &LEDGER);
     let partial = inventory(
@@ -5220,7 +5219,7 @@ async fn python_survey_unplaced() {
 // does not — and the survey's facts list the registration alone, never an
 // action's decorator as a surface of its own.
 #[tokio::test]
-async fn python_survey_methods() {
+async fn py_viewset() {
     let project = scratch();
     modules(
         &project,
@@ -5289,7 +5288,7 @@ async fn python_survey_methods() {
 // id per public method beside its own, a private or a dunder method none; a
 // function reaches what it imports.
 #[tokio::test]
-async fn python_exports() {
+async fn py_exports() {
     let project = scratch();
     modules(
         &project,
@@ -5373,7 +5372,7 @@ async fn python_exports() {
 // `type` the model answers gives way to them; an inline value's
 // declarations are copied too, with no file to anchor in.
 #[tokio::test]
-async fn python_types() {
+async fn py_types() {
     let project = scratch();
     modules(
         &project,
@@ -5426,7 +5425,7 @@ async fn python_types() {
 // dropped and a typed parameter spelled `{name}`; the bootstrap serves none,
 // and a value is never surveyed, so it carries none.
 #[tokio::test]
-async fn python_contracts() {
+async fn py_contracts() {
     let project = scratch();
     modules(&project, &FLASK);
     let survey = inventory(
@@ -5465,7 +5464,7 @@ async fn python_contracts() {
 // registers, or an `add_url_rule` whose `methods=` lists more than one verb
 // or is non-literal, is left unrouted rather than typed `GET`.
 #[tokio::test]
-async fn python_contracts_registered() {
+async fn py_route_calls() {
     let project = scratch();
     modules(
         &project,
@@ -5525,7 +5524,7 @@ async fn python_contracts_registered() {
 // is no message, so its surface carries none, and a task's name is the
 // function's, so a task carries none either.
 #[tokio::test]
-async fn python_contracts_messaged() {
+async fn py_message_contracts() {
     let project = scratch();
     modules(
         &project,
@@ -5579,7 +5578,7 @@ async fn python_contracts_messaged() {
 // name assigned a table is a `type` claim of its own, the statement whole;
 // an empty one, a scalar, and a private one are none.
 #[tokio::test]
-async fn python_type_tables() {
+async fn py_type_tables() {
     let project = scratch();
     modules(
         &project,
@@ -5637,7 +5636,7 @@ async fn python_type_tables() {
 // of the module is listed without it and no `type` claim copies it; an
 // inline value's annotated list cuts its declarations the same way.
 #[tokio::test]
-async fn python_exports_annotated_all() {
+async fn py_annotated_all() {
     let project = scratch();
     modules(
         &project,
@@ -5701,7 +5700,7 @@ async fn python_exports_annotated_all() {
 // import with the names bound to them; a construction, a reference to a
 // value spelled elsewhere, and a function's working local are none.
 #[tokio::test]
-async fn python_boundaries() {
+async fn py_boundaries() {
     let project = scratch();
     modules(&project, &PY_APP);
     modules(
@@ -5773,7 +5772,7 @@ async fn python_boundaries() {
 // structure: the router's inclusion, the construction bound at module
 // level, the connection made in a module-level declaration.
 #[tokio::test]
-async fn python_calls() {
+async fn py_calls() {
     let project = scratch();
     modules(&project, &PY_APP);
     modules(
@@ -5846,7 +5845,7 @@ fn py_deciding_inventory() -> String {
 // with their text and the function they run in, so a requirement anchors
 // where a behaviour starts.
 #[tokio::test]
-async fn python_decisions() {
+async fn py_decisions() {
     let project = scratch();
     modules(&project, &PY_DECIDING);
 
@@ -5883,7 +5882,7 @@ async fn python_decisions() {
 // not, the corrected answer is accepted, and the inline value is held to no
 // anchor.
 #[tokio::test]
-async fn python_anchors() {
+async fn py_anchors() {
     let project = scratch();
     modules(&project, &PY_DECIDING);
     let guarded = serde_json::json!({
@@ -5949,7 +5948,7 @@ async fn python_anchors() {
 // assigned one is through its value, so a call on the cursor a pool's
 // connection opened is a call through the pool's package.
 #[tokio::test]
-async fn python_steps() {
+async fn py_steps() {
     let project = scratch();
     modules(
         &project,
@@ -6047,7 +6046,7 @@ async fn python_steps() {
 // `serializer.is_valid(..)`) is a step into the tree, while the construction
 // that made it only wires.
 #[tokio::test]
-async fn python_anchors_declared() {
+async fn py_class_anchors() {
     let project = scratch();
     modules(
         &project,
@@ -6128,7 +6127,7 @@ async fn python_anchors_declared() {
 // — and the test file itself follows the seam's modules, inlined or listed as
 // they are; a skipped test states nothing.
 #[tokio::test]
-async fn python_stated() {
+async fn py_stated_tests() {
     let project = scratch();
     modules(&project, &PY_APP);
     py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
@@ -6194,7 +6193,7 @@ async fn python_stated() {
 // names is reached by no seam, counts as nothing the resolver could not
 // follow, and the guard itself is no decision.
 #[tokio::test]
-async fn python_type_checking() {
+async fn py_type_checking() {
     let project = scratch();
     modules(&project, &PY_APP);
     py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
@@ -6214,10 +6213,10 @@ async fn python_type_checking() {
     );
     let survey = py_app_inventory();
     let neutral = decision();
-    let answer = answer();
+    let extract = answer();
 
     let model = PYTHON
-        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &answer]))
+        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &neutral, &extract]))
         .await;
 
     let turns = PYTHON.surveyed(&model, 3);
@@ -6226,56 +6225,56 @@ async fn python_type_checking() {
     assert!(orders.contains("- `app/db.py`"), "the store is reached: {orders}");
     assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
     assert!(!orders.contains("TYPE_CHECKING`"), "the guard decides nothing: {orders}");
-}
 
-// A `from .. import *` under `if TYPE_CHECKING:` in a package `__init__` is
-// a declaration's too: the star re-export it records is type-only, so the
-// module it names is reached by no seam, and counts as nothing the resolver
-// could not follow.
-#[tokio::test]
-async fn python_type_checking_star() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            ("app/__init__.py", ""),
-            (
-                "app/main.py",
-                "from fastapi import FastAPI\n\nfrom .routers import orders\n\napp = \
-                 FastAPI()\napp.include_router(orders.router, prefix=\"/api\")\n",
-            ),
-            ("app/routers/__init__.py", ""),
-            (
-                "app/routers/orders.py",
-                "from fastapi import APIRouter\n\nfrom ..store import pool\n\nrouter = \
-                 APIRouter(prefix=\"/orders\")\n\n\n@router.get(\"/{order_id}\")\nasync def \
-                 get(order_id: str) -> dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
-            ),
-            ("app/audit.py", "class Auditor:\n    pass\n"),
-        ],
-    );
-    py_bulk(
-        &project,
-        "app/store/__init__.py",
-        "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from ..audit import *\n\npool \
-         = \"o-1\"\n",
-    );
-    let survey =
-        inventory(&[("GET /api/orders/{order_id}", "app/routers/orders.py#L8-L10", "orders")], &[]);
-    let neutral = decision();
-    let answer = answer();
+    {
+        let project = scratch();
+        modules(
+            &project,
+            &[
+                ("app/__init__.py", ""),
+                (
+                    "app/main.py",
+                    "from fastapi import FastAPI\n\nfrom .routers import orders\n\napp = \
+                         FastAPI()\napp.include_router(orders.router, prefix=\"/api\")\n",
+                ),
+                ("app/routers/__init__.py", ""),
+                (
+                    "app/routers/orders.py",
+                    "from fastapi import APIRouter\n\nfrom ..store import pool\n\nrouter = \
+                         APIRouter(prefix=\"/orders\")\n\n\n@router.get(\"/{order_id}\")\nasync def \
+                         get(order_id: str) -> dict:\n    return {\"id\": order_id, \"pool\": pool}\n",
+                ),
+                ("app/audit.py", "class Auditor:\n    pass\n"),
+            ],
+        );
+        py_bulk(
+            &project,
+            "app/store/__init__.py",
+            "from typing import TYPE_CHECKING\n\nif TYPE_CHECKING:\n    from ..audit import *\n\npool \
+                 = \"o-1\"\n",
+        );
+        let survey = inventory(
+            &[("GET /api/orders/{order_id}", "app/routers/orders.py#L8-L10", "orders")],
+            &[],
+        );
+        let neutral = decision();
+        let extract = answer();
 
-    let model = PYTHON
-        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
-        .await;
+        let model = PYTHON
+            .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &extract]))
+            .await;
 
-    let turns = PYTHON.surveyed(&model, 2);
-    let orders = turn_for(&turns, "GET /api/orders/{order_id}");
-    inlined(orders, &["app/routers/orders.py"], &["app/audit.py"]);
-    assert!(orders.contains("- `app/store/__init__.py`"), "the store is reached: {orders}");
-    assert!(!orders.contains("could not follow"), "a typing import is followed nowhere: {orders}");
-    let start = turn_for(&turns, "start");
-    assert!(!start.contains("app/audit.py"), "nothing of `start` reaches it either: {start}");
+        let turns = PYTHON.surveyed(&model, 2);
+        let orders = turn_for(&turns, "GET /api/orders/{order_id}");
+        inlined(orders, &["app/routers/orders.py"], &["app/audit.py"]);
+        assert!(orders.contains("- `app/store/__init__.py`"), "the store is reached: {orders}");
+        assert!(
+            !orders.contains("could not follow"),
+            "a typing import is followed nowhere: {orders}"
+        );
+        let start = turn_for(&turns, "start");
+        assert!(!start.contains("app/audit.py"), "nothing of `start` reaches it either: {start}");
+    }
 }
 
 // A relative import whose module shares a typing module's name — `from
@@ -6283,7 +6282,7 @@ async fn python_type_checking_star() {
 // tree's own module, not the standard library's: the seam reaches it past
 // the budget, and its declaration is a parser `type` claim.
 #[tokio::test]
-async fn python_relative_typing_name() {
+async fn py_relative_typing() {
     let project = scratch();
     modules(&project, &PY_APP);
     py_bulk(&project, "app/db.py", "pool = \"o-1\"\n");
@@ -6341,7 +6340,7 @@ async fn python_relative_typing_name() {
 // already — the package `__init__.py` files no closure holds among them —
 // so the brief says only what could not be followed there too.
 #[tokio::test]
-async fn python_unresolved() {
+async fn py_unresolved() {
     const ORDERS: &str = "import importlib\n\nfrom ..db import pool\nfrom .generated import \
                           seed\n\n\nasync def create_order(body: dict) -> dict:\n    return \
                           {\"id\": pool, \"body\": body, \"seed\": seed}\n\n\ndef \
@@ -6400,7 +6399,7 @@ async fn python_unresolved() {
 // name by its first segment — and the seed script no surface reaches is
 // inlined with the rest.
 #[tokio::test]
-async fn python_fixture_click_jobs() {
+async fn py_click_jobs() {
     let project = scratch();
     fixture(&project, "click-jobs");
     let survey = inventory(
@@ -6622,7 +6621,7 @@ fn fastapi_router(
 // include's, and each is told apart by its verb and the path past the
 // resource.
 #[tokio::test]
-async fn python_fixture_fastapi_routers() {
+async fn py_fastapi_routers() {
     let project = scratch();
     fixture(&project, "fastapi-routers");
     let survey = inventory(&FASTAPI_SURFACES, &[]);
@@ -6720,7 +6719,7 @@ async fn python_fixture_fastapi_routers() {
 // every import of it followed; a module beside the loader is not inlined for
 // a load spelling another package.
 #[tokio::test]
-async fn python_dynamic() {
+async fn py_dynamic() {
     let project = scratch();
     modules(&project, &PY_APP);
     modules(
@@ -6785,7 +6784,7 @@ async fn python_dynamic() {
 // widened for it, the brief says nothing could not be followed, and the
 // helper is inlined among neither the modules nor the stated tests.
 #[tokio::test]
-async fn python_skipped_import() {
+async fn py_skipped_import() {
     let project = scratch();
     modules(&project, &PY_APP);
     project.write(
@@ -6826,7 +6825,7 @@ async fn python_skipped_import() {
 // `criterion` may cite a value in — while a `requirement` there is at no
 // anchor and comes back.
 #[tokio::test]
-async fn python_data() {
+async fn py_data() {
     let project = scratch();
     modules(&project, &PY_APP);
     project.write(
@@ -6901,7 +6900,7 @@ async fn python_data() {
 // not the `config` module beside it: the file is the seam's data, named by
 // the module reading it, and that module reaches nothing through the string.
 #[tokio::test]
-async fn python_data_beside_module() {
+async fn py_data_stem() {
     let project = scratch();
     modules(&project, &PY_APP);
     project.write(
@@ -6941,7 +6940,7 @@ async fn python_data_beside_module() {
 // and the bootstrap. The packaging `setup.py` is the root's alone: one
 // beneath a package is a module like any other.
 #[tokio::test]
-async fn python_non_production() {
+async fn py_non_production() {
     const REFUSED: [&str; 11] = [
         "tests/test_orders.py",
         "app/orders_test.py",
@@ -6985,7 +6984,7 @@ async fn python_non_production() {
 // over the module, listed when it is past the budget, the export the survey
 // names its surface.
 #[tokio::test]
-async fn python_one_module() {
+async fn py_one_module() {
     const REFUSED: [&str; 6] = [
         "tests/test_orders.py",
         "src/orders.pyi",
@@ -7026,7 +7025,7 @@ async fn python_one_module() {
 // surface was found and held to the one stem the manifest's package name
 // gives.
 #[tokio::test]
-async fn python_no_surface() {
+async fn py_no_surface() {
     let project = scratch();
     modules(
         &project,
@@ -7042,80 +7041,76 @@ async fn python_no_surface() {
     );
     let survey =
         inventory(&[], &["src/helpers/__init__.py", "src/helpers/config.py", "src/helpers/db.py"]);
-    let answer = claim("acme-shared-helpers.pool");
+    let claimed = claim("acme-shared-helpers.pool");
 
-    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &answer, &answer])).await;
+    let model = PYTHON.run(&project, ScriptedModel::answering([&survey, &claimed, &claimed])).await;
 
     let turns = PYTHON.surveyed(&model, 1);
     assert!(surfaces(&turns[0]).is_empty(), "no surface is named: {}", turns[0]);
     assert!(turns[0].contains("No surface was found"), "{}", turns[0]);
     assert!(turns[0].contains("the one stem `acme-shared-helpers`"), "{}", turns[0]);
     inlined(&turns[0], &["src/helpers/config.py", "src/helpers/db.py"], &[]);
-}
 
-// Past the budget, a tree with no surface is one extract per directory
-// beneath its one top-level package under `src/`, under the directory's
-// name, the package's own modules joined to the first; a directory's seam
-// inlines its own modules and no other's.
-#[tokio::test]
-async fn python_no_surface_directories() {
-    let project = scratch();
-    modules(
-        &project,
-        &[
-            ("src/helpers/__init__.py", ""),
-            ("src/helpers/version.py", "VERSION = \"1\"\n"),
-            ("src/helpers/lib/config.py", "RETRIES = 3\n"),
-            ("src/helpers/util/format.py", "SEPARATOR = \", \"\n"),
-        ],
-    );
-    py_bulk(&project, "src/helpers/lib/db.py", "pool = 1\n");
-    let survey = inventory(
-        &[],
-        &[
-            "src/helpers/__init__.py",
-            "src/helpers/version.py",
-            "src/helpers/lib/config.py",
-            "src/helpers/lib/db.py",
-            "src/helpers/util/format.py",
-        ],
-    );
-    let neutral = decision();
-    let answer = answer();
+    // past the budget
+    {
+        let project = scratch();
+        modules(
+            &project,
+            &[
+                ("src/helpers/__init__.py", ""),
+                ("src/helpers/version.py", "VERSION = \"1\"\n"),
+                ("src/helpers/lib/config.py", "RETRIES = 3\n"),
+                ("src/helpers/util/format.py", "SEPARATOR = \", \"\n"),
+            ],
+        );
+        py_bulk(&project, "src/helpers/lib/db.py", "pool = 1\n");
+        let survey = inventory(
+            &[],
+            &[
+                "src/helpers/__init__.py",
+                "src/helpers/version.py",
+                "src/helpers/lib/config.py",
+                "src/helpers/lib/db.py",
+                "src/helpers/util/format.py",
+            ],
+        );
+        let neutral = decision();
+        let extract = answer();
 
-    let model = PYTHON
-        .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &answer]))
-        .await;
+        let model = PYTHON
+            .run(&project, ScriptedModel::answering([&survey, &neutral, &neutral, &extract]))
+            .await;
 
-    let turns = PYTHON.surveyed(&model, 2);
-    let seam = |stem: &str| {
-        let naming: Vec<&String> =
-            turns.iter().filter(|turn| turn.contains(&format!("the stem `{stem}`"))).collect();
-        assert_eq!(naming.len(), 1, "`{stem}` is one seam's alone, got {naming:?}");
-        naming[0]
-    };
-    let lib = seam("lib");
-    assert!(lib.contains("`src/helpers/lib/`, with the root's own modules"), "{lib}");
-    inlined(
-        lib,
-        &["src/helpers/version.py", "src/helpers/lib/config.py"],
-        &["src/helpers/util/format.py"],
-    );
-    assert!(
-        lib.contains("- `src/helpers/lib/db.py`"),
-        "the store past the budget is listed: {lib}"
-    );
-    let util = seam("util");
-    inlined(
-        util,
-        &["src/helpers/util/format.py"],
-        &["src/helpers/version.py", "src/helpers/lib/config.py", "src/helpers/lib/db.py"],
-    );
+        let turns = PYTHON.surveyed(&model, 2);
+        let seam = |stem: &str| {
+            let naming: Vec<&String> =
+                turns.iter().filter(|turn| turn.contains(&format!("the stem `{stem}`"))).collect();
+            assert_eq!(naming.len(), 1, "`{stem}` is one seam's alone, got {naming:?}");
+            naming[0]
+        };
+        let lib = seam("lib");
+        assert!(lib.contains("`src/helpers/lib/`, with the root's own modules"), "{lib}");
+        inlined(
+            lib,
+            &["src/helpers/version.py", "src/helpers/lib/config.py"],
+            &["src/helpers/util/format.py"],
+        );
+        assert!(
+            lib.contains("- `src/helpers/lib/db.py`"),
+            "the store past the budget is listed: {lib}"
+        );
+        let util = seam("util");
+        inlined(
+            util,
+            &["src/helpers/util/format.py"],
+            &["src/helpers/version.py", "src/helpers/lib/config.py", "src/helpers/lib/db.py"],
+        );
+    }
 }
 
 // A tree with no Python module is refused before any turn is spent.
 #[tokio::test]
-async fn python_no_module() {
+async fn py_no_module() {
     let project = scratch();
     tree(&project, &["README.md", "src/orders.pyi", "tests/test_orders.py"]);
 

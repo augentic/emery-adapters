@@ -9,32 +9,6 @@ pub struct Outline {
     pub blocks: Vec<Block>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Heading {
-    pub level: u8,
-    pub line: u32,
-    pub text: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Block {
-    pub kind: Kind,
-    pub lines: Lines,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Kind {
-    Paragraph,
-    Item,
-    Row,
-    Step,
-    Quote,
-    Heading,
-    Fence,
-    FrontMatter,
-    Other,
-}
-
 impl Outline {
     pub fn read(text: &str) -> Self {
         let lines: Vec<&str> = text.lines().collect();
@@ -68,28 +42,37 @@ impl Outline {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Heading {
+    pub level: u8,
+    pub line: u32,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Block {
+    pub kind: Kind,
+    pub lines: Lines,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Kind {
+    Paragraph,
+    Item,
+    Row,
+    Step,
+    Quote,
+    Heading,
+    Fence,
+    FrontMatter,
+    Other,
+}
+
 pub fn opening_line(text: &str) -> Option<(u32, &str)> {
     text.lines().enumerate().find_map(|(index, line)| {
         let trimmed = line.trim();
         (!trimmed.is_empty()).then(|| (line_number(index + 1), trimmed))
     })
-}
-
-fn line_number(index: usize) -> u32 {
-    u32::try_from(index).unwrap_or(u32::MAX)
-}
-
-fn gherkin(lines: &[&str]) -> bool {
-    lines
-        .iter()
-        .map(|line| line.trim())
-        .find(|line| !line.is_empty() && !line.starts_with('@') && !line.starts_with('#'))
-        .is_some_and(|line| line.starts_with("Feature:"))
-}
-
-struct Open {
-    kind: Kind,
-    start: u32,
 }
 
 struct Reader<'a> {
@@ -260,6 +243,23 @@ impl<'a> Reader<'a> {
             lines: Lines { start, end },
         });
     }
+}
+
+struct Open {
+    kind: Kind,
+    start: u32,
+}
+
+fn gherkin(lines: &[&str]) -> bool {
+    lines
+        .iter()
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty() && !line.starts_with('@') && !line.starts_with('#'))
+        .is_some_and(|line| line.starts_with("Feature:"))
+}
+
+fn line_number(index: usize) -> u32 {
+    u32::try_from(index).unwrap_or(u32::MAX)
 }
 
 fn unindented(line: &str) -> Option<&str> {
