@@ -16,12 +16,6 @@ pub struct Prepared<'i> {
     pub documents: Vec<Document>,
 }
 
-pub struct Document {
-    pub path: String,
-    pub text: String,
-    pub outline: Outline,
-}
-
 impl<'i> Prepared<'i> {
     pub fn read(source: &'i str, root: &'i str) -> Result<Self, Error> {
         let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
@@ -95,6 +89,12 @@ impl<'i> Prepared<'i> {
                 .collect()
         })
     }
+}
+
+pub struct Document {
+    pub path: String,
+    pub text: String,
+    pub outline: Outline,
 }
 
 const UNSURVEYED: &str = "No subject was found in this tree: the survey named none, so it is \

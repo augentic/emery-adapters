@@ -23,14 +23,14 @@ pub async fn survey<P: Model>(ctx: &Context<'_, P>) -> Result<Vec<Seam>, Error> 
     prepared.seams(&inventory)
 }
 
-const MIN_SIZE: usize = 2;
-const MAX_SIZE: usize = 16;
-
 fn directories(root: &str) -> Result<Vec<Seam>, Error> {
     let files = emery_sdk::workspace::list(root, |entry| !entry.hidden())?;
     let seams: Vec<Seam> = partition("", files).into_iter().map(Seam::files).collect();
     Ok(if seams.len() < 2 { vec![Seam::whole()] } else { seams })
 }
+
+const MIN_SIZE: usize = 2;
+const MAX_SIZE: usize = 16;
 
 fn partition(prefix: &str, files: Vec<String>) -> Vec<Vec<String>> {
     // bucket by the next path segment

@@ -9,32 +9,6 @@ pub struct Outline {
     pub blocks: Vec<Block>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Heading {
-    pub level: u8,
-    pub line: u32,
-    pub text: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Block {
-    pub kind: Kind,
-    pub lines: Lines,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum Kind {
-    Paragraph,
-    Item,
-    Row,
-    Step,
-    Quote,
-    Heading,
-    Fence,
-    FrontMatter,
-    Other,
-}
-
 impl Outline {
     pub fn read(text: &str) -> Self {
         let lines: Vec<&str> = text.lines().collect();
@@ -66,6 +40,32 @@ impl Outline {
             .or_else(|| self.headings.iter().find(|heading| span.holds(heading.line)))
             .map(|heading| heading.text.as_str())
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Heading {
+    pub level: u8,
+    pub line: u32,
+    pub text: String,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct Block {
+    pub kind: Kind,
+    pub lines: Lines,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Kind {
+    Paragraph,
+    Item,
+    Row,
+    Step,
+    Quote,
+    Heading,
+    Fence,
+    FrontMatter,
+    Other,
 }
 
 pub fn opening_line(text: &str) -> Option<(u32, &str)> {

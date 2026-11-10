@@ -18,20 +18,6 @@ pub struct Module {
     core: code::Module,
 }
 
-impl Deref for Module {
-    type Target = code::Module;
-
-    fn deref(&self) -> &Self::Target {
-        &self.core
-    }
-}
-
-impl DerefMut for Module {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.core
-    }
-}
-
 impl Module {
     pub fn parse(path: &str, text: String) -> Self {
         let mut module = walk::read(path, &text);
@@ -115,5 +101,19 @@ impl Module {
         for class in classes {
             class.exported = exported.contains(class.name.as_str());
         }
+    }
+}
+
+impl Deref for Module {
+    type Target = code::Module;
+
+    fn deref(&self) -> &Self::Target {
+        &self.core
+    }
+}
+
+impl DerefMut for Module {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.core
     }
 }
