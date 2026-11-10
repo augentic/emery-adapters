@@ -4,8 +4,10 @@
 
 mod support;
 
+use std::collections::BTreeSet;
+
 use emery_sdk::survey::{Inventory, Surface};
-use emery_sdk::target::{Grant, TargetAdapter};
+use emery_sdk::target::{Grant, MergeStrategy, TargetAdapter};
 use emery_sdk::{Doc, body};
 use omnia_test::host::{Scratch, ScriptedModel, scratch};
 use omnia_test::{Seen, SeenWorker};
@@ -84,10 +86,52 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
 // The worker grant a target's `grants` lower through the world onto each of
 // its turns, as the host records it.
 fn granted<A: TargetAdapter>(seen: &[Seen]) {
-    let grant = Grant::union(A::metadata().grants).map(SeenWorker::from);
+    let grants = A::metadata().grants;
+    assert_eq!(Grant::findings(grants), Vec::<String>::new());
+    let grant = Grant::union(grants).map(SeenWorker::from);
     assert!(grant.is_some(), "the shipped target spells what its worker reaches");
     for request in seen {
         assert_eq!(request.worker, grant, "the turn carries the adapter's worker grant");
+    }
+}
+
+// Every file the template scaffolds as a list is union-merged; static seed
+// files are not; the glob rules are a stem's manifest and its entry.
+fn omnia_union_rules_follow_template() {
+    let union: Vec<&str> = emery_omnia::Adapter::metadata()
+        .rules
+        .iter()
+        .filter(|rule| rule.strategy == MergeStrategy::Union)
+        .map(|rule| rule.paths.as_ref())
+        .collect();
+    let listed: BTreeSet<&str> = omnia_template::ENTRIES
+        .iter()
+        .filter(|entry| entry.role == omnia_template::Role::Listed)
+        .map(|entry| entry.path)
+        .collect();
+
+    for path in &listed {
+        assert!(union.contains(path), "the listed `{path}` is merged as a union: {union:?}");
+    }
+    let (globs, plain): (Vec<&str>, Vec<&str>) = union.iter().partition(|rule| rule.contains('*'));
+    assert_eq!(
+        plain.into_iter().collect::<BTreeSet<_>>(),
+        listed,
+        "every union rule over one path is a file the template scaffolds as a list"
+    );
+    assert_eq!(
+        globs,
+        ["crates/*/Cargo.toml", "crates/*/src/lib.rs"],
+        "the glob rules are a stem's manifest and its entry"
+    );
+    for entry in omnia_template::ENTRIES {
+        if entry.role == omnia_template::Role::Static {
+            assert!(
+                !union.contains(&entry.path),
+                "the static `{}` is merged under no rule",
+                entry.path
+            );
+        }
     }
 }
 
@@ -285,6 +329,7 @@ async fn emery_omnia() {
         ScriptedModel::default(),
     )
     .await;
+    omnia_union_rules_follow_template();
 
     let project = scratch();
     let edits = serde_json::json!({ "edits": [

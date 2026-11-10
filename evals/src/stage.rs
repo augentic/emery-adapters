@@ -53,60 +53,8 @@ pub fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf
     Ok(project)
 }
 
-// The `Adapter:` trailer a sealed empty slice carries; the engine's resume
-// reads the trailer for its presence alone.
-pub const TARGET_NAME: &str = "target";
-
-// The repository the engine creates for run `n` of a case, under `[target]
-// name = "run-N"`. One repository per run: `apply` seals a revision over the
-// current one where a repository holds it, so a second run sealing into the
-// first's would build over the first's tree, and a greenfield build needs a
-// repository of its own.
-pub fn repository(project: &Path, n: usize) -> PathBuf {
-    project.join(format!(".emery/vcs/repos/run-{n}"))
-}
-
-// Points the project's `emery.toml` at run `n`'s repository and stages
-// `target`'s component in the store. Both targets scaffold a whole tree, so
-// no URL is named and `apply` creates the repository beneath the project.
-pub fn retarget(project: &Path, settings: &Settings, target: Target, n: usize) -> io::Result<()> {
-    let path = project.join("emery.toml");
-    let config = fs::read_to_string(&path)?;
-    let sources = config.split_once("[target]").map_or(config.as_str(), |(sources, _)| sources);
-    let reference = settings.stage_component(target.name())?;
-    fs::write(&path, format!("{sources}[target]\nname = \"run-{n}\"\nadapter = \"{reference}\"\n"))
-}
-
 fn toml_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
-}
-
-// One host git over a repository the runner created or reads, under an
-// identity of the runner's own so no operator configuration is needed;
-// its stdout trimmed, its stderr the error when it fails.
-#[expect(
-    clippy::disallowed_types,
-    reason = "the eval creates and reads its repositories with the host's git"
-)]
-pub fn git(at: &Path, args: &[&str]) -> io::Result<String> {
-    let output = std::process::Command::new("git")
-        .arg("-C")
-        .arg(at)
-        .args(["-c", "commit.gpgsign=false"])
-        .args(args)
-        .env("GIT_AUTHOR_NAME", "emery eval")
-        .env("GIT_AUTHOR_EMAIL", "eval@emery.invalid")
-        .env("GIT_COMMITTER_NAME", "emery eval")
-        .env("GIT_COMMITTER_EMAIL", "eval@emery.invalid")
-        .output()?;
-    if !output.status.success() {
-        return Err(io::Error::other(format!(
-            "git {args:?} at `{}`: {}",
-            at.display(),
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 // What a fixture's checkout may hold that no run reads: dependencies,
@@ -143,6 +91,58 @@ fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+// The `Adapter:` trailer a sealed empty slice carries; the engine's resume
+// reads the trailer for its presence alone.
+pub const TARGET_NAME: &str = "target";
+
+// The repository the engine creates for run `n` of a case, under `[target]
+// name = "run-N"`. One repository per run: `apply` seals a revision over the
+// current one where a repository holds it, so a second run sealing into the
+// first's would build over the first's tree, and a greenfield build needs a
+// repository of its own.
+pub fn repository(project: &Path, n: usize) -> PathBuf {
+    project.join(format!(".emery/vcs/repos/run-{n}"))
+}
+
+// Points the project's `emery.toml` at run `n`'s repository and stages
+// `target`'s component in the store. Both targets scaffold a whole tree, so
+// no URL is named and `apply` creates the repository beneath the project.
+pub fn retarget(project: &Path, settings: &Settings, target: Target, n: usize) -> io::Result<()> {
+    let path = project.join("emery.toml");
+    let config = fs::read_to_string(&path)?;
+    let sources = config.split_once("[target]").map_or(config.as_str(), |(sources, _)| sources);
+    let reference = settings.stage_component(target.name())?;
+    fs::write(&path, format!("{sources}[target]\nname = \"run-{n}\"\nadapter = \"{reference}\"\n"))
+}
+
+// One host git over a repository the runner created or reads, under an
+// identity of the runner's own so no operator configuration is needed;
+// its stdout trimmed, its stderr the error when it fails.
+#[expect(
+    clippy::disallowed_types,
+    reason = "the eval creates and reads its repositories with the host's git"
+)]
+pub fn git(at: &Path, args: &[&str]) -> io::Result<String> {
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(at)
+        .args(["-c", "commit.gpgsign=false"])
+        .args(args)
+        .env("GIT_AUTHOR_NAME", "emery eval")
+        .env("GIT_AUTHOR_EMAIL", "eval@emery.invalid")
+        .env("GIT_COMMITTER_NAME", "emery eval")
+        .env("GIT_COMMITTER_EMAIL", "eval@emery.invalid")
+        .output()?;
+    if !output.status.success() {
+        return Err(io::Error::other(format!(
+            "git {args:?} at `{}`: {}",
+            at.display(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )));
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 pub fn skipped_entry(name: &std::ffi::OsStr) -> bool {
@@ -351,6 +351,20 @@ pub fn restaged(
     })
 }
 
+fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree_whole(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn clone_root(from: &Path, to: &Path, revision: &str) -> io::Result<()> {
     let repos = to.parent().ok_or_else(|| io::Error::other("a repository sits under a project"))?;
     fs::create_dir_all(repos)?;
@@ -401,20 +415,4 @@ pub fn export_tip(tree: &Tree, export: &Path) -> io::Result<Vec<String>> {
         )));
     }
     Ok(git(repo, &["ls-tree", "-r", "--name-only", tip])?.lines().map(str::to_owned).collect())
-}
-
-// A copy of a directory tree skipping nothing, for a staged project's
-// sources.
-fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
-    fs::create_dir_all(to)?;
-    for entry in fs::read_dir(from)? {
-        let entry = entry?;
-        let target = to.join(entry.file_name());
-        if entry.file_type()?.is_dir() {
-            copy_tree_whole(&entry.path(), &target)?;
-        } else {
-            fs::copy(entry.path(), target)?;
-        }
-    }
-    Ok(())
 }

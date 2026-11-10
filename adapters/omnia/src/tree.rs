@@ -22,77 +22,6 @@ use crate::syntax::{self, Mentions, Unparsed};
 
 const MAX_DIFF_LINES: usize = 24;
 
-// One Rust file of the tree: its text, what `syn` made of it, and the names
-// it mentions, none where `syn` refused it.
-struct Module {
-    path: String,
-    text: String,
-    parsed: Result<syn::File, Unparsed>,
-    mentions: Mentions,
-}
-
-impl Module {
-    fn read(root: &Path, file: &Path) -> Result<Self, Error> {
-        let path = layout::relative(root, file);
-        let text = layout::read(file)?;
-        let parsed = syntax::parse(&text);
-        let mentions = parsed.as_ref().ok().map(Mentions::of).unwrap_or_default();
-        Ok(Self {
-            path,
-            text,
-            parsed,
-            mentions,
-        })
-    }
-
-    fn is_common(&self) -> bool {
-        self.path.starts_with("crates/common/")
-    }
-
-    fn file(&self) -> Option<&syn::File> {
-        self.parsed.as_ref().ok()
-    }
-
-    // The line `number` stands on, trimmed and without its trailing comma.
-    fn line(&self, number: usize) -> String {
-        number
-            .checked_sub(1)
-            .and_then(|index| self.text.lines().nth(index))
-            .unwrap_or_default()
-            .trim()
-            .trim_end_matches(',')
-            .to_owned()
-    }
-
-    fn markers(&self) -> Vec<(usize, String)> {
-        let mut markers = Markers::default();
-        if let Some(file) = self.file() {
-            markers.visit_file(file);
-        }
-        markers.found
-    }
-
-    // The top-level fn named `name`, where the file declares one.
-    fn fn_item(&self, name: &str) -> Option<&syn::ItemFn> {
-        self.file()?.items.iter().find_map(|item| match item {
-            syn::Item::Fn(item) if item.sig.ident == name => Some(item),
-            _ => None,
-        })
-    }
-}
-
-#[derive(Default)]
-struct Markers {
-    found: Vec<(usize, String)>,
-}
-
-impl<'ast> Visit<'ast> for Markers {
-    fn visit_macro(&mut self, mac: &'ast Macro) {
-        self.found.extend(syntax::todo_marker(mac));
-        visit::visit_macro(self, mac);
-    }
-}
-
 // The Rust files of a tree, read once: the stems' sources, the stems' tests,
 // and the root list the tree holds, with the crates under `crates/` and
 // the manifest of each that holds one.
@@ -684,43 +613,90 @@ impl<'a> Tree<'a> {
     }
 }
 
-struct Found {
-    line: usize,
-    // a `test` attribute stands among the function's, `#[tokio::test]` or
-    // `#[test]`, so the harness runs it
-    attributed: bool,
-    ignored: bool,
-    marker: Option<usize>,
-    placeholders: Vec<(usize, String)>,
+// One Rust file of the tree: its text, what `syn` made of it, and the names
+// it mentions, none where `syn` refused it.
+struct Module {
+    path: String,
+    text: String,
+    parsed: Result<syn::File, Unparsed>,
+    mentions: Mentions,
 }
 
-#[derive(Default)]
-struct Placeholders {
-    found: Vec<(usize, String)>,
-}
+impl Module {
+    fn read(root: &Path, file: &Path) -> Result<Self, Error> {
+        let path = layout::relative(root, file);
+        let text = layout::read(file)?;
+        let parsed = syntax::parse(&text);
+        let mentions = parsed.as_ref().ok().map(Mentions::of).unwrap_or_default();
+        Ok(Self {
+            path,
+            text,
+            parsed,
+            mentions,
+        })
+    }
 
-impl<'ast> Visit<'ast> for Placeholders {
-    fn visit_local(&mut self, node: &'ast Local) {
-        if let Some(init) = &node.init
-            && let Expr::Lit(ExprLit {
-                lit: Lit::Str(lit), ..
-            }) = &*init.expr
-        {
-            let value = lit.value();
-            if is_placeholder(&value) {
-                self.found.push((syntax::line(lit.span()), value));
-            }
+    fn is_common(&self) -> bool {
+        self.path.starts_with("crates/common/")
+    }
+
+    fn file(&self) -> Option<&syn::File> {
+        self.parsed.as_ref().ok()
+    }
+
+    // The line `number` stands on, trimmed and without its trailing comma.
+    fn line(&self, number: usize) -> String {
+        number
+            .checked_sub(1)
+            .and_then(|index| self.text.lines().nth(index))
+            .unwrap_or_default()
+            .trim()
+            .trim_end_matches(',')
+            .to_owned()
+    }
+
+    fn markers(&self) -> Vec<(usize, String)> {
+        let mut markers = Markers::default();
+        if let Some(file) = self.file() {
+            markers.visit_file(file);
         }
-        visit::visit_local(self, node);
+        markers.found
+    }
+
+    // The top-level fn named `name`, where the file declares one.
+    fn fn_item(&self, name: &str) -> Option<&syn::ItemFn> {
+        self.file()?.items.iter().find_map(|item| match item {
+            syn::Item::Fn(item) if item.sig.ident == name => Some(item),
+            _ => None,
+        })
     }
 }
 
-fn is_placeholder(value: &str) -> bool {
-    let Some(inner) = value.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else {
-        return false;
-    };
-    !inner.is_empty()
-        && inner.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+#[derive(Default)]
+struct Markers {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Markers {
+    fn visit_macro(&mut self, mac: &'ast Macro) {
+        self.found.extend(syntax::todo_marker(mac));
+        visit::visit_macro(self, mac);
+    }
+}
+
+// The requirement ids a marker names: its text up to the colon, one
+// `REQ-<n> <subject>` per comma.
+fn marker_ids(marker: &str) -> Vec<&str> {
+    let named = marker.split(':').next().unwrap_or(marker);
+    named
+        .split(',')
+        .filter_map(|entry| entry.split_whitespace().next())
+        .filter(|id| {
+            id.strip_prefix("REQ-").is_some_and(|digits| {
+                !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
+            })
+        })
+        .collect()
 }
 
 // Every `"<value>"` placeholder the test file's `provider()` seeds a
@@ -749,6 +725,14 @@ fn provider_placeholders(file: &syn::File) -> Vec<(usize, String)> {
         }
     }
     seeds.found
+}
+
+fn is_placeholder(value: &str) -> bool {
+    let Some(inner) = value.strip_prefix('<').and_then(|rest| rest.strip_suffix('>')) else {
+        return false;
+    };
+    !inner.is_empty()
+        && inner.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
 }
 
 // The test `name` declares in a test file: its line, whether a `test` and
@@ -793,6 +777,37 @@ fn test_of(file: &syn::File, name: &str) -> Option<Found> {
     })
 }
 
+struct Found {
+    line: usize,
+    // a `test` attribute stands among the function's, `#[tokio::test]` or
+    // `#[test]`, so the harness runs it
+    attributed: bool,
+    ignored: bool,
+    marker: Option<usize>,
+    placeholders: Vec<(usize, String)>,
+}
+
+#[derive(Default)]
+struct Placeholders {
+    found: Vec<(usize, String)>,
+}
+
+impl<'ast> Visit<'ast> for Placeholders {
+    fn visit_local(&mut self, node: &'ast Local) {
+        if let Some(init) = &node.init
+            && let Expr::Lit(ExprLit {
+                lit: Lit::Str(lit), ..
+            }) = &*init.expr
+        {
+            let value = lit.value();
+            if is_placeholder(&value) {
+                self.found.push((syntax::line(lit.span()), value));
+            }
+        }
+        visit::visit_local(self, node);
+    }
+}
+
 fn diff_lines(expected: &[&str], actual: &[&str]) -> Vec<String> {
     let (n, m) = (expected.len(), actual.len());
     let mut common = vec![vec![0_usize; m + 1]; n + 1];
@@ -823,19 +838,4 @@ fn diff_lines(expected: &[&str], actual: &[&str]) -> Vec<String> {
     drift.extend(expected[i..].iter().map(|line| format!("- {line}")));
     drift.extend(actual[j..].iter().map(|line| format!("+ {line}")));
     drift
-}
-
-// The requirement ids a marker names: its text up to the colon, one
-// `REQ-<n> <subject>` per comma.
-fn marker_ids(marker: &str) -> Vec<&str> {
-    let named = marker.split(':').next().unwrap_or(marker);
-    named
-        .split(',')
-        .filter_map(|entry| entry.split_whitespace().next())
-        .filter(|id| {
-            id.strip_prefix("REQ-").is_some_and(|digits| {
-                !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit())
-            })
-        })
-        .collect()
 }

@@ -1196,6 +1196,15 @@ fn title_of(line: &str) -> String {
     line.trim_start_matches('#').trim().to_owned()
 }
 
+// The lines from the first that starts with `lead` to the next blank line,
+// exclusive.
+fn paragraph<'t>(text: &'t str, lead: &str) -> Option<&'t str> {
+    let start = line_start(text, lead)?;
+    let rest = &text[start..];
+    let end = rest.find("\n\n").unwrap_or(rest.len());
+    Some(rest[..end].trim_end())
+}
+
 // The byte offset of the first line that starts with `lead`.
 fn line_start(text: &str, lead: &str) -> Option<usize> {
     let mut at = 0;
@@ -1228,15 +1237,6 @@ fn fence(section: &str, n: usize) -> Option<&str> {
         at += line.len();
     }
     None
-}
-
-// The lines from the first that starts with `lead` to the next blank line,
-// exclusive.
-fn paragraph<'t>(text: &'t str, lead: &str) -> Option<&'t str> {
-    let start = line_start(text, lead)?;
-    let rest = &text[start..];
-    let end = rest.find("\n\n").unwrap_or(rest.len());
-    Some(rest[..end].trim_end())
 }
 
 // The table's header rows and every body row whose first cell `keep` admits.

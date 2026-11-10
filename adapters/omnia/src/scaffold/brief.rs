@@ -22,12 +22,6 @@ const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --
 const HELD: &str =
     "The tree already held it, so nothing was written over it; read it for what stands.";
 
-// How much of the turn the inlined texts may take: the brief's files first,
-// the passages after them, a text past the budget named by its path alone.
-struct Budget {
-    left: u64,
-}
-
 // What the turn reads of the scaffold, owned so the SDK's `Scaffold` borrows
 // it: the brief and the passages under one budget, the guarded files, and
 // the design types laid.
@@ -402,6 +396,34 @@ impl Scaffold {
              each document:\n\n{}",
             quoted.trim_end()
         )
+    }
+}
+
+// How much of the turn the inlined texts may take: the brief's files first,
+// the passages after them, a text past the budget named by its path alone.
+struct Budget {
+    left: u64,
+}
+
+impl Budget {
+    // Whether `text` fits in what is left, taking it where it does.
+    const fn fits(&mut self, text: &str) -> bool {
+        let size = text.len() as u64;
+        if size > self.left {
+            return false;
+        }
+        self.left -= size;
+        true
+    }
+}
+
+// `a`, `a and b`, or `a, b, and c`.
+fn listed(items: &[String]) -> String {
+    match items {
+        [] => String::new(),
+        [one] => one.clone(),
+        [first, second] => format!("{first} and {second}"),
+        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
     }
 }
 
@@ -873,27 +895,5 @@ impl Handler {
         " Each path parameter is extracted as a `String`; where the design keys it as an \
          integer, extract it typed, `Path<i64>`, and let axum answer `400` for a malformed one."
             .to_owned()
-    }
-}
-
-impl Budget {
-    // Whether `text` fits in what is left, taking it where it does.
-    const fn fits(&mut self, text: &str) -> bool {
-        let size = text.len() as u64;
-        if size > self.left {
-            return false;
-        }
-        self.left -= size;
-        true
-    }
-}
-
-// `a`, `a and b`, or `a, b, and c`.
-fn listed(items: &[String]) -> String {
-    match items {
-        [] => String::new(),
-        [one] => one.clone(),
-        [first, second] => format!("{first} and {second}"),
-        [rest @ .., last] => format!("{}, and {last}", rest.join(", ")),
     }
 }

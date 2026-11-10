@@ -27,9 +27,6 @@ use self::stem::{Kind, Stem, lines_of};
 use self::types::DesignKey;
 use crate::{layout, syntax};
 
-// How many exported functions of other stems the brief lists.
-const MAX_EXPORTS: usize = 24;
-
 // A slice's skeleton as read against the tree and not yet written: each
 // stem's files, held or to scaffold, and each line placed in its list.
 pub struct Plan {
@@ -55,6 +52,79 @@ pub struct Plan {
     skips: Vec<Skip>,
 }
 
+impl Plan {
+    // A slice of `start` requirements alone, none carrying a route, lays no
+    // stem: nothing is scaffolded and no turn is opened for it.
+    pub const fn is_empty(&self) -> bool {
+        self.stems.is_empty()
+    }
+
+    // Writes each stem's files the tree lacks and adds each placed line to
+    // its list, every list written once with its lines in order.
+    pub fn write(mut self, root: &Path) -> Result<Scaffold, Error> {
+        let mut written = Vec::new();
+        for stem in &self.stems {
+            for kind in Kind::ALL {
+                let Some(file) = stem.file(kind) else { continue };
+                if !file.held {
+                    create(root, &file.path, &stem.render(kind))?;
+                    written.push(file.path.clone());
+                } else if file.extended
+                    && let Some(text) = stem.text(kind)
+                {
+                    write_whole(root, &file.path, Standing::File, text.as_bytes())
+                        .map_err(|err| server_error!("writing `{}`: {err}", file.path))?;
+                    written.push(file.path.clone());
+                }
+            }
+            for data in stem.data.iter().filter(|_| stem.module.laid()) {
+                match standing(root, &data.path) {
+                    Ok(Standing::Absent) => {
+                        create(root, &data.path, &data.text)?;
+                        written.push(data.path.clone());
+                    }
+                    Ok(Standing::File) => {}
+                    Err(NoFollow::Io { path, source }) => {
+                        return Err(server_error!("reading `{path}`: {source}"));
+                    }
+                    Err(err) => {
+                        return Err(bad_request!(
+                            "`{}` {err}, where the slice's scaffold writes a data file",
+                            data.path
+                        ));
+                    }
+                }
+            }
+        }
+
+        let mut touched: Vec<&str> = Vec::new();
+        for line in self.stems.iter().flat_map(|stem| &stem.lines) {
+            if line.placement == Placement::Add && self.lists.add(line) {
+                push_unique(&mut touched, &line.path);
+            }
+        }
+        for path in touched {
+            let Some(text) = self.lists.get(path) else { continue };
+            write_whole(root, path, Standing::File, text.as_bytes())
+                .map_err(|err| server_error!("writing `{path}`: {err}"))?;
+            written.push(path.to_owned());
+        }
+        let listing = layout::listing(root)?;
+        Ok(Scaffold {
+            plan: self,
+            written,
+            listing,
+        })
+    }
+}
+
+// Creates the file the plan found absent, its directories made one at a
+// time and no link followed.
+fn create(root: &Path, path: &str, text: &str) -> Result<(), Error> {
+    write_whole(root, path, Standing::Absent, text.as_bytes())
+        .map_err(|err| server_error!("creating `{path}`: {err}"))
+}
+
 // The gate's function as the slice reaches it: the module that holds it
 // and the handlers of the slice, each by its module and name, that call it
 // first.
@@ -71,117 +141,12 @@ pub struct Skip {
     pub subject: String,
 }
 
-// A `pub fn` a stem already in the tree exports, which a slice of another
-// stem calls rather than writing again.
-struct Export {
-    // The function's path from the crate root, `customers::customers::authenticate`.
-    path: String,
-    file: String,
-    line: usize,
-    signature: String,
-    doc: Option<String>,
-}
-
 // A slice's skeleton as written, which the turn fills and the check holds
 // the tree to.
 pub struct Scaffold {
     plan: Plan,
     written: Vec<String>,
     listing: BTreeSet<String>,
-}
-
-// What a check reads of one scenario the scaffold wrote a test for.
-pub struct ExpectedTest<'a> {
-    pub path: &'a str,
-    pub id: &'a str,
-    pub scenario: &'a str,
-    pub test: &'a str,
-}
-
-// One stem's share of the slice before its files are planned.
-struct StemPlan<'s> {
-    stem: Stem,
-    requirements: Vec<&'s Requirement>,
-    owned: Vec<&'s DesignType>,
-}
-
-// A `start` requirement laid under the crate of its route's resource.
-struct Relaid {
-    id: String,
-    route: String,
-    stem: String,
-}
-
-// The slice's requirements and owned types sorted to their stems.
-struct Sorted<'s> {
-    plans: Vec<StemPlan<'s>>,
-    start: Vec<String>,
-    relaid: Vec<Relaid>,
-    skips: Vec<Skip>,
-}
-
-impl<'s> Sorted<'s> {
-    // Each requirement to its stem, `start` set aside unless a typed route
-    // names the resource whose crate serves it, and each owned type to the
-    // stem its key leads with, else the first.
-    fn of(slice: &'s Slice) -> Self {
-        let mut plans: Vec<StemPlan> = Vec::new();
-        let mut start = Vec::new();
-        let mut relaid = Vec::new();
-        let mut skips = Vec::new();
-        for requirement in &slice.requirements {
-            let own = requirement.stem();
-            let name = if layout::is_start_stem(own) {
-                let resource = trigger::route(requirement)
-                    .map(|route| (route, trigger::resource(route)))
-                    .and_then(|(route, stem)| Some((route, stem?)))
-                    .filter(|(_, stem)| !layout::is_start_stem(stem));
-                let Some((route, stem)) = resource else {
-                    start.push(requirement.id.clone());
-                    continue;
-                };
-                relaid.push(Relaid {
-                    id: requirement.id.clone(),
-                    route: route.to_string(),
-                    stem: stem.clone(),
-                });
-                stem
-            } else {
-                own.to_owned()
-            };
-            if reference::skips(requirement) {
-                skips.push(Skip {
-                    stem: name.clone(),
-                    id: requirement.id.clone(),
-                    subject: requirement.subject.clone(),
-                });
-            }
-            match plans.iter_mut().find(|plan| plan.stem.name == name) {
-                Some(plan) => plan.requirements.push(requirement),
-                None => plans.push(StemPlan {
-                    stem: Stem::new(&name, slice),
-                    requirements: vec![requirement],
-                    owned: Vec::new(),
-                }),
-            }
-        }
-        for design_type in &slice.types {
-            let stem = DesignKey::parse(&design_type.key).stem;
-            let at = plans
-                .iter()
-                .position(|plan| Some(plan.stem.name.as_str()) == stem)
-                .or_else(|| (!plans.is_empty()).then_some(0));
-            if let Some(at) = at {
-                plans[at].owned.push(design_type);
-            }
-        }
-        Self {
-            plans,
-            start,
-            relaid,
-            skips,
-        }
-    }
 }
 
 impl Scaffold {
@@ -384,70 +349,127 @@ impl Scaffold {
     }
 }
 
-impl Plan {
-    // A slice of `start` requirements alone, none carrying a route, lays no
-    // stem: nothing is scaffolded and no turn is opened for it.
-    pub const fn is_empty(&self) -> bool {
-        self.stems.is_empty()
-    }
+// The slice's requirements and owned types sorted to their stems.
+struct Sorted<'s> {
+    plans: Vec<StemPlan<'s>>,
+    start: Vec<String>,
+    relaid: Vec<Relaid>,
+    skips: Vec<Skip>,
+}
 
-    // Writes each stem's files the tree lacks and adds each placed line to
-    // its list, every list written once with its lines in order.
-    pub fn write(mut self, root: &Path) -> Result<Scaffold, Error> {
-        let mut written = Vec::new();
-        for stem in &self.stems {
-            for kind in Kind::ALL {
-                let Some(file) = stem.file(kind) else { continue };
-                if !file.held {
-                    create(root, &file.path, &stem.render(kind))?;
-                    written.push(file.path.clone());
-                } else if file.extended
-                    && let Some(text) = stem.text(kind)
-                {
-                    write_whole(root, &file.path, Standing::File, text.as_bytes())
-                        .map_err(|err| server_error!("writing `{}`: {err}", file.path))?;
-                    written.push(file.path.clone());
-                }
+impl<'s> Sorted<'s> {
+    // Each requirement to its stem, `start` set aside unless a typed route
+    // names the resource whose crate serves it, and each owned type to the
+    // stem its key leads with, else the first.
+    fn of(slice: &'s Slice) -> Self {
+        let mut plans: Vec<StemPlan> = Vec::new();
+        let mut start = Vec::new();
+        let mut relaid = Vec::new();
+        let mut skips = Vec::new();
+        for requirement in &slice.requirements {
+            let own = requirement.stem();
+            let name = if layout::is_start_stem(own) {
+                let resource = trigger::route(requirement)
+                    .map(|route| (route, trigger::resource(route)))
+                    .and_then(|(route, stem)| Some((route, stem?)))
+                    .filter(|(_, stem)| !layout::is_start_stem(stem));
+                let Some((route, stem)) = resource else {
+                    start.push(requirement.id.clone());
+                    continue;
+                };
+                relaid.push(Relaid {
+                    id: requirement.id.clone(),
+                    route: route.to_string(),
+                    stem: stem.clone(),
+                });
+                stem
+            } else {
+                own.to_owned()
+            };
+            if reference::skips(requirement) {
+                skips.push(Skip {
+                    stem: name.clone(),
+                    id: requirement.id.clone(),
+                    subject: requirement.subject.clone(),
+                });
             }
-            for data in stem.data.iter().filter(|_| stem.module.laid()) {
-                match standing(root, &data.path) {
-                    Ok(Standing::Absent) => {
-                        create(root, &data.path, &data.text)?;
-                        written.push(data.path.clone());
-                    }
-                    Ok(Standing::File) => {}
-                    Err(NoFollow::Io { path, source }) => {
-                        return Err(server_error!("reading `{path}`: {source}"));
-                    }
-                    Err(err) => {
-                        return Err(bad_request!(
-                            "`{}` {err}, where the slice's scaffold writes a data file",
-                            data.path
-                        ));
-                    }
-                }
+            match plans.iter_mut().find(|plan| plan.stem.name == name) {
+                Some(plan) => plan.requirements.push(requirement),
+                None => plans.push(StemPlan {
+                    stem: Stem::new(&name, slice),
+                    requirements: vec![requirement],
+                    owned: Vec::new(),
+                }),
             }
         }
-
-        let mut touched: Vec<&str> = Vec::new();
-        for line in self.stems.iter().flat_map(|stem| &stem.lines) {
-            if line.placement == Placement::Add && self.lists.add(line) {
-                push_unique(&mut touched, &line.path);
+        for design_type in &slice.types {
+            let stem = DesignKey::parse(&design_type.key).stem;
+            let at = plans
+                .iter()
+                .position(|plan| Some(plan.stem.name.as_str()) == stem)
+                .or_else(|| (!plans.is_empty()).then_some(0));
+            if let Some(at) = at {
+                plans[at].owned.push(design_type);
             }
         }
-        for path in touched {
-            let Some(text) = self.lists.get(path) else { continue };
-            write_whole(root, path, Standing::File, text.as_bytes())
-                .map_err(|err| server_error!("writing `{path}`: {err}"))?;
-            written.push(path.to_owned());
+        Self {
+            plans,
+            start,
+            relaid,
+            skips,
         }
-        let listing = layout::listing(root)?;
-        Ok(Scaffold {
-            plan: self,
-            written,
-            listing,
-        })
     }
+}
+
+// One stem's share of the slice before its files are planned.
+struct StemPlan<'s> {
+    stem: Stem,
+    requirements: Vec<&'s Requirement>,
+    owned: Vec<&'s DesignType>,
+}
+
+// A `start` requirement laid under the crate of its route's resource.
+struct Relaid {
+    id: String,
+    route: String,
+    stem: String,
+}
+
+// Resolves the gate for every stem with a handler under its prefix: the
+// one the tree holds, else the one the first such stem lays, read once and
+// handed to each stem.
+fn resolve_gate(
+    root: &Path, existing: &BTreeSet<String>, gate: &Gate, stems: &mut [Stem],
+) -> Result<(), Error> {
+    let own: Vec<String> = stems.iter().map(|stem| stem.module.path.clone()).collect();
+    let found = gate::Found::scan(root, existing, &own)?;
+    let first = stems.iter().find(|stem| stem.under(gate)).map(|stem| gate::Laying {
+        module: stem.part.clone(),
+        dir: stem.dir.clone(),
+    });
+    let gated = gate::Gated {
+        gate,
+        found: found.as_ref(),
+        first: first.as_ref(),
+    };
+    for stem in stems.iter_mut() {
+        stem.gate(&gated);
+    }
+    Ok(())
+}
+
+// How many exported functions of other stems the brief lists.
+const MAX_EXPORTS: usize = 24;
+
+// A `pub fn` a stem already in the tree exports, which a slice of another
+// stem calls rather than writing again.
+struct Export {
+    // The function's path from the crate root, `customers::customers::authenticate`.
+    path: String,
+    file: String,
+    line: usize,
+    signature: String,
+    doc: Option<String>,
 }
 
 // The `pub fn`s the stem crates already in the tree export from their
@@ -490,29 +512,6 @@ fn exports(root: &Path, existing: &BTreeSet<String>, stems: &[Stem]) -> Result<V
     Ok(exports)
 }
 
-// Resolves the gate for every stem with a handler under its prefix: the
-// one the tree holds, else the one the first such stem lays, read once and
-// handed to each stem.
-fn resolve_gate(
-    root: &Path, existing: &BTreeSet<String>, gate: &Gate, stems: &mut [Stem],
-) -> Result<(), Error> {
-    let own: Vec<String> = stems.iter().map(|stem| stem.module.path.clone()).collect();
-    let found = gate::Found::scan(root, existing, &own)?;
-    let first = stems.iter().find(|stem| stem.under(gate)).map(|stem| gate::Laying {
-        module: stem.part.clone(),
-        dir: stem.dir.clone(),
-    });
-    let gated = gate::Gated {
-        gate,
-        found: found.as_ref(),
-        first: first.as_ref(),
-    };
-    for stem in stems.iter_mut() {
-        stem.gate(&gated);
-    }
-    Ok(())
-}
-
 // The stems the inbound stream holds to a registration whose crate already
 // registers a topic in one of its modules, so the brief asks for no second
 // registration there; a file `syn` refuses registers nothing.
@@ -532,9 +531,10 @@ fn consumed(root: &Path, inbound: &Inbound, stems: &[Stem]) -> Result<BTreeSet<S
     Ok(consumed)
 }
 
-// Creates the file the plan found absent, its directories made one at a
-// time and no link followed.
-fn create(root: &Path, path: &str, text: &str) -> Result<(), Error> {
-    write_whole(root, path, Standing::Absent, text.as_bytes())
-        .map_err(|err| server_error!("creating `{path}`: {err}"))
+// What a check reads of one scenario the scaffold wrote a test for.
+pub struct ExpectedTest<'a> {
+    pub path: &'a str,
+    pub id: &'a str,
+    pub scenario: &'a str,
+    pub test: &'a str,
 }

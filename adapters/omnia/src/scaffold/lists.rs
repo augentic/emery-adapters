@@ -18,41 +18,6 @@ pub struct Line {
     pub placement: Placement,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Placement {
-    Held,
-    Add,
-    Unanchored,
-}
-
-// Where a list takes a line.
-pub enum Place {
-    // After the template's anchor, as the template's own insertion lays it:
-    // on the line after the anchor's, or, for an anchor opening an array,
-    // as the array's last entry.
-    After(&'static str),
-    // The topic table: the end of the file.
-    FileEnd,
-    // Among the `pub mod` lines of a stem's entry, in the order the
-    // formatter keeps them; before its first `use`, a blank line between,
-    // where the entry holds none.
-    PubModList,
-}
-
-// The text of each list a line is placed in, read once; a list the tree
-// lacks is `None`.
-#[derive(Default)]
-pub struct Lists {
-    texts: BTreeMap<String, Option<String>>,
-}
-
-// The topic table as the tree holds it, and the names the slice's topics
-// take beside its constants.
-pub struct Topics {
-    declared: Vec<(String, String)>,
-    names: Names,
-}
-
 impl Line {
     pub fn new(path: &str, text: String, place: Place) -> Self {
         Self {
@@ -89,6 +54,34 @@ impl Line {
     fn key(&self) -> &str {
         self.text.lines().last().unwrap_or(&self.text).trim()
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    Held,
+    Add,
+    Unanchored,
+}
+
+// Where a list takes a line.
+pub enum Place {
+    // After the template's anchor, as the template's own insertion lays it:
+    // on the line after the anchor's, or, for an anchor opening an array,
+    // as the array's last entry.
+    After(&'static str),
+    // The topic table: the end of the file.
+    FileEnd,
+    // Among the `pub mod` lines of a stem's entry, in the order the
+    // formatter keeps them; before its first `use`, a blank line between,
+    // where the entry holds none.
+    PubModList,
+}
+
+// The text of each list a line is placed in, read once; a list the tree
+// lacks is `None`.
+#[derive(Default)]
+pub struct Lists {
+    texts: BTreeMap<String, Option<String>>,
 }
 
 impl Lists {
@@ -134,6 +127,13 @@ impl Lists {
     pub fn get(&self, path: &str) -> Option<&str> {
         self.texts.get(path).and_then(Option::as_deref)
     }
+}
+
+// The topic table as the tree holds it, and the names the slice's topics
+// take beside its constants.
+pub struct Topics {
+    declared: Vec<(String, String)>,
+    names: Names,
 }
 
 impl Topics {

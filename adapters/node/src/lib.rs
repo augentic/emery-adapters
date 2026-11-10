@@ -64,10 +64,6 @@ impl TargetAdapter for Adapter {
     }
 }
 
-/// The prompts and the reference embedded in the adapter.
-pub static PROSE: &[Doc] =
-    emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
-
 const FILES: &[(&str, &str)] = &[
     (".gitignore", include_str!("../seed/.gitignore")),
     ("package.json", include_str!("../seed/package.json")),
@@ -93,6 +89,10 @@ fn init(root: &str) -> Result<(), Error> {
     tracing::info!(scaffolded, "scaffolded the root manifests");
     Ok(())
 }
+
+/// The prompts and the reference embedded in the adapter.
+pub static PROSE: &[Doc] =
+    emery_sdk::prose!["../prose/build.md", "../prose/verify.md", "../prose/references/layout.md",];
 
 #[cfg(target_arch = "wasm32")]
 emery_sdk::export_target!(Adapter);

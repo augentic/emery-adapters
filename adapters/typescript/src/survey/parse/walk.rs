@@ -83,14 +83,6 @@ struct Walker<'s> {
     keyword: Option<&'static str>,
 }
 
-struct Frame {
-    id: u32,
-    name: Option<String>,
-    depth: usize,
-    saved_nesting: usize,
-    saved_constructor: bool,
-}
-
 impl<'s> Walker<'s> {
     fn line(&self, offset: u32) -> u32 {
         u32::try_from(self.starts.partition_point(|&start| start <= offset)).unwrap_or(u32::MAX)
@@ -855,6 +847,14 @@ impl<'a> Visit<'a> for Walker<'_> {
         self.type_decl(&it.id.name, TypeKind::Enum, it.span);
         walk::walk_ts_enum_declaration(self, it);
     }
+}
+
+struct Frame {
+    id: u32,
+    name: Option<String>,
+    depth: usize,
+    saved_nesting: usize,
+    saved_constructor: bool,
 }
 
 fn hidden(accessibility: Option<TSAccessibility>, key: &str) -> bool {
