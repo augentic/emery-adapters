@@ -119,13 +119,8 @@ omnia-wasi-model = "0.38.0"
 omnia-wasi-otel = "0.38.0"
 
 [patch.crates-io]
-# experiment / non-production: the layout contract is emery PR 400
-# (`experiment/layout-on-main`) at this commit. Path overrides stay commented;
-# CI has no sibling checkout.
 emery-prose = { git = "https://github.com/augentic/emery", rev = "af792266eb1254a2d6723a5bfbb015d93c3dbc65" }
 emery-sdk = { git = "https://github.com/augentic/emery", rev = "af792266eb1254a2d6723a5bfbb015d93c3dbc65" }
-# emery-prose = { path = "../emery/crates/prose" }
-# emery-sdk = { path = "../emery/crates/sdk" }
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-backend = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
