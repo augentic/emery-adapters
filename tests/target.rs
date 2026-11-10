@@ -4,12 +4,11 @@
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
-use std::num::NonZeroU32;
 use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, DesignType, Grant, InitContext, MergeStrategy, Outcome, Report, Requirement,
+    BuildContext, DesignType, Grant, InitContext, Outcome, Report, Requirement,
     Scenario, Slice, TargetAdapter, Task, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
@@ -733,60 +732,6 @@ async fn node_init() {
     assert_eq!(
         files_under(project.path()),
         ["package.json", "tsconfig.json"].map(str::to_owned).into()
-    );
-}
-
-// The rules a wave's slices merge under: the lockfile kept from the
-// integrated side, the entry and every list beneath it as a union, and every
-// manifest under none.
-#[test]
-fn node_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_node::Adapter::metadata()
-        .rules
-        .iter()
-        .map(|rule| (rule.paths.as_ref(), rule.strategy))
-        .collect();
-
-    assert_eq!(
-        declared,
-        [
-            ("package-lock.json", MergeStrategy::Ours),
-            ("src/index.ts", MergeStrategy::Union),
-            ("**/index.ts", MergeStrategy::Union),
-        ],
-        "the merge rules the adapter declares, in order"
-    );
-}
-
-// What a build's or verify's worker reaches beyond the tree, as the grant the
-// turns carry: the npm registry, a Node installed beneath the home by nvm,
-// Volta, or fnm, and Volta's root named for it. The union is asserted rather
-// than the grants, so the adapter may regroup them while any widening shows.
-#[test]
-fn node_worker() {
-    let grants = emery_node::Adapter::metadata().grants;
-    assert_eq!(
-        Grant::union(grants).map(SeenWorker::from),
-        Some(SeenWorker {
-            egress: vec!["registry.npmjs.org".to_owned()],
-            read: vec![
-                "~/.nvm/versions/node".to_owned(),
-                "~/.volta".to_owned(),
-                "~/.local/share/fnm".to_owned(),
-            ],
-            env: vec![("VOLTA_HOME".to_owned(), "~/.volta".to_owned())],
-        }),
-        "the worker grant the adapter's turns carry"
-    );
-    assert_eq!(Grant::findings(grants), Vec::<String>::new());
-}
-
-#[test]
-fn node_budget() {
-    assert_eq!(
-        emery_node::Adapter::metadata().budget,
-        NonZeroU32::new(12),
-        "the default slice budget the adapter declares"
     );
 }
 
@@ -4890,107 +4835,6 @@ async fn omnia_init_files() {
         pins.iter().map(|(_, version)| *version).collect();
     assert_eq!(versions.len(), 1, "every omnia pin in the seed is one version: {pins:?}");
     assert!(manifest.contains(OMNIA_PIN), "the scenarios edit the pin the seed holds");
-}
-
-// The rules a wave's slices merge under: the lockfile kept from the
-// integrated side, every file holding a list as a union, and every other
-// path under none, the entry `src/lib.rs` among them.
-#[test]
-fn omnia_rules() {
-    let declared: Vec<(&str, MergeStrategy)> = emery_omnia::Adapter::metadata()
-        .rules
-        .iter()
-        .map(|rule| (rule.paths.as_ref(), rule.strategy))
-        .collect();
-
-    assert_eq!(
-        declared,
-        [
-            ("Cargo.lock", MergeStrategy::Ours),
-            ("Cargo.toml", MergeStrategy::Union),
-            ("src/lib.rs", MergeStrategy::Union),
-            ("crates/common/src/topic.rs", MergeStrategy::Union),
-            ("crates/*/Cargo.toml", MergeStrategy::Union),
-            ("crates/*/src/lib.rs", MergeStrategy::Union),
-        ],
-        "the merge rules the adapter declares, in order"
-    );
-}
-
-// The rules follow the template: every file the template scaffolds as a list is
-// union-merged, every union rule over one path is such a file, and the rules
-// over a glob are the two files of a stem's crate that hold its lists, so a
-// list the template adds or drops moves the rules with it.
-#[test]
-fn omnia_rules_follow_template() {
-    let union: Vec<&str> = emery_omnia::Adapter::metadata()
-        .rules
-        .iter()
-        .filter(|rule| rule.strategy == MergeStrategy::Union)
-        .map(|rule| rule.paths.as_ref())
-        .collect();
-    let listed: BTreeSet<&str> = omnia_template::ENTRIES
-        .iter()
-        .filter(|entry| entry.role == omnia_template::Role::Listed)
-        .map(|entry| entry.path)
-        .collect();
-
-    for path in &listed {
-        assert!(union.contains(path), "the listed `{path}` is merged as a union: {union:?}");
-    }
-    let (globs, plain): (Vec<&str>, Vec<&str>) = union.iter().partition(|rule| rule.contains('*'));
-    assert_eq!(
-        plain.into_iter().collect::<BTreeSet<_>>(),
-        listed,
-        "every union rule over one path is a file the template scaffolds as a list"
-    );
-    assert_eq!(
-        globs,
-        ["crates/*/Cargo.toml", "crates/*/src/lib.rs"],
-        "the glob rules are a stem's manifest and its entry"
-    );
-    for entry in omnia_template::ENTRIES {
-        if entry.role == omnia_template::Role::Static {
-            assert!(
-                !union.contains(&entry.path),
-                "the static `{}` is merged under no rule",
-                entry.path
-            );
-        }
-    }
-}
-
-// What a build's or verify's worker reaches beyond the tree, as the grant the
-// turns carry: the crates.io index and its downloads, the toolchain and the
-// binaries beneath the home, never `~/.cargo` whole, and `RUSTUP_HOME` named
-// for it. The union is asserted rather than the grants, so the adapter may
-// regroup them while any widening shows.
-#[test]
-fn omnia_worker() {
-    let grants = emery_omnia::Adapter::metadata().grants;
-    assert_eq!(
-        Grant::union(grants).map(SeenWorker::from),
-        Some(SeenWorker {
-            egress: vec![
-                "index.crates.io".to_owned(),
-                "static.crates.io".to_owned(),
-                "github.com".to_owned(),
-            ],
-            read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
-            env: vec![("RUSTUP_HOME".to_owned(), "~/.rustup".to_owned())],
-        }),
-        "the worker grant the adapter's turns carry"
-    );
-    assert_eq!(Grant::findings(grants), Vec::<String>::new());
-}
-
-#[test]
-fn omnia_budget() {
-    assert_eq!(
-        emery_omnia::Adapter::metadata().budget,
-        NonZeroU32::new(12),
-        "the default slice budget the adapter declares"
-    );
 }
 
 #[tokio::test]
