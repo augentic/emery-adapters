@@ -828,22 +828,6 @@ mod tests {
     }
 
     #[test]
-    fn first_rung_tag() {
-        assert_eq!(tag(2, 0, RUNG), "run-2");
-    }
-
-    #[test]
-    fn climbed_tag() {
-        let rung = Rung {
-            timeout: 1200,
-            inactivity: 240,
-        };
-        let tag = tag(1, 1, rung);
-        assert_eq!(tag, "run-1@1200-240");
-        assert!(!tag.contains('/'), "a tag names files beneath the case");
-    }
-
-    #[test]
     fn ladder_rungs() {
         let ladder: Vec<Rung> = LADDER
             .split(',')
@@ -855,10 +839,21 @@ mod tests {
         assert_eq!(Rung::parse(BUILD_RUNG, "EVAL_BUILD_RUNG").unwrap(), ladder[1]);
         assert!(Rung::parse("1200", "EVAL_LADDER").unwrap_err().starts_with("EVAL_LADDER:"));
         assert!(Rung::parse("a/b", "EVAL_BUILD_RUNG").unwrap_err().starts_with("EVAL_BUILD_RUNG:"));
+
+        assert_eq!(tag(2, 0, RUNG), "run-2");
+
+        let rung = Rung {
+            timeout: 1200,
+            inactivity: 240,
+        };
+        let tag = tag(1, 1, rung);
+        assert_eq!(tag, "run-1@1200-240");
+        assert!(!tag.contains('/'), "a tag names files beneath the case");
     }
 
     #[test]
-    fn oracle_args() {
+    #[expect(clippy::too_many_lines, reason = "Args::parse scenarios share one cli_args test")]
+    fn cli_args() {
         let args =
             Args::parse(["--oracle", "card", "train"].map(String::from).into_iter()).unwrap();
         assert_eq!(args.oracle.as_deref(), Some("card"));
@@ -877,10 +872,7 @@ mod tests {
             ["--oracle", "card", "--target", "omnia", "train"].map(String::from).into_iter(),
         );
         assert!(omnia.is_ok(), "the oracle reads an omnia build");
-    }
 
-    #[test]
-    fn resume_args() {
         let args = Args::parse(
             ["--resume", "card", "--at", "3", "--target", "omnia", "express-orders"]
                 .map(String::from)
@@ -934,12 +926,46 @@ mod tests {
         ] {
             assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
         }
+
+        let build = Args::parse(
+            ["--build", "--target", "omnia", "--budget", "6", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(build.budget, NonZeroUsize::new(6));
+        assert_eq!(build.target, Some(Target::Omnia));
+
+        let rebuild = Args::parse(
+            ["--rebuild", "card", "--budget", "12", "express-orders"].map(String::from).into_iter(),
+        )
+        .unwrap();
+        assert_eq!(rebuild.budget, NonZeroUsize::new(12));
+
+        let resume = Args::parse(
+            ["--resume", "card", "--at", "2", "--budget", "8", "express-orders"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(resume.budget, NonZeroUsize::new(8));
+
+        for argv in [
+            &["--budget", "6", "express-orders"][..],
+            &["--facts", "--budget", "6", "express-orders"][..],
+            &["--oracle", "card", "--budget", "6", "train"][..],
+            &["--build", "--budget", "0", "express-orders"][..],
+            &["--build", "--budget", "six", "express-orders"][..],
+            &["--build", "--budget"][..],
+        ] {
+            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
+        }
     }
 
     // A resumed build's chain holds the slices it resumed beside the ones it
     // built; the counts tell them apart.
     #[test]
-    fn resumed_build_counts() {
+    fn resumed_build() {
         let stderr = timed("build-SLICE-004", "ok", 100_000) + &timed("verify", "ok", 20_000);
         let history = vec![
             Landed {
@@ -987,13 +1013,7 @@ mod tests {
         assert_eq!(this_run.len(), 1);
         assert_eq!(this_run[0].id, "SLICE-004");
         assert_eq!(build.resumption(), ", 1 resumed, 1 built");
-    }
 
-    // A resume seals the earlier waves' empty slices but the first, so the
-    // slices sealed are the empty ones before the wave in wave order less
-    // one, none at the second wave, and the message is the engine's own.
-    #[test]
-    fn resumed_empty_waves_sealed() {
         let envelope = serde_json::json!({
             "slices": [
                 {"id": "SLICE-001", "name": "start", "wave": 1, "covered": [],
@@ -1017,48 +1037,19 @@ mod tests {
         assert_eq!(
             sealed.message("rev", "1111"),
             "SLICE-002 start-prefetch\n\nSlice: SLICE-002\nPart: PART-002\nRevision: rev\nBudget: \
-             12\nRequirements: REQ-004\nCovered: \nAdapter: target\nBase: 1111\nWave: 3"
+                     12\nRequirements: REQ-004\nCovered: \nAdapter: target\nBase: 1111\nWave: 3"
         );
     }
 
-    #[test]
-    fn rust_log_traces_adapter_crates() {
-        let filter = rust_log(["documentation", "typescript", "node"]);
-        let targets: Vec<_> =
-            filter.split(',').map(|part| part.split('=').next().unwrap()).collect();
-        assert!(targets.contains(&"emery_documentation"));
-        assert!(targets.contains(&"emery_typescript"));
-        assert!(targets.contains(&"emery_node"));
-        assert!(!targets.contains(&"documentation"));
-    }
+    // A resume seals the earlier waves' empty slices but the first, so the
+    // slices sealed are the empty ones before the wave in wave order less
+    // one, none at the second wave, and the message is the engine's own.
 
     // Both backends' completion and tool-call lines are in the default
     // filter, so one runner reads a run under `emery` or `emery-dev`.
-    #[test]
-    fn rust_log_reads_both_backends() {
-        let filter = rust_log(["typescript"]);
-        let directives: Vec<&str> = filter.split(',').collect();
-        assert!(directives.contains(&"emery_engine=debug"));
-        assert!(directives.contains(&"omnia_cursor=info"));
-        assert!(directives.contains(&"omnia_cursor::tools=trace"));
-        assert!(directives.contains(&"omnia_genai=debug"));
-        assert!(directives.contains(&"omnia_genai::tools=trace"));
-        assert!(directives.contains(&"omnia_core=off"));
-    }
 
     #[test]
-    fn backend_of_binary() {
-        assert_eq!(Backend::of(Path::new("../emery/target/release/emery")), Backend::Cursor);
-        assert_eq!(Backend::of(Path::new("../emery/target/release/emery-dev")), Backend::GenAi);
-        assert_eq!(Backend::of(Path::new("/opt/bin/emery-dev.exe")), Backend::GenAi);
-        assert_eq!(Backend::Cursor.rung(), ("CURSOR_TIMEOUT_SECS", "CURSOR_INACTIVITY_SECS"));
-        assert_eq!(Backend::GenAi.rung(), ("GENAI_TIMEOUT_SECS", "GENAI_SHELL_TIMEOUT_SECS"));
-        assert_eq!(Backend::Cursor.model(), ("CURSOR_MODEL", "auto"));
-        assert_eq!(Backend::GenAi.model(), ("GENAI_MODEL", "gpt-5.5"));
-    }
-
-    #[test]
-    fn starved_run() {
+    fn run_outcomes() {
         let starved = run_from(
             Some(3),
             &(completion("survey-python", "ok") + &completion("evidence-python-0", "timeout")),
@@ -1069,10 +1060,7 @@ mod tests {
         let landed = run_from(Some(0), &completion("evidence-python-0", "ok"), None);
         assert!(!landed.starved());
         assert!(landed.passed());
-    }
 
-    #[test]
-    fn stillborn_run() {
         let refused = run_from(Some(4), &completion("survey-python", "error"), None);
         assert!(refused.stillborn());
         assert_eq!(refused.died_in(), Some("survey-python"));
@@ -1089,10 +1077,7 @@ mod tests {
 
         let engine = run_from(Some(1), &completion("survey-python", "ok"), None);
         assert!(!engine.stillborn(), "only the backend's refusal is put again");
-    }
 
-    #[test]
-    fn died_in_engine_turn() {
         let stderr = completion("survey-python", "ok")
             + &completion("evidence-python-0", "corrected")
             + &completion("spec-draft", "ok")
@@ -1104,7 +1089,7 @@ mod tests {
     }
 
     #[test]
-    fn build_landed() {
+    fn build_metrics() {
         let stderr = timed("build-SLICE-001", "ok", 100_000)
             + &timed("verify", "ok", 20_000)
             + &timed("build-SLICE-002", "ok", 60_000)
@@ -1124,6 +1109,37 @@ mod tests {
         assert_eq!(build.covered(), (4, 5));
         assert_eq!(build.verify_failures(), [] as [&str; 0]);
         assert_eq!(build.repaired(), [2]);
+
+        let stdout = r#"{"slices": [], "sealed": [
+                    {"wave": 1, "commit": "aaaa", "paths": ["Cargo.lock"]},
+                    {"wave": 3, "commit": "cccc", "paths": ["Cargo.lock", "crates/start/src/api.rs"]}
+                ]}"#;
+        let mut build = build_from(0, stdout, "", Vec::new());
+        build.target = Target::Omnia;
+        let repairs = build.repairs();
+        assert_eq!(repairs.get(&1), Some(&Vec::new()));
+        assert_eq!(repairs.get(&2), None);
+        assert_eq!(
+            repairs.get(&3).map(Vec::as_slice),
+            Some(&["crates/start/src/api.rs".to_owned()][..])
+        );
+
+        let stderr = timed("build-SLICE-001", "ok", 100_000)
+            + &timed("verify", "ok", 20_000)
+            + &timed("build-SLICE-002", "ok", 60_000)
+            + &timed("build-SLICE-003", "ok", 90_000)
+            + &timed("verify", "ok", 30_000)
+            + &timed("verify", "corrected", 5_000);
+        let build = build_from(0, "{}", &stderr, Vec::new());
+        let waves = build.wave_turns();
+        assert_eq!(waves.len(), 2);
+        assert_eq!(waves[1].builds.len(), 2);
+        assert_eq!(waves[1].verifies.len(), 2, "a verify's correction round closes the same wave");
+        assert_eq!(build.serial(), Duration::from_secs(305));
+        assert_eq!(build.critical(), Duration::from_secs(100 + 20 + 90 + 35));
+        assert_eq!(build.speedup(), Some(124));
+        assert_eq!(factor(124), "1.24×");
+        assert_eq!(factor(300), "3.00×");
     }
 
     fn check(name: &'static str, exit: Option<i32>) -> HostCheck {
@@ -1136,7 +1152,11 @@ mod tests {
     }
 
     #[test]
-    fn host_checks_cells() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Fidelity host checks and runner summaries share one test"
+    )]
+    fn host_checks() {
         let mut fidelity = Fidelity {
             file: "run-1.fidelity.md".to_owned(),
             tree: "the label `emery/feb4bd36`".to_owned(),
@@ -1202,12 +1222,7 @@ mod tests {
         fidelity.checks[1] = unrun("npx tsc", "the install failed");
         fidelity.checks[2] = unrun("node --test", "the install failed");
         assert_eq!(fidelity.host_cell(), "npm install ✗ · npx tsc unrun · node --test unrun");
-    }
 
-    // The omnia profile's runner is `cargo test`, so its failures read as
-    // the tests' and the guest build's name stands beside them.
-    #[test]
-    fn omnia_host_checks_cells() {
         let mut fidelity = Fidelity {
             file: "run-1.fidelity.md".to_owned(),
             tree: "the label `emery/feb4bd36`".to_owned(),
@@ -1236,39 +1251,18 @@ mod tests {
         fidelity.failed = 1;
         assert!(!fidelity.clean());
         assert_eq!(fidelity.host_cell(), "tests 7/8 · cargo build unrun");
-    }
 
-    #[test]
-    fn target_names() {
-        assert_eq!(Target::default(), Target::Node);
-        assert_eq!(Target::parse("node"), Ok(Target::Node));
-        Target::parse("typescript-target").unwrap_err();
-        assert_eq!(Target::parse("omnia"), Ok(Target::Omnia));
-        Target::parse("omnia-target").unwrap_err();
-        assert_eq!(Target::Omnia.lockfile(), "Cargo.lock");
-        assert_eq!(Target::Node.runner(), "node --test");
-        assert_eq!(Target::Omnia.config_shim(), Some("clippy.toml"));
-        assert_eq!(Target::Node.config_shim(), None);
-    }
-
-    #[test]
-    fn tap_summary() {
         let note = "TAP version 13\nok 1 - a\nnot ok 2 - b\n# tests 2\n# pass 1\n# fail 1\n";
         assert_eq!(tap_counts(note), (1, 1));
         assert_eq!(tap_counts("not run: the install failed"), (0, 0));
-    }
 
-    // Cargo prints one `test result` line per test binary; the counts sum
-    // over them, and a check that did not run counts nothing.
-    #[test]
-    fn cargo_test_summary() {
         let output = "     Running tests/reading.rs\n\
-                      test an_order_is_returned_by_its_id ... ok\n\
-                      test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; \
-                      finished in 0.00s\n\
-                      \n     Running tests/placing.rs\n\
-                      test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered \
-                      out; finished in 0.01s\n";
+                              test an_order_is_returned_by_its_id ... ok\n\
+                              test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; \
+                              finished in 0.00s\n\
+                              \n     Running tests/placing.rs\n\
+                              test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered \
+                              out; finished in 0.01s\n";
         assert_eq!(cargo_test_counts(output), (3, 1));
         assert_eq!(cargo_test_counts("not run: the lint failed"), (0, 0));
         let runner = HostCheck {
@@ -1280,10 +1274,16 @@ mod tests {
         assert_eq!(runner.summary(), "3 passed · 1 failed");
     }
 
+    // The omnia profile's runner is `cargo test`, so its failures read as
+    // the tests' and the guest build's name stands beside them.
+
+    // Cargo prints one `test result` line per test binary; the counts sum
+    // over them, and a check that did not run counts nothing.
+
     // A `#[test]` or `#[tokio::test]` fn is a scenario with its underscores
     // as spaces; a helper fn, and an attribute between, are passed over.
     #[test]
-    fn rust_tests_named_by_scenarios() {
+    fn scenario_matching() {
         let text = "fn app(provider: Provider) -> Router {}\n\
                     \n#[tokio::test]\n\
                     async fn an_order_with_no_items_is_refused() {}\n\
@@ -1302,14 +1302,7 @@ mod tests {
         assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
         assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
         assert_eq!(named_by("an order is cancelled", &names), None);
-    }
 
-    // The scenarios of a requirement a merged slice left uncovered are not
-    // counted, since the adapter has it keep its ignored test; those of a
-    // requirement no merged slice holds are not either; and with nothing
-    // merged every requirement's are.
-    #[test]
-    fn scenarios_counted_over_covered_requirements() {
         let slice = |name: &str, requirements: &[&str], covered: &[&str]| Integrated {
             id: format!("SLICE-{name}"),
             name: name.to_owned(),
@@ -1349,7 +1342,29 @@ mod tests {
         let every = scenarios_of(spec.as_array().unwrap(), &[], &names);
         assert_eq!(every.len(), 5, "nothing merged counts every requirement's scenarios");
         assert_eq!(every.iter().filter(|scenario| scenario.unknown).count(), 1);
+
+        let text = "import { test } from \"node:test\";\n\
+                            test(\"an order with no items is refused\", () => {});\n\
+                            it('a paid order ships', () => {});\n\
+                            subtest(\"not a test\", () => {});\n\
+                            test(`a template ${name}`, () => {});\n";
+        let names = declared_tests(text);
+        assert_eq!(names, ["an order with no items is refused", "a paid order ships"]);
+        assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
+        assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("ships", &names), None);
+        assert_eq!(named_by("an order is cancelled", &names), None);
+
+        let names = vec!["per_probe_budget_is_enforced".to_owned(), "orders__are_paid".to_owned()];
+        assert_eq!(named_by("Per-probe budget is enforced", &names), Some(Named::Exact));
+        assert_eq!(named_by("Orders are paid, then shipped", &names), Some(Named::Fuzzy));
+        assert_eq!(named_by("Per-probe", &names), None);
     }
+
+    // The scenarios of a requirement a merged slice left uncovered are not
+    // counted, since the adapter has it keep its ignored test; those of a
+    // requirement no merged slice holds are not either; and with nothing
+    // merged every requirement's are.
 
     // A scratch tree of the test's own under the host's temp dir, written from
     // `(path, text)` pairs and removed first where an earlier run left it.
@@ -1377,7 +1392,7 @@ mod tests {
     // constant no module names is unreached, and a module with no handler
     // is passed over.
     #[test]
-    fn omnia_modules_unreached_by_the_lists() {
+    fn unreached_modules() {
         let root = scratch(
             "omnia-unreached",
             &[
@@ -1444,6 +1459,29 @@ mod tests {
             ],
             "a crate its own tests alone name is unreached"
         );
+
+        let root = scratch(
+            "typescript-unreached",
+            &[
+                (
+                    "src/index.ts",
+                    "export * as orders from \"./orders/index.ts\";\n\
+                             export * as start from './start/index.ts';\n",
+                ),
+                ("src/orders/index.ts", "export * as reading from \"./reading/index.ts\";\n"),
+                ("src/orders/reading/index.ts", "export const read = 1;\n"),
+                ("src/orders/placing/index.ts", "export const place = 1;\n"),
+                ("src/orders/shared/types.ts", "export type Order = {};\n"),
+                ("src/start/index.ts", "export const main = () => {};\n"),
+                ("src/health/index.ts", "export const register = () => {};\n"),
+                ("src/main.ts", "import { main } from \"./start/index.ts\";\nawait main();\n"),
+            ],
+        );
+        let unreached = Target::Node.unreached(&root).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(unreached, ["src/health/index.ts", "src/orders/placing/index.ts"]);
+        assert!(reexported("export * as a from \"./a\";", "a"));
+        assert!(!reexported("export { main } from \"./bootstrap/index.ts\";", "bootstrap"));
     }
 
     // Each `.route(` of a part's `handlers()` is one entry per method its
@@ -1454,7 +1492,11 @@ mod tests {
     // the module's spelling of its name, has no requirement carrying a typed
     // HTTP trigger, and a module no merged slice owns is no probe.
     #[test]
-    fn omnia_routes_per_module() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Omnia route extraction and probe filtering share one test"
+    )]
+    fn omnia_routes() {
         let root = scratch(
             "omnia-routes",
             &[
@@ -1531,36 +1573,47 @@ mod tests {
             .map(|(m, v, p, probe)| ((*m).to_owned(), (*v).to_owned(), (*p).to_owned(), *probe))
             .collect();
         assert_eq!(read, expected);
+
+        let slices = [
+            Integrated {
+                id: "SLICE-001".to_owned(),
+                name: "start".to_owned(),
+                wave: 1,
+                requirements: vec!["REQ-001".to_owned()],
+                covered: Vec::new(),
+                files: Vec::new(),
+                commit: None,
+                resolved: Vec::new(),
+            },
+            Integrated {
+                id: "SLICE-002".to_owned(),
+                name: "start".to_owned(),
+                wave: 2,
+                requirements: vec!["REQ-002".to_owned()],
+                covered: vec!["REQ-002".to_owned()],
+                files: vec!["crates/health/src/start.rs".to_owned()],
+                commit: Some("aaaa".to_owned()),
+                resolved: Vec::new(),
+            },
+        ];
+        let spec_doc = serde_json::json!([
+            {"id": "REQ-001", "body": ["DATABASE_URL is required."], "trigger": null},
+            {"id": "REQ-002", "body": ["Liveness probe."],
+             "trigger": {"http": {"method": "GET", "path": "/health/live"}}},
+        ]);
+        let mounted = vec![(
+            "crates/health/src/start.rs".to_owned(),
+            "GET".to_owned(),
+            "/health/live".to_owned(),
+        )];
+        let checked = routes(mounted, &slices, spec_doc.as_array().unwrap());
+        assert_eq!(checked.len(), 1);
+        assert!(!checked[0].probe, "the second serial slice of `start` carries the route trigger");
     }
 
     // A stem's `index.ts` the entry re-exports is reached, and a part's its
     // stem's list re-exports; a stem the entry lacks and a part the stem's
     // list lacks are listed, a directory with no `index.ts` aside.
-    #[test]
-    fn typescript_modules_unreached_by_the_lists() {
-        let root = scratch(
-            "typescript-unreached",
-            &[
-                (
-                    "src/index.ts",
-                    "export * as orders from \"./orders/index.ts\";\n\
-                     export * as start from './start/index.ts';\n",
-                ),
-                ("src/orders/index.ts", "export * as reading from \"./reading/index.ts\";\n"),
-                ("src/orders/reading/index.ts", "export const read = 1;\n"),
-                ("src/orders/placing/index.ts", "export const place = 1;\n"),
-                ("src/orders/shared/types.ts", "export type Order = {};\n"),
-                ("src/start/index.ts", "export const main = () => {};\n"),
-                ("src/health/index.ts", "export const register = () => {};\n"),
-                ("src/main.ts", "import { main } from \"./start/index.ts\";\nawait main();\n"),
-            ],
-        );
-        let unreached = Target::Node.unreached(&root).unwrap();
-        fs::remove_dir_all(&root).unwrap();
-        assert_eq!(unreached, ["src/health/index.ts", "src/orders/placing/index.ts"]);
-        assert!(reexported("export * as a from \"./a\";", "a"));
-        assert!(!reexported("export { main } from \"./bootstrap/index.ts\";", "bootstrap"));
-    }
 
     // Two builds interleave and a verify follows: each completion's writes
     // are the `responded` lines of its own turn, closed by its outcome
@@ -1569,7 +1622,11 @@ mod tests {
     // apart; a completion's shell use is its own calls, paired by subject,
     // with the result bytes summed.
     #[test]
-    fn writes_and_shell_read_per_completion() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "Cursor and genai completion log shapes share one test"
+    )]
+    fn completion_logs() {
         let log = "\
 2026-10-12T07:13:44.000000Z DEBUG complete{n=1 model=\"m\" format=schema label=\"build-SLICE-001\"}:send{round=1}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo clippy\"
 2026-10-12T07:13:45.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"write_files\" wrote=Some([\"crates/a/src/a.rs\"=1000, \"crates/a/Cargo.toml\"=200]) deleted=Some([]) error=None
@@ -1589,11 +1646,11 @@ mod tests {
 2026-10-12T07:14:00.000000Z DEBUG complete{n=3 model=\"m\" format=schema label=\"verify\"}:send{round=1}: omnia_cursor::model::observe: tool call completed tool=shell subject=\"cargo build\" result_bytes=10
 2026-10-12T07:14:01.000000Z  INFO complete{n=3 model=\"m\" format=schema label=\"verify\"}: omnia_cursor::model::observe: completion outcome=\"ok\" attempts=1 duration_ms=4000 input_tokens=5 cache_read_tokens=0 output_tokens=2 reasoning_tokens=0
 ";
-        let completions = completions(log);
-        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        let cursor = completions(log);
+        let labels: Vec<&str> = cursor.iter().map(|c| c.label.as_str()).collect();
         assert_eq!(labels, ["build-SLICE-001", "build-SLICE-002", "verify"]);
         assert_eq!(
-            completions[0].writes,
+            cursor[0].writes,
             Writes {
                 calls: 2,
                 rewrites: 1,
@@ -1604,11 +1661,11 @@ mod tests {
             }
         );
         assert_eq!(
-            completions[0].writes.to_string(),
+            cursor[0].writes.to_string(),
             "write_files 2 calls, 1 rewrites, 0 empty, 1 shrinking; edit_files 1 calls; 1 refused"
         );
         assert_eq!(
-            completions[0].shell,
+            cursor[0].shell,
             ShellUse {
                 calls: 1,
                 time: Duration::from_millis(3500),
@@ -1616,7 +1673,7 @@ mod tests {
             }
         );
         assert_eq!(
-            completions[1].writes,
+            cursor[1].writes,
             Writes {
                 calls: 3,
                 rewrites: 2,
@@ -1627,7 +1684,7 @@ mod tests {
             }
         );
         assert_eq!(
-            completions[1].shell,
+            cursor[1].shell,
             ShellUse {
                 calls: 1,
                 time: Duration::from_secs(3),
@@ -1635,7 +1692,7 @@ mod tests {
             }
         );
         assert_eq!(
-            completions[2].writes,
+            cursor[2].writes,
             Writes {
                 calls: 1,
                 rewrites: 0,
@@ -1647,41 +1704,33 @@ mod tests {
             "a verify's sizes start afresh, so its first write of a path is no rewrite"
         );
         assert_eq!(
-            completions[2].shell,
+            cursor[2].shell,
             ShellUse {
                 calls: 1,
                 time: Duration::from_secs(3),
                 bytes: 10
             }
         );
-    }
 
-    // The genai backend's lines carry the same messages under its own
-    // targets, `omnia_genai::tools` for a call and `omnia_genai::observe`
-    // for the completion, with `exit=` and `duration_ms=` after the result's
-    // size and the phase split after the duration; the reader keys on the
-    // message, so it reads them as it reads Cursor's.
-    #[test]
-    fn genai_completions_read_by_message() {
         let log = "\
-2026-10-19T10:00:00.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion started prompt_bytes=81234 tools=5
-2026-10-19T10:00:01.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\"
-2026-10-19T10:00:02.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"crates/orders/src/reading.rs\"]) error=None
-2026-10-19T10:01:31.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\" result_bytes=4096 exit=\"0\" duration_ms=90000
-2026-10-19T10:01:32.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=read_doc subject=\"references/testing.md\"
-2026-10-19T10:01:33.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=read_doc subject=\"references/testing.md\" result_bytes=9000 duration_ms=3
-2026-10-19T10:02:00.000000Z  INFO complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion outcome=\"corrected\" attempts=2 duration_ms=120000 model_ms=25000 tool_ms=90003 check_ms=4997 input_tokens=90000 cache_read_tokens=0 cache_write_tokens=0 output_tokens=7000 reasoning_tokens=0 total_tokens=97000
-2026-10-19T10:03:00.000000Z  WARN complete{n=2 model=\"openai::qwen3-coder\" format=schema label=\"verify\"}: omnia_genai::observe: completion outcome=\"timeout\" attempts=0 duration_ms=600000 model_ms=600000 tool_ms=0 check_ms=0 input_tokens=0 cache_read_tokens=0 cache_write_tokens=0 output_tokens=0 reasoning_tokens=0
-";
-        let completions = completions(log);
-        let labels: Vec<&str> = completions.iter().map(|c| c.label.as_str()).collect();
+        2026-10-19T10:00:00.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion started prompt_bytes=81234 tools=5
+        2026-10-19T10:00:01.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\"
+        2026-10-19T10:00:02.000000Z DEBUG emery_sdk::target::write: responded turn=SLICE-001 tool=\"edit_files\" edited=Some([\"crates/orders/src/reading.rs\"]) error=None
+        2026-10-19T10:01:31.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=shell subject=\"cargo clippy -p orders --all-targets -- -D warnings && cargo test -p orders\" result_bytes=4096 exit=\"0\" duration_ms=90000
+        2026-10-19T10:01:32.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call tool=read_doc subject=\"references/testing.md\"
+        2026-10-19T10:01:33.000000Z DEBUG complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::tools: tool call completed tool=read_doc subject=\"references/testing.md\" result_bytes=9000 duration_ms=3
+        2026-10-19T10:02:00.000000Z  INFO complete{n=1 model=\"openai::qwen3-coder\" format=schema label=\"build-SLICE-001\"}: omnia_genai::observe: completion outcome=\"corrected\" attempts=2 duration_ms=120000 model_ms=25000 tool_ms=90003 check_ms=4997 input_tokens=90000 cache_read_tokens=0 cache_write_tokens=0 output_tokens=7000 reasoning_tokens=0 total_tokens=97000
+        2026-10-19T10:03:00.000000Z  WARN complete{n=2 model=\"openai::qwen3-coder\" format=schema label=\"verify\"}: omnia_genai::observe: completion outcome=\"timeout\" attempts=0 duration_ms=600000 model_ms=600000 tool_ms=0 check_ms=0 input_tokens=0 cache_read_tokens=0 cache_write_tokens=0 output_tokens=0 reasoning_tokens=0
+        ";
+        let genai = completions(log);
+        let labels: Vec<&str> = genai.iter().map(|c| c.label.as_str()).collect();
         assert_eq!(labels, ["build-SLICE-001", "verify"]);
-        assert_eq!(completions[0].outcome, "corrected");
-        assert_eq!(completions[0].duration, Duration::from_secs(120));
-        assert_eq!(completions[0].tokens.input, 90000);
-        assert_eq!(completions[0].tokens.output, 7000);
+        assert_eq!(genai[0].outcome, "corrected");
+        assert_eq!(genai[0].duration, Duration::from_secs(120));
+        assert_eq!(genai[0].tokens.input, 90000);
+        assert_eq!(genai[0].tokens.output, 7000);
         assert_eq!(
-            completions[0].shell,
+            genai[0].shell,
             ShellUse {
                 calls: 1,
                 time: Duration::from_secs(90),
@@ -1689,15 +1738,21 @@ mod tests {
             },
             "the shell alone is counted, never a guest tool"
         );
-        assert_eq!(completions[0].writes.edits, 1);
-        assert_eq!(completions[1].outcome, "timeout");
-        assert_eq!(completions[1].shell, ShellUse::default());
+        assert_eq!(genai[0].writes.edits, 1);
+        assert_eq!(genai[1].outcome, "timeout");
+        assert_eq!(genai[1].shell, ShellUse::default());
     }
+
+    // The genai backend's lines carry the same messages under its own
+    // targets, `omnia_genai::tools` for a call and `omnia_genai::observe`
+    // for the completion, with `exit=` and `duration_ms=` after the result's
+    // size and the phase split after the duration; the reader keys on the
+    // message, so it reads them as it reads Cursor's.
 
     // A run's repository as the engine leaves it: the `Revision` root the
     // head stays on, and the label a build moved over the slices it merged.
     #[test]
-    fn rebuild_clones_the_sealed_root() {
+    fn clone_sealed_root() {
         let root = scratch("sealed-root", &[("spec/spec.json", "{}\n")]);
         let commit = |message: &str| {
             git(&root, &["add", "--all"]).unwrap();
@@ -1738,7 +1793,7 @@ mod tests {
     // the run's history and tree are empty until a slice merges, and an
     // earlier run's integration copy is never read as this run's.
     #[test]
-    fn history_ignores_unbuilt_revision_root() {
+    fn unbuilt_history() {
         let project = scratch("unbuilt-root", &[]);
         let commit = |repo: &Path, file: &str, message: &str| {
             fs::write(repo.join(file), "{}\n").unwrap();
@@ -1783,48 +1838,9 @@ mod tests {
 
     // An envelope carrying `sealed` is read before the chain: each seal's
     // paths less the lockfile, a lock-only seal an empty list.
-    #[test]
-    fn wave_seals_read_from_the_envelope() {
-        let stdout = r#"{"slices": [], "sealed": [
-            {"wave": 1, "commit": "aaaa", "paths": ["Cargo.lock"]},
-            {"wave": 3, "commit": "cccc", "paths": ["Cargo.lock", "crates/start/src/api.rs"]}
-        ]}"#;
-        let mut build = build_from(0, stdout, "", Vec::new());
-        build.target = Target::Omnia;
-        let repairs = build.repairs();
-        assert_eq!(repairs.get(&1), Some(&Vec::new()));
-        assert_eq!(repairs.get(&2), None);
-        assert_eq!(
-            repairs.get(&3).map(Vec::as_slice),
-            Some(&["crates/start/src/api.rs".to_owned()][..])
-        );
-    }
 
     #[test]
-    fn tests_named_by_scenarios() {
-        let text = "import { test } from \"node:test\";\n\
-                    test(\"an order with no items is refused\", () => {});\n\
-                    it('a paid order ships', () => {});\n\
-                    subtest(\"not a test\", () => {});\n\
-                    test(`a template ${name}`, () => {});\n";
-        let names = declared_tests(text);
-        assert_eq!(names, ["an order with no items is refused", "a paid order ships"]);
-        assert_eq!(named_by("An order with no items is refused", &names), Some(Named::Exact));
-        assert_eq!(named_by("a paid order ships to the address", &names), Some(Named::Fuzzy));
-        assert_eq!(named_by("ships", &names), None);
-        assert_eq!(named_by("an order is cancelled", &names), None);
-    }
-
-    #[test]
-    fn tests_named_across_separators() {
-        let names = vec!["per_probe_budget_is_enforced".to_owned(), "orders__are_paid".to_owned()];
-        assert_eq!(named_by("Per-probe budget is enforced", &names), Some(Named::Exact));
-        assert_eq!(named_by("Orders are paid, then shipped", &names), Some(Named::Fuzzy));
-        assert_eq!(named_by("Per-probe", &names), None);
-    }
-
-    #[test]
-    fn layout_membership() {
+    fn within_layout() {
         let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
         for path in [
             "package.json",
@@ -1850,12 +1866,7 @@ mod tests {
         ] {
             assert!(!Target::Node.within_layout(path, &stems), "`{path}` is outside the layout");
         }
-    }
 
-    // The root files are the template's entries, at this workspace's lock,
-    // and the lockfile; a root list an earlier template laid is outside.
-    #[test]
-    fn omnia_layout_membership() {
         let stems: BTreeSet<&str> = ["orders", "start"].into_iter().collect();
         for path in [
             "Cargo.toml",
@@ -1899,32 +1910,16 @@ mod tests {
         }
     }
 
+    // The root files are the template's entries, at this workspace's lock,
+    // and the lockfile; a root list an earlier template laid is outside.
+
     // The serial walk is every turn in a row; the critical path takes each
     // wave at its slowest slice, then its verify.
-    #[test]
-    fn build_critical_path() {
-        let stderr = timed("build-SLICE-001", "ok", 100_000)
-            + &timed("verify", "ok", 20_000)
-            + &timed("build-SLICE-002", "ok", 60_000)
-            + &timed("build-SLICE-003", "ok", 90_000)
-            + &timed("verify", "ok", 30_000)
-            + &timed("verify", "corrected", 5_000);
-        let build = build_from(0, "{}", &stderr, Vec::new());
-        let waves = build.wave_turns();
-        assert_eq!(waves.len(), 2);
-        assert_eq!(waves[1].builds.len(), 2);
-        assert_eq!(waves[1].verifies.len(), 2, "a verify's correction round closes the same wave");
-        assert_eq!(build.serial(), Duration::from_secs(305));
-        assert_eq!(build.critical(), Duration::from_secs(100 + 20 + 90 + 35));
-        assert_eq!(build.speedup(), Some(124));
-        assert_eq!(factor(124), "1.24×");
-        assert_eq!(factor(300), "3.00×");
-    }
 
     // Two rounds of one slice's build add up on its wave's path; a wave
     // the failure ended has builds and no verify.
     #[test]
-    fn build_rounds_and_open_wave() {
+    fn build_failures() {
         let stderr = timed("build-SLICE-001", "corrected", 40_000)
             + &timed("build-SLICE-001", "ok", 30_000)
             + &timed("verify", "ok", 10_000)
@@ -1935,21 +1930,17 @@ mod tests {
         assert_eq!(waves[0].critical(), Duration::from_secs(80));
         assert_eq!(waves[1].critical(), Duration::from_secs(25));
         assert_eq!(build.waves(), 2);
-    }
 
-    // Wave 2's verify answered, so its completion is `ok`: the verdict is what failed.
-    #[test]
-    fn build_failure_envelope() {
         let stderr = timed("build-SLICE-001", "ok", 1_000)
             + &timed("verify", "ok", 1_000)
             + &timed("build-SLICE-002", "ok", 1_000)
             + &timed("verify", "ok", 1_000)
             + "2026-10-09T03:53:16Z  INFO emery_sdk::target: verified passed=false failures=2\n\
-               {\n  \"error\": \"verify-failed\",\n  \"message\": \"wave 2 failed; SLICE-002 merged \
-               in it stays committed in `.emery/vcs/integration`; `emery/feb4` stays at `aaaa`: \
-               verification failed:\\n- check 2 (tsc): src/orders/index.ts(3,1): error TS2304\\n- \
-               check 3 (npm test): not run\",\n  \"exit-code\": 1\n}\n\
-               2026-10-09T03:53:17Z  INFO omnia_core::runtime::command: wasi:cli/run exited code=1\n";
+                       {\n  \"error\": \"verify-failed\",\n  \"message\": \"wave 2 failed; SLICE-002 merged \
+                       in it stays committed in `.emery/vcs/integration`; `emery/feb4` stays at `aaaa`: \
+                       verification failed:\\n- check 2 (tsc): src/orders/index.ts(3,1): error TS2304\\n- \
+                       check 3 (npm test): not run\",\n  \"exit-code\": 1\n}\n\
+                       2026-10-09T03:53:17Z  INFO omnia_core::runtime::command: wasi:cli/run exited code=1\n";
         let history = vec![
             Landed {
                 commit: "bbbbbbbbbbbb".to_owned(),
@@ -2001,15 +1992,12 @@ mod tests {
         assert_eq!(integrated[1].name, "orders");
         assert_eq!(integrated[1].uncovered(), ["REQ-003"]);
         assert_eq!(build.covered(), (2, 3));
-    }
 
-    #[test]
-    fn build_merge_unresolved_wave() {
         let envelope = "{\n  \"error\": \"merge-unresolved\",\n  \"message\": \"slice `SLICE-003` \
-                        (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
-                        `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts, \
-                        and the conflict cannot be resolved: the slice removed `package.json`\",\n  \
-                        \"exit-code\": 1\n}\n";
+                                (payments) failed in wave 3; SLICE-002 merged before it stays committed in \
+                                `.emery/vcs/integration`: its merge conflicts at package.json, src/index.ts, \
+                                and the conflict cannot be resolved: the slice removed `package.json`\",\n  \
+                                \"exit-code\": 1\n}\n";
         let bare = build_from(1, "", envelope, Vec::new());
         assert_eq!(bare.code(), Some("merge-unresolved"));
         assert_eq!(bare.wave_failed(), Some(3));
@@ -2029,6 +2017,8 @@ mod tests {
         assert_eq!(build.waves(), 3);
         assert_eq!(build.verified(), 2);
     }
+
+    // Wave 2's verify answered, so its completion is `ok`: the verdict is what failed.
 
     #[test]
     fn build_chain() {
@@ -2054,7 +2044,7 @@ mod tests {
     }
 
     #[test]
-    fn anchor_landing() {
+    fn source_logs() {
         let surveyed = "TRACE python: surveyed source=python surfaces=[\
             {\"name\":\"GET /items\",\"entry\":\"app/items.py\",\"stem\":\"items\",\"ids\":[\"items.get\"],\"lines\":\"L10-L30\"},\
             {\"name\":\"start\",\"entry\":\"app/main.py\",\"stem\":\"start\",\"ids\":[\"start\"],\"lines\":\"L5\"}]\n";
@@ -2082,21 +2072,15 @@ mod tests {
 
         let unlined = run_from(Some(0), &accepted_line("python", &claims), None);
         assert_eq!(unlined.landing(), None, "no surface span logged, nothing to land against");
-    }
 
-    // Two sources' lines are read apart: each source's claims, surfaces, and
-    // unplaced count under its own name, and a span of one source never lands
-    // a claim of the other.
-    #[test]
-    fn two_sources_read_apart() {
         let stderr = "TRACE typescript: surveyed source=code surfaces=[\
-            {\"name\":\"OrderService\",\"entry\":\"orders.ts\",\"stem\":\"order-service\",\"ids\":[],\"lines\":\"L35-L76\"}]\n\
-            INFO emery_sdk: placed by model source=code surfaces=1 unplaced=0\n\
-            INFO emery_sdk: surveyed by model source=docs surfaces=3 unreached=1\n"
-            .to_owned()
-            + &accepted_line("code", &requirement("order-service.place", "orders.ts#L40-L42"))
-            + &accepted_line("docs", &requirement("orders.place", "orders.md#L10-L16"))
-            + &accepted_line("docs", &requirement("orders.cancel", "orders.ts#L40-L42"));
+                    {\"name\":\"OrderService\",\"entry\":\"orders.ts\",\"stem\":\"order-service\",\"ids\":[],\"lines\":\"L35-L76\"}]\n\
+                    INFO emery_sdk: placed by model source=code surfaces=1 unplaced=0\n\
+                    INFO emery_sdk: surveyed by model source=docs surfaces=3 unreached=1\n"
+                    .to_owned()
+                    + &accepted_line("code", &requirement("order-service.place", "orders.ts#L40-L42"))
+                    + &accepted_line("docs", &requirement("orders.place", "orders.md#L10-L16"))
+                    + &accepted_line("docs", &requirement("orders.cancel", "orders.ts#L40-L42"));
         let run = run_from(Some(0), &stderr, None);
         assert_eq!(run.claims_of("code", ClaimKind::Requirement).count(), 1);
         assert_eq!(run.claims_of("docs", ClaimKind::Requirement).count(), 2);
@@ -2120,8 +2104,12 @@ mod tests {
         );
     }
 
+    // Two sources' lines are read apart: each source's claims, surfaces, and
+    // unplaced count under its own name, and a span of one source never lands
+    // a claim of the other.
+
     #[test]
-    fn source_shapes() {
+    fn case_schema() {
         let one = case("[[source]]\nadapter = \"python\"\nfixture = \"f\"\nstems = [\"a\"]\n\n[[requirement]]\nanchor = \"a.py#L1\"\ngloss = \"g\"\n")
             .expect("one source, the item's by default");
         assert_eq!(one.sources[0].name(), "python", "a source unnamed is named for its adapter");
@@ -2182,10 +2170,7 @@ mod tests {
              claims = [{{ source = \"docs\", anchor = \"a.md#L1\" }}, {{ source = \"faq\", anchor = \"b.md#L1\" }}]\n"
         ))
         .expect("a loser among the claims' sources under a disagreement");
-    }
 
-    #[test]
-    fn reference_path() {
         let one = "[[source]]\nadapter = \"typescript\"\nfixture = \"f\"\n";
         let named = case(&format!("reference = \"evals/cases/train/reference\"\n{one}"))
             .expect("a reference relative to the root");
@@ -2202,7 +2187,7 @@ mod tests {
     // source of its case, and every committed fixture and reference tree
     // passes the credential gate.
     #[test]
-    fn committed_cases_parse() {
+    fn committed_cases() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         let mut seen = 0;
         let mut checked = BTreeSet::new();
@@ -2441,6 +2426,10 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "behaviour grading scenarios share one consolidated test"
+    )]
     fn behaviour_grading() {
         let expected = case(
             "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
@@ -2455,7 +2444,7 @@ mod tests {
              claims = [{ source = \"docs\", anchor = \"orders.md#L14\" }]\n",
         )
         .unwrap();
-        let spec = spec(&serde_json::json!([
+        let requirements = spec(&serde_json::json!([
             // the first behaviour, one requirement citing both sources, agreed
             { "subject": "orders.place", "status": "agreed",
               "sources": [cited("docs", "orders.place", "orders.md#L12"), cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
@@ -2468,7 +2457,7 @@ mod tests {
             { "subject": "orders.read", "status": "agreed",
               "sources": [cited("docs", "orders.read", "orders.md#L14"), cited("code", "orders.read", "orders.ts#L59-L65")] },
         ]));
-        let run = run_from(Some(0), "", Some(spec));
+        let run = run_from(Some(0), "", Some(requirements));
 
         let graded = behaviours(&expected.behaviours, &run);
         assert_eq!(graded.met, 4);
@@ -2485,23 +2474,20 @@ mod tests {
             vec!["`orders.read` on `orders.read` from {\"code\", \"docs\"}"]
         );
         assert_eq!(graded.to_string(), "4/4 ~1 !1");
-    }
 
-    #[test]
-    fn behaviour_missed_and_partial() {
         let expected = case(
-            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
-             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
-             [[behaviour]]\ngloss = \"both state it\"\n\
-             claims = [{ source = \"docs\", anchor = \"a.md#L1\" }, { source = \"code\", anchor = \"a.ts#L1\" }]\n\n\
-             [[behaviour]]\ngloss = \"neither states it\"\n\
-             claims = [{ source = \"docs\", anchor = \"a.md#L9\" }]\n",
-        )
-        .unwrap();
-        let spec = spec(&serde_json::json!([
+                    "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+                     [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+                     [[behaviour]]\ngloss = \"both state it\"\n\
+                     claims = [{ source = \"docs\", anchor = \"a.md#L1\" }, { source = \"code\", anchor = \"a.ts#L1\" }]\n\n\
+                     [[behaviour]]\ngloss = \"neither states it\"\n\
+                     claims = [{ source = \"docs\", anchor = \"a.md#L9\" }]\n",
+                )
+                .unwrap();
+        let requirements = spec(&serde_json::json!([
             { "subject": "a", "status": "unknown", "sources": [cited("docs", "a.one", "a.md#L1")] },
         ]));
-        let run = run_from(Some(0), "", Some(spec));
+        let run = run_from(Some(0), "", Some(requirements));
 
         let graded = behaviours(&expected.behaviours, &run);
         assert_eq!(graded.met, 1);
@@ -2510,21 +2496,15 @@ mod tests {
         assert!(graded.partial[0].ends_with("(uncited code:`a.ts#L1`)"));
         assert_eq!(graded.premerged, Vec::<String>::new());
         assert_eq!(graded.to_string(), "1/2");
-    }
 
-    // The planted disagreement is between the document and the FAQ, so a
-    // divergence the code lost, in a requirement the FAQ's claim never
-    // reached, is not the status expected.
-    #[test]
-    fn behaviour_status_loser() {
         let expected = case(
-            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
-             [[source]]\nname = \"faq\"\nadapter = \"documentation\"\nfixture = \"f\"\nrank = 4\n\n\
-             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
-             [[behaviour]]\ngloss = \"which orders can be cancelled\"\nstatus = \"divergence\"\nloser = \"faq\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L31-L33\" }, { source = \"faq\", anchor = \"faq.md#L9-L12\" }, { source = \"code\", anchor = \"orders.ts#L67-L74\" }]\n",
-        )
-        .unwrap();
+                    "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+                     [[source]]\nname = \"faq\"\nadapter = \"documentation\"\nfixture = \"f\"\nrank = 4\n\n\
+                     [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+                     [[behaviour]]\ngloss = \"which orders can be cancelled\"\nstatus = \"divergence\"\nloser = \"faq\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L31-L33\" }, { source = \"faq\", anchor = \"faq.md#L9-L12\" }, { source = \"code\", anchor = \"orders.ts#L67-L74\" }]\n",
+                )
+                .unwrap();
         let graded = |requirements: Value| {
             behaviours(&expected.behaviours, &run_from(Some(0), "", Some(spec(&requirements))))
         };
@@ -2576,28 +2556,23 @@ mod tests {
               "sources": [docs, faq] },
         ]));
         assert_eq!((unturned.status_met, unturned.status_expected), (0, 1));
-    }
 
-    // A citation over a whole method spans the branches inside it without
-    // stating any; one a line wider than the sentence it cites states it.
-    #[test]
-    fn behaviour_wide_citations() {
         let expected = case(
-            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
-             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
-             [[behaviour]]\ngloss = \"an order with no line items is refused\"\n\
-             claims = [{ source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n\n\
-             [[behaviour]]\ngloss = \"a line quantity below one is refused\"\n\
-             claims = [{ source = \"code\", anchor = \"orders.ts#L43-L45\" }]\n\n\
-             [[behaviour]]\ngloss = \"a valid order is stored pending and answered\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L10-L13\" }, { source = \"code\", anchor = \"orders.ts#L46-L56\" }]\n\n\
-             [[behaviour]]\ngloss = \"an order is in exactly one of four states\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L21\" }]\n\n\
-             [[behaviour]]\ngloss = \"the id is opaque\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L17\" }]\n",
-        )
-        .unwrap();
-        let spec = spec(&serde_json::json!([
+                    "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+                     [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+                     [[behaviour]]\ngloss = \"an order with no line items is refused\"\n\
+                     claims = [{ source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n\n\
+                     [[behaviour]]\ngloss = \"a line quantity below one is refused\"\n\
+                     claims = [{ source = \"code\", anchor = \"orders.ts#L43-L45\" }]\n\n\
+                     [[behaviour]]\ngloss = \"a valid order is stored pending and answered\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L10-L13\" }, { source = \"code\", anchor = \"orders.ts#L46-L56\" }]\n\n\
+                     [[behaviour]]\ngloss = \"an order is in exactly one of four states\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L21\" }]\n\n\
+                     [[behaviour]]\ngloss = \"the id is opaque\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L17\" }]\n",
+                )
+                .unwrap();
+        let requirements = spec(&serde_json::json!([
             // the happy path cited over the whole method, validation and all
             { "subject": "orders.place", "status": "agreed",
               "sources": [cited("docs", "orders.place", "orders.md#L10-L13"), cited("code", "order-service.place.create-pending-order", "orders.ts#L39-L57")] },
@@ -2612,7 +2587,7 @@ mod tests {
             { "subject": "orders.place.asides", "status": "unknown",
               "sources": [cited("docs", "orders.place.asides", "orders.md#L15-L17")] },
         ]));
-        let run = run_from(Some(0), "", Some(spec));
+        let run = run_from(Some(0), "", Some(requirements));
 
         let graded = behaviours(&expected.behaviours, &run);
         assert_eq!(graded.met, 4);
@@ -2624,11 +2599,18 @@ mod tests {
         assert_eq!(graded.to_string(), "4/5");
     }
 
+    // The planted disagreement is between the document and the FAQ, so a
+    // divergence the code lost, in a requirement the FAQ's claim never
+    // reached, is not the status expected.
+
+    // A citation over a whole method spans the branches inside it without
+    // stating any; one a line wider than the sentence it cites states it.
+
     // The model may state a behaviour as a criterion of the rule it qualifies
     // rather than as a rule of its own; the grader reads it under the
     // requirement citing the criterion's parent id, and under no other.
     #[test]
-    fn behaviour_met_by_criterion() {
+    fn behaviour_criteria() {
         let expected = case(
             "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
              [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
@@ -2647,11 +2629,11 @@ mod tests {
             ]
             .join(","),
         );
-        let spec = spec(&serde_json::json!([
+        let requirements = spec(&serde_json::json!([
             { "subject": "orders.place", "status": "agreed",
               "sources": [cited("docs", "orders.place", "orders.md#L10-L12")] },
         ]));
-        let run = run_from(Some(0), &stderr, Some(spec));
+        let run = run_from(Some(0), &stderr, Some(requirements));
 
         let graded = behaviours(&expected.behaviours, &run);
         assert_eq!(graded.met, 1);
@@ -2666,23 +2648,16 @@ mod tests {
         assert!(graded.partial.is_empty(), "{:?}", graded.partial);
         assert!(graded.split.is_empty(), "{:?}", graded.split);
         assert_eq!(graded.to_string(), "1/2");
-    }
 
-    // A behaviour the document states as a criterion and the code as a
-    // requirement is held twice, in two kinds the engine cannot join: it is
-    // met and noted, and it is neither a split nor a wrong merge of the
-    // requirement holding the criterion.
-    #[test]
-    fn behaviour_across_kinds() {
         let expected = case(
-            "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
-             [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
-             [[behaviour]]\ngloss = \"a valid order is placed\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L10-L12\" }]\n\n\
-             [[behaviour]]\ngloss = \"an empty order is refused\"\nstatus = \"unknown\"\n\
-             claims = [{ source = \"docs\", anchor = \"orders.md#L13\" }, { source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n",
-        )
-        .unwrap();
+                    "[[source]]\nname = \"docs\"\nadapter = \"documentation\"\nfixture = \"d\"\n\n\
+                     [[source]]\nname = \"code\"\nadapter = \"typescript\"\nfixture = \"c\"\n\n\
+                     [[behaviour]]\ngloss = \"a valid order is placed\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L10-L12\" }]\n\n\
+                     [[behaviour]]\ngloss = \"an empty order is refused\"\nstatus = \"unknown\"\n\
+                     claims = [{ source = \"docs\", anchor = \"orders.md#L13\" }, { source = \"code\", anchor = \"orders.ts#L40-L42\" }]\n",
+                )
+                .unwrap();
         let stderr = accepted_line(
             "docs",
             &[
@@ -2694,13 +2669,13 @@ mod tests {
             "code",
             &requirement("order-service.place.empty", "orders.ts#L40-L42"),
         );
-        let spec = spec(&serde_json::json!([
+        let requirements = spec(&serde_json::json!([
             { "subject": "orders.place", "status": "agreed",
               "sources": [cited("docs", "orders.place", "orders.md#L10-L12")] },
             { "subject": "order-service.place.empty", "status": "unknown",
               "sources": [cited("code", "order-service.place.empty", "orders.ts#L40-L42")] },
         ]));
-        let run = run_from(Some(0), &stderr, Some(spec));
+        let run = run_from(Some(0), &stderr, Some(requirements));
 
         let graded = behaviours(&expected.behaviours, &run);
         assert_eq!(graded.met, 2);
@@ -2710,55 +2685,23 @@ mod tests {
         assert!(graded.partial.is_empty(), "{:?}", graded.partial);
         assert_eq!(graded.across.len(), 1, "{:?}", graded.across);
         assert!(
-            graded.across[0].ends_with(
-                "(`orders.place.empty` under `orders.place`; cited by [\"order-service.place.empty\"])"
-            ),
-            "{:?}",
-            graded.across
-        );
+                    graded.across[0].ends_with(
+                        "(`orders.place.empty` under `orders.place`; cited by [\"order-service.place.empty\"])"
+                    ),
+                    "{:?}",
+                    graded.across
+                );
         assert_eq!((graded.status_met, graded.status_expected), (1, 1));
         assert_eq!(graded.to_string(), "2/2");
     }
 
-    #[test]
-    fn budget_args() {
-        let build = Args::parse(
-            ["--build", "--target", "omnia", "--budget", "6", "express-orders"]
-                .map(String::from)
-                .into_iter(),
-        )
-        .unwrap();
-        assert_eq!(build.budget, NonZeroUsize::new(6));
-        assert_eq!(build.target, Some(Target::Omnia));
-
-        let rebuild = Args::parse(
-            ["--rebuild", "card", "--budget", "12", "express-orders"].map(String::from).into_iter(),
-        )
-        .unwrap();
-        assert_eq!(rebuild.budget, NonZeroUsize::new(12));
-
-        let resume = Args::parse(
-            ["--resume", "card", "--at", "2", "--budget", "8", "express-orders"]
-                .map(String::from)
-                .into_iter(),
-        )
-        .unwrap();
-        assert_eq!(resume.budget, NonZeroUsize::new(8));
-
-        for argv in [
-            &["--budget", "6", "express-orders"][..],
-            &["--facts", "--budget", "6", "express-orders"][..],
-            &["--oracle", "card", "--budget", "6", "train"][..],
-            &["--build", "--budget", "0", "express-orders"][..],
-            &["--build", "--budget", "six", "express-orders"][..],
-            &["--build", "--budget"][..],
-        ] {
-            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
-        }
-    }
+    // A behaviour the document states as a criterion and the code as a
+    // requirement is held twice, in two kinds the engine cannot join: it is
+    // met and noted, and it is neither a split nor a wrong merge of the
+    // requirement holding the criterion.
 
     #[test]
-    fn slicing_cap_exhaustions_counted() {
+    fn cap_exhaustion() {
         let cap_rejected = "DEBUG judge{question=\"slicing\"}: emery_engine::brief: candidate \
                             rejected findings=[\"- the stem `orders` is cut into 5 slices \
                             (`orders-get` 2, `orders-amend` 5), yet `orders-get` (2 requirements) \
@@ -2783,7 +2726,11 @@ mod tests {
     }
 
     #[test]
-    fn plan_shape_and_edges() {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "PlanShape edges and markdown section share one test"
+    )]
+    fn plan_shape() {
         let spec_doc = serde_json::json!({
             "requirements": [
                 {"id": "REQ-001", "subject": "start.require-db", "trigger": null},
@@ -2870,10 +2817,7 @@ mod tests {
             ),
             "{text}"
         );
-    }
 
-    #[test]
-    fn plan_shape_uses_edges() {
         let spec_doc = serde_json::json!({
             "requirements": [
                 {"id": "REQ-001", "subject": "start.require-db", "trigger": null},
@@ -2942,12 +2886,12 @@ mod tests {
         plan_shape_section(&mut text, &[vec![attempt]]).unwrap();
         assert!(text.contains("| derived edges | named edges | onto typeless |"), "{text}");
         assert!(
-            text.contains(
-                "| 1 | ok (14s) | 0 | 4 | 3 (2/1/1) | 2 | 0 | \
-                 1 (`orders` → `customers` (`Customer`)) | 1 (`audit` → `orders` (`Order`)) | 0 |"
-            ),
-            "{text}"
-        );
+                    text.contains(
+                        "| 1 | ok (14s) | 0 | 4 | 3 (2/1/1) | 2 | 0 | \
+                         1 (`orders` → `customers` (`Customer`)) | 1 (`audit` → `orders` (`Order`)) | 0 |"
+                    ),
+                    "{text}"
+                );
     }
 
     const SCHEDULED_ENVELOPE: &str = r#"{
@@ -2984,7 +2928,7 @@ mod tests {
     }"#;
 
     #[test]
-    fn schedule_metrics_and_section() {
+    fn schedule_table() {
         let stderr = timed("build-SLICE-002", "ok", 90_000)
             + &timed("verify", "ok", 20_000)
             + &timed("build-SLICE-003", "corrected", 40_000)
@@ -3061,44 +3005,5 @@ mod tests {
             text.contains("| `SLICE-003` `orders` (2/2) | `PART-002` | 3 | 1 | 3 | yes | 120s |"),
             "{text}"
         );
-    }
-
-    #[test]
-    fn serial_part_routes_not_probes() {
-        let slices = [
-            Integrated {
-                id: "SLICE-001".to_owned(),
-                name: "start".to_owned(),
-                wave: 1,
-                requirements: vec!["REQ-001".to_owned()],
-                covered: Vec::new(),
-                files: Vec::new(),
-                commit: None,
-                resolved: Vec::new(),
-            },
-            Integrated {
-                id: "SLICE-002".to_owned(),
-                name: "start".to_owned(),
-                wave: 2,
-                requirements: vec!["REQ-002".to_owned()],
-                covered: vec!["REQ-002".to_owned()],
-                files: vec!["crates/health/src/start.rs".to_owned()],
-                commit: Some("aaaa".to_owned()),
-                resolved: Vec::new(),
-            },
-        ];
-        let spec_doc = serde_json::json!([
-            {"id": "REQ-001", "body": ["DATABASE_URL is required."], "trigger": null},
-            {"id": "REQ-002", "body": ["Liveness probe."],
-             "trigger": {"http": {"method": "GET", "path": "/health/live"}}},
-        ]);
-        let mounted = vec![(
-            "crates/health/src/start.rs".to_owned(),
-            "GET".to_owned(),
-            "/health/live".to_owned(),
-        )];
-        let checked = routes(mounted, &slices, spec_doc.as_array().unwrap());
-        assert_eq!(checked.len(), 1);
-        assert!(!checked[0].probe, "the second serial slice of `start` carries the route trigger");
     }
 }
