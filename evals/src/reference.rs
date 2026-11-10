@@ -327,14 +327,6 @@ struct Spec {
     config: BTreeMap<String, String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Auth {
-    header: String,
-    token: String,
-    guarded: String,
-}
-
 impl Spec {
     fn parse(text: &str) -> Result<Self, String> {
         let spec: Self = toml::from_str(text).map_err(|error| error.to_string())?;
@@ -346,6 +338,14 @@ impl Spec {
         }
         Ok(spec)
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Auth {
+    header: String,
+    token: String,
+    guarded: String,
 }
 
 // What a scenario must hold to be driven: steps, each one request with its
@@ -1013,14 +1013,6 @@ struct Oracle {
     note: Option<String>,
 }
 
-// One fixture or scenario driven through the guest: what it recorded, and
-// every way the guest's answer differed, none for a pass.
-struct Outcome {
-    fixture: String,
-    expected: String,
-    reasons: Vec<String>,
-}
-
 impl Oracle {
     const fn not_run(why: String) -> Self {
         Self {
@@ -1128,13 +1120,6 @@ impl Oracle {
     }
 }
 
-// The text after `marker` where the line opens with it, or where the test
-// runner's `test <name> ... ` opened the line the harness printed first.
-fn marked<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
-    line.strip_prefix(marker)
-        .or_else(|| line.split_once("... ").and_then(|(_, rest)| rest.strip_prefix(marker)))
-}
-
 impl Display for Oracle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "\n### Oracle\n")?;
@@ -1200,6 +1185,21 @@ impl Display for Oracle {
         }
         Ok(())
     }
+}
+
+// The text after `marker` where the line opens with it, or where the test
+// runner's `test <name> ... ` opened the line the harness printed first.
+fn marked<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
+    line.strip_prefix(marker)
+        .or_else(|| line.split_once("... ").and_then(|(_, rest)| rest.strip_prefix(marker)))
+}
+
+// One fixture or scenario driven through the guest: what it recorded, and
+// every way the guest's answer differed, none for a pass.
+struct Outcome {
+    fixture: String,
+    expected: String,
+    reasons: Vec<String>,
 }
 
 // The test the eval writes into the built tree as `tests/reference_oracle.rs`,

@@ -56,12 +56,6 @@ pub fn dependency_line(name: &str) -> String {
     format!("{name}.workspace = true")
 }
 
-// The crate a `[dependencies]` line names, before its `.workspace` or its
-// ` =`.
-fn dependency_name(line: &str) -> &str {
-    line.split(['.', ' ', '=']).next().unwrap_or(line)
-}
-
 // The topic table's constant for `topic`, under its doc line, as the lines
 // added at the end of the table.
 pub fn topic_constant(constant: &str, topic: &str) -> String {
@@ -100,86 +94,6 @@ fn marker_lines(marker: &str) -> Vec<String> {
 pub fn fenced(lang: &str, text: &str) -> String {
     let fence = Fence::around(text);
     format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
-}
-
-// The doubles every scenario starts from, each setting the part reads
-// seeded with a placeholder the turn fills.
-fn provider(keys: &[&str]) -> Fn {
-    let item = Fn::new("provider").returns("Provider");
-    if keys.is_empty() {
-        return item
-            .comments([
-                "The doubles every scenario starts from: set a setting or a response on them in \
-                 the arrangement.",
-            ])
-            .body(["Provider::default()"]);
-    }
-    let seeds: Vec<String> =
-        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
-    let inline = format!("[{}]", seeds.join(", "));
-    let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
-    let body = if joined.chars().count() <= BODY_WIDTH {
-        vec![joined]
-    } else {
-        let mut lines = seeded(&seeds, &inline);
-        lines.push("Provider::default().config(MapConfig::default().with(settings))".to_owned());
-        lines
-    };
-    item.comments([
-        "The doubles every scenario starts from, the part's settings seeded: give each its",
-        "value for the scenarios, and set a response on the doubles in the arrangement.",
-    ])
-    .body(body)
-}
-
-// `let settings = [..];` as the formatter lays an array: on one line where
-// it fits, beneath the binding where it fits there, else one seed per line.
-fn seeded(seeds: &[String], inline: &str) -> Vec<String> {
-    let joined = format!("let settings = {inline};");
-    if joined.chars().count() <= BODY_WIDTH {
-        return vec![joined];
-    }
-    if TAB + inline.chars().count() < BODY_WIDTH {
-        return vec!["let settings =".to_owned(), format!("{}{inline};", pad(TAB))];
-    }
-    let mut lines = vec!["let settings = [".to_owned()];
-    lines.extend(seeds.iter().map(|seed| format!("{}{seed},", pad(TAB))));
-    lines.push("];".to_owned());
-    lines
-}
-
-// The stem's router over the doubles, built as the guest builds it.
-fn router(ident: &str) -> Fn {
-    Fn::new("router")
-        .comments(["The stem's router over the doubles, as the guest builds it."])
-        .params(["provider: &Provider"])
-        .returns("Router<Provider>")
-        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
-}
-
-// One request through the stem's router, its body read as JSON so a test
-// asserts fields and never bytes.
-fn call() -> Fn {
-    Fn::new("call")
-        .comments([
-            "One request through the stem's router, answered as its status and its body as JSON:",
-            "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
-        ])
-        .asynchronous()
-        .params(["provider: &Provider", "request: Request<Body>"])
-        .returns("(StatusCode, Value)")
-        .body([
-            "let response = send(&router(provider), request).await;",
-            "let status = response.status();",
-            "let body = response.into_body();",
-            "let body = if body.is_empty() {",
-            "    Value::Null",
-            "} else {",
-            "    serde_json::from_slice(&body)",
-            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))",
-            "};",
-            "(status, body)",
-        ])
 }
 
 impl Stem {
@@ -547,6 +461,92 @@ impl Stem {
         }
         uses
     }
+}
+
+// The crate a `[dependencies]` line names, before its `.workspace` or its
+// ` =`.
+fn dependency_name(line: &str) -> &str {
+    line.split(['.', ' ', '=']).next().unwrap_or(line)
+}
+
+// The doubles every scenario starts from, each setting the part reads
+// seeded with a placeholder the turn fills.
+fn provider(keys: &[&str]) -> Fn {
+    let item = Fn::new("provider").returns("Provider");
+    if keys.is_empty() {
+        return item
+            .comments([
+                "The doubles every scenario starts from: set a setting or a response on them in \
+                 the arrangement.",
+            ])
+            .body(["Provider::default()"]);
+    }
+    let seeds: Vec<String> =
+        keys.iter().map(|key| format!("(\"{}\", \"{PLACEHOLDER}\")", escape(key))).collect();
+    let inline = format!("[{}]", seeds.join(", "));
+    let joined = format!("Provider::default().config(MapConfig::default().with({inline}))");
+    let body = if joined.chars().count() <= BODY_WIDTH {
+        vec![joined]
+    } else {
+        let mut lines = seeded(&seeds, &inline);
+        lines.push("Provider::default().config(MapConfig::default().with(settings))".to_owned());
+        lines
+    };
+    item.comments([
+        "The doubles every scenario starts from, the part's settings seeded: give each its",
+        "value for the scenarios, and set a response on the doubles in the arrangement.",
+    ])
+    .body(body)
+}
+
+// `let settings = [..];` as the formatter lays an array: on one line where
+// it fits, beneath the binding where it fits there, else one seed per line.
+fn seeded(seeds: &[String], inline: &str) -> Vec<String> {
+    let joined = format!("let settings = {inline};");
+    if joined.chars().count() <= BODY_WIDTH {
+        return vec![joined];
+    }
+    if TAB + inline.chars().count() < BODY_WIDTH {
+        return vec!["let settings =".to_owned(), format!("{}{inline};", pad(TAB))];
+    }
+    let mut lines = vec!["let settings = [".to_owned()];
+    lines.extend(seeds.iter().map(|seed| format!("{}{seed},", pad(TAB))));
+    lines.push("];".to_owned());
+    lines
+}
+
+// The stem's router over the doubles, built as the guest builds it.
+fn router(ident: &str) -> Fn {
+    Fn::new("router")
+        .comments(["The stem's router over the doubles, as the guest builds it."])
+        .params(["provider: &Provider"])
+        .returns("Router<Provider>")
+        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
+}
+
+// One request through the stem's router, its body read as JSON so a test
+// asserts fields and never bytes.
+fn call() -> Fn {
+    Fn::new("call")
+        .comments([
+            "One request through the stem's router, answered as its status and its body as JSON:",
+            "`Value::Null` for an empty body, the text as a `Value::String` where it is not JSON.",
+        ])
+        .asynchronous()
+        .params(["provider: &Provider", "request: Request<Body>"])
+        .returns("(StatusCode, Value)")
+        .body([
+            "let response = send(&router(provider), request).await;",
+            "let status = response.status();",
+            "let body = response.into_body();",
+            "let body = if body.is_empty() {",
+            "    Value::Null",
+            "} else {",
+            "    serde_json::from_slice(&body)",
+            "        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&body).into_owned()))",
+            "};",
+            "(status, body)",
+        ])
 }
 
 // The imports of `uses` that `file` does not already bring into scope.
@@ -944,14 +944,14 @@ fn laid_field(field: &LaidField) -> Field {
         .vis(Vis::Pub)
 }
 
-fn laid_variant(variant: &LaidVariant) -> Variant {
-    Variant::new(&variant.name).docs(variant.docs.clone()).attrs(variant.attrs.iter().cloned())
-}
-
 // The fn a field's `serde(default)` names, `const` where its value allows.
 fn default_fn(default: &DefaultFn) -> Fn {
     let item = Fn::new(&default.name).returns(&default.ret).body([default.value.as_str()]);
     if default.constant { item.constant() } else { item }
+}
+
+fn laid_variant(variant: &LaidVariant) -> Variant {
+    Variant::new(&variant.name).docs(variant.docs.clone()).attrs(variant.attrs.iter().cloned())
 }
 
 impl Test {

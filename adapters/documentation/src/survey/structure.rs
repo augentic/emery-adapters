@@ -75,23 +75,6 @@ pub fn opening_line(text: &str) -> Option<(u32, &str)> {
     })
 }
 
-fn line_number(index: usize) -> u32 {
-    u32::try_from(index).unwrap_or(u32::MAX)
-}
-
-fn gherkin(lines: &[&str]) -> bool {
-    lines
-        .iter()
-        .map(|line| line.trim())
-        .find(|line| !line.is_empty() && !line.starts_with('@') && !line.starts_with('#'))
-        .is_some_and(|line| line.starts_with("Feature:"))
-}
-
-struct Open {
-    kind: Kind,
-    start: u32,
-}
-
 struct Reader<'a> {
     lines: &'a [&'a str],
     gherkin: bool,
@@ -260,6 +243,23 @@ impl<'a> Reader<'a> {
             lines: Lines { start, end },
         });
     }
+}
+
+struct Open {
+    kind: Kind,
+    start: u32,
+}
+
+fn gherkin(lines: &[&str]) -> bool {
+    lines
+        .iter()
+        .map(|line| line.trim())
+        .find(|line| !line.is_empty() && !line.starts_with('@') && !line.starts_with('#'))
+        .is_some_and(|line| line.starts_with("Feature:"))
+}
+
+fn line_number(index: usize) -> u32 {
+    u32::try_from(index).unwrap_or(u32::MAX)
 }
 
 fn unindented(line: &str) -> Option<&str> {

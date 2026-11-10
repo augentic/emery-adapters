@@ -103,17 +103,6 @@ fn is_data(entry: Entry<'_>) -> bool {
     entry.extension().is_some_and(|extension| DATA_EXTENSIONS.contains(&extension))
 }
 
-fn skipped_dir(entry: Entry<'_>) -> bool {
-    never_dir(entry) || TEST_DIRS.contains(&entry.name())
-}
-
-fn never_dir(entry: Entry<'_>) -> bool {
-    let name = entry.name();
-    NEVER_DIRS.contains(&name)
-        || name.ends_with(".egg-info")
-        || (name == "versions" && entry.path().ends_with("alembic/versions"))
-}
-
 fn is_test(entry: Entry<'_>) -> bool {
     if entry.hidden() {
         return false;
@@ -132,4 +121,15 @@ fn is_test(entry: Entry<'_>) -> bool {
         return false;
     }
     is_test_name(stem) || entry.path().split('/').rev().skip(1).any(|dir| TEST_DIRS.contains(&dir))
+}
+
+fn skipped_dir(entry: Entry<'_>) -> bool {
+    never_dir(entry) || TEST_DIRS.contains(&entry.name())
+}
+
+fn never_dir(entry: Entry<'_>) -> bool {
+    let name = entry.name();
+    NEVER_DIRS.contains(&name)
+        || name.ends_with(".egg-info")
+        || (name == "versions" && entry.path().ends_with("alembic/versions"))
 }

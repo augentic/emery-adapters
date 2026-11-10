@@ -528,6 +528,14 @@ pub struct Completion {
     pub writes: Writes,
 }
 
+impl Completion {
+    // Whether the turn closed with an answer the gate accepted, on its
+    // first round or a correction.
+    pub fn answered(&self) -> bool {
+        matches!(self.outcome.as_str(), "ok" | "corrected")
+    }
+}
+
 // The shell calls one completion made: how many, their summed wall time
 // from the call to its completion, and the bytes their results carried back.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -572,14 +580,6 @@ impl Display for Writes {
             write!(f, "; {} refused", self.refused)?;
         }
         Ok(())
-    }
-}
-
-impl Completion {
-    // Whether the turn closed with an answer the gate accepted, on its
-    // first round or a correction.
-    pub fn answered(&self) -> bool {
-        matches!(self.outcome.as_str(), "ok" | "corrected")
     }
 }
 

@@ -13,6 +13,46 @@ pub struct Settings {
     pub fields: Vec<Field>,
 }
 
+impl Settings {
+    // The settings `texts` spell for the part `name` stands for, or none
+    // where they spell no key: a key is a word of two or more
+    // `SCREAMING_SNAKE` segments that opens with a letter and that
+    // `excluded` does not claim for a topic, a path, or another constant.
+    pub fn spelled<'t>(
+        name: String, texts: impl IntoIterator<Item = &'t str>, excluded: impl Fn(&str) -> bool,
+    ) -> Option<Self> {
+        let keys: BTreeSet<&str> = texts
+            .into_iter()
+            .flat_map(|text| text.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_'))
+            .filter(|word| is_key(word) && !excluded(word))
+            .collect();
+        if keys.is_empty() {
+            return None;
+        }
+        let prefix = shared_prefix(&keys);
+        let fields = keys
+            .iter()
+            .map(|key| {
+                let rest =
+                    prefix.as_deref().and_then(|prefix| key.strip_prefix(prefix)).unwrap_or(key);
+                let field = snake(&rest.to_ascii_lowercase());
+                let read =
+                    format!("{}{}", prefix.as_deref().unwrap_or(""), field.to_ascii_uppercase());
+                Field {
+                    explicit: read != *key,
+                    name: field,
+                    key: (*key).to_owned(),
+                }
+            })
+            .collect();
+        Some(Self { name, prefix, fields })
+    }
+
+    pub fn keys(&self) -> impl Iterator<Item = &str> {
+        self.fields.iter().map(|field| field.key.as_str())
+    }
+}
+
 // The names `axum::http::StatusCode` declares, which a scenario spells for
 // a status and never for a setting.
 const STATUSES: &[&str] = &[
@@ -84,46 +124,6 @@ const STATUSES: &[&str] = &[
 // header, an encoding, a format.
 const NOT_SETTINGS: &[&str] =
     &["APPLICATION_JSON", "CONTENT_LENGTH", "CONTENT_TYPE", "ISO_8601", "RFC_3339", "UTF_8"];
-
-impl Settings {
-    // The settings `texts` spell for the part `name` stands for, or none
-    // where they spell no key: a key is a word of two or more
-    // `SCREAMING_SNAKE` segments that opens with a letter and that
-    // `excluded` does not claim for a topic, a path, or another constant.
-    pub fn spelled<'t>(
-        name: String, texts: impl IntoIterator<Item = &'t str>, excluded: impl Fn(&str) -> bool,
-    ) -> Option<Self> {
-        let keys: BTreeSet<&str> = texts
-            .into_iter()
-            .flat_map(|text| text.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_'))
-            .filter(|word| is_key(word) && !excluded(word))
-            .collect();
-        if keys.is_empty() {
-            return None;
-        }
-        let prefix = shared_prefix(&keys);
-        let fields = keys
-            .iter()
-            .map(|key| {
-                let rest =
-                    prefix.as_deref().and_then(|prefix| key.strip_prefix(prefix)).unwrap_or(key);
-                let field = snake(&rest.to_ascii_lowercase());
-                let read =
-                    format!("{}{}", prefix.as_deref().unwrap_or(""), field.to_ascii_uppercase());
-                Field {
-                    explicit: read != *key,
-                    name: field,
-                    key: (*key).to_owned(),
-                }
-            })
-            .collect();
-        Some(Self { name, prefix, fields })
-    }
-
-    pub fn keys(&self) -> impl Iterator<Item = &str> {
-        self.fields.iter().map(|field| field.key.as_str())
-    }
-}
 
 // Whether `word` has a key's shape and is no status.
 fn is_key(word: &str) -> bool {

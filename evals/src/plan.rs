@@ -154,16 +154,6 @@ impl PartNode {
     }
 }
 
-#[derive(Default)]
-struct ClassifiedEdges {
-    derived: Vec<Edge>,
-    named: Vec<Edge>,
-    onto_typeless: usize,
-    type_backed: Vec<Edge>,
-    unbacked: Vec<Edge>,
-    unbacked_start: usize,
-}
-
 fn wave_widths(parts: &[PartNode], waves: Option<&Value>) -> Vec<usize> {
     if let Some(waves) = waves.and_then(Value::as_array)
         && !waves.is_empty()
@@ -247,6 +237,68 @@ fn merged_parts(
     merged
 }
 
+#[derive(Default)]
+struct ClassifiedEdges {
+    derived: Vec<Edge>,
+    named: Vec<Edge>,
+    onto_typeless: usize,
+    type_backed: Vec<Edge>,
+    unbacked: Vec<Edge>,
+    unbacked_start: usize,
+}
+
+impl ClassifiedEdges {
+    fn of(
+        parts: &[PartNode], by_req: &BTreeMap<&str, (&str, Option<&Value>)>, design: Option<&Value>,
+    ) -> Self {
+        let types = DesignTypes::of(design);
+        let by_id: BTreeMap<&str, &PartNode> =
+            parts.iter().map(|part| (part.id.as_str(), part)).collect();
+        let mut out = Self::default();
+
+        for part in parts {
+            for dep_id in &part.depends_on {
+                if dep_id == &part.id {
+                    continue;
+                }
+                let Some(&dep) = by_id.get(dep_id.as_str()) else {
+                    continue;
+                };
+                if dep.types.is_empty() {
+                    out.onto_typeless += 1;
+                }
+                let (backed, used) = types.edge_types(part, dep);
+                if !backed.is_empty() {
+                    let edge = Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: backed,
+                    };
+                    out.derived.push(edge.clone());
+                    out.type_backed.push(edge);
+                } else if !used.is_empty() {
+                    out.named.push(Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: used,
+                    });
+                } else {
+                    if dep.is_bootstrap(by_req) {
+                        out.unbacked_start += 1;
+                    }
+                    out.unbacked.push(Edge {
+                        from: part.name.clone(),
+                        to: dep.name.clone(),
+                        types: Vec::new(),
+                    });
+                }
+            }
+        }
+
+        out
+    }
+}
+
 struct DesignTypes<'a> {
     signatures: BTreeMap<&'a str, &'a str>,
     declared: BTreeMap<&'a str, &'a str>,
@@ -317,58 +369,6 @@ impl<'a> DesignTypes<'a> {
             }
         }
         (backed, used)
-    }
-}
-
-impl ClassifiedEdges {
-    fn of(
-        parts: &[PartNode], by_req: &BTreeMap<&str, (&str, Option<&Value>)>, design: Option<&Value>,
-    ) -> Self {
-        let types = DesignTypes::of(design);
-        let by_id: BTreeMap<&str, &PartNode> =
-            parts.iter().map(|part| (part.id.as_str(), part)).collect();
-        let mut out = Self::default();
-
-        for part in parts {
-            for dep_id in &part.depends_on {
-                if dep_id == &part.id {
-                    continue;
-                }
-                let Some(&dep) = by_id.get(dep_id.as_str()) else {
-                    continue;
-                };
-                if dep.types.is_empty() {
-                    out.onto_typeless += 1;
-                }
-                let (backed, used) = types.edge_types(part, dep);
-                if !backed.is_empty() {
-                    let edge = Edge {
-                        from: part.name.clone(),
-                        to: dep.name.clone(),
-                        types: backed,
-                    };
-                    out.derived.push(edge.clone());
-                    out.type_backed.push(edge);
-                } else if !used.is_empty() {
-                    out.named.push(Edge {
-                        from: part.name.clone(),
-                        to: dep.name.clone(),
-                        types: used,
-                    });
-                } else {
-                    if dep.is_bootstrap(by_req) {
-                        out.unbacked_start += 1;
-                    }
-                    out.unbacked.push(Edge {
-                        from: part.name.clone(),
-                        to: dep.name.clone(),
-                        types: Vec::new(),
-                    });
-                }
-            }
-        }
-
-        out
     }
 }
 fn declared_name<'a>(signature: &'a str, key: &'a str) -> &'a str {

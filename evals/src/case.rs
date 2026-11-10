@@ -452,27 +452,6 @@ pub fn named_secret(path: &str) -> Option<&'static str> {
     None
 }
 
-#[derive(Clone, Copy)]
-enum SecretRun {
-    Upper,
-    Alnum,
-    Token,
-    Base64,
-}
-
-impl SecretRun {
-    const fn admits(self, byte: u8) -> bool {
-        match self {
-            Self::Upper => byte.is_ascii_uppercase() || byte.is_ascii_digit(),
-            Self::Alnum => byte.is_ascii_alphanumeric(),
-            Self::Token => byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-',
-            Self::Base64 => {
-                byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/' || byte == b'='
-            }
-        }
-    }
-}
-
 pub fn carried_secret(path: &str, bytes: &[u8]) -> Option<String> {
     if pem_private_key(bytes) {
         return Some("a PEM private key block".to_owned());
@@ -486,11 +465,35 @@ pub fn carried_secret(path: &str, bytes: &[u8]) -> Option<String> {
     parameter_secret(path, bytes)
 }
 
+fn pem_private_key(bytes: &[u8]) -> bool {
+    const HEAD: &[u8] = b"-----BEGIN ";
+    const DASHES: &[u8] = b"-----";
+    const PRIVATE: &[u8] = b"PRIVATE KEY";
+
+    byte_occurrences(bytes, HEAD).any(|start| {
+        let rest = &bytes[start + HEAD.len()..];
+        byte_occurrences(rest, DASHES).next().is_some_and(|end| {
+            let label = &rest[..end];
+            label.ends_with(PRIVATE) && !label.contains(&b'\n')
+        })
+    })
+}
+
 struct SecretShape {
     prefix: &'static [u8],
     run: SecretRun,
     least: usize,
     what: &'static str,
+}
+
+impl SecretShape {
+    fn matches(&self, bytes: &[u8]) -> bool {
+        byte_occurrences(bytes, self.prefix).any(|start| {
+            let rest = &bytes[start + self.prefix.len()..];
+            let run = rest.iter().take_while(|byte| self.run.admits(**byte)).count();
+            run >= self.least && rest.get(run) != Some(&b'/')
+        })
+    }
 }
 
 const SECRET_SHAPES: [SecretShape; 23] = [
@@ -634,27 +637,24 @@ const SECRET_SHAPES: [SecretShape; 23] = [
     },
 ];
 
-fn pem_private_key(bytes: &[u8]) -> bool {
-    const HEAD: &[u8] = b"-----BEGIN ";
-    const DASHES: &[u8] = b"-----";
-    const PRIVATE: &[u8] = b"PRIVATE KEY";
-
-    byte_occurrences(bytes, HEAD).any(|start| {
-        let rest = &bytes[start + HEAD.len()..];
-        byte_occurrences(rest, DASHES).next().is_some_and(|end| {
-            let label = &rest[..end];
-            label.ends_with(PRIVATE) && !label.contains(&b'\n')
-        })
-    })
+#[derive(Clone, Copy)]
+enum SecretRun {
+    Upper,
+    Alnum,
+    Token,
+    Base64,
 }
 
-impl SecretShape {
-    fn matches(&self, bytes: &[u8]) -> bool {
-        byte_occurrences(bytes, self.prefix).any(|start| {
-            let rest = &bytes[start + self.prefix.len()..];
-            let run = rest.iter().take_while(|byte| self.run.admits(**byte)).count();
-            run >= self.least && rest.get(run) != Some(&b'/')
-        })
+impl SecretRun {
+    const fn admits(self, byte: u8) -> bool {
+        match self {
+            Self::Upper => byte.is_ascii_uppercase() || byte.is_ascii_digit(),
+            Self::Alnum => byte.is_ascii_alphanumeric(),
+            Self::Token => byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-',
+            Self::Base64 => {
+                byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/' || byte == b'='
+            }
+        }
     }
 }
 
