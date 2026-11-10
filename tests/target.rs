@@ -8,8 +8,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, DesignType, Grant, InitContext, Outcome, Report, Requirement,
-    Scenario, Slice, TargetAdapter, Task, Verdict, VerifyContext,
+    BuildContext, DesignType, Grant, InitContext, Outcome, Report, Requirement, Scenario, Slice,
+    TargetAdapter, Task, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
