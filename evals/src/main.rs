@@ -48,15 +48,6 @@ const BUILD_RUNG: &str = "1200/240";
 // either backend, its completion and tool-call lines and the tool-call
 // arguments whole, which it logs under a target of their own. The crate is
 // `emery-<kind>`, so the tracing target is `emery_<kind>`.
-fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
-    let mut filter = "emery_engine=debug,emery_sdk=trace".to_owned();
-    for adapter in adapters {
-        let _ = write!(filter, ",emery_{adapter}=trace");
-    }
-    filter
-        + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_genai=debug,omnia_genai::tools=trace,\
-           omnia_core=off"
-}
 
 // The backend the binary answers the model through, read from its file
 // name: `emery-dev` is the genai runtime, anything else the shipped Cursor
@@ -122,32 +113,6 @@ impl Backend {
     }
 }
 
-fn main() -> ExitCode {
-    match eval() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => {
-            eprintln!("eval: {error}");
-            ExitCode::FAILURE
-        }
-    }
-}
-
-// What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--build`, `--rebuild <card>`, `--resume <card> --at
-// <wave>` with `--drifted` to admit a seed the template has moved under,
-// `--oracle <card>`) with the target a build goes through.
-struct Args {
-    filter: BTreeSet<String>,
-    facts_only: bool,
-    again: Option<Again>,
-    // the card whose `omnia` build the reference's fixtures are driven through
-    oracle: Option<String>,
-    // the target a build runs through; none where no build runs
-    target: Option<Target>,
-    // the requirement budget per slice passed as `--budget` to `emery build`
-    budget: Option<NonZeroUsize>,
-}
-
 // A build of a card's committed plans again: fresh, or on from a wave of the
 // chain the card's build left. A resume reads the component's template
 // against the seed it resumes before the put and refuses one the template
@@ -174,274 +139,6 @@ impl Again {
             }
         }
     }
-}
-
-impl Args {
-    fn parse(argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut argv = argv;
-        let mut filter: BTreeSet<String> = BTreeSet::new();
-        let mut rebuild: Option<String> = None;
-        let mut resume: Option<String> = None;
-        let mut at: Option<usize> = None;
-        let mut oracle: Option<String> = None;
-        let mut target: Option<Target> = None;
-        let mut budget: Option<NonZeroUsize> = None;
-        while let Some(arg) = argv.next() {
-            if arg == "--rebuild" {
-                rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
-            } else if arg == "--resume" {
-                resume = Some(argv.next().ok_or("`--resume` names a card")?);
-            } else if arg == "--at" {
-                let wave = argv.next().ok_or("`--at` names a wave")?;
-                at = Some(wave.parse().map_err(|error| format!("`--at {wave}`: {error}"))?);
-            } else if arg == "--oracle" {
-                oracle = Some(argv.next().ok_or("`--oracle` names a card")?);
-            } else if arg == "--target" {
-                let name = argv.next().ok_or("`--target` names a target adapter")?;
-                target = Some(Target::parse(&name)?);
-            } else if arg == "--budget" {
-                let cap = argv.next().ok_or("`--budget` names a requirement budget")?;
-                budget = Some(cap.parse().map_err(|error| format!("`--budget {cap}`: {error}"))?);
-            } else {
-                filter.insert(arg);
-            }
-        }
-        let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
-        let facts_only = filter.remove("--facts");
-        let build = filter.remove("--build") || again.is_some();
-        if facts_only && filter.is_empty() {
-            return Err("`--facts` names a case or an adapter".into());
-        }
-        if facts_only && build {
-            return Err("`--facts` spends no turn, so it cannot `--build`".into());
-        }
-        if again.is_some() && filter.is_empty() {
-            return Err("`--rebuild` and `--resume` name a case or an adapter".into());
-        }
-        if oracle.is_some() {
-            if filter.is_empty() {
-                return Err("`--oracle` names a case or an adapter".into());
-            }
-            if facts_only || build {
-                return Err(
-                    "`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
-                            `--build`, `--rebuild`, or `--resume`"
-                        .into(),
-                );
-            }
-            if target.is_some_and(|target| target != Target::Omnia) {
-                return Err("`--oracle` reads an `omnia` build; `--target` names another".into());
-            }
-        } else if target.is_some() && !build {
-            return Err(
-                "`--target` chooses what `--build`, `--rebuild`, or `--resume` builds through"
-                    .into(),
-            );
-        }
-        if budget.is_some() && !build {
-            return Err(
-                "`--budget` sets the requirement budget for `--build`, `--rebuild`, or `--resume`"
-                    .into(),
-            );
-        }
-        Ok(Self {
-            filter,
-            facts_only,
-            again,
-            oracle,
-            target: build.then(|| target.unwrap_or_default()),
-            budget,
-        })
-    }
-
-    fn resolve_again(
-        rebuild: Option<String>, resume: Option<String>, at: Option<usize>,
-        filter: &mut BTreeSet<String>,
-    ) -> Result<Option<Again>, Box<dyn std::error::Error>> {
-        let again = match (rebuild, resume, at) {
-            (Some(_), Some(_), _) => {
-                return Err(
-                    "`--rebuild` and `--resume` each build a card's plans again; name one".into()
-                );
-            }
-            (Some(card), None, None) => Some(Again::Rebuild { card }),
-            (_, None, Some(_)) => {
-                return Err("`--at` names the wave a `--resume` resumes at".into());
-            }
-            (None, Some(card), Some(wave)) => {
-                if wave < 2 {
-                    return Err(
-                        "`--at` names a wave past the first; a resume at wave 1 is a `--rebuild`"
-                            .into(),
-                    );
-                }
-                let drifted = filter.remove("--drifted");
-                Some(Again::Resume { card, wave, drifted })
-            }
-            (None, Some(_), None) => {
-                return Err("`--resume` names the wave to resume at through `--at`".into());
-            }
-            (None, None, None) => None,
-        };
-        if filter.remove("--drifted") {
-            return Err("`--drifted` admits the seed a `--resume` resumes over".into());
-        }
-        Ok(again)
-    }
-}
-
-#[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
-fn eval() -> Result<(), Box<dyn std::error::Error>> {
-    // the crate sits one level beneath the repository root, which every
-    // fixture, binary, and scorecard path is relative to
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
-    let Args {
-        filter,
-        facts_only,
-        again,
-        oracle,
-        target,
-        budget,
-    } = Args::parse(env::args().skip(1))?;
-    let cases = cases(root, &filter)?;
-    if cases.is_empty() {
-        return Err(format!("no case under `{CASES}` matches").into());
-    }
-    let eval_dir = root.join("target/eval");
-
-    // the oracle alone needs no binary, no component, and no model
-    if let Some(card) = oracle {
-        for case in &cases {
-            let Some(reference) = Reference::locate(root, case.expected.reference.as_deref())
-            else {
-                eprintln!("eval: case `{}` names no reference; nothing driven", case.name);
-                continue;
-            };
-            let project = eval_dir.join(&card).join(&case.name);
-            let (file, text) = self::oracle(&project, &reference)?;
-            print!("{text}");
-            eprintln!("eval: `{}` oracle at {}", case.name, file.display());
-        }
-        return Ok(());
-    }
-
-    let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
-    let mut settings = Settings::from_env(root, &adapters, target, budget)?;
-    settings.again = again;
-
-    if let Some(again) = settings.again.clone() {
-        let started = now();
-        let card_name = started.replace(':', "-");
-        let mut reports = Vec::with_capacity(cases.len());
-        for case in &cases {
-            let run = again.run(&eval_dir, &card_name, case, &settings)?;
-            eprintln!("eval: `{}` {}", case.name, run.summary());
-            let attempt = Attempt {
-                grade: grade(&case.expected, &run),
-                run,
-            };
-            reports.push(Report {
-                case,
-                runs: vec![vec![attempt]],
-            });
-        }
-        return write_scorecard(&eval_dir, &settings, &reports, &started, &card_name);
-    }
-    if facts_only {
-        for case in &cases {
-            let project = stage(&eval_dir.join("facts"), case, &settings)?;
-            let text = facts(&project, &settings, case)?;
-            fs::write(project.join("facts.md"), &text)?;
-            println!("# {} — survey facts\n\n{text}\n", case.name);
-            eprintln!("eval: `{}` facts at {}", case.name, project.join("facts.md").display());
-        }
-        return Ok(());
-    }
-
-    // run and grade every case, each run climbing the ladder while the cap
-    // is what fails it
-    let started = now();
-    let card_name = started.replace(':', "-");
-    let mut reports = Vec::with_capacity(cases.len());
-    for case in &cases {
-        eprintln!("eval: case `{}`", case.name);
-        let project = stage(&eval_dir.join(&card_name), case, &settings)?;
-        let mut runs = Vec::with_capacity(settings.runs);
-
-        for n in 1..=settings.runs {
-            let mut attempts = Vec::new();
-
-            for (index, rung) in settings.ladder.iter().enumerate() {
-                eprintln!("eval: `{}` run {n} at {rung}", case.name);
-                let tag = tag(n, index, *rung);
-                let run = attempt(&project, &settings, case, n, *rung, &tag)?;
-                eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
-                let climb = run.starved() && index + 1 < settings.ladder.len();
-                attempts.push(Attempt {
-                    grade: grade(&case.expected, &run),
-                    run,
-                });
-
-                if !climb {
-                    break;
-                }
-            }
-
-            runs.push(attempts);
-        }
-
-        reports.push(Report { case, runs });
-    }
-
-    write_scorecard(&eval_dir, &settings, &reports, &started, &card_name)
-}
-
-fn write_scorecard(
-    eval_dir: &Path, settings: &Settings, reports: &[Report<'_>], started: &str, card_name: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let card = scorecard(settings, reports, started, card_name);
-    let out = eval_dir.join(format!("{card_name}.md"));
-    fs::write(&out, &card)?;
-    print!("{card}");
-    eprintln!("eval: scorecard at {}", out.display());
-    Ok(())
-}
-
-// The name a run's files carry beneath its case: `run-N` at the first rung,
-// `run-N@<timeout>-<inactivity>` up the ladder — the rung's `/` as a `-`,
-// since the tag is a file name.
-fn tag(n: usize, index: usize, rung: Rung) -> String {
-    if index == 0 {
-        format!("run-{n}")
-    } else {
-        format!("run-{n}@{}-{}", rung.timeout, rung.inactivity)
-    }
-}
-
-// One run at one rung, put again once when the backend refused it before
-// any claim was accepted: the failure is the host's, not the arm's, and a
-// second opening is cheaper than a run short. The dead attempt's files are
-// kept as `<tag>.dead.*`.
-fn attempt(
-    project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
-) -> io::Result<Run> {
-    let first = run(project, settings, case, n, rung, tag)?;
-    if !first.stillborn() {
-        return Ok(first);
-    }
-    eprintln!("eval: `{}` run {n} at {rung} {} — put again", case.name, first.summary());
-    for suffix in ["stderr", "stdout", "facts.md"] {
-        let from = project.join(format!("{tag}.{suffix}"));
-        if from.exists() {
-            fs::rename(from, project.join(format!("{tag}.dead.{suffix}")))?;
-        }
-    }
-    let mut again = run(project, settings, case, n, rung, tag)?;
-    again.dead = Some(first.summary());
-
-    Ok(again)
 }
 
 struct Settings {
@@ -587,6 +284,21 @@ impl Settings {
     }
 }
 
+// The run's log filter unless the caller sets one: the engine at debug,
+// every adapter the case runs under at trace beside the SDK's, and, for
+// either backend, its completion and tool-call lines and the tool-call
+// arguments whole, which it logs under a target of their own. The crate is
+// `emery-<kind>`, so the tracing target is `emery_<kind>`.
+fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
+    let mut filter = "emery_engine=debug,emery_sdk=trace".to_owned();
+    for adapter in adapters {
+        let _ = write!(filter, ",emery_{adapter}=trace");
+    }
+    filter
+        + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_genai=debug,omnia_genai::tools=trace,\
+           omnia_core=off"
+}
+
 // One rung of the budget ladder: the backend's cap per completion and its
 // inactivity cut-off, in seconds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -655,6 +367,254 @@ fn emery(
     command.output()
 }
 
+fn main() -> ExitCode {
+    match eval() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("eval: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
+fn eval() -> Result<(), Box<dyn std::error::Error>> {
+    // the crate sits one level beneath the repository root, which every
+    // fixture, binary, and scorecard path is relative to
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("CARGO_MANIFEST_DIR: no parent directory")?;
+    let Args {
+        filter,
+        facts_only,
+        again,
+        oracle,
+        target,
+        budget,
+    } = Args::parse(env::args().skip(1))?;
+    let cases = cases(root, &filter)?;
+    if cases.is_empty() {
+        return Err(format!("no case under `{CASES}` matches").into());
+    }
+    let eval_dir = root.join("target/eval");
+
+    // the oracle alone needs no binary, no component, and no model
+    if let Some(card) = oracle {
+        for case in &cases {
+            let Some(reference) = Reference::locate(root, case.expected.reference.as_deref())
+            else {
+                eprintln!("eval: case `{}` names no reference; nothing driven", case.name);
+                continue;
+            };
+            let project = eval_dir.join(&card).join(&case.name);
+            let (file, text) = self::oracle(&project, &reference)?;
+            print!("{text}");
+            eprintln!("eval: `{}` oracle at {}", case.name, file.display());
+        }
+        return Ok(());
+    }
+
+    let adapters: BTreeSet<&str> = cases.iter().flat_map(|case| case.expected.adapters()).collect();
+    let mut settings = Settings::from_env(root, &adapters, target, budget)?;
+    settings.again = again;
+
+    if let Some(again) = settings.again.clone() {
+        let started = now();
+        let card_name = started.replace(':', "-");
+        let mut reports = Vec::with_capacity(cases.len());
+        for case in &cases {
+            let run = again.run(&eval_dir, &card_name, case, &settings)?;
+            eprintln!("eval: `{}` {}", case.name, run.summary());
+            let attempt = Attempt {
+                grade: grade(&case.expected, &run),
+                run,
+            };
+            reports.push(Report {
+                case,
+                runs: vec![vec![attempt]],
+            });
+        }
+        return write_scorecard(&eval_dir, &settings, &reports, &started, &card_name);
+    }
+    if facts_only {
+        for case in &cases {
+            let project = stage(&eval_dir.join("facts"), case, &settings)?;
+            let text = facts(&project, &settings, case)?;
+            fs::write(project.join("facts.md"), &text)?;
+            println!("# {} — survey facts\n\n{text}\n", case.name);
+            eprintln!("eval: `{}` facts at {}", case.name, project.join("facts.md").display());
+        }
+        return Ok(());
+    }
+
+    // run and grade every case, each run climbing the ladder while the cap
+    // is what fails it
+    let started = now();
+    let card_name = started.replace(':', "-");
+    let mut reports = Vec::with_capacity(cases.len());
+    for case in &cases {
+        eprintln!("eval: case `{}`", case.name);
+        let project = stage(&eval_dir.join(&card_name), case, &settings)?;
+        let mut runs = Vec::with_capacity(settings.runs);
+
+        for n in 1..=settings.runs {
+            let mut attempts = Vec::new();
+
+            for (index, rung) in settings.ladder.iter().enumerate() {
+                eprintln!("eval: `{}` run {n} at {rung}", case.name);
+                let tag = tag(n, index, *rung);
+                let run = attempt(&project, &settings, case, n, *rung, &tag)?;
+                eprintln!("eval: `{}` run {n} at {rung} {}", case.name, run.summary());
+                let climb = run.starved() && index + 1 < settings.ladder.len();
+                attempts.push(Attempt {
+                    grade: grade(&case.expected, &run),
+                    run,
+                });
+
+                if !climb {
+                    break;
+                }
+            }
+
+            runs.push(attempts);
+        }
+
+        reports.push(Report { case, runs });
+    }
+
+    write_scorecard(&eval_dir, &settings, &reports, &started, &card_name)
+}
+
+// What the command line asks for: the cases or adapters named, and the
+// mode (`--facts`, `--build`, `--rebuild <card>`, `--resume <card> --at
+// <wave>` with `--drifted` to admit a seed the template has moved under,
+// `--oracle <card>`) with the target a build goes through.
+struct Args {
+    filter: BTreeSet<String>,
+    facts_only: bool,
+    again: Option<Again>,
+    // the card whose `omnia` build the reference's fixtures are driven through
+    oracle: Option<String>,
+    // the target a build runs through; none where no build runs
+    target: Option<Target>,
+    // the requirement budget per slice passed as `--budget` to `emery build`
+    budget: Option<NonZeroUsize>,
+}
+
+impl Args {
+    fn parse(argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut argv = argv;
+        let mut filter: BTreeSet<String> = BTreeSet::new();
+        let mut rebuild: Option<String> = None;
+        let mut resume: Option<String> = None;
+        let mut at: Option<usize> = None;
+        let mut oracle: Option<String> = None;
+        let mut target: Option<Target> = None;
+        let mut budget: Option<NonZeroUsize> = None;
+        while let Some(arg) = argv.next() {
+            if arg == "--rebuild" {
+                rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
+            } else if arg == "--resume" {
+                resume = Some(argv.next().ok_or("`--resume` names a card")?);
+            } else if arg == "--at" {
+                let wave = argv.next().ok_or("`--at` names a wave")?;
+                at = Some(wave.parse().map_err(|error| format!("`--at {wave}`: {error}"))?);
+            } else if arg == "--oracle" {
+                oracle = Some(argv.next().ok_or("`--oracle` names a card")?);
+            } else if arg == "--target" {
+                let name = argv.next().ok_or("`--target` names a target adapter")?;
+                target = Some(Target::parse(&name)?);
+            } else if arg == "--budget" {
+                let cap = argv.next().ok_or("`--budget` names a requirement budget")?;
+                budget = Some(cap.parse().map_err(|error| format!("`--budget {cap}`: {error}"))?);
+            } else {
+                filter.insert(arg);
+            }
+        }
+        let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
+        let facts_only = filter.remove("--facts");
+        let build = filter.remove("--build") || again.is_some();
+        if facts_only && filter.is_empty() {
+            return Err("`--facts` names a case or an adapter".into());
+        }
+        if facts_only && build {
+            return Err("`--facts` spends no turn, so it cannot `--build`".into());
+        }
+        if again.is_some() && filter.is_empty() {
+            return Err("`--rebuild` and `--resume` name a case or an adapter".into());
+        }
+        if oracle.is_some() {
+            if filter.is_empty() {
+                return Err("`--oracle` names a case or an adapter".into());
+            }
+            if facts_only || build {
+                return Err(
+                    "`--oracle` spends no turn and builds nothing, so it cannot `--facts`, \
+                            `--build`, `--rebuild`, or `--resume`"
+                        .into(),
+                );
+            }
+            if target.is_some_and(|target| target != Target::Omnia) {
+                return Err("`--oracle` reads an `omnia` build; `--target` names another".into());
+            }
+        } else if target.is_some() && !build {
+            return Err(
+                "`--target` chooses what `--build`, `--rebuild`, or `--resume` builds through"
+                    .into(),
+            );
+        }
+        if budget.is_some() && !build {
+            return Err(
+                "`--budget` sets the requirement budget for `--build`, `--rebuild`, or `--resume`"
+                    .into(),
+            );
+        }
+        Ok(Self {
+            filter,
+            facts_only,
+            again,
+            oracle,
+            target: build.then(|| target.unwrap_or_default()),
+            budget,
+        })
+    }
+
+    fn resolve_again(
+        rebuild: Option<String>, resume: Option<String>, at: Option<usize>,
+        filter: &mut BTreeSet<String>,
+    ) -> Result<Option<Again>, Box<dyn std::error::Error>> {
+        let again = match (rebuild, resume, at) {
+            (Some(_), Some(_), _) => {
+                return Err(
+                    "`--rebuild` and `--resume` each build a card's plans again; name one".into()
+                );
+            }
+            (Some(card), None, None) => Some(Again::Rebuild { card }),
+            (_, None, Some(_)) => {
+                return Err("`--at` names the wave a `--resume` resumes at".into());
+            }
+            (None, Some(card), Some(wave)) => {
+                if wave < 2 {
+                    return Err(
+                        "`--at` names a wave past the first; a resume at wave 1 is a `--rebuild`"
+                            .into(),
+                    );
+                }
+                let drifted = filter.remove("--drifted");
+                Some(Again::Resume { card, wave, drifted })
+            }
+            (None, Some(_), None) => {
+                return Err("`--resume` names the wave to resume at through `--at`".into());
+            }
+            (None, None, None) => None,
+        };
+        if filter.remove("--drifted") {
+            return Err("`--drifted` admits the seed a `--resume` resumes over".into());
+        }
+        Ok(again)
+    }
+}
+
 // The UTC wall clock as `YYYY-MM-DDTHH:MM:SSZ`, for the scorecard's name and title.
 #[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 fn now() -> String {
@@ -685,6 +645,51 @@ fn civil(days: u64) -> (u64, u64, u64) {
     (year, month, day)
 }
 
+// The name a run's files carry beneath its case: `run-N` at the first rung,
+// `run-N@<timeout>-<inactivity>` up the ladder — the rung's `/` as a `-`,
+// since the tag is a file name.
+fn tag(n: usize, index: usize, rung: Rung) -> String {
+    if index == 0 {
+        format!("run-{n}")
+    } else {
+        format!("run-{n}@{}-{}", rung.timeout, rung.inactivity)
+    }
+}
+
+// One run at one rung, put again once when the backend refused it before
+// any claim was accepted: the failure is the host's, not the arm's, and a
+// second opening is cheaper than a run short. The dead attempt's files are
+// kept as `<tag>.dead.*`.
+fn attempt(
+    project: &Path, settings: &Settings, case: &Case, n: usize, rung: Rung, tag: &str,
+) -> io::Result<Run> {
+    let first = run(project, settings, case, n, rung, tag)?;
+    if !first.stillborn() {
+        return Ok(first);
+    }
+    eprintln!("eval: `{}` run {n} at {rung} {} — put again", case.name, first.summary());
+    for suffix in ["stderr", "stdout", "facts.md"] {
+        let from = project.join(format!("{tag}.{suffix}"));
+        if from.exists() {
+            fs::rename(from, project.join(format!("{tag}.dead.{suffix}")))?;
+        }
+    }
+    let mut again = run(project, settings, case, n, rung, tag)?;
+    again.dead = Some(first.summary());
+
+    Ok(again)
+}
+
+fn write_scorecard(
+    eval_dir: &Path, settings: &Settings, reports: &[Report<'_>], started: &str, card_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let card = scorecard(settings, reports, started, card_name);
+    let out = eval_dir.join(format!("{card_name}.md"));
+    fs::write(&out, &card)?;
+    print!("{card}");
+    eprintln!("eval: scorecard at {}", out.display());
+    Ok(())
+}
 #[cfg(test)]
 mod tests {
     use std::num::NonZeroU32;

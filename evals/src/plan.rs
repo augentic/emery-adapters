@@ -29,45 +29,6 @@ pub struct PlanShape {
     pub unbacked_start: usize,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Edge {
-    pub from: String,
-    pub to: String,
-    // The dependency's type names or keys explaining the edge; empty for an
-    // unbacked edge.
-    pub types: Vec<String>,
-}
-
-impl Display for Edge {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.types.is_empty() {
-            write!(f, "`{}` → `{}`", self.from, self.to)
-        } else {
-            let types: Vec<String> = self.types.iter().map(|t| format!("`{t}`")).collect();
-            write!(f, "`{}` → `{}` ({})", self.from, self.to, types.join(", "))
-        }
-    }
-}
-
-struct PartNode {
-    id: String,
-    name: String,
-    requirements: Vec<String>,
-    types: Vec<String>,
-    uses: Vec<String>,
-    depends_on: Vec<String>,
-}
-
-#[derive(Default)]
-struct ClassifiedEdges {
-    derived: Vec<Edge>,
-    named: Vec<Edge>,
-    onto_typeless: usize,
-    type_backed: Vec<Edge>,
-    unbacked: Vec<Edge>,
-    unbacked_start: usize,
-}
-
 impl PlanShape {
     pub fn of(
         plan: Option<&Value>, spec: Option<&Value>, design: Option<&Value>, waves: Option<&Value>,
@@ -162,6 +123,15 @@ fn edges_cell(edges: &[Edge]) -> String {
     format!("{} ({})", edges.len(), detail.join(", "))
 }
 
+struct PartNode {
+    id: String,
+    name: String,
+    requirements: Vec<String>,
+    types: Vec<String>,
+    uses: Vec<String>,
+    depends_on: Vec<String>,
+}
+
 impl PartNode {
     fn of(entry: &Value) -> Self {
         Self {
@@ -184,26 +154,14 @@ impl PartNode {
     }
 }
 
-// Formats a sequence of per-wave item counts as `N (w1/w2/...)`, or `0` when
-// empty.
-pub fn format_wave_shape(widths: &[usize]) -> String {
-    if widths.is_empty() {
-        return "0".to_owned();
-    }
-    let joined: Vec<String> = widths.iter().map(usize::to_string).collect();
-    format!("{} ({})", widths.len(), joined.join("/"))
-}
-
-// A design type key without its trailing `(path#Ln)` source citation.
-fn bare_key(key: &str) -> &str {
-    key.split(" (").next().unwrap_or(key).trim()
-}
-
-// The bare identifier a design type key declares: `Order` for `Order`,
-// `orders.Order`, or `Order (src/orders.ts#L10-L20)`.
-pub fn type_name(key: &str) -> &str {
-    let dotted = bare_key(key);
-    dotted.rsplit_once('.').map_or(dotted, |(_, name)| name)
+#[derive(Default)]
+struct ClassifiedEdges {
+    derived: Vec<Edge>,
+    named: Vec<Edge>,
+    onto_typeless: usize,
+    type_backed: Vec<Edge>,
+    unbacked: Vec<Edge>,
+    unbacked_start: usize,
 }
 
 fn wave_widths(parts: &[PartNode], waves: Option<&Value>) -> Vec<usize> {
@@ -413,7 +371,6 @@ impl ClassifiedEdges {
         out
     }
 }
-
 fn declared_name<'a>(signature: &'a str, key: &'a str) -> &'a str {
     for line in signature.lines() {
         let trimmed = line.trim_start();
@@ -456,4 +413,46 @@ fn word_count(text: &str, word: &str) -> usize {
     text.split(|ch: char| !(ch.is_alphanumeric() || ch == '_'))
         .filter(|&token| token == word)
         .count()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Edge {
+    pub from: String,
+    pub to: String,
+    // The dependency's type names or keys explaining the edge; empty for an
+    // unbacked edge.
+    pub types: Vec<String>,
+}
+
+impl Display for Edge {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.types.is_empty() {
+            write!(f, "`{}` → `{}`", self.from, self.to)
+        } else {
+            let types: Vec<String> = self.types.iter().map(|t| format!("`{t}`")).collect();
+            write!(f, "`{}` → `{}` ({})", self.from, self.to, types.join(", "))
+        }
+    }
+}
+
+// Formats a sequence of per-wave item counts as `N (w1/w2/...)`, or `0` when
+// empty.
+pub fn format_wave_shape(widths: &[usize]) -> String {
+    if widths.is_empty() {
+        return "0".to_owned();
+    }
+    let joined: Vec<String> = widths.iter().map(usize::to_string).collect();
+    format!("{} ({})", widths.len(), joined.join("/"))
+}
+
+// The bare identifier a design type key declares: `Order` for `Order`,
+// `orders.Order`, or `Order (src/orders.ts#L10-L20)`.
+pub fn type_name(key: &str) -> &str {
+    let dotted = bare_key(key);
+    dotted.rsplit_once('.').map_or(dotted, |(_, name)| name)
+}
+
+// A design type key without its trailing `(path#Ln)` source citation.
+fn bare_key(key: &str) -> &str {
+    key.split(" (").next().unwrap_or(key).trim()
 }

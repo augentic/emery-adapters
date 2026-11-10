@@ -350,6 +350,44 @@ impl Target {
     }
 }
 
+// Every `#[test]` or `#[tokio::test]` fn under `dir`, read from the files'
+// text and spelled as a scenario, its underscores as spaces.
+fn rust_test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            rust_test_names(&path, names)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            let text = fs::read_to_string(&path)?;
+            names.extend(declared_rust_tests(&text));
+        }
+    }
+    Ok(())
+}
+
+// Every `test("…")` and `it("…")` name under `dir`, read from the files'
+// text; a name over a template or an expression is passed over.
+fn test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if entry.file_type()?.is_dir() {
+            test_names(&path, names)?;
+        } else if path.extension().is_some_and(|ext| ext == "ts") {
+            let text = fs::read_to_string(&path)?;
+            names.extend(declared_tests(&text));
+        }
+    }
+    Ok(())
+}
+
 // The root-level directory `emery apply` seals the three documents under, in
 // every repository a build lands in.
 const SPECIFICATION: &str = "spec/";
@@ -587,102 +625,6 @@ pub struct Fidelity {
     pub reference: Option<reference::Comparison>,
 }
 
-// One route a module of the tree mounts, as its source spells it; a probe
-// is a route whose module's requirements state no method and path, so the
-// surface is the layout's shape and not the specification's.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Route {
-    pub module: String,
-    pub method: String,
-    pub path: String,
-    pub probe: bool,
-}
-
-// One command the host ran in the exported tree: its exit, or none where an
-// earlier check's failure left it unrun, what it printed, and the tail of it.
-pub struct HostCheck {
-    pub name: &'static str,
-    pub exit: Option<i32>,
-    pub output: String,
-    pub note: String,
-}
-
-impl HostCheck {
-    fn passed(&self) -> bool {
-        self.exit == Some(0)
-    }
-
-    // The one line of the note the table shows: the TAP counts for Node's
-    // runner, the summed `test result` counts for cargo's, the last line
-    // printed for the rest.
-    pub fn summary(&self) -> String {
-        let lines: Vec<&str> =
-            self.note.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
-        if self.name == "node --test" {
-            let counts: Vec<&str> = lines
-                .iter()
-                .copied()
-                .filter(|line| {
-                    ["# tests", "# pass", "# fail"].iter().any(|key| line.starts_with(key))
-                })
-                .collect();
-            if !counts.is_empty() {
-                return counts.join(" · ");
-            }
-        }
-        if self.name == "cargo test" && self.output.contains("test result:") {
-            let (passed, failed) = cargo_test_counts(&self.output);
-            return format!("{passed} passed · {failed} failed");
-        }
-        lines.last().copied().unwrap_or("").to_owned()
-    }
-}
-
-// One acceptance scenario of a requirement a merged slice covered, and the
-// test named by it, if any.
-pub struct Scenario {
-    pub stem: String,
-    pub unknown: bool,
-    pub named: Option<Named>,
-}
-
-// The scenarios of the requirements the merged slices covered, each with
-// the test among `names` it is named by: an uncovered requirement has no
-// test to name, by the adapter's own rule, so its scenarios are not counted
-// against the ratio; where nothing merged, every requirement's are, so a
-// build that landed no slice still shows what its tests would be named by.
-pub fn scenarios_of(
-    requirements: &[Value], integrated: &[Integrated], names: &[String],
-) -> Vec<Scenario> {
-    let covered: BTreeSet<&str> =
-        integrated.iter().flat_map(|slice| slice.covered.iter().map(String::as_str)).collect();
-    let mut scenarios = Vec::new();
-    for requirement in requirements {
-        let Some(id) = requirement["id"].as_str() else {
-            continue;
-        };
-        if !integrated.is_empty() && !covered.contains(id) {
-            continue;
-        }
-        let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
-        let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
-        for scenario in listed {
-            scenarios.push(Scenario {
-                stem: stem.clone(),
-                unknown: scenario["then"].as_str() == Some("[unknown]"),
-                named: named_by(scenario["name"].as_str().unwrap_or(""), names),
-            });
-        }
-    }
-    scenarios
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Named {
-    Exact,
-    Fuzzy,
-}
-
 impl Fidelity {
     pub fn read(
         project: &Path, tag: &str, tree: &Tree, build: &Build, spec: Option<&Value>,
@@ -847,60 +789,6 @@ impl Fidelity {
     }
 }
 
-// The routes a tree mounts, each marked a probe where the merged slices
-// owning its module have no requirement stating a method and path.
-pub fn routes(
-    mounted: Vec<(String, String, String)>, slices: &[Integrated], requirements: &[Value],
-) -> Vec<Route> {
-    mounted
-        .into_iter()
-        .map(|(module, method, path)| {
-            let owned = slices_of(slices, &module);
-            let probe = !owned.is_empty()
-                && !owned.iter().any(|slice| states_route(&slice.requirements, requirements));
-            Route {
-                module,
-                method,
-                path,
-                probe,
-            }
-        })
-        .collect()
-}
-
-// The merged slices whose module `crates/<stem>/src/<part>.rs` is: those
-// named `<stem>-<part>`, or `<stem>` where the part is the stem itself, or
-// `<part>` where the slice's name went in whole under another crate, as
-// the bootstrap's under `start`; the module spells the name's hyphens as
-// underscores.
-fn slices_of<'a>(slices: &'a [Integrated], module: &str) -> Vec<&'a Integrated> {
-    let Some(rest) = module.strip_prefix("crates/") else {
-        return Vec::new();
-    };
-    let Some((stem, rest)) = rest.split_once("/src/") else {
-        return Vec::new();
-    };
-    let Some(part) = rest.strip_suffix(".rs") else {
-        return Vec::new();
-    };
-    let stem = stem.replace('-', "_");
-    let name = if part == stem { stem } else { format!("{stem}_{part}") };
-    let named = |wanted: &str| -> Vec<&'a Integrated> {
-        slices.iter().filter(|slice| slice.name.replace('-', "_") == wanted).collect()
-    };
-    let matched = named(&name);
-    if matched.is_empty() { named(part) } else { matched }
-}
-
-// Whether any of the requirements `ids` name, among `requirements`, carries
-// an HTTP `trigger`.
-fn states_route(ids: &[String], requirements: &[Value]) -> bool {
-    requirements.iter().any(|requirement| {
-        requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
-            && requirement["trigger"]["http"]["method"].is_string()
-    })
-}
-
 impl Display for Fidelity {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         writeln!(f, "# Fidelity\n\nTree: {}.\n\n## The host's checks\n", self.tree)?;
@@ -973,6 +861,156 @@ fn listed(f: &mut fmt::Formatter<'_>, heading: &str, what: &str, paths: &[String
         writeln!(f, "  - `{path}`")?;
     }
     Ok(())
+}
+
+// One route a module of the tree mounts, as its source spells it; a probe
+// is a route whose module's requirements state no method and path, so the
+// surface is the layout's shape and not the specification's.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Route {
+    pub module: String,
+    pub method: String,
+    pub path: String,
+    pub probe: bool,
+}
+
+// One command the host ran in the exported tree: its exit, or none where an
+// earlier check's failure left it unrun, what it printed, and the tail of it.
+pub struct HostCheck {
+    pub name: &'static str,
+    pub exit: Option<i32>,
+    pub output: String,
+    pub note: String,
+}
+
+impl HostCheck {
+    fn passed(&self) -> bool {
+        self.exit == Some(0)
+    }
+
+    // The one line of the note the table shows: the TAP counts for Node's
+    // runner, the summed `test result` counts for cargo's, the last line
+    // printed for the rest.
+    pub fn summary(&self) -> String {
+        let lines: Vec<&str> =
+            self.note.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+        if self.name == "node --test" {
+            let counts: Vec<&str> = lines
+                .iter()
+                .copied()
+                .filter(|line| {
+                    ["# tests", "# pass", "# fail"].iter().any(|key| line.starts_with(key))
+                })
+                .collect();
+            if !counts.is_empty() {
+                return counts.join(" · ");
+            }
+        }
+        if self.name == "cargo test" && self.output.contains("test result:") {
+            let (passed, failed) = cargo_test_counts(&self.output);
+            return format!("{passed} passed · {failed} failed");
+        }
+        lines.last().copied().unwrap_or("").to_owned()
+    }
+}
+
+// One acceptance scenario of a requirement a merged slice covered, and the
+// test named by it, if any.
+pub struct Scenario {
+    pub stem: String,
+    pub unknown: bool,
+    pub named: Option<Named>,
+}
+
+// The scenarios of the requirements the merged slices covered, each with
+// the test among `names` it is named by: an uncovered requirement has no
+// test to name, by the adapter's own rule, so its scenarios are not counted
+// against the ratio; where nothing merged, every requirement's are, so a
+// build that landed no slice still shows what its tests would be named by.
+pub fn scenarios_of(
+    requirements: &[Value], integrated: &[Integrated], names: &[String],
+) -> Vec<Scenario> {
+    let covered: BTreeSet<&str> =
+        integrated.iter().flat_map(|slice| slice.covered.iter().map(String::as_str)).collect();
+    let mut scenarios = Vec::new();
+    for requirement in requirements {
+        let Some(id) = requirement["id"].as_str() else {
+            continue;
+        };
+        if !integrated.is_empty() && !covered.contains(id) {
+            continue;
+        }
+        let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
+        let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
+        for scenario in listed {
+            scenarios.push(Scenario {
+                stem: stem.clone(),
+                unknown: scenario["then"].as_str() == Some("[unknown]"),
+                named: named_by(scenario["name"].as_str().unwrap_or(""), names),
+            });
+        }
+    }
+    scenarios
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Named {
+    Exact,
+    Fuzzy,
+}
+
+// The routes a tree mounts, each marked a probe where the merged slices
+// owning its module have no requirement stating a method and path.
+pub fn routes(
+    mounted: Vec<(String, String, String)>, slices: &[Integrated], requirements: &[Value],
+) -> Vec<Route> {
+    mounted
+        .into_iter()
+        .map(|(module, method, path)| {
+            let owned = slices_of(slices, &module);
+            let probe = !owned.is_empty()
+                && !owned.iter().any(|slice| states_route(&slice.requirements, requirements));
+            Route {
+                module,
+                method,
+                path,
+                probe,
+            }
+        })
+        .collect()
+}
+
+// The merged slices whose module `crates/<stem>/src/<part>.rs` is: those
+// named `<stem>-<part>`, or `<stem>` where the part is the stem itself, or
+// `<part>` where the slice's name went in whole under another crate, as
+// the bootstrap's under `start`; the module spells the name's hyphens as
+// underscores.
+fn slices_of<'a>(slices: &'a [Integrated], module: &str) -> Vec<&'a Integrated> {
+    let Some(rest) = module.strip_prefix("crates/") else {
+        return Vec::new();
+    };
+    let Some((stem, rest)) = rest.split_once("/src/") else {
+        return Vec::new();
+    };
+    let Some(part) = rest.strip_suffix(".rs") else {
+        return Vec::new();
+    };
+    let stem = stem.replace('-', "_");
+    let name = if part == stem { stem } else { format!("{stem}_{part}") };
+    let named = |wanted: &str| -> Vec<&'a Integrated> {
+        slices.iter().filter(|slice| slice.name.replace('-', "_") == wanted).collect()
+    };
+    let matched = named(&name);
+    if matched.is_empty() { named(part) } else { matched }
+}
+
+// Whether any of the requirements `ids` name, among `requirements`, carries
+// an HTTP `trigger`.
+fn states_route(ids: &[String], requirements: &[Value]) -> bool {
+    requirements.iter().any(|requirement| {
+        requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
+            && requirement["trigger"]["http"]["method"].is_string()
+    })
 }
 
 // One command of the host's toolchain run in `at`, its stdout and stderr
@@ -1057,25 +1095,6 @@ pub fn cargo_test_counts(output: &str) -> (usize, usize) {
     (passed, failed)
 }
 
-// Every `#[test]` or `#[tokio::test]` fn under `dir`, read from the files'
-// text and spelled as a scenario, its underscores as spaces.
-fn rust_test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
-    if !dir.is_dir() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            rust_test_names(&path, names)?;
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
-            let text = fs::read_to_string(&path)?;
-            names.extend(declared_rust_tests(&text));
-        }
-    }
-    Ok(())
-}
-
 pub fn declared_rust_tests(text: &str) -> Vec<String> {
     let mut names = Vec::new();
     let mut lines = text.lines().map(str::trim);
@@ -1095,25 +1114,6 @@ pub fn declared_rust_tests(text: &str) -> Vec<String> {
         }
     }
     names
-}
-
-// Every `test("…")` and `it("…")` name under `dir`, read from the files'
-// text; a name over a template or an expression is passed over.
-fn test_names(dir: &Path, names: &mut Vec<String>) -> io::Result<()> {
-    if !dir.is_dir() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if entry.file_type()?.is_dir() {
-            test_names(&path, names)?;
-        } else if path.extension().is_some_and(|ext| ext == "ts") {
-            let text = fs::read_to_string(&path)?;
-            names.extend(declared_tests(&text));
-        }
-    }
-    Ok(())
 }
 
 pub fn declared_tests(text: &str) -> Vec<String> {

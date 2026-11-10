@@ -44,165 +44,6 @@ pub struct Expected {
     pub reference: Option<String>,
 }
 
-// One source of the run: the adapter it runs under and what it is bound to,
-// with the stems its accepted requirement claims lead with, exactly, and
-// the (entry, stem) pairs its survey decides, exactly.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Source {
-    // the name the specification cites the source by; the adapter's when
-    // the line is absent, as `emery` names it
-    name: Option<String>,
-    // the adapter the source runs under, by crate name
-    pub adapter: String,
-    // the fixture tree, relative to the repository root
-    pub fixture: Option<String>,
-    // an inline value in the fixture's place
-    pub description: Option<String>,
-    // the `[[source]] rank` the staged `emery.toml` carries; absent, the
-    // adapter's kind decides
-    pub rank: Option<NonZeroU32>,
-    #[serde(default)]
-    pub stems: Vec<String>,
-    #[serde(default, rename = "surface")]
-    pub surfaces: Vec<ExpectedSurface>,
-}
-
-impl Source {
-    pub fn name(&self) -> &str {
-        self.name.as_deref().unwrap_or(&self.adapter)
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExpectedSurface {
-    pub entry: String,
-    pub stem: String,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Item {
-    // the source the item is read from; the case's one source when absent
-    #[serde(default)]
-    pub source: Option<String>,
-    // the stem — or any one of the stems — a meeting claim's id leads with
-    // for the match to count as `in stem`; none grades the anchor alone
-    #[serde(default)]
-    pub stem: Option<Stems>,
-    pub anchor: String,
-    pub gloss: String,
-}
-
-// One behaviour the specification states once, however many sources state
-// it: the claims that contribute, each at its source and anchor, the status
-// the engine's authority rule gives the requirement, and, where the status
-// is a disagreement, the source whose statement loses — so a `divergence`
-// between two other sources does not pass for the one planted.
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Behaviour {
-    pub gloss: String,
-    #[serde(default)]
-    status: Option<String>,
-    #[serde(default)]
-    loser: Option<String>,
-    pub claims: Vec<ExpectedClaim>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ExpectedClaim {
-    pub source: String,
-    pub anchor: String,
-}
-
-impl Behaviour {
-    pub fn label(&self) -> String {
-        let claims: Vec<String> = self
-            .claims
-            .iter()
-            .map(|claim| format!("{}:`{}`", claim.source, claim.anchor))
-            .collect();
-        format!("{} — {}", claims.join(", "), self.gloss)
-    }
-
-    // The status expected, with the loser where one is named: `divergence`,
-    // `divergence losing faq`.
-    pub fn expected_status(&self) -> Option<String> {
-        let status = self.status.as_ref()?;
-        Some(
-            self.loser
-                .as_ref()
-                .map_or_else(|| status.clone(), |loser| format!("{status} losing {loser}")),
-        )
-    }
-
-    // Whether a requirement holding the behaviour carries the status
-    // expected and, where a loser is named, a loser note from that source.
-    pub fn decided(&self, requirement: &Value) -> bool {
-        let Some(status) = &self.status else { return true };
-        requirement["status"] == status.as_str()
-            && self.loser.as_deref().is_none_or(|loser| losers_of(requirement).any(|s| s == loser))
-    }
-
-    // What a requirement holding the behaviour decided, read the way
-    // `expected_status` spells it, so a mismatch reads against it.
-    pub fn outcome(&self, requirement: &Value) -> Option<String> {
-        let status = requirement["status"].as_str()?;
-        if self.loser.is_none() {
-            return Some(status.to_owned());
-        }
-        let losers: BTreeSet<&str> = losers_of(requirement).collect();
-        if losers.is_empty() {
-            return Some(status.to_owned());
-        }
-        let losers: Vec<&str> = losers.into_iter().collect();
-        Some(format!("{status} losing {}", losers.join(", ")))
-    }
-}
-
-// The sources whose statements a requirement lists as losers, as `emery show
-// --format json` carries them.
-fn losers_of(requirement: &Value) -> impl Iterator<Item = &str> {
-    requirement["losers"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|loser| loser["sources"].as_array())
-        .flatten()
-        .filter_map(Value::as_str)
-}
-
-// One stem, or a list where the code is shared — a guard two routers
-// declare, one declared in the bootstrap's module and applied per route —
-// and a requirement at it is rightly placed under either.
-#[derive(Deserialize)]
-#[serde(untagged)]
-pub enum Stems {
-    One(String),
-    Any(Vec<String>),
-}
-
-impl Stems {
-    pub fn holds(&self, stem: &str) -> bool {
-        match self {
-            Self::One(one) => one == stem,
-            Self::Any(any) => any.iter().any(|one| one == stem),
-        }
-    }
-}
-
-impl Display for Stems {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::One(one) => f.write_str(one),
-            Self::Any(any) => f.write_str(&any.join("|")),
-        }
-    }
-}
-
 impl Expected {
     pub fn adapters(&self) -> impl Iterator<Item = &str> {
         self.sources.iter().map(|source| source.adapter.as_str())
@@ -307,6 +148,165 @@ impl Expected {
             }
         }
         Ok(())
+    }
+}
+
+// One source of the run: the adapter it runs under and what it is bound to,
+// with the stems its accepted requirement claims lead with, exactly, and
+// the (entry, stem) pairs its survey decides, exactly.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Source {
+    // the name the specification cites the source by; the adapter's when
+    // the line is absent, as `emery` names it
+    name: Option<String>,
+    // the adapter the source runs under, by crate name
+    pub adapter: String,
+    // the fixture tree, relative to the repository root
+    pub fixture: Option<String>,
+    // an inline value in the fixture's place
+    pub description: Option<String>,
+    // the `[[source]] rank` the staged `emery.toml` carries; absent, the
+    // adapter's kind decides
+    pub rank: Option<NonZeroU32>,
+    #[serde(default)]
+    pub stems: Vec<String>,
+    #[serde(default, rename = "surface")]
+    pub surfaces: Vec<ExpectedSurface>,
+}
+
+impl Source {
+    pub fn name(&self) -> &str {
+        self.name.as_deref().unwrap_or(&self.adapter)
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpectedSurface {
+    pub entry: String,
+    pub stem: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Item {
+    // the source the item is read from; the case's one source when absent
+    #[serde(default)]
+    pub source: Option<String>,
+    // the stem — or any one of the stems — a meeting claim's id leads with
+    // for the match to count as `in stem`; none grades the anchor alone
+    #[serde(default)]
+    pub stem: Option<Stems>,
+    pub anchor: String,
+    pub gloss: String,
+}
+
+// One behaviour the specification states once, however many sources state
+// it: the claims that contribute, each at its source and anchor, the status
+// the engine's authority rule gives the requirement, and, where the status
+// is a disagreement, the source whose statement loses — so a `divergence`
+// between two other sources does not pass for the one planted.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Behaviour {
+    pub gloss: String,
+    #[serde(default)]
+    status: Option<String>,
+    #[serde(default)]
+    loser: Option<String>,
+    pub claims: Vec<ExpectedClaim>,
+}
+
+impl Behaviour {
+    pub fn label(&self) -> String {
+        let claims: Vec<String> = self
+            .claims
+            .iter()
+            .map(|claim| format!("{}:`{}`", claim.source, claim.anchor))
+            .collect();
+        format!("{} — {}", claims.join(", "), self.gloss)
+    }
+
+    // The status expected, with the loser where one is named: `divergence`,
+    // `divergence losing faq`.
+    pub fn expected_status(&self) -> Option<String> {
+        let status = self.status.as_ref()?;
+        Some(
+            self.loser
+                .as_ref()
+                .map_or_else(|| status.clone(), |loser| format!("{status} losing {loser}")),
+        )
+    }
+
+    // Whether a requirement holding the behaviour carries the status
+    // expected and, where a loser is named, a loser note from that source.
+    pub fn decided(&self, requirement: &Value) -> bool {
+        let Some(status) = &self.status else { return true };
+        requirement["status"] == status.as_str()
+            && self.loser.as_deref().is_none_or(|loser| losers_of(requirement).any(|s| s == loser))
+    }
+
+    // What a requirement holding the behaviour decided, read the way
+    // `expected_status` spells it, so a mismatch reads against it.
+    pub fn outcome(&self, requirement: &Value) -> Option<String> {
+        let status = requirement["status"].as_str()?;
+        if self.loser.is_none() {
+            return Some(status.to_owned());
+        }
+        let losers: BTreeSet<&str> = losers_of(requirement).collect();
+        if losers.is_empty() {
+            return Some(status.to_owned());
+        }
+        let losers: Vec<&str> = losers.into_iter().collect();
+        Some(format!("{status} losing {}", losers.join(", ")))
+    }
+}
+
+// The sources whose statements a requirement lists as losers, as `emery show
+// --format json` carries them.
+fn losers_of(requirement: &Value) -> impl Iterator<Item = &str> {
+    requirement["losers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|loser| loser["sources"].as_array())
+        .flatten()
+        .filter_map(Value::as_str)
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExpectedClaim {
+    pub source: String,
+    pub anchor: String,
+}
+
+// One stem, or a list where the code is shared — a guard two routers
+// declare, one declared in the bootstrap's module and applied per route —
+// and a requirement at it is rightly placed under either.
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum Stems {
+    One(String),
+    Any(Vec<String>),
+}
+
+impl Stems {
+    pub fn holds(&self, stem: &str) -> bool {
+        match self {
+            Self::One(one) => one == stem,
+            Self::Any(any) => any.iter().any(|one| one == stem),
+        }
+    }
+}
+
+impl Display for Stems {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::One(one) => f.write_str(one),
+            Self::Any(any) => f.write_str(&any.join("|")),
+        }
     }
 }
 
@@ -473,6 +473,19 @@ impl SecretRun {
     }
 }
 
+pub fn carried_secret(path: &str, bytes: &[u8]) -> Option<String> {
+    if pem_private_key(bytes) {
+        return Some("a PEM private key block".to_owned());
+    }
+    if let Some(shape) = SECRET_SHAPES.iter().find(|shape| shape.matches(bytes)) {
+        return Some(shape.what.to_owned());
+    }
+    if azure_storage_key(bytes) {
+        return Some("an Azure Storage account key".to_owned());
+    }
+    parameter_secret(path, bytes)
+}
+
 struct SecretShape {
     prefix: &'static [u8],
     run: SecretRun,
@@ -620,19 +633,6 @@ const SECRET_SHAPES: [SecretShape; 23] = [
         what: "an Azure shared access key",
     },
 ];
-
-pub fn carried_secret(path: &str, bytes: &[u8]) -> Option<String> {
-    if pem_private_key(bytes) {
-        return Some("a PEM private key block".to_owned());
-    }
-    if let Some(shape) = SECRET_SHAPES.iter().find(|shape| shape.matches(bytes)) {
-        return Some(shape.what.to_owned());
-    }
-    if azure_storage_key(bytes) {
-        return Some("an Azure Storage account key".to_owned());
-    }
-    parameter_secret(path, bytes)
-}
 
 fn pem_private_key(bytes: &[u8]) -> bool {
     const HEAD: &[u8] = b"-----BEGIN ";

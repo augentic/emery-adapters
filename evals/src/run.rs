@@ -51,28 +51,6 @@ pub struct Run {
     pub build: Option<Build>,
 }
 
-// One surface as an adapter's `surveyed` line spells it; `lines` is its
-// registration or declaration, `L<n>` or `L<n>-L<n>`, where the adapter
-// logs one.
-#[derive(Deserialize)]
-pub struct Surveyed {
-    pub name: String,
-    pub entry: String,
-    pub stem: String,
-    #[serde(default)]
-    pub ids: Vec<String>,
-    #[serde(default)]
-    lines: Option<String>,
-}
-
-impl Surveyed {
-    fn span(&self) -> Option<(u64, u64)> {
-        let text = self.lines.as_deref()?.strip_prefix('L')?;
-        let (start, end) = text.split_once("-L").unwrap_or((text, text));
-        Some((start.parse().ok()?, end.parse().ok()?))
-    }
-}
-
 impl Run {
     pub fn summary(&self) -> String {
         let specified = match self.exit {
@@ -478,6 +456,27 @@ impl Run {
     }
 }
 
+// One surface as an adapter's `surveyed` line spells it; `lines` is its
+// registration or declaration, `L<n>` or `L<n>-L<n>`, where the adapter
+// logs one.
+#[derive(Deserialize)]
+pub struct Surveyed {
+    pub name: String,
+    pub entry: String,
+    pub stem: String,
+    #[serde(default)]
+    pub ids: Vec<String>,
+    #[serde(default)]
+    lines: Option<String>,
+}
+
+impl Surveyed {
+    fn span(&self) -> Option<(u64, u64)> {
+        let text = self.lines.as_deref()?.strip_prefix('L')?;
+        let (start, end) = text.split_once("-L").unwrap_or((text, text));
+        Some((start.parse().ok()?, end.parse().ok()?))
+    }
+}
 // Where the accepted requirement claims land against the registered or
 // declared surfaces: covering a surface's own first line — the span a
 // requirement over a whole handler takes, from its decorator or
@@ -667,6 +666,38 @@ pub fn run(
     Ok(run)
 }
 
+// An adapter's `survey facts` trace line carries the text rendered before the
+// model as one JSON string at the end of the line, per source.
+fn survey_facts(stderr: &str) -> BTreeMap<String, String> {
+    stderr
+        .lines()
+        .filter(|line| line.contains(" survey facts source="))
+        .filter_map(|line| {
+            let source = field(line, " source=")?;
+            let (_, json) = line.split_once(" facts=")?;
+            Some((source.to_owned(), serde_json::from_str(json.trim()).ok()?))
+        })
+        .collect()
+}
+
+// The value a log line carries under `<key>=`, bare up to the next space.
+fn field<'l>(line: &'l str, key: &str) -> Option<&'l str> {
+    let (_, rest) = line.split_once(key)?;
+    rest.split_whitespace().next()
+}
+
+// One source's facts bare; several each under a heading naming the source.
+fn facts_text(facts: &BTreeMap<String, String>) -> String {
+    if let [(_, text)] = facts.iter().collect::<Vec<_>>().as_slice() {
+        return (*text).clone();
+    }
+    facts
+        .iter()
+        .map(|(source, text)| format!("# source `{source}`\n\n{text}\n"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 // The survey facts a staged project's adapters render, read from one run that
 // spends no turn: the run fails at the first completion, after the facts
 // are logged.
@@ -694,38 +725,6 @@ pub fn tail(text: &str) -> String {
     let mut lines: Vec<&str> = text.lines().rev().take(5).collect();
     lines.reverse();
     lines.join("\n")
-}
-
-// One source's facts bare; several each under a heading naming the source.
-fn facts_text(facts: &BTreeMap<String, String>) -> String {
-    if let [(_, text)] = facts.iter().collect::<Vec<_>>().as_slice() {
-        return (*text).clone();
-    }
-    facts
-        .iter()
-        .map(|(source, text)| format!("# source `{source}`\n\n{text}\n"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-// The value a log line carries under `<key>=`, bare up to the next space.
-fn field<'l>(line: &'l str, key: &str) -> Option<&'l str> {
-    let (_, rest) = line.split_once(key)?;
-    rest.split_whitespace().next()
-}
-
-// An adapter's `survey facts` trace line carries the text rendered before the
-// model as one JSON string at the end of the line, per source.
-fn survey_facts(stderr: &str) -> BTreeMap<String, String> {
-    stderr
-        .lines()
-        .filter(|line| line.contains(" survey facts source="))
-        .filter_map(|line| {
-            let source = field(line, " source=")?;
-            let (_, json) = line.split_once(" facts=")?;
-            Some((source.to_owned(), serde_json::from_str(json.trim()).ok()?))
-        })
-        .collect()
 }
 
 // The SDK's `accepted` trace line carries each seam's evidence as one JSON
@@ -878,7 +877,6 @@ pub fn cap_exhaustions(stderr: &str) -> usize {
     }
     count
 }
-
 fn is_cap_finding(text: &str) -> bool {
     text.contains("fit one slice")
         || text.contains("fit one part")

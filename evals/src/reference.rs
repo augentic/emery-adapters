@@ -17,35 +17,6 @@ pub struct Reference {
     name: String,
     kind: Kind,
 }
-
-// What a reference directory holds: a hand-written guest beside its
-// recorded fixtures, measured and driven, or `oracle.toml` over recorded
-// scenarios of the source itself, driven alone.
-enum Kind {
-    Guest,
-    Scenarios(Spec),
-}
-
-// What `oracle.toml` declares over a reference of recorded scenarios: the
-// bearer its guarded paths take, and the configuration the scenarios were
-// recorded under.
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Spec {
-    kind: String,
-    auth: Auth,
-    #[serde(default)]
-    config: BTreeMap<String, String>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct Auth {
-    header: String,
-    token: String,
-    guarded: String,
-}
-
 impl Reference {
     // The reference `named` relative to `root`, where its tree exists; one
     // the root lacks is reported and left out, since a reference is
@@ -266,6 +237,102 @@ impl Reference {
         manifest.write_harness(export, SCENARIO_HARNESS_SOURCE)?;
         Ok(Ok(scenarios.len()))
     }
+}
+pub struct Comparison {
+    name: String,
+    measures: Vec<Measure>,
+    oracle: Oracle,
+    log: String,
+}
+
+impl Comparison {
+    // What `cargo test` printed as the harness ran, the guest's own events
+    // among it; empty where the harness could not run.
+    pub fn log(&self) -> &str {
+        &self.log
+    }
+
+    // The one line the card's build findings carry.
+    pub fn finding(&self) -> String {
+        let measures: Vec<String> = self
+            .measures
+            .iter()
+            .filter(|measure| {
+                matches!(measure.name, "crates" | "Rust lines (non-blank)" | "dependencies")
+            })
+            .map(|measure| {
+                let name = if measure.name == "Rust lines (non-blank)" {
+                    "Rust lines"
+                } else {
+                    measure.name
+                };
+                format!("{name} {} vs {}", measure.built, measure.reference)
+            })
+            .collect();
+        let oracle = format!("reference oracle {}", self.oracle.cell());
+        if measures.is_empty() { oracle } else { format!("{oracle}; {}", measures.join(", ")) }
+    }
+}
+
+impl Display for Comparison {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.measures.is_empty() {
+            writeln!(
+                f,
+                "\n## Reference comparison\n\nAgainst `{}`, the source's behaviour recorded as \
+                 scenarios, each driven through the built guest over one fresh store.",
+                self.name
+            )?;
+            return write!(f, "{}", self.oracle);
+        }
+        writeln!(
+            f,
+            "\n## Reference comparison\n\nAgainst `{}`, the hand-written guest of the same \
+             behaviour; a count is the tree's, a name one side alone spells.\n",
+            self.name
+        )?;
+        writeln!(
+            f,
+            "| measure | built | reference | only built | only reference |\n| --- | --- | --- | \
+             --- | --- |"
+        )?;
+        for measure in &self.measures {
+            writeln!(
+                f,
+                "| {} | {} | {} | {} | {} |",
+                measure.name,
+                measure.built,
+                measure.reference,
+                spelled(&measure.only_built),
+                spelled(&measure.only_reference)
+            )?;
+        }
+        write!(f, "{}", self.oracle)
+    }
+}
+enum Kind {
+    Guest,
+    Scenarios(Spec),
+}
+
+// What `oracle.toml` declares over a reference of recorded scenarios: the
+// bearer its guarded paths take, and the configuration the scenarios were
+// recorded under.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Spec {
+    kind: String,
+    auth: Auth,
+    #[serde(default)]
+    config: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Auth {
+    header: String,
+    token: String,
+    guarded: String,
 }
 
 impl Spec {
@@ -894,78 +961,6 @@ fn inbound_candidates(topics: &BTreeSet<String>, config: &BTreeMap<String, Strin
 
 // The built tree beside the reference: each measure on both sides, what
 // the oracle found, and everything the harness printed as it ran.
-pub struct Comparison {
-    name: String,
-    measures: Vec<Measure>,
-    oracle: Oracle,
-    log: String,
-}
-
-impl Comparison {
-    // What `cargo test` printed as the harness ran, the guest's own events
-    // among it; empty where the harness could not run.
-    pub fn log(&self) -> &str {
-        &self.log
-    }
-
-    // The one line the card's build findings carry.
-    pub fn finding(&self) -> String {
-        let measures: Vec<String> = self
-            .measures
-            .iter()
-            .filter(|measure| {
-                matches!(measure.name, "crates" | "Rust lines (non-blank)" | "dependencies")
-            })
-            .map(|measure| {
-                let name = if measure.name == "Rust lines (non-blank)" {
-                    "Rust lines"
-                } else {
-                    measure.name
-                };
-                format!("{name} {} vs {}", measure.built, measure.reference)
-            })
-            .collect();
-        let oracle = format!("reference oracle {}", self.oracle.cell());
-        if measures.is_empty() { oracle } else { format!("{oracle}; {}", measures.join(", ")) }
-    }
-}
-
-impl Display for Comparison {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        if self.measures.is_empty() {
-            writeln!(
-                f,
-                "\n## Reference comparison\n\nAgainst `{}`, the source's behaviour recorded as \
-                 scenarios, each driven through the built guest over one fresh store.",
-                self.name
-            )?;
-            return write!(f, "{}", self.oracle);
-        }
-        writeln!(
-            f,
-            "\n## Reference comparison\n\nAgainst `{}`, the hand-written guest of the same \
-             behaviour; a count is the tree's, a name one side alone spells.\n",
-            self.name
-        )?;
-        writeln!(
-            f,
-            "| measure | built | reference | only built | only reference |\n| --- | --- | --- | \
-             --- | --- |"
-        )?;
-        for measure in &self.measures {
-            writeln!(
-                f,
-                "| {} | {} | {} | {} | {} |",
-                measure.name,
-                measure.built,
-                measure.reference,
-                spelled(&measure.only_built),
-                spelled(&measure.only_reference)
-            )?;
-        }
-        write!(f, "{}", self.oracle)
-    }
-}
 
 // One measure on both sides: its count on each, and the names one side
 // alone spells where the measure is of names.

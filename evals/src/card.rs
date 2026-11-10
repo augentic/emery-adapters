@@ -99,12 +99,177 @@ pub fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, nam
     card
 }
 
+// A ratio in hundredths as the card spells it, `1.40×`.
+pub fn factor(hundredths: usize) -> String {
+    format!("{}.{:02}×", hundredths / 100, hundredths % 100)
+}
+
+// A commit as the card spells it: its first eight characters.
+pub fn short(commit: &str) -> &str {
+    commit.get(..8).unwrap_or(commit)
+}
+
+pub fn plan_shape_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
+    let relevant: Vec<(bool, &Attempt)> = runs
+        .iter()
+        .flat_map(|attempts| {
+            attempts.iter().enumerate().map(|(index, attempt)| (index > 0, attempt))
+        })
+        .filter(|(_, attempt)| {
+            attempt.run.plan.is_some()
+                || attempt.run.completions.iter().any(|c| c.label == "slicing")
+        })
+        .collect();
+    if relevant.is_empty() {
+        return Ok(());
+    }
+    let legacy = relevant
+        .iter()
+        .any(|(_, attempt)| attempt.run.plan.is_some() && !attempt.grade.plan.uses_edges);
+    let edge_headers = if legacy {
+        "type-backed edges | unbacked edges | unbacked onto start"
+    } else {
+        "derived edges | named edges | onto typeless"
+    };
+    writeln!(
+        f,
+        "\n## Plan shape\n\n\
+         | run | slicing | cap exhausted | parts | waves | widest | merged stems | {edge_headers} |\n\
+         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    )?;
+    for (climbed, attempt) in relevant {
+        let label = if climbed {
+            format!("{} @ {}", attempt.run.n, attempt.run.rung)
+        } else {
+            attempt.run.n.to_string()
+        };
+        let shape = &attempt.grade.plan;
+        let (first, second, third) = if legacy {
+            (shape.type_backed_cell(), shape.unbacked_cell(), shape.unbacked_start)
+        } else {
+            (shape.derived_cell(), shape.named_cell(), shape.onto_typeless)
+        };
+        writeln!(
+            f,
+            "| {label} | {} | {} | {} | {} | {} | {} | {first} | {second} | {third} |",
+            attempt.run.slicing_cell(),
+            attempt.run.cap_exhausted,
+            shape.parts,
+            shape.wave_shape,
+            shape.widest,
+            shape.merged_cell(),
+        )?;
+    }
+    Ok(())
+}
+
+pub fn schedule_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
+    let built: Vec<(bool, &Attempt, &Build)> = runs
+        .iter()
+        .flat_map(|attempts| {
+            attempts.iter().enumerate().filter_map(|(index, attempt)| {
+                Some((index > 0, attempt, attempt.run.build.as_ref()?))
+            })
+        })
+        .collect();
+    if built.is_empty() {
+        return Ok(());
+    }
+    writeln!(f, "\n## Schedule")?;
+    for (climbed, attempt, build) in built {
+        let label = if climbed {
+            format!("{} @ {}", attempt.run.n, attempt.run.rung)
+        } else {
+            attempt.run.n.to_string()
+        };
+        let metrics = build.slice_metrics(attempt.run.spec.as_ref());
+        let budget_text = match (build.budget, build.budget_source.as_deref()) {
+            (Some(budget), Some(source)) => format!("budget {budget} ({source})"),
+            (Some(budget), None) => format!("budget {budget}"),
+            (None, _) => "budget default".to_owned(),
+        };
+        let over: Vec<String> =
+            build.over_budget().into_iter().map(|slice| format!("`{}`", slice.id)).collect();
+        let over_text = if over.is_empty() {
+            "0 over budget".to_owned()
+        } else {
+            format!("{} over budget ({})", over.len(), over.join(", "))
+        };
+        writeln!(
+            f,
+            "\nRun {label}: {budget_text} · {} slices in {} waves · widest {} · {over_text}\n",
+            metrics.len(),
+            build.schedule_waves(),
+            build.schedule_widest(),
+        )?;
+        if metrics.is_empty() {
+            continue;
+        }
+        writeln!(
+            f,
+            "| slice | part | wave | req | scenarios | over budget | duration | input | cached | output | reasoning |\n\
+             | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+        )?;
+        for slice in &metrics {
+            let position = if slice.count > 1 {
+                format!(" ({}/{})", slice.index, slice.count)
+            } else {
+                String::new()
+            };
+            let over = if slice.over_budget { "yes" } else { "no" };
+            writeln!(
+                f,
+                "| `{}` `{}`{position} | `{}` | {} | {} | {} | {over} | {}s | {} | {} | {} | {} |",
+                slice.id,
+                slice.name,
+                slice.part,
+                slice.wave,
+                slice.requirements,
+                slice.scenario_count,
+                slice.duration.as_secs(),
+                slice.tokens.input,
+                slice.tokens.cached,
+                slice.tokens.output,
+                slice.tokens.reasoning,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 struct Card<'a> {
     report: &'a Report<'a>,
     ladder: &'a [Rung],
     backend: Backend,
     // whether the run built each plan, so the rows carry the build columns
     built: bool,
+}
+
+impl Card<'_> {
+    // Stability across runs: at the first rung when two landed there, else
+    // across the attempts that landed anywhere.
+    fn stability_section(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let runs = &self.report.runs;
+        let landed: Vec<&Attempt> = runs
+            .iter()
+            .filter_map(|attempts| attempts.first())
+            .filter(|attempt| attempt.run.exit == Some(0))
+            .collect();
+        if landed.len() >= 2 {
+            let label = format!("across {} runs at {}", landed.len(), self.ladder[0]);
+            return stability(f, &label, &landed);
+        }
+        let landed: Vec<&Attempt> = runs
+            .iter()
+            .filter_map(|attempts| attempts.last())
+            .filter(|attempt| attempt.run.exit == Some(0))
+            .collect();
+        if landed.len() >= 2 {
+            let label = format!("across the {} attempts that landed", landed.len());
+            return stability(f, &label, &landed);
+        }
+        Ok(())
+    }
 }
 
 impl Display for Card<'_> {
@@ -169,45 +334,6 @@ impl Display for Card<'_> {
     }
 }
 
-impl Card<'_> {
-    // Stability across runs: at the first rung when two landed there, else
-    // across the attempts that landed anywhere.
-    fn stability_section(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let runs = &self.report.runs;
-        let landed: Vec<&Attempt> = runs
-            .iter()
-            .filter_map(|attempts| attempts.first())
-            .filter(|attempt| attempt.run.exit == Some(0))
-            .collect();
-        if landed.len() >= 2 {
-            let label = format!("across {} runs at {}", landed.len(), self.ladder[0]);
-            return stability(f, &label, &landed);
-        }
-        let landed: Vec<&Attempt> = runs
-            .iter()
-            .filter_map(|attempts| attempts.last())
-            .filter(|attempt| attempt.run.exit == Some(0))
-            .collect();
-        if landed.len() >= 2 {
-            let label = format!("across the {} attempts that landed", landed.len());
-            return stability(f, &label, &landed);
-        }
-        Ok(())
-    }
-}
-
-// A cell over every source: each source's reading, led by its name where
-// the case has several.
-fn per_source(
-    grades: &[SourceGrade], named: bool, cell: impl Fn(&SourceGrade) -> String,
-) -> String {
-    grades
-        .iter()
-        .map(|grade| if named { format!("{} {}", grade.name, cell(grade)) } else { cell(grade) })
-        .collect::<Vec<_>>()
-        .join(" · ")
-}
-
 fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     let Attempt { run, grade } = attempt;
     let tokens = run.tokens();
@@ -265,6 +391,18 @@ fn row(f: &mut Formatter<'_>, attempt: &Attempt, named: bool) -> fmt::Result {
     )
 }
 
+// A cell over every source: each source's reading, led by its name where
+// the case has several.
+fn per_source(
+    grades: &[SourceGrade], named: bool, cell: impl Fn(&SourceGrade) -> String,
+) -> String {
+    grades
+        .iter()
+        .map(|grade| if named { format!("{} {}", grade.name, cell(grade)) } else { cell(grade) })
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
 // The seven build cells after a row's own: what the build merged, verified,
 // took, saved over a serial walk, and covered, then what the host's checks
 // and the tests say of the tree it left; `—` where no plan was built, and
@@ -310,11 +448,6 @@ fn build_cells(f: &mut Formatter<'_>, attempt: &Attempt) -> fmt::Result {
         f,
         " {merged} | {verified} | {wall} | {speedup} | {covered}/{all} | {host} | {scenarios} |"
     )
-}
-
-// A ratio in hundredths as the card spells it, `1.40×`.
-pub fn factor(hundredths: usize) -> String {
-    format!("{}.{:02}×", hundredths / 100, hundredths % 100)
 }
 
 fn notes(f: &mut Formatter<'_>, attempt: &Attempt, climbed: bool) -> fmt::Result {
@@ -643,11 +776,6 @@ fn build_ending(f: &mut Formatter<'_>, run: &Run, build: &Build, merged: usize) 
     Ok(())
 }
 
-// A commit as the card spells it: its first eight characters.
-pub fn short(commit: &str) -> &str {
-    commit.get(..8).unwrap_or(commit)
-}
-
 // One source's survey: the surfaces its adapter logged, what it placed
 // nowhere, and how the (entry, stem) pairs and the stems read against the
 // case; `led` names the source where the case has several.
@@ -731,134 +859,6 @@ fn behaviour_notes(f: &mut Formatter<'_>, behaviours: &Behaviours) -> fmt::Resul
             behaviours.premerged.join("; ")
         )
     }
-}
-
-pub fn plan_shape_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
-    let relevant: Vec<(bool, &Attempt)> = runs
-        .iter()
-        .flat_map(|attempts| {
-            attempts.iter().enumerate().map(|(index, attempt)| (index > 0, attempt))
-        })
-        .filter(|(_, attempt)| {
-            attempt.run.plan.is_some()
-                || attempt.run.completions.iter().any(|c| c.label == "slicing")
-        })
-        .collect();
-    if relevant.is_empty() {
-        return Ok(());
-    }
-    let legacy = relevant
-        .iter()
-        .any(|(_, attempt)| attempt.run.plan.is_some() && !attempt.grade.plan.uses_edges);
-    let edge_headers = if legacy {
-        "type-backed edges | unbacked edges | unbacked onto start"
-    } else {
-        "derived edges | named edges | onto typeless"
-    };
-    writeln!(
-        f,
-        "\n## Plan shape\n\n\
-         | run | slicing | cap exhausted | parts | waves | widest | merged stems | {edge_headers} |\n\
-         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
-    )?;
-    for (climbed, attempt) in relevant {
-        let label = if climbed {
-            format!("{} @ {}", attempt.run.n, attempt.run.rung)
-        } else {
-            attempt.run.n.to_string()
-        };
-        let shape = &attempt.grade.plan;
-        let (first, second, third) = if legacy {
-            (shape.type_backed_cell(), shape.unbacked_cell(), shape.unbacked_start)
-        } else {
-            (shape.derived_cell(), shape.named_cell(), shape.onto_typeless)
-        };
-        writeln!(
-            f,
-            "| {label} | {} | {} | {} | {} | {} | {} | {first} | {second} | {third} |",
-            attempt.run.slicing_cell(),
-            attempt.run.cap_exhausted,
-            shape.parts,
-            shape.wave_shape,
-            shape.widest,
-            shape.merged_cell(),
-        )?;
-    }
-    Ok(())
-}
-
-pub fn schedule_section(f: &mut impl fmt::Write, runs: &[Vec<Attempt>]) -> fmt::Result {
-    let built: Vec<(bool, &Attempt, &Build)> = runs
-        .iter()
-        .flat_map(|attempts| {
-            attempts.iter().enumerate().filter_map(|(index, attempt)| {
-                Some((index > 0, attempt, attempt.run.build.as_ref()?))
-            })
-        })
-        .collect();
-    if built.is_empty() {
-        return Ok(());
-    }
-    writeln!(f, "\n## Schedule")?;
-    for (climbed, attempt, build) in built {
-        let label = if climbed {
-            format!("{} @ {}", attempt.run.n, attempt.run.rung)
-        } else {
-            attempt.run.n.to_string()
-        };
-        let metrics = build.slice_metrics(attempt.run.spec.as_ref());
-        let budget_text = match (build.budget, build.budget_source.as_deref()) {
-            (Some(budget), Some(source)) => format!("budget {budget} ({source})"),
-            (Some(budget), None) => format!("budget {budget}"),
-            (None, _) => "budget default".to_owned(),
-        };
-        let over: Vec<String> =
-            build.over_budget().into_iter().map(|slice| format!("`{}`", slice.id)).collect();
-        let over_text = if over.is_empty() {
-            "0 over budget".to_owned()
-        } else {
-            format!("{} over budget ({})", over.len(), over.join(", "))
-        };
-        writeln!(
-            f,
-            "\nRun {label}: {budget_text} · {} slices in {} waves · widest {} · {over_text}\n",
-            metrics.len(),
-            build.schedule_waves(),
-            build.schedule_widest(),
-        )?;
-        if metrics.is_empty() {
-            continue;
-        }
-        writeln!(
-            f,
-            "| slice | part | wave | req | scenarios | over budget | duration | input | cached | output | reasoning |\n\
-             | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
-        )?;
-        for slice in &metrics {
-            let position = if slice.count > 1 {
-                format!(" ({}/{})", slice.index, slice.count)
-            } else {
-                String::new()
-            };
-            let over = if slice.over_budget { "yes" } else { "no" };
-            writeln!(
-                f,
-                "| `{}` `{}`{position} | `{}` | {} | {} | {} | {over} | {}s | {} | {} | {} | {} |",
-                slice.id,
-                slice.name,
-                slice.part,
-                slice.wave,
-                slice.requirements,
-                slice.scenario_count,
-                slice.duration.as_secs(),
-                slice.tokens.input,
-                slice.tokens.cached,
-                slice.tokens.output,
-                slice.tokens.reasoning,
-            )?;
-        }
-    }
-    Ok(())
 }
 
 // One row per run: pass or fail at each rung attempted, `—` past the rung
