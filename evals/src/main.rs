@@ -196,8 +196,7 @@ impl Settings {
             .ok_or("HOME: unset, so the binary's store `~/.emery/adapters` has no home")?;
         let mut wasm = BTreeMap::new();
         for component in adapters.iter().copied().chain(target.map(Target::name)) {
-            // the crate is `emery-<kind>`; cargo spells the hyphen as an underscore
-            let artifact = format!("emery_{component}");
+            let artifact = crate_ident(component);
             let name = format!("{}_WASM", artifact.to_uppercase());
             let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
             if !path.is_file() {
@@ -292,11 +291,17 @@ impl Settings {
 fn rust_log<'a>(adapters: impl IntoIterator<Item = &'a str>) -> String {
     let mut filter = "emery_engine=debug,emery_sdk=trace".to_owned();
     for adapter in adapters {
-        let _ = write!(filter, ",emery_{adapter}=trace");
+        let _ = write!(filter, ",{}=trace", crate_ident(adapter));
     }
     filter
         + ",omnia_cursor=info,omnia_cursor::tools=trace,omnia_genai=debug,omnia_genai::tools=trace,\
            omnia_core=off"
+}
+
+// The crate `emery-<adapter>` as Rust and cargo's artifacts spell it, the
+// hyphens of a name such as `rendered-layout` as underscores.
+fn crate_ident(adapter: &str) -> String {
+    format!("emery_{}", adapter.replace('-', "_"))
 }
 
 // One rung of the budget ladder: the backend's cap per completion and its
@@ -1912,6 +1917,34 @@ mod tests {
             "package.json",
         ] {
             assert!(!Target::Omnia.within_layout(path, &stems), "`{path}` is outside the layout");
+        }
+
+        let stems = BTreeSet::from(["login"]);
+        for path in [
+            "package.json",
+            "pnpm-lock.yaml",
+            "index.html",
+            "layout/capture.mjs",
+            "src/main.js",
+            "src/App.vue",
+            "src/components/LoginForm.vue",
+            "public/facts/assets/logo.svg",
+            "layout/original/index.json",
+            "layout/verify/score.json",
+            "spec/plan.json",
+        ] {
+            assert!(Target::Vue.within_layout(path, &stems), "`{path}` is within the layout");
+        }
+        for path in [
+            "README.md",
+            "package-lock.json",
+            "login/App.vue",
+            "layout/facts/index.json",
+            "layout/review/score.json",
+            "tools/extract.mjs",
+            "public/favicon.ico",
+        ] {
+            assert!(!Target::Vue.within_layout(path, &stems), "`{path}` is outside the layout");
         }
     }
 

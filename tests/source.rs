@@ -1094,6 +1094,104 @@ async fn intent_empty_brief() {
     assert!(model.seen().is_empty(), "no turn is spent on a blank value");
 }
 
+// A page of rendered-layout facts over widths 320 to 1440: a `main` holding
+// a heading and a paragraph, each with its text.
+const FACTS_INDEX: &str = r#"{"version":2,"range":[320,1440],"height":800,"height_range":[400,1440],"root":"n0","defaults":{},"fonts":{},"faces":[],"assets":{},"parts":[{"file":"parts/n0.json"}]}"#;
+const FACTS_NODES: &str = r##"{
+  "n0": {"tag": "html", "kind": "box", "parent": null, "children": ["n1"], "box": [[320, 1440, 0, 0, 1, 0, 0, 0, 0, 200, 1]]},
+  "n1": {"tag": "main", "kind": "box", "parent": "n0", "children": ["n2", "n3"], "box": [[320, 1440, 0, 0, 1, 0, 0, 0, 0, 200, 1]]},
+  "n2": {"tag": "h1", "kind": "box", "parent": "n1", "children": ["t0"], "box": [[320, 1440, 0, 0, 1, 0, 16, 16, -32, 40, 1]]},
+  "t0": {"tag": "#text", "kind": "text", "parent": "n2", "children": [], "text": "Fresh eggs"},
+  "n3": {"tag": "p", "kind": "box", "parent": "n1", "children": ["t1"], "box": [[320, 1440, 0, 0, 0.5, 0, 16, 72, 0, 24, 1]]},
+  "t1": {"tag": "#text", "kind": "text", "parent": "n3", "children": [], "text": "Open daily"}
+}"##;
+
+const RENDERED_LAYOUT: Shipped<emery_rendered_layout::Adapter> =
+    Shipped::new("rendered-layout", emery_rendered_layout::PROSE);
+
+// The facts are read by code alone: one claim per placed element at the file
+// holding it, and the folder whole as the one layout with a wireframe per
+// review width, the hidden file beside the facts left out.
+#[tokio::test]
+async fn emery_rendered_layout() {
+    let project = scratch();
+    project.write("index.json", FACTS_INDEX);
+    project.write("parts/n0.json", FACTS_NODES);
+    project.write(".DS_Store", "");
+    let model = ScriptedModel::default();
+
+    let evidence = RENDERED_LAYOUT.accepted(&workspace(&project), &model).await;
+
+    check_evidence(&evidence);
+    model.assert_exhausted();
+    assert!(model.seen().is_empty(), "no turn is put");
+    let placed: Vec<(ClaimKind, Option<&str>, Option<&str>)> = evidence
+        .claims
+        .iter()
+        .map(|claim| (claim.kind, claim.path.as_deref(), claim.synopsis.as_deref()))
+        .collect();
+    assert_eq!(
+        placed,
+        [
+            (
+                ClaimKind::Region,
+                Some("parts/n0.json"),
+                Some(
+                    "`main` n1: \"Fresh eggs Open daily\"; at 360px 0,0 360x200; at 768px 0,0 \
+                     768x200; at 1440px 0,0 1440x200"
+                )
+            ),
+            (
+                ClaimKind::Leaf,
+                Some("parts/n0.json"),
+                Some(
+                    "`h1` n2 in n1: \"Fresh eggs\"; at 360px 16,16 328x40; at 768px 16,16 736x40; \
+                     at 1440px 16,16 1408x40"
+                )
+            ),
+            (
+                ClaimKind::Leaf,
+                Some("parts/n0.json"),
+                Some(
+                    "`p` n3 in n1: \"Open daily\"; at 360px 16,72 180x24; at 768px 16,72 384x24; \
+                     at 1440px 16,72 720x24"
+                )
+            ),
+        ]
+    );
+
+    let [layout] = evidence.layouts.as_slice() else {
+        panic!("one layout: {:?}", evidence.layouts)
+    };
+    assert_eq!(layout.media_type, "application/vnd.emery.web-rendered-layout+gzip");
+    let bundle = web_rendered_layout::FactsFolder::from_bundle(&layout.body)
+        .expect("the layout body is a bundle");
+    assert_eq!(bundle.paths().collect::<Vec<_>>(), ["index.json", "parts/n0.json"]);
+    let views: Vec<(&str, &str)> =
+        layout.views.iter().map(|view| (view.label.as_str(), view.media_type.as_str())).collect();
+    assert_eq!(
+        views,
+        [
+            ("360px wide", "image/svg+xml"),
+            ("768px wide", "image/svg+xml"),
+            ("1440px wide", "image/svg+xml")
+        ]
+    );
+    assert!(layout.views.iter().all(|view| view.body.starts_with("<svg")), "{:?}", layout.views);
+}
+
+#[tokio::test]
+async fn emery_rendered_layout_refused() {
+    let project = scratch();
+    project.write("index.json", FACTS_INDEX);
+    project.write("parts/n0.json", FACTS_NODES);
+    RENDERED_LAYOUT.refused(&project, Some("a page"), ScriptedModel::default()).await;
+
+    let unread = scratch();
+    unread.write("notes.md", "# Not facts");
+    RENDERED_LAYOUT.refused(&unread, None, ScriptedModel::default()).await;
+}
+
 // An Express service the way one is written: the entry mounts a router,
 // the router registers two routes — one handled in place, one by a function
 // passed by name — and the routes reach a service and its store.

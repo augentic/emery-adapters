@@ -72,9 +72,34 @@ async fn scenario() {
                 "the budget and merge rules the metadata declares, in order"
             );
         }
-        other => {
-            panic!("no argument or `metadata [budget=<n>] <glob>=<strategy>..`; got {other:?}")
+        ["init"] => {
+            assert_eq!(
+                run(&Task::Init).await,
+                Outcome::Initialised,
+                "an init answers an initialised tree"
+            );
         }
+        ["refused", expected, fragment] => {
+            let refusal = Caller
+                .run(ADAPTER, WORKSPACE, &Task::Build(slice()))
+                .await
+                .expect_err("the build of the slice is refused");
+            assert_eq!(
+                refusal.code(),
+                *expected,
+                "the build refused with the wrong class: {}",
+                refusal.description()
+            );
+            assert!(
+                refusal.description().contains(fragment),
+                "the refusal names `{fragment}`: {}",
+                refusal.description()
+            );
+        }
+        other => panic!(
+            "no argument, `serial`, `metadata [budget=<n>] <glob>=<strategy>..`, `init`, or \
+             `refused <code> <fragment>`; got {other:?}"
+        ),
     }
 }
 
@@ -147,6 +172,7 @@ fn slice() -> Slice {
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
             .to_owned(),
+        layouts: Vec::new(),
     }
 }
 
@@ -186,5 +212,6 @@ fn second_serial_slice() -> Slice {
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001, REQ-002\nTypes: \
                orders.Order\nDepends on: none\n"
             .to_owned(),
+        layouts: Vec::new(),
     }
 }

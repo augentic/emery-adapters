@@ -17,12 +17,16 @@ omnia-wasi-model.workspace = true
 omnia-wasi-otel.workspace = true
 opentelemetry-proto.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+web-rendered-layout.workspace = true
 emery-documentation = { path = "adapters/documentation" }
 emery-intent = { path = "adapters/intent" }
 emery-python = { path = "adapters/python" }
 emery-typescript = { path = "adapters/typescript" }
 emery-node = { path = "adapters/node" }
 emery-omnia = { path = "adapters/omnia" }
+emery-rendered-layout = { path = "adapters/web/rendered-layout" }
+emery-vue = { path = "adapters/web/vue" }
 omnia-template.workspace = true
 syn.workspace = true
 test-programs.workspace = true
@@ -33,7 +37,19 @@ tracing.workspace = true
 workspace = true
 
 [workspace]
-members = ["adapters/*", "crates/*", "evals"]
+# experiment / non-production: `adapters/web/` groups the web adapters, so
+# the adapters are named rather than globbed.
+members = [
+    "adapters/documentation",
+    "adapters/intent",
+    "adapters/node",
+    "adapters/omnia",
+    "adapters/python",
+    "adapters/typescript",
+    "adapters/web/*",
+    "crates/*",
+    "evals",
+]
 resolver = "3"
 
 [workspace.package]
@@ -73,12 +89,15 @@ print_stdout = "warn"
 unused_result_ok = "warn"
 
 [workspace.dependencies]
+base64 = "0.22.1"
+flate2 = { version = "1.1.10", default-features = false, features = ["rust_backend"] }
 futures = "0.3.34"
 opentelemetry-proto = "0.33.1"
 proc-macro2 = { version = "1.0.107", default-features = false, features = ["span-locations"] }
 semver = "1.0.28"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
+sha2 = "0.11.1"
 syn = { version = "3.0.9", default-features = false, features = ["full", "parsing", "visit"] }
 tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 toml = "1.2.1"
@@ -90,6 +109,8 @@ test-programs = { path = "crates/test-programs" }
 emery-prose = "0.39.0"
 emery-sdk = "0.39.0"
 
+web-rendered-layout = { path = "crates/web-rendered-layout" }
+
 omnia = { version = "0.38.0", default-features = false, features = ["jit"] }
 omnia-sdk = { version = "0.38.0", default-features = false }
 omnia-template = { git = "https://github.com/augentic/omnia-exemplar" }
@@ -98,8 +119,8 @@ omnia-wasi-model = "0.38.0"
 omnia-wasi-otel = "0.38.0"
 
 [patch.crates-io]
-emery-prose = { git = "https://github.com/augentic/emery" }
-emery-sdk = { git = "https://github.com/augentic/emery" }
+emery-prose = { git = "https://github.com/augentic/emery", rev = "2119c91d4c46307f3aa3b7216eaa42acaffa4dd5" }
+emery-sdk = { git = "https://github.com/augentic/emery", rev = "2119c91d4c46307f3aa3b7216eaa42acaffa4dd5" }
 omnia = { git = "https://github.com/augentic/omnia" }
 omnia-backend = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
@@ -121,6 +142,8 @@ emery-python = { opt-level = 2 }
 emery-typescript = { opt-level = 2 }
 emery-node = { opt-level = 2 }
 emery-omnia = { opt-level = 2 }
+emery-rendered-layout = { opt-level = 2 }
+emery-vue = { opt-level = 2 }
 test-programs = { opt-level = 2 }
 
 cranelift-assembler-x64 = { opt-level = 2 }

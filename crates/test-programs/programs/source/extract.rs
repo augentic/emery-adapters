@@ -19,6 +19,9 @@ async fn scenario() {
             extract(&workspace()).await;
             extract(&value("Ship the orders API with idempotent retries.")).await;
         }
+        ["workspace"] => {
+            extract(&workspace()).await;
+        }
         ["refused", expected, inline @ ..] => {
             let input = match inline {
                 [] => workspace(),
@@ -44,7 +47,8 @@ async fn scenario() {
         }
         other => {
             panic!(
-                "no argument, `refused <code> [<value>]`, `echoed`, or `together`; got {other:?}"
+                "no argument, `workspace`, `refused <code> [<value>]`, `echoed`, or `together`; got \
+                 {other:?}"
             )
         }
     }

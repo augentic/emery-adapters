@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+  <rect width="800" height="520" fill="#e4edd8"/>
+  <path d="M0 80 C180 40 260 160 420 120 C580 80 680 180 800 140 L800 0 L0 0 Z" fill="#cfe0c4"/>
+  <path d="M0 400 C160 360 300 460 500 420 C650 390 740 460 800 430 L800 520 L0 520 Z" fill="#d5e6c9"/>
+  <path d="M40 300 C180 250 260 180 400 220 C560 270 640 160 780 200" fill="none" stroke="#d8c39a" stroke-width="28"/>
+  <path d="M200 40 C240 160 220 300 280 500" fill="none" stroke="#d8c39a" stroke-width="18"/>
+  <rect x="470" y="210" width="70" height="50" fill="#8b5a3c"/>
+  <polygon points="460,210 505,170 550,210" fill="#6b3f28"/>
+  <circle cx="505" cy="188" r="22" fill="#c45c32"/>
+  <circle cx="505" cy="188" r="9" fill="#f4efe6"/>
+  <text x="505" y="270" text-anchor="middle" font-family="Georgia, serif" font-size="22" fill="#1e3a2a">Greenfield Farm</text>
+  <text x="140" y="90" font-family="Georgia, serif" font-size="16" fill="#2f5a40">Upper Greenfield</text>
+  <text x="560" y="430" font-family="Georgia, serif" font-size="16" fill="#2f5a40">Hollow Lane</text>
+</svg>

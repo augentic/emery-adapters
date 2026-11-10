@@ -185,6 +185,39 @@ async fn emery_intent() {
     assert!(seen[0].messages[0].contains(BRIEF), "the brief read through the mount is the seam");
 }
 
+// The facts are read through the mount by code alone, and an inline value is
+// refused, with no turn put either time.
+#[tokio::test]
+async fn emery_rendered_layout() {
+    let project = scratch();
+    project.write(
+        "index.json",
+        r#"{"version":2,"range":[320,1440],"height":800,"height_range":[400,1440],"root":"n0","parts":[{"file":"parts/n0.json"}]}"#,
+    );
+    project.write(
+        "parts/n0.json",
+        r#"{"n0":{"tag":"html","kind":"box","parent":null,"children":["n1"]},"n1":{"tag":"main","kind":"box","parent":"n0","children":[],"box":[[320,1440,0,0,1,0,0,0,0,200,1]]}}"#,
+    );
+
+    let model = support::run(
+        test_programs::ADAPTER_EMERY_RENDERED_LAYOUT,
+        &project,
+        &["workspace"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "no turn is put over the facts");
+
+    let model = support::run(
+        test_programs::ADAPTER_EMERY_RENDERED_LAYOUT,
+        &project,
+        &["refused", "bad_request", "a page"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "no turn is put over the value");
+}
+
 // The survey turn opens first under `survey.md`, and the surface the code
 // derives at the anchor the answer named reaches the seam: the parser and
 // the recogniser ran as a guest over the lent tree.
@@ -301,6 +334,50 @@ async fn emery_node() {
         Some(include_bytes!("../adapters/node/seed/package.json").as_slice()),
         "the root manifest reached the host's tree through the init"
     );
+}
+
+// Experiment / non-production. The metadata lowers the one rule; the init
+// scaffolds the seed in the host's tree with no turn; a slice carrying no
+// layout is refused before any turn, since the page is rebuilt from one.
+#[tokio::test]
+async fn emery_vue() {
+    support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &scratch(),
+        &["metadata", "budget=12", "pnpm-lock.yaml=ours"],
+        ScriptedModel::default(),
+    )
+    .await;
+
+    let project = scratch();
+    let model = support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &project,
+        &["init"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "the init opens no turn");
+    for (path, seeded) in [
+        ("package.json", include_str!("../adapters/web/vue/seed/package.json")),
+        ("src/main.js", include_str!("../adapters/web/vue/seed/src/main.js")),
+        ("layout/capture.mjs", web_rendered_layout::CAPTURE_SCRIPT),
+    ] {
+        assert_eq!(
+            project.read(path).as_deref(),
+            Some(seeded.as_bytes()),
+            "the init scaffolded `{path}` in the host's tree"
+        );
+    }
+
+    let model = support::build(
+        test_programs::TARGET_EMERY_VUE,
+        &project,
+        &["refused", "bad_request", "carries 0 layouts"],
+        ScriptedModel::default(),
+    )
+    .await;
+    assert!(model.seen().is_empty(), "the refusal opens no turn");
 }
 
 // The metadata lowers the budget and the six rules in order; the init

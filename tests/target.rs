@@ -583,6 +583,7 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
         requirements,
         types: Vec::new(),
         brief: Vec::new(),
+        layouts: Vec::new(),
     }
 }
 

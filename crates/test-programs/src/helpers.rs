@@ -1,5 +1,5 @@
 use emery_sdk::target::capability::Target;
-use emery_sdk::{Backing, Claim, ClaimKind, Evidence, Source};
+use emery_sdk::{Backing, Claim, ClaimKind, Evidence, Layout, LayoutView, Source};
 use serde_json::{Value, json};
 
 /// The mount point of the lent workspace inside a driver guest.
@@ -89,5 +89,14 @@ pub fn maximal() -> Evidence {
             Claim::new(ClaimKind::Container).at("src/orders"),
             Claim::new(ClaimKind::Leaf).at("src/orders.ts").with_extra("exported", true),
         ],
+        layouts: vec![Layout {
+            media_type: "application/json".to_owned(),
+            body: br#"{"page":"orders"}"#.to_vec(),
+            views: vec![LayoutView {
+                label: "360px".to_owned(),
+                media_type: "image/svg+xml".to_owned(),
+                body: "<svg/>".to_owned(),
+            }],
+        }],
     }
 }

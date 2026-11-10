@@ -1085,7 +1085,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
+source = "git+https://github.com/augentic/emery?rev=2119c91d4c46307f3aa3b7216eaa42acaffa4dd5#2119c91d4c46307f3aa3b7216eaa42acaffa4dd5"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1104,8 +1104,10 @@ dependencies = [
  "emery-node",
  "emery-omnia",
  "emery-python",
+ "emery-rendered-layout",
  "emery-sdk",
  "emery-typescript",
+ "emery-vue",
  "omnia",
  "omnia-sdk",
  "omnia-template",
@@ -1114,10 +1116,12 @@ dependencies = [
  "omnia-wasi-otel",
  "opentelemetry-proto",
  "serde_json",
+ "sha2 0.11.1",
  "syn 3.0.9",
  "test-programs",
  "tokio",
  "tracing",
+ "web-rendered-layout",
 ]
 
 [[package]]
@@ -1137,7 +1141,7 @@ dependencies = [
 [[package]]
 name = "emery-lexicon"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
+source = "git+https://github.com/augentic/emery?rev=2119c91d4c46307f3aa3b7216eaa42acaffa4dd5#2119c91d4c46307f3aa3b7216eaa42acaffa4dd5"
 
 [[package]]
 name = "emery-node"
@@ -1159,7 +1163,7 @@ dependencies = [
 [[package]]
 name = "emery-prose"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
+source = "git+https://github.com/augentic/emery?rev=2119c91d4c46307f3aa3b7216eaa42acaffa4dd5#2119c91d4c46307f3aa3b7216eaa42acaffa4dd5"
 
 [[package]]
 name = "emery-python"
@@ -1172,9 +1176,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "emery-rendered-layout"
+version = "0.12.0"
+dependencies = [
+ "emery-sdk",
+ "web-rendered-layout",
+]
+
+[[package]]
 name = "emery-sdk"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery#f8a673707a3d5a2605d9261592f37735c15a8ee5"
+source = "git+https://github.com/augentic/emery?rev=2119c91d4c46307f3aa3b7216eaa42acaffa4dd5#2119c91d4c46307f3aa3b7216eaa42acaffa4dd5"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -1199,6 +1211,15 @@ dependencies = [
  "oxc_ast_visit",
  "oxc_parser",
  "oxc_span",
+]
+
+[[package]]
+name = "emery-vue"
+version = "0.12.0"
+dependencies = [
+ "emery-sdk",
+ "serde_json",
+ "web-rendered-layout",
 ]
 
 [[package]]
@@ -1250,6 +1271,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
+ "web-rendered-layout",
 ]
 
 [[package]]
@@ -5828,6 +5850,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbc9c5aca783b3f1838be89f3f9937c528b90ec5faa6fb62d809726c16a7d8f7"
 dependencies = [
  "wast",
+]
+
+[[package]]
+name = "web-layout-capture"
+version = "0.12.0"
+dependencies = [
+ "web-rendered-layout",
+]
+
+[[package]]
+name = "web-rendered-layout"
+version = "0.12.0"
+dependencies = [
+ "base64 0.22.1",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
 ]
 
 [[package]]
