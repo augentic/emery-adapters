@@ -10,14 +10,15 @@
 // capture-site.sh serves at, and opened in a browser:
 //
 // 1. Right-click an element to select it; "Select parent" widens the selection.
-// 2. Write how its design should change and apply. COMMAND runs in DIR/source with the prompt
-//    (prompt.md: the instruction and the selected element) as its last argument, for example
-//    `cursor-agent -p`. It edits the source, never the facts.
-// 3. The page is rebuilt and reloaded, so the browser shows the edit, and the panel shows the
-//    source diff.
-// 4. Approve commits the change in DIR/source and adds the instruction to DIR/brief/brief.md.
-//    Reject reverts the source and reopens the selection, so the instruction can be revised and
-//    applied again. Neither captures facts, so an edit costs the agent and a build alone.
+// 2. Write how its design should change and queue it. Queue as many as wanted, on any element,
+//    without waiting; they run one at a time in the order they were queued.
+// 3. For each queued instruction in turn, COMMAND runs in DIR/source with the prompt (prompt.md:
+//    the instruction and the element) as its last argument, for example `cursor-agent -p`. It
+//    edits the source, never the facts. The page is rebuilt and reloaded, so the browser shows
+//    the edit, and the panel shows the source diff.
+// 4. Approve commits the change in DIR/source and adds the instruction to DIR/brief/brief.md;
+//    the next queued instruction then runs. Reject reverts the source and drops the edit.
+//    Neither captures facts, so an edit costs the agent and a build alone.
 // 5. Finish, once every edit is approved, captures the page's facts into DIR/records/<n>/facts,
 //    makes them DIR/facts, and sets the facts before and after side by side.
 //
@@ -74,8 +75,10 @@ if (!fs.existsSync(session.facts)) {
 
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({ viewport: null });
-let state = idle();
-let pending = null;
+let state = { phase: "idle" };
+let pending = null; // the edit awaiting a decision, or null
+let busy = false; // an agent or build is running
+const queue = []; // the instructions waiting their turn, oldest first
 await page.addInitScript({ path: fileURLToPath(PANEL) });
 await page.exposeBinding("__layoutEditIntent", (_, intent) => {
   handle(intent).catch((err) => show(idle(`The editor failed: ${err.message}`)));
@@ -87,15 +90,33 @@ await page.goto(url);
 say(`editing ${url}; right-click an element in the browser`);
 
 async function handle(intent) {
-  const settled = ["idle", "select", "finished"].includes(state.phase);
+  const settled = !pending && !busy;
+  if (intent.type === "queue") return enqueue(intent.element, intent.instruction);
+  if (intent.type === "approve" && pending) return approve();
+  if (intent.type === "reject" && pending) return reject();
   if (intent.type === "close" && settled) return show(idle());
-  if (intent.type === "apply" && settled) return attempt(intent.element, intent.instruction);
-  if (intent.type === "approve" && state.phase === "review") return approve();
-  if (intent.type === "reject" && state.phase === "review") return reject();
   if (intent.type === "finish" && settled && session.unrecorded().length) return finish();
 }
 
-// Steps 2 and 3: the agent's edit, and the page rebuilt onto it for the operator to look at.
+// Step 2: an instruction joins the queue and, if nothing is running, starts the queue moving.
+async function enqueue(element, instruction) {
+  queue.push({ element, instruction });
+  await show(state);
+  await pump();
+}
+
+// Runs queued instructions one at a time: the next starts only once the one before it is decided.
+async function pump() {
+  if (busy || pending || !queue.length) return;
+  busy = true;
+  const { element, instruction } = queue.shift();
+  const started = await attempt(element, instruction);
+  busy = false;
+  if (!started) await pump();
+}
+
+// Step 3: the agent's edit, and the page rebuilt onto it. Returns whether a review is now open;
+// a failed attempt is reverted and recorded, and lets the queue move on.
 async function attempt(element, instruction) {
   const { n, dir } = session.attempt();
   const entry = { attempt: n, at: new Date().toISOString(), instruction, element, diff: "", ms: {} };
@@ -112,14 +133,16 @@ async function attempt(element, instruction) {
     await timed(entry, "build", "Building and serving the edited page…", () => republish(path.join(dir, "build.log")));
     pending = { entry, dir };
     await show(review());
+    return true;
   } catch (err) {
     session.log({ ...entry, status: "failed", error: err.message });
     await restore(rebuilt);
-    await show({ phase: "select", element, instruction, error: `Edit ${n} failed and was reverted: ${err.message}` });
+    await show(idle(`Edit ${n} failed and was reverted: ${err.message}`));
+    return false;
   }
 }
 
-// Step 4, approved: the change is committed and its instruction joins the brief.
+// Step 4, approved: the change is committed and its instruction joins the brief; the queue moves on.
 async function approve() {
   const { entry } = pending;
   pending = null;
@@ -127,6 +150,7 @@ async function approve() {
   session.note(entry.element, entry.instruction);
   session.log({ ...entry, status: "approved", commit });
   await show(idle(`Edit ${entry.attempt} approved.`));
+  await pump();
 }
 
 // Step 5: the page's facts captured once over every approved edit, and made the session's.
@@ -149,7 +173,7 @@ async function finish() {
 }
 
 function idle(message = undefined) {
-  return { phase: "idle", message, unrecorded: session.unrecorded().length };
+  return { phase: "idle", message };
 }
 
 function review() {
@@ -158,7 +182,7 @@ function review() {
 }
 
 async function timed(entry, name, message, work) {
-  await show({ phase: "busy", message, instruction: entry.instruction ?? "" });
+  await show({ phase: "busy", message, instruction: entry.instruction });
   const started = Date.now();
   try {
     return await work();
@@ -167,14 +191,15 @@ async function timed(entry, name, message, work) {
   }
 }
 
-// Step 4, rejected: the source goes back to the last approved design, the selection reopens.
+// Step 4, rejected: the source goes back to the last approved design; the queue moves on.
 async function reject() {
   const { entry } = pending;
   pending = null;
   session.log({ ...entry, status: "rejected" });
   await show({ phase: "busy", message: "Reverting the source…", instruction: entry.instruction });
   await restore(true);
-  await show({ phase: "select", element: entry.element, instruction: entry.instruction });
+  await show(idle(`Edit ${entry.attempt} rejected and reverted.`));
+  await pump();
 }
 
 async function restore(rebuilt) {
@@ -199,7 +224,11 @@ function pairs(dir) {
 }
 
 async function show(next) {
-  state = next;
+  state = {
+    ...next,
+    unrecorded: session.unrecorded().length,
+    queued: queue.map(({ element, instruction }) => ({ tag: element.tag, text: element.text, instruction })),
+  };
   await page.evaluate((shown) => window.__layoutEdit?.show(shown), state).catch(() => {});
 }
 
