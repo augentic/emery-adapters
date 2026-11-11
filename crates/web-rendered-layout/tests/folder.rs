@@ -22,6 +22,18 @@ fn bundle_round_trip() {
 }
 
 #[test]
+fn digest_names_the_bundle() {
+    let folder = page(&[RED, BLUE]);
+    let digest = folder.digest().expect("a digest");
+    let back = FactsFolder::from_bundle(&folder.to_bundle().expect("a bundle")).expect("reads");
+
+    let hex = digest.strip_prefix("sha256:").expect("the scheme leads");
+    assert!(hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')));
+    assert_eq!(back.digest().expect("a digest"), digest);
+    assert_ne!(page(&[RED]).digest().expect("a digest"), digest);
+}
+
+#[test]
 fn bundle_refuses_other_formats() {
     let refused = FactsFolder::from_bundle(&gzip(br#"{"format":"other/1","files":{}}"#))
         .expect_err("another format is refused");

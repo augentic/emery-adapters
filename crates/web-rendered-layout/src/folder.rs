@@ -8,8 +8,10 @@ use base64::engine::general_purpose::STANDARD;
 use flate2::Compression;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use serde_json::{Map, Value, json};
+use sha2::{Digest as _, Sha256};
 
 use crate::Error;
+use crate::capture::hex;
 
 /// The media type of a facts [bundle](FactsFolder::to_bundle): its JSON document, gzipped.
 ///
@@ -109,6 +111,15 @@ impl FactsFolder {
             .read_to_end(&mut bundle)
             .map_err(|err| Error::new(format!("compressing the layout bundle: {err}")))?;
         Ok(bundle)
+    }
+
+    /// The `sha256:<hex>` digest of the [bundle](Self::to_bundle), which names the layout in a spec.
+    ///
+    /// # Errors
+    ///
+    /// When the bundle cannot be built.
+    pub fn digest(&self) -> Result<String, Error> {
+        Ok(format!("sha256:{}", hex(&Sha256::digest(self.to_bundle()?))))
     }
 
     fn to_document(&self) -> Vec<u8> {

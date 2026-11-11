@@ -8,7 +8,7 @@ mod support;
 use std::path::Path;
 
 use support::{BLUE, Card, RED, facts};
-use web_rendered_layout::{REVIEW_WIDTHS, Width, draw, overlay};
+use web_rendered_layout::{REVIEW_WIDTHS, Width, draw, overlay, pair};
 
 fn golden(name: &str, drawn: &str) {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden").join(name);
@@ -32,6 +32,13 @@ fn overlay_golden() {
     let original = facts(&[RED, BLUE]);
     let moved = facts(&[RED, Card { y: 300.0, ..BLUE }]);
     golden("cards-moved-360.svg", &overlay(&original, &moved, Width(360)));
+}
+
+#[test]
+fn pair_golden() {
+    let before = facts(&[RED, BLUE]);
+    let after = facts(&[RED, Card { height: 30.0, ..BLUE }]);
+    golden("cards-pair-360.svg", &pair(&before, &after, Width(360)));
 }
 
 #[test]
