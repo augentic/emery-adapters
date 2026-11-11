@@ -11,7 +11,7 @@
 //!   a capture to the files it was taken of.
 //! - [`Facts`] reads a folder and answers what was rendered at a [`Viewport`].
 //! - [`compare`] scores a render against an original.
-//! - [`draw`] and [`overlay`] render deterministic SVG images.
+//! - [`draw`], [`pair`], and [`overlay`] render deterministic SVG images.
 //! - [`review`] is a comparison with its overlays and findings.
 //! - [`outline`] reads the page as regions, containers, and leaves.
 
@@ -34,7 +34,7 @@ pub use compare::{
     Comparison, Failure, Heights, KindSummary, PASS_MARK, Point, PointComparison, Summary, compare,
     compare_at,
 };
-pub use draw::{REVIEW_WIDTHS, draw, overlay};
+pub use draw::{REVIEW_WIDTHS, draw, overlay, pair};
 pub use error::Error;
 pub use facts::{Facts, NodeId, Viewport, Width};
 pub use folder::{BUNDLE_MEDIA_TYPE, FactsFolder};

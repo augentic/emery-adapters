@@ -5,6 +5,8 @@
 //!     [--min N] [--max N] [--height N] [--height-min N] [--height-max N] [--tools DIR]
 //! web-layout-capture score --original DIR --render DIR --out DIR
 //! web-layout-capture draw --facts DIR --out DIR
+//! web-layout-capture pair --before DIR --after DIR --out DIR
+//! web-layout-capture digest --facts DIR
 //! ```
 //!
 //! `capture` drives a browser over the page served at URL through
@@ -12,7 +14,8 @@
 //! built from what it recorded. `score` writes `score.json` and the review
 //! overlays, and exits 1 when the render does not pass. `draw` writes a
 //! wireframe of the facts at each review width and their outline, one
-//! placed element a line.
+//! placed element a line. `pair` writes the two facts side by side at each
+//! review width. `digest` prints the `sha256:` digest a spec names the facts by.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -26,7 +29,7 @@ use std::process::Command;
 use std::process::ExitCode;
 
 use web_rendered_layout::{
-    Facts, FactsFolder, REVIEW_WIDTHS, Review, Role, assemble, draw, outline, review,
+    Facts, FactsFolder, REVIEW_WIDTHS, Review, Role, assemble, draw, outline, pair, review,
 };
 
 // The capture script and its pinned Playwright, beside this workspace's crates.
@@ -36,7 +39,9 @@ const USAGE: &str = "usage:
   web-layout-capture capture --url URL --out DIR [--screenshots DIR] [--stamp DIR]
       [--min N] [--max N] [--height N] [--height-min N] [--height-max N] [--tools DIR]
   web-layout-capture score --original DIR --render DIR --out DIR
-  web-layout-capture draw --facts DIR --out DIR";
+  web-layout-capture draw --facts DIR --out DIR
+  web-layout-capture pair --before DIR --after DIR --out DIR
+  web-layout-capture digest --facts DIR";
 
 #[expect(clippy::print_stderr, reason = "the command reports its errors")]
 #[expect(clippy::disallowed_methods, reason = "a native operator tool, not a guest")]
@@ -47,6 +52,8 @@ fn main() -> ExitCode {
         Some("capture") => Options::parse(args, &CAPTURE).and_then(|options| capture(&options)),
         Some("score") => Options::parse(args, &SCORE).and_then(|options| score(&options)),
         Some("draw") => Options::parse(args, &DRAW).and_then(|options| wireframes(&options)),
+        Some("pair") => Options::parse(args, &PAIR).and_then(|options| pairs(&options)),
+        Some("digest") => Options::parse(args, &DIGEST).and_then(|options| digest(&options)),
         _ => Err(USAGE.to_owned()),
     };
     match outcome {
@@ -83,6 +90,14 @@ const SCORE: Accepts = Accepts {
 };
 const DRAW: Accepts = Accepts {
     required: &["facts", "out"],
+    optional: &[],
+};
+const PAIR: Accepts = Accepts {
+    required: &["before", "after", "out"],
+    optional: &[],
+};
+const DIGEST: Accepts = Accepts {
+    required: &["facts"],
     optional: &[],
 };
 
@@ -194,10 +209,34 @@ fn wireframes(options: &Options) -> Result<ExitCode, String> {
     Ok(ExitCode::SUCCESS)
 }
 
+fn pairs(options: &Options) -> Result<ExitCode, String> {
+    let before = read(&options.path("before"))?;
+    let after = read(&options.path("after"))?;
+    let out = options.path("out");
+    fs::create_dir_all(&out).map_err(|err| format!("creating {}: {err}", out.display()))?;
+    for width in REVIEW_WIDTHS {
+        write(&out.join(format!("pair-{}.svg", width.0)), &pair(&before, &after, width))?;
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+#[expect(clippy::print_stdout, reason = "the command prints the digest")]
+fn digest(options: &Options) -> Result<ExitCode, String> {
+    let dir = options.path("facts");
+    let folder = read_folder(&dir)?;
+    Facts::read(&folder).map_err(|err| format!("{}: {err}", dir.display()))?;
+    let digest = folder.digest().map_err(|err| format!("{}: {err}", dir.display()))?;
+    println!("{digest}");
+    Ok(ExitCode::SUCCESS)
+}
+
 fn read(dir: &Path) -> Result<Facts, String> {
-    FactsFolder::read(dir)
-        .and_then(|folder| Facts::read(&folder))
-        .map_err(|err| format!("{}: {err}", dir.display()))
+    let folder = read_folder(dir)?;
+    Facts::read(&folder).map_err(|err| format!("{}: {err}", dir.display()))
+}
+
+fn read_folder(dir: &Path) -> Result<FactsFolder, String> {
+    FactsFolder::read(dir).map_err(|err| format!("{}: {err}", dir.display()))
 }
 
 // Empties `dir`, so nothing from an earlier run survives in it.

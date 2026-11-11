@@ -3,7 +3,10 @@
 # `fastapi-template-web` eval fixture, the Full Stack FastAPI Template's
 # login page, captured as `evals/README.md` says. Another page is another
 # recipe: `tools/web-layout-capture/capture-site.sh <site> <dir>`, then
-# `path` naming the dir and the brief naming the page.
+# `path` naming the dir and the brief naming the page. A design changed
+# through `tools/web-layout-edit/edit.mjs` is read from its session's
+# `facts/`, and its approved instructions from a third, `emery:intent`
+# source whose `path` names the session's `brief/`.
 
 [[source]]
 name = "page"

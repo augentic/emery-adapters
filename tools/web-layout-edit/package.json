@@ -1,0 +1,11 @@
+{
+  "name": "web-layout-edit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Experiment / non-production: point-and-edit of a site's design through its own frontend source, recording its rendered-layout facts (edit.mjs)",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

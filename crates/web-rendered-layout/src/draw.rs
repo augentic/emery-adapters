@@ -2,7 +2,8 @@
 //!
 //! [`draw`] shows a page as a wireframe at one width: every painted box in
 //! document order, then every text line in its colour, split where the
-//! browser broke it. [`overlay`] draws the original in grey and marks in red
+//! browser broke it. [`pair`] sets two wireframes side by side, before and
+//! after an edit. [`overlay`] draws the original in grey and marks in red
 //! every original item that did not hold, in orange every render item paired
 //! with nothing, each with why as its tooltip.
 
@@ -23,14 +24,46 @@ const SHOWN_WIDTH: f64 = 720.0;
 // The overlay's legend, beneath the page so it hides no mark.
 const LEGEND_HEIGHT: f64 = 64.0;
 
+// The space between the two pages of a pair, and the band above each naming it.
+const PAIR_GAP: f64 = 24.0;
+const CAPTION_HEIGHT: f64 = 24.0;
+
 /// The page of `facts` at `width`, as an SVG wireframe.
 #[must_use]
 pub fn draw(facts: &Facts, width: Width) -> String {
+    Canvas::wireframe(facts, Viewport::at(width)).finish()
+}
+
+/// `before` and `after` at `width`, as two [`draw`] wireframes side by side, each captioned.
+#[must_use]
+pub fn pair(before: &Facts, after: &Facts, width: Width) -> String {
     let viewport = Viewport::at(width);
-    let mut svg = Canvas::new(facts, viewport);
-    svg.paints(facts, viewport, Shade::Colour);
-    svg.texts(facts, viewport, Shade::Colour);
-    svg.finish()
+    let page_width = f64::from(width.0);
+    let shown = page_width.min(SHOWN_WIDTH);
+    let scale = shown / page_width;
+    let sides = [(0.0, "before", before), (shown + PAIR_GAP, "after", after)];
+    let mut body = String::new();
+    let mut height: f64 = 0.0;
+    for (x, caption, facts) in sides {
+        let canvas = Canvas::wireframe(facts, viewport);
+        height = height.max(canvas.height * scale);
+        let _ = write!(
+            body,
+            r#"<text x="{}" y="16" font-size="14">{caption}, {width}</text><svg x="{}" y="{CAPTION_HEIGHT}" width="{}" height="{}" viewBox="0 0 {} {}">{}</svg>"#,
+            number(x),
+            number(x),
+            number(shown),
+            number(canvas.height * scale),
+            number(canvas.width),
+            number(canvas.height),
+            canvas.body,
+        );
+    }
+    format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" width="{}" height="{}" font-family="sans-serif">{body}</svg>"#,
+        number(shown.mul_add(2.0, PAIR_GAP)),
+        number(CAPTION_HEIGHT + height),
+    ) + "\n"
 }
 
 /// `original` at `width` in grey, with what [`compare_at`] found against `render` marked.
@@ -90,6 +123,13 @@ impl Canvas {
             number(height)
         );
         Self { width, height, body }
+    }
+
+    fn wireframe(facts: &Facts, viewport: Viewport) -> Self {
+        let mut svg = Self::new(facts, viewport);
+        svg.paints(facts, viewport, Shade::Colour);
+        svg.texts(facts, viewport, Shade::Colour);
+        svg
     }
 
     fn paints(&mut self, facts: &Facts, viewport: Viewport, shade: Shade) {
