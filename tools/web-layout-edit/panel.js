@@ -73,8 +73,6 @@
 
   const close = () => {
     selected = null;
-    state = { phase: "idle" };
-    render();
     send({ type: "close" });
   };
 
@@ -92,7 +90,14 @@
       h("span", { className: "muted", textContent: element.path }));
 
   const views = {
-    idle: () => (state.message ? [h("p", { textContent: state.message })] : []),
+    idle: () => [
+      state.message ? h("p", { textContent: state.message }) : null,
+      state.unrecorded
+        ? h("div", {},
+          h("p", { className: "muted", textContent: `${state.unrecorded} approved edit(s) are not in the facts yet. Finish once every edit is approved.` }),
+          h("div", { className: "row" }, h("button", { className: "primary", textContent: "Finish", onclick: () => send({ type: "finish" }) })))
+        : null,
+    ],
 
     busy: () => [h("h2", { textContent: state.message }), h("p", { className: "muted", textContent: state.instruction })],
 
@@ -126,18 +131,16 @@
       h("h2", { textContent: `Edit ${state.attempt}: the page now shows it` }),
       summary(state.element),
       h("p", {}, "“", state.instruction, "”"),
-      state.error ? h("p", { className: "error", textContent: state.error }) : null,
-      h("p", { className: "muted", textContent: "Approve captures the page's facts and commits the change; reject reverts it." }),
+      h("p", { className: "muted", textContent: "Approve commits the change; reject reverts it." }),
       h("details", { open: true }, h("summary", { textContent: "Source diff" }), h("pre", { textContent: state.diff })),
       h("div", { className: "row" },
         h("button", { textContent: "Reject", onclick: () => send({ type: "reject" }) }),
         h("button", { className: "primary", textContent: "Approve", onclick: () => send({ type: "approve" }) })),
     ],
 
-    approved: () => [
-      h("h2", { textContent: `Edit ${state.attempt} approved: before and after` }),
-      summary(state.element),
-      h("p", {}, "“", state.instruction, "”"),
+    finished: () => [
+      h("h2", { textContent: "Facts recorded: before and after" }),
+      h("p", { textContent: `Edits ${state.edits.join(", ")}` }),
       h("p", { className: "muted" }, `facts ${state.facts.before}`, h("br"), `→ ${state.facts.after}`),
       ...state.pairs.map(({ width, svg, file }) =>
         h("figure", {},
@@ -158,7 +161,7 @@
     if (!panel) return;
     find();
     const children = views[state.phase]().filter((child) => child != null);
-    panel.className = state.phase === "approved" ? "panel wide" : "panel";
+    panel.className = state.phase === "finished" ? "panel wide" : "panel";
     panel.hidden = children.length === 0;
     panel.replaceChildren(...children);
     place();

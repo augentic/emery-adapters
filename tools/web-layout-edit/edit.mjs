@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Experiment / non-production. Point-and-edit: change the design of one element of a site by
-// having an agent edit the site's own frontend source, and record the facts after every change.
+// Experiment / non-production. Point-and-edit: change the design of one element of a site at a
+// time by having an agent edit the site's own frontend source, then record the facts once.
 //
 //   node tools/web-layout-edit/edit.mjs --site <site> --session DIR --agent COMMAND
 //
@@ -15,18 +15,20 @@
 //    `cursor-agent -p`. It edits the source, never the facts.
 // 3. The page is rebuilt and reloaded, so the browser shows the edit, and the panel shows the
 //    source diff.
-// 4. Approve captures the edited page's facts into DIR/edits/<n>/facts, commits the change in
-//    DIR/source, makes its facts DIR/facts, and sets the facts before and after side by side.
+// 4. Approve commits the change in DIR/source and adds the instruction to DIR/brief/brief.md.
 //    Reject reverts the source and reopens the selection, so the instruction can be revised and
-//    applied again. Facts are captured for an approved edit alone, since a capture takes a while.
+//    applied again. Neither captures facts, so an edit costs the agent and a build alone.
+// 5. Finish, once every edit is approved, captures the page's facts into DIR/records/<n>/facts,
+//    makes them DIR/facts, and sets the facts before and after side by side.
 //
-// Every decided attempt is one line of DIR/edits.jsonl: the instruction, the element, the source
-// diff, its status, how long each step took, and for an approved edit the facts' digests before
-// and after and its commit.
+// DIR/edits.jsonl holds one line per decided attempt (the instruction, the element, the source
+// diff, its status, how long each step took, and an approved one's commit) and one per record
+// (the attempts it covers and the facts' digests before and after).
 //
 // The editor settles a design before Emery sees it. Once it is settled, run `emery specify` over
-// a config whose `emery:rendered-layout` source `path` names DIR/facts, then `emery apply`. A
-// later change is edited here again, then `emery amend` and `emery apply`.
+// a config whose `emery:rendered-layout` source `path` names DIR/facts/ and whose
+// `emery:intent` source `path` names DIR/brief/, then `emery apply`. A later change is edited
+// here again and finished, then `emery amend` and `emery apply`.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -72,11 +74,11 @@ if (!fs.existsSync(session.facts)) {
 
 const browser = await chromium.launch({ headless: false });
 const page = await browser.newPage({ viewport: null });
-let state = { phase: "idle" };
+let state = idle();
 let pending = null;
 await page.addInitScript({ path: fileURLToPath(PANEL) });
 await page.exposeBinding("__layoutEditIntent", (_, intent) => {
-  handle(intent).catch((err) => show({ phase: "idle", message: `the editor failed: ${err.message}` }));
+  handle(intent).catch((err) => show(idle(`The editor failed: ${err.message}`)));
 });
 page.on("load", () => show(state));
 browser.on("disconnected", () => shutdown(0));
@@ -85,10 +87,12 @@ await page.goto(url);
 say(`editing ${url}; right-click an element in the browser`);
 
 async function handle(intent) {
-  if (intent.type === "close" && (state.phase === "select" || state.phase === "approved")) return show({ phase: "idle" });
-  if (intent.type === "apply" && (state.phase === "idle" || state.phase === "select")) return attempt(intent.element, intent.instruction);
+  const settled = ["idle", "select", "finished"].includes(state.phase);
+  if (intent.type === "close" && settled) return show(idle());
+  if (intent.type === "apply" && settled) return attempt(intent.element, intent.instruction);
   if (intent.type === "approve" && state.phase === "review") return approve();
   if (intent.type === "reject" && state.phase === "review") return reject();
+  if (intent.type === "finish" && settled && session.unrecorded().length) return finish();
 }
 
 // Steps 2 and 3: the agent's edit, and the page rebuilt onto it for the operator to look at.
@@ -115,32 +119,46 @@ async function attempt(element, instruction) {
   }
 }
 
-// Step 4, approved: the edited page's facts are captured, the change is committed, and its
-// facts become the session's. A capture that fails commits nothing and leaves the review open.
+// Step 4, approved: the change is committed and its instruction joins the brief.
 async function approve() {
-  const { entry, dir } = pending;
+  const { entry } = pending;
+  pending = null;
+  const commit = await source.commit(`edit ${entry.attempt}: ${entry.instruction}`);
+  session.note(entry.element, entry.instruction);
+  session.log({ ...entry, status: "approved", commit });
+  await show(idle(`Edit ${entry.attempt} approved.`));
+}
+
+// Step 5: the page's facts captured once over every approved edit, and made the session's.
+// A capture that fails leaves the session's facts as they stood.
+async function finish() {
+  const edits = session.unrecorded();
+  const { n, dir } = session.capture();
+  const entry = { record: n, at: new Date().toISOString(), edits, ms: {} };
   const facts = path.join(dir, "facts");
   try {
-    await timed(entry, "capture", "Capturing the approved page's facts…", () => capture(url, facts, path.join(dir, "capture.log")));
+    await timed(entry, "capture", "Capturing the page's facts…", () => capture(url, facts, path.join(dir, "capture.log")));
     entry.facts = { before: await digest(session.facts), after: await digest(facts) };
     await pair(session.facts, facts, dir);
   } catch (err) {
-    return show(review(`Capturing the facts failed; nothing was committed: ${err.message}`));
+    return show(idle(`Capturing the facts failed; ${session.facts} is unchanged: ${err.message}`));
   }
-  pending = null;
-  const commit = await source.commit(`edit ${entry.attempt}: ${entry.instruction}`);
   session.adopt(facts);
-  session.log({ ...entry, status: "approved", commit });
-  await show({ phase: "approved", attempt: entry.attempt, element: entry.element, instruction: entry.instruction, facts: entry.facts, pairs: pairs(dir) });
+  session.log({ ...entry, status: "recorded" });
+  await show({ phase: "finished", edits, facts: entry.facts, pairs: pairs(dir) });
 }
 
-function review(error = undefined) {
+function idle(message = undefined) {
+  return { phase: "idle", message, unrecorded: session.unrecorded().length };
+}
+
+function review() {
   const { entry } = pending;
-  return { phase: "review", attempt: entry.attempt, element: entry.element, instruction: entry.instruction, diff: entry.diff, error };
+  return { phase: "review", attempt: entry.attempt, element: entry.element, instruction: entry.instruction, diff: entry.diff };
 }
 
 async function timed(entry, name, message, work) {
-  await show({ phase: "busy", message, instruction: entry.instruction });
+  await show({ phase: "busy", message, instruction: entry.instruction ?? "" });
   const started = Date.now();
   try {
     return await work();
