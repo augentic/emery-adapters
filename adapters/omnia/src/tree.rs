@@ -130,16 +130,30 @@ impl<'a> Tree<'a> {
 
     // The crates under `crates/` that are a stem's: neither `common` nor a
     // `start` crate.
-    fn stem_crates(&self) -> impl Iterator<Item = &str> {
+    pub fn stem_crates(&self) -> impl Iterator<Item = &str> {
         self.crates.iter().map(String::as_str).filter(|dir| layout::is_stem_crate(dir))
     }
 
     // Each stem crate's manifest, by directory, where the tree holds one.
-    fn stem_manifests(&self) -> impl Iterator<Item = (&str, &str)> {
+    pub fn stem_manifests(&self) -> impl Iterator<Item = (&str, &str)> {
         self.manifests
             .iter()
             .map(|(dir, text)| (dir.as_str(), text.as_str()))
             .filter(|(dir, _)| layout::is_stem_crate(dir))
+    }
+
+    // Every Rust file under a stem crate: its sources and its tests.
+    pub fn stem_modules(&self) -> impl Iterator<Item = &Module> {
+        self.modules.iter().chain(&self.tests).filter(|module| !module.is_common())
+    }
+
+    // The sources and tests of the stem crate at `crates/<dir>/`.
+    pub fn stem_files<'s>(&'s self, dir: &str) -> impl Iterator<Item = &'s Module> {
+        let prefix = format!("crates/{dir}/");
+        self.modules
+            .iter()
+            .chain(&self.tests)
+            .filter(move |module| module.path.starts_with(&prefix))
     }
 
     // A crate the turn wrote is one of the slice's stems' or none of the
@@ -615,14 +629,22 @@ impl<'a> Tree<'a> {
 
 // One Rust file of the tree: its text, what `syn` made of it, and the names
 // it mentions, none where `syn` refused it.
-struct Module {
-    path: String,
-    text: String,
+pub struct Module {
+    pub path: String,
+    pub text: String,
     parsed: Result<syn::File, Unparsed>,
     mentions: Mentions,
 }
 
 impl Module {
+    pub fn crate_dir(&self) -> Option<&str> {
+        self.path.strip_prefix("crates/")?.split('/').next()
+    }
+
+    pub fn file(&self) -> Option<&syn::File> {
+        self.parsed.as_ref().ok()
+    }
+
     fn read(root: &Path, file: &Path) -> Result<Self, Error> {
         let path = layout::relative(root, file);
         let text = layout::read(file)?;
@@ -638,10 +660,6 @@ impl Module {
 
     fn is_common(&self) -> bool {
         self.path.starts_with("crates/common/")
-    }
-
-    fn file(&self) -> Option<&syn::File> {
-        self.parsed.as_ref().ok()
     }
 
     // The line `number` stands on, trimmed and without its trailing comma.

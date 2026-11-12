@@ -8,8 +8,9 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, Change, DesignType, Grant, InitContext, Outcome, PartReach, Report, Requirement,
-    Scenario, ScopeContext, SectionChange, Slice, TargetAdapter, Task, Verdict, VerifyContext,
+    BuildContext, Change, Departure, DesignType, Grant, InitContext, Outcome, PartReach, Report,
+    Requirement, Scenario, ScopeContext, SectionChange, Slice, SliceChange, Standing,
+    TargetAdapter, Task, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
@@ -6865,4 +6866,135 @@ async fn omnia_unwired_handler() {
             && correction.contains(&expected),
         "the correction names the unregistered handler at its line: {correction}"
     );
+}
+
+// On a change build, a kept stem (`unchanged` requirements alone, no departure
+// or changed type under it, and its crate already in the tree) has nothing
+// scaffolded for it and its requirements are appended to `covered` after the
+// turn; the brief lists the touch points in other crates that mention a
+// reached or vanished crate.
+#[tokio::test]
+async fn omnia_change_kept() {
+    let project = omnia_tree().await;
+    project.write(
+        "crates/customers/Cargo.toml",
+        format!(
+            "{}orders = {{ path = \"../orders\" }}\n",
+            OMNIA_MANIFEST.replace("orders", "customers")
+        ),
+    );
+    project.write("crates/customers/src/lib.rs", OMNIA_ENTRY.replace("orders", "customers"));
+    let kept_module = "//! Kept customers.\n\nuse orders::reading::check;\n\npub fn verify() {\n    check();\n}\n";
+    project.write("crates/customers/src/reading.rs", kept_module);
+    project.write(
+        "Cargo.toml",
+        omnia_seed("Cargo.toml").replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            &format!("{OMNIA_PATH_CRATE_ANCHOR}customers = {{ path = \"crates/customers\" }}\n"),
+        ),
+    );
+    project.write(
+        "src/lib.rs",
+        omnia_seed("src/lib.rs").replace(
+            OMNIA_ROOT_ANCHOR,
+            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
+             the end\n        customers::handlers(),\n    ])\n    \
+             .with_state(Client::new(provider))\n",
+        ),
+    );
+
+    let mut slice = slice_for("orders-reading", &["orders.check", "customers.verify"]);
+    slice.change = Some(SliceChange {
+        built: "rev-001".to_owned(),
+        commit: "abc1234".to_owned(),
+        standing: vec![Standing::Changed, Standing::Unchanged],
+        prior: vec![Requirement {
+            id: "REQ-001".to_owned(),
+            subject: "orders.check".to_owned(),
+            statement: vec!["Prior statement.".to_owned()],
+            scenarios: Vec::new(),
+            trigger: None,
+        }],
+        ..SliceChange::default()
+    });
+    let marker = "REQ-001 orders.check: the behaviour";
+    let filled = "pub fn check() -> Result<()> {\n    Ok(())\n}";
+    let model = ScriptedModel::answering([
+        r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(0, [edit_files(&[("crates/orders/src/reading.rs", marker, filled)])]);
+
+    let report =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("change slice with kept stem");
+    model.assert_exhausted();
+
+    assert_eq!(
+        report.covered,
+        ["REQ-001", "REQ-002"],
+        "the kept stem's unchanged requirement is appended to `covered`"
+    );
+    assert_eq!(
+        text(&project, "crates/customers/src/reading.rs"),
+        kept_module,
+        "nothing is laid over the kept stem's module"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        !brief.contains("Stem `customers`"),
+        "the kept stem is filtered out of the scaffold brief: {brief}"
+    );
+    for touch in [
+        "Touch points outside the slice's reached crates that mention a reached or vanished crate",
+        "- `crates/customers/Cargo.toml:23`: `dependency orders`",
+        "- `crates/customers/src/reading.rs:3`: `use`",
+        "- `crates/customers/src/reading.rs:5`: `fn verify`",
+    ] {
+        assert!(brief.contains(touch), "the brief lists `{touch}`: {brief}");
+    }
+}
+
+// A retiring slice whose vanished stems are mentioned by no other crate in the
+// tree answers `Built` over an empty `Report` with no model turn.
+#[tokio::test]
+async fn omnia_change_retiring_quiet() {
+    let project = omnia_tree().await;
+    let slice = Slice {
+        id: "SLICE-001".to_owned(),
+        part: "PART-001".to_owned(),
+        name: "returns".to_owned(),
+        index: 1,
+        count: 1,
+        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        requirements: Vec::new(),
+        types: Vec::new(),
+        brief: vec!["Retires returns.".to_owned()],
+        spec: String::new(),
+        design: "# Design\n".to_owned(),
+        plan: "## Part: returns\n\nID: PART-001\nRequirements: []\n".to_owned(),
+        change: Some(SliceChange {
+            built: "rev-001".to_owned(),
+            commit: "abc1234".to_owned(),
+            departed: vec![Departure {
+                requirement: Requirement {
+                    id: "REQ-001".to_owned(),
+                    subject: "returns.create".to_owned(),
+                    statement: vec!["Creates a return.".to_owned()],
+                    scenarios: Vec::new(),
+                    trigger: None,
+                },
+                moved_to: None,
+            }],
+            vanished: vec!["returns".to_owned()],
+            ..SliceChange::default()
+        }),
+    };
+    let model = ScriptedModel::answering(std::iter::empty::<&str>());
+
+    let report = OMNIA.build_slice(&project, &model, &slice).await.expect("quiet retiring slice");
+    model.assert_exhausted();
+
+    let empty: [&str; 0] = [];
+    assert_eq!(report.covered, empty);
+    assert_eq!(report.written, empty);
+    assert_eq!(model.seen().len(), 0, "a quiet retiring slice opens no turn");
 }

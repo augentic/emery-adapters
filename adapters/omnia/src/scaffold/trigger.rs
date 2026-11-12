@@ -5,6 +5,8 @@ use emery_sdk::survey::route::Spelling;
 use emery_sdk::target::Requirement;
 use emery_sdk::{Route, Trigger};
 
+use crate::layout;
+
 // The methods `axum::routing` has a method router for, each with that
 // function.
 const METHODS: [(&str, &str); 5] =
@@ -62,4 +64,22 @@ pub fn carries_body(method: &str) -> bool {
 // /api/health/live`; none for a route of parameters and noise alone.
 pub fn resource(route: &Route) -> Option<String> {
     TYPED.stem(&route.path)
+}
+
+// The route and resource stem a `start` requirement relays to when its
+// trigger is a supported route naming a non-`start` resource.
+pub fn relaid(requirement: &Requirement) -> Option<(&Route, String)> {
+    let route = route(requirement)?;
+    let stem = resource(route).filter(|stem| !layout::is_start_stem(stem))?;
+    Some((route, stem))
+}
+
+// The stem a requirement lands under: its own stem, or for `start` the
+// resource stem of its route; `None` when `start` carries no route.
+pub fn stem(requirement: &Requirement) -> Option<String> {
+    let own = requirement.stem();
+    if !layout::is_start_stem(own) {
+        return Some(own.to_owned());
+    }
+    relaid(requirement).map(|(_, stem)| stem)
 }

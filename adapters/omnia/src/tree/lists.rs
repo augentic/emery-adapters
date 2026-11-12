@@ -73,15 +73,6 @@ impl Tree<'_> {
         ))
     }
 
-    // The stem's sources and tests, where a dependency's use is read.
-    fn stem_files<'s>(&'s self, stem: &str) -> impl Iterator<Item = &'s Module> {
-        let prefix = format!("crates/{stem}/");
-        self.modules
-            .iter()
-            .chain(&self.tests)
-            .filter(move |module| module.path.starts_with(&prefix))
-    }
-
     pub fn unmerged_stems(&self) -> Option<String> {
         let mut lines = Vec::new();
         for module in &self.modules {

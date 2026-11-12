@@ -33,6 +33,12 @@ impl Mentions {
         mentions
     }
 
+    pub fn of_item(item: &Item) -> Self {
+        let mut mentions = Self::default();
+        mentions.visit_item(item);
+        mentions
+    }
+
     // Whether `name` stands anywhere as an identifier.
     pub fn contains(&self, name: &str) -> bool {
         self.idents.contains_key(name)

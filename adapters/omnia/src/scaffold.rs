@@ -8,7 +8,7 @@ mod reference;
 mod render;
 mod settings;
 mod stem;
-mod trigger;
+pub mod trigger;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,7 +24,8 @@ use self::lists::{Lists, Placement, Topics};
 pub use self::reference::{Gate, Inbound, Wire, registration};
 use self::reference::{Idiom, Role, Rules};
 use self::stem::{Kind, Stem, lines_of};
-use self::types::DesignKey;
+pub use self::types::DesignKey;
+use crate::change::{Change, TouchPoint};
 use crate::{layout, syntax};
 
 // A slice's skeleton as read against the tree and not yet written: each
@@ -50,13 +51,15 @@ pub struct Plan {
     rules: Rules,
     exports: Vec<Export>,
     skips: Vec<Skip>,
+    touch_points: Vec<TouchPoint>,
 }
 
 impl Plan {
-    // A slice of `start` requirements alone, none carrying a route, lays no
-    // stem: nothing is scaffolded and no turn is opened for it.
+    // A slice of `start` requirements alone, none carrying a route, or a
+    // retiring slice with no touch points, lays no stem and needs no turn:
+    // nothing is scaffolded and no turn is opened for it.
     pub const fn is_empty(&self) -> bool {
-        self.stems.is_empty()
+        self.stems.is_empty() && self.touch_points.is_empty()
     }
 
     // Writes each stem's files the tree lacks and adds each placed line to
@@ -150,7 +153,7 @@ pub struct Scaffold {
 }
 
 impl Scaffold {
-    pub fn plan(slice: &Slice, root: &Path) -> Result<Plan, Error> {
+    pub fn plan(slice: &Slice, root: &Path, change: &Change) -> Result<Plan, Error> {
         let existing: BTreeSet<String> = layout::crates(root)?.into_iter().collect();
         let mut topics = Topics::read(root)?;
         let design = types::Design::read(
@@ -167,7 +170,7 @@ impl Scaffold {
             start,
             relaid,
             skips,
-        } = Sorted::of(slice);
+        } = Sorted::of(slice, change);
 
         let mut lists = Lists::default();
         let mut stems = Vec::new();
@@ -212,6 +215,7 @@ impl Scaffold {
             rules: route_rules,
             exports,
             skips,
+            touch_points: change.touch_points().to_vec(),
         })
     }
 
@@ -359,9 +363,9 @@ struct Sorted<'s> {
 
 impl<'s> Sorted<'s> {
     // Each requirement to its stem, `start` set aside unless a typed route
-    // names the resource whose crate serves it, and each owned type to the
-    // stem its key leads with, else the first.
-    fn of(slice: &'s Slice) -> Self {
+    // names the resource whose crate serves it, kept stems filtered out, and
+    // each owned type to the stem its key leads with, else the first.
+    fn of(slice: &'s Slice, change: &Change) -> Self {
         let mut plans: Vec<StemPlan> = Vec::new();
         let mut start = Vec::new();
         let mut relaid = Vec::new();
@@ -369,14 +373,13 @@ impl<'s> Sorted<'s> {
         for requirement in &slice.requirements {
             let own = requirement.stem();
             let name = if layout::is_start_stem(own) {
-                let resource = trigger::route(requirement)
-                    .map(|route| (route, trigger::resource(route)))
-                    .and_then(|(route, stem)| Some((route, stem?)))
-                    .filter(|(_, stem)| !layout::is_start_stem(stem));
-                let Some((route, stem)) = resource else {
+                let Some((route, stem)) = trigger::relaid(requirement) else {
                     start.push(requirement.id.clone());
                     continue;
                 };
+                if change.is_kept(&stem) {
+                    continue;
+                }
                 relaid.push(Relaid {
                     id: requirement.id.clone(),
                     route: route.to_string(),
@@ -384,6 +387,9 @@ impl<'s> Sorted<'s> {
                 });
                 stem
             } else {
+                if change.is_kept(own) {
+                    continue;
+                }
                 own.to_owned()
             };
             if reference::skips(requirement) {
@@ -404,6 +410,9 @@ impl<'s> Sorted<'s> {
         }
         for design_type in &slice.types {
             let stem = DesignKey::parse(&design_type.key).stem;
+            if stem.is_some_and(|stem| change.is_kept(stem)) {
+                continue;
+            }
             let at = plans
                 .iter()
                 .position(|plan| Some(plan.stem.name.as_str()) == stem)

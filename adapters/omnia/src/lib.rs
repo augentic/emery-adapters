@@ -6,6 +6,7 @@
 //! report or verdict, and runs `cargo clippy`, `cargo test`, and the
 //! `wasm32-wasip2` check at each slice and wave.
 
+mod change;
 mod layout;
 mod scaffold;
 mod syntax;
@@ -15,8 +16,9 @@ use std::num::NonZeroU32;
 use std::path::Path;
 
 use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
-use emery_sdk::{Error, Model, tracing};
+use emery_sdk::{Error, Model, push_unique, tracing};
 
+use self::change::Change;
 use self::scaffold::Scaffold;
 use self::tree::Tree;
 
@@ -59,14 +61,16 @@ impl TargetAdapter for Adapter {
             Task::Scope(ctx) => Ok(Outcome::Scoped(target::scope::conservative(ctx.change))),
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let plan = Scaffold::plan(ctx.slice, root)?;
+                let change = Change::read(ctx.slice, &Tree::read(root)?);
+                let plan = Scaffold::plan(ctx.slice, root, &change)?;
                 if plan.is_empty() {
                     tracing::info!(
                         slice = ctx.slice.id,
-                        "every requirement is `start`'s and none carries a route; no turn"
+                        retiring = change.is_retiring(),
+                        "nothing to scaffold and no touch points; no turn"
                     );
                     return Ok(Outcome::Built(Report {
-                        covered: Vec::new(),
+                        covered: change.kept_requirements().to_vec(),
                         written: Vec::new(),
                     }));
                 }
@@ -77,11 +81,14 @@ impl TargetAdapter for Adapter {
                 );
                 let prepared = scaffold.prepare(PROSE);
                 let ctx = ctx.with_scaffold(prepared.as_target());
-                target::build(&ctx, PROSE, |report| {
+                let mut report = target::build(&ctx, PROSE, |report| {
                     Tree::read(root)?.check_build(&scaffold, report)
                 })
-                .await
-                .map(Outcome::Built)
+                .await?;
+                for id in change.kept_requirements() {
+                    push_unique(&mut report.covered, id.clone());
+                }
+                Ok(Outcome::Built(report))
             }
             Task::Verify(ctx) => {
                 let root = Path::new(ctx.workspace);

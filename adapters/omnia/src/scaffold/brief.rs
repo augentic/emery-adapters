@@ -92,6 +92,7 @@ impl Scaffold {
         }
         self.brief_rules(&mut text);
         self.brief_gate(&mut text);
+        self.brief_touch_points(&mut text);
         for relaid in &self.plan.relaid {
             let _ = writeln!(
                 text,
@@ -325,12 +326,35 @@ impl Scaffold {
         }
     }
 
+    // The items and manifest lines outside the slice's reached or vanished
+    // crates that mention one of them, which are the only places outside
+    // those crates the turn may edit.
+    fn brief_touch_points(&self, text: &mut String) {
+        if self.plan.touch_points.is_empty() {
+            return;
+        }
+        text.push_str(
+            "Touch points outside the slice's reached crates that mention a reached or vanished \
+             crate, the only items outside those crates this turn may edit:\n\n",
+        );
+        for point in &self.plan.touch_points {
+            let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.item);
+        }
+        text.push('\n');
+    }
+
     // The one shell command the turn checks the tree with: the slice's
     // packages under clippy and their tests, then the guest check and the
     // formatter over the workspace.
     fn check(&self) -> String {
         let packages: Vec<String> =
             self.plan.stems.iter().map(|stem| format!("-p {}", stem.package)).collect();
+        if packages.is_empty() {
+            return format!(
+                "cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace \
+                 && {CHECK}"
+            );
+        }
         let packages = packages.join(" ");
         format!(
             "cargo clippy {packages} --all-targets -- -D warnings && cargo test {packages} && \
