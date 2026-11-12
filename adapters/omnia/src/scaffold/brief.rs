@@ -16,6 +16,7 @@ use super::reference::{self, Gate, Laid, Needs, Wire};
 use super::stem::{Consumer, Handler, Kind, Stem};
 use super::{Scaffold, registration, render, trigger};
 use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
+use crate::syntax::ExportedFn;
 
 const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
 
@@ -218,18 +219,7 @@ impl Scaffold {
             text.push_str(
                 "Exported by the stems already in the tree, to call rather than write again:\n\n",
             );
-            for export in &self.plan.exports {
-                let _ = write!(
-                    text,
-                    "- `{}` (`{}:{}`): `{}`",
-                    export.path, export.file, export.line, export.signature
-                );
-                if let Some(doc) = &export.doc {
-                    let _ = write!(text, " — {doc}");
-                }
-                text.push('\n');
-            }
-            text.push('\n');
+            write_exports(&self.plan.exports, text);
         }
     }
 
@@ -328,19 +318,26 @@ impl Scaffold {
 
     // The items and manifest lines outside the slice's reached or vanished
     // crates that mention one of them, which are the only places outside
-    // those crates the turn may edit.
+    // those crates the turn may edit, and the exported signatures the
+    // rewritten crates carried before removal.
     fn brief_touch_points(&self, text: &mut String) {
-        if self.plan.touch_points.is_empty() {
-            return;
+        if !self.plan.touch_points.is_empty() {
+            text.push_str(
+                "Touch points outside the slice's reached crates that mention a reached or \
+                 vanished crate, the only items outside those crates this turn may edit:\n\n",
+            );
+            for point in &self.plan.touch_points {
+                let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.item);
+            }
+            text.push('\n');
         }
-        text.push_str(
-            "Touch points outside the slice's reached crates that mention a reached or vanished \
-             crate, the only items outside those crates this turn may edit:\n\n",
-        );
-        for point in &self.plan.touch_points {
-            let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.item);
+        if !self.plan.prior_exports.is_empty() {
+            text.push_str(
+                "Exported signatures of the rewritten crates before this slice, which other \
+                 crates call; keep them unless the slice changes them:\n\n",
+            );
+            write_exports(&self.plan.prior_exports, text);
         }
-        text.push('\n');
     }
 
     // The one shell command the turn checks the tree with: the slice's
@@ -451,9 +448,32 @@ fn listed(items: &[String]) -> String {
     }
 }
 
+fn write_exports(exports: &[ExportedFn], text: &mut String) {
+    for export in exports {
+        let _ = write!(
+            text,
+            "- `{}` (`{}:{}`): `{}`",
+            export.path, export.file, export.line, export.signature
+        );
+        if let Some(doc) = &export.doc {
+            let _ = write!(text, " — {doc}");
+        }
+        text.push('\n');
+    }
+    text.push('\n');
+}
+
 impl Stem {
     fn brief_files(&self, budget: &mut Budget, text: &mut String) {
         let _ = writeln!(text, "Stem `{}`, part `{}`:\n", self.name, self.part);
+        if self.rewritten {
+            let _ = writeln!(
+                text,
+                "Rewritten for this change: `crates/{}/` is written from the slice, the prior \
+                 crate is not in the tree.\n",
+                self.dir
+            );
+        }
         let _ = writeln!(
             text,
             "- `{}`: {}{}. One `<crate>.workspace = true` line at the end of `[dependencies]` \

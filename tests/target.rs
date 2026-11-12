@@ -6953,12 +6953,8 @@ async fn omnia_change_kept() {
     }
 }
 
-// A retiring slice whose vanished stems are mentioned by no other crate in the
-// tree answers `Built` over an empty `Report` with no model turn.
-#[tokio::test]
-async fn omnia_change_retiring_quiet() {
-    let project = omnia_tree().await;
-    let slice = Slice {
+fn retiring_returns_slice() -> Slice {
+    Slice {
         id: "SLICE-001".to_owned(),
         part: "PART-001".to_owned(),
         name: "returns".to_owned(),
@@ -6987,7 +6983,15 @@ async fn omnia_change_retiring_quiet() {
             vanished: vec!["returns".to_owned()],
             ..SliceChange::default()
         }),
-    };
+    }
+}
+
+// A retiring slice whose vanished stems are mentioned by no other crate in the
+// tree answers `Built` over an empty `Report` with no model turn.
+#[tokio::test]
+async fn omnia_change_retiring_quiet() {
+    let project = omnia_tree().await;
+    let slice = retiring_returns_slice();
     let model = ScriptedModel::answering(std::iter::empty::<&str>());
 
     let report = OMNIA.build_slice(&project, &model, &slice).await.expect("quiet retiring slice");
@@ -6997,4 +7001,161 @@ async fn omnia_change_retiring_quiet() {
     assert_eq!(report.covered, empty);
     assert_eq!(report.written, empty);
     assert_eq!(model.seen().len(), 0, "a quiet retiring slice opens no turn");
+}
+
+// On a change build, a stem reached for the first time in this build has its
+// prior exported signatures read for the brief, its crate removed (following no
+// link), and its skeleton re-laid byte for byte as a fresh stem with its root
+// list lines placed `Held`.
+#[tokio::test]
+async fn omnia_change_rewrite() {
+    let project = omnia_tree().await;
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
+    project.write("crates/orders/src/lib.rs", OMNIA_ENTRY);
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Prior orders.\n\n/// Validates an order.\npub fn validate(id: &str) -> bool {\n    !id.is_empty()\n}\n\npub fn obsolete() {}\n",
+    );
+    project.write("crates/orders/src/legacy.rs", "pub fn dead() {}\n");
+    project.write("crates/orders/tests/legacy.rs", "#[test]\nfn old() {}\n");
+    let root_manifest = omnia_seed("Cargo.toml").replace(
+        OMNIA_PATH_CRATE_ANCHOR,
+        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+    );
+    let root_entry = omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE);
+    project.write("Cargo.toml", &root_manifest);
+    project.write("src/lib.rs", &root_entry);
+
+    let mut slice = omnia_slice();
+    slice.change = Some(SliceChange {
+        built: "rev-001".to_owned(),
+        commit: "abc1234".to_owned(),
+        standing: vec![Standing::Changed],
+        prior: vec![slice.requirements[0].clone()],
+        ..SliceChange::default()
+    });
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("rewrite reached stem");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, "crates/orders/Cargo.toml"), OMNIA_MANIFEST);
+    assert_eq!(text(&project, "crates/orders/src/lib.rs"), OMNIA_ENTRY);
+    assert_eq!(text(&project, "crates/orders/src/reading.rs"), OMNIA_MODULE);
+    assert_eq!(text(&project, "crates/orders/tests/reading.rs"), OMNIA_TESTS);
+    assert!(
+        !project.path().join("crates/orders/src/legacy.rs").exists()
+            && !project.path().join("crates/orders/tests/legacy.rs").exists(),
+        "prior files of the rewritten crate are removed"
+    );
+    assert_eq!(text(&project, "Cargo.toml"), root_manifest);
+    assert_eq!(text(&project, "src/lib.rs"), root_entry);
+
+    let brief = &model.seen()[0].messages[0];
+    for expected in [
+        "Rewritten for this change: `crates/orders/` is written from the slice, the prior crate is \
+         not in the tree.",
+        "- `Cargo.toml`, `src/lib.rs`: the stem's lines already held: `orders = { path = \
+         \"crates/orders\" }` in `Cargo.toml`, `orders::handlers()` in `src/lib.rs`.",
+        "Exported signatures of the rewritten crates before this slice, which other crates call; \
+         keep them unless the slice changes them:",
+        "- `orders::reading::validate` (`crates/orders/src/reading.rs:4`): `pub fn validate(id: \
+         &str) -> bool` — Validates an order.",
+        "- `orders::reading::obsolete` (`crates/orders/src/reading.rs:8`): `pub fn obsolete()`",
+    ] {
+        assert!(brief.contains(expected), "the brief carries `{expected}`: {brief}");
+    }
+}
+
+// On a change build, a vanished stem has its crate removed, its lines dropped
+// from the root `Cargo.toml`, `src/lib.rs`, and any stem manifest path
+// dependency, and those lines left out of every guard's `keeps`; a symbolic
+// link at or inside the vanished crate path is refused as `bad_request`.
+#[tokio::test]
+async fn omnia_change_vanished() {
+    let project = omnia_tree().await;
+    project.write("crates/returns/Cargo.toml", OMNIA_MANIFEST.replace("orders", "returns"));
+    project.write("crates/returns/src/lib.rs", OMNIA_ENTRY.replace("orders", "returns"));
+    project.write("crates/returns/src/reading.rs", "pub fn refund() {}\n");
+    project.write(
+        "crates/orders/Cargo.toml",
+        format!("{OMNIA_MANIFEST}returns = {{ path = \"../returns\" }}\n"),
+    );
+    project.write("crates/orders/src/lib.rs", OMNIA_ENTRY);
+    project.write(
+        "crates/orders/src/reading.rs",
+        "//! Orders.\n\nuse returns::reading::refund;\n\npub fn check() {\n    refund();\n}\n",
+    );
+    project.write(
+        "Cargo.toml",
+        omnia_seed("Cargo.toml").replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            &format!(
+                "{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}returns = {{ path = \
+                 \"crates/returns\" }}\n"
+            ),
+        ),
+    );
+    project.write(
+        "src/lib.rs",
+        omnia_seed("src/lib.rs").replace(
+            OMNIA_ROOT_ANCHOR,
+            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
+             the end\n        orders::handlers(),\n        returns::handlers(),\n    ])\n    \
+             .with_state(Client::new(provider))\n",
+        ),
+    );
+
+    let slice = retiring_returns_slice();
+    let root_without_returns = omnia_seed("Cargo.toml").replace(
+        OMNIA_PATH_CRATE_ANCHOR,
+        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+    );
+    let model = ScriptedModel::answering([
+        r#"{"covered": [], "written": ["Cargo.toml", "crates/orders/src/reading.rs"]}"#,
+    ])
+    .calling(
+        0,
+        [
+            write_files(&[("Cargo.toml", &root_without_returns)]),
+            edit_files(&[(
+                "crates/orders/src/reading.rs",
+                "use returns::reading::refund;\n\npub fn check() {\n    refund();\n}",
+                "pub fn check() {}",
+            )]),
+        ],
+    );
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("vanished stem removed");
+    model.assert_exhausted();
+
+    assert!(!project.path().join("crates/returns").exists(), "vanished crate directory is gone");
+    assert!(
+        !text(&project, "Cargo.toml").contains("returns"),
+        "root Cargo.toml drops vanished line"
+    );
+    assert!(
+        !text(&project, "src/lib.rs").contains("returns::handlers()"),
+        "root src/lib.rs drops vanished line"
+    );
+    assert!(
+        !text(&project, "crates/orders/Cargo.toml").contains("returns"),
+        "stem Cargo.toml drops vanished path dependency"
+    );
+
+    let linked = omnia_tree().await;
+    linked.write("elsewhere/.keep", "");
+    symlink("../elsewhere", linked.path().join("crates/returns")).expect("planting the link");
+    let linked_model = ScriptedModel::default();
+    let refusal = OMNIA
+        .build_slice(&linked, &linked_model, &slice)
+        .await
+        .expect_err("a symlink at the vanished crate path is refused");
+    linked_model.assert_exhausted();
+    assert!(
+        matches!(refusal, Error::BadRequest { .. }),
+        "refused with the wrong class: {}",
+        refusal.description()
+    );
+    assert_eq!(refusal.description(), "`crates/returns` is a symlink");
 }

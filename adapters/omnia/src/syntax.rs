@@ -2,7 +2,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::mem;
+use std::path::Path as StdPath;
 
+use emery_sdk::Error;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
 use syn::visit::{self, Visit};
 use syn::{
@@ -216,6 +218,17 @@ pub fn pub_fn(file: &syn::File, name: &str) -> Option<usize> {
     })
 }
 
+// A bare `pub fn` a stem crate exports from a module (`path` from the crate
+// root, `customers::customers::authenticate`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExportedFn {
+    pub path: String,
+    pub file: String,
+    pub line: usize,
+    pub signature: String,
+    pub doc: Option<String>,
+}
+
 // A bare `pub fn` among the items of a file: its name, the lines its
 // signature runs over (`pub` to the body's opening brace), and the first
 // line of its doc where it carries one.
@@ -267,7 +280,38 @@ pub fn signature(text: &str, exported: &Exported) -> String {
         .map(str::trim)
         .collect::<Vec<_>>()
         .join(" ");
-    joined.trim_end_matches('{').trim_end().to_owned()
+    joined.split('{').next().unwrap_or(&joined).trim_end().to_owned()
+}
+
+// The `pub fn`s the stem crate at `crates/<dir>/` exports from its part
+// modules, in path order; a file `syn` refuses is passed over, since the
+// checks name it.
+pub fn crate_exported_fns(root: &StdPath, dir: &str) -> Result<Vec<ExportedFn>, Error> {
+    let stem = if dir == crate::layout::crate_dir("common") { "common" } else { dir };
+    let crate_ident = crate::layout::package(stem).replace('-', "_");
+    let mut exports = Vec::new();
+    for source in crate::layout::sources(&root.join("crates").join(dir).join("src"))? {
+        let Some(module) = source.file_stem().and_then(|name| name.to_str()) else { continue };
+        if module == "lib" {
+            continue;
+        }
+        let text = crate::layout::read(&source)?;
+        let Ok(file) = parse(&text) else { continue };
+        let relative = crate::layout::relative(root, &source);
+        for exported in exported_fns(&file) {
+            if exported.name == "handlers" {
+                continue;
+            }
+            exports.push(ExportedFn {
+                path: format!("{crate_ident}::{module}::{}", exported.name),
+                file: relative.clone(),
+                line: exported.from,
+                signature: signature(&text, &exported),
+                doc: exported.doc,
+            });
+        }
+    }
+    Ok(exports)
 }
 
 // The modules `file` declares from files beside it, `pub mod reading;`, by

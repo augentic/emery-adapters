@@ -61,7 +61,8 @@ impl TargetAdapter for Adapter {
             Task::Scope(ctx) => Ok(Outcome::Scoped(target::scope::conservative(ctx.change))),
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
-                let change = Change::read(ctx.slice, &Tree::read(root)?);
+                let mut change = Change::read(ctx.slice, &Tree::read(root)?);
+                change.rewrite(root)?;
                 let plan = Scaffold::plan(ctx.slice, root, &change)?;
                 if plan.is_empty() {
                     tracing::info!(
@@ -71,7 +72,7 @@ impl TargetAdapter for Adapter {
                     );
                     return Ok(Outcome::Built(Report {
                         covered: change.kept_requirements().to_vec(),
-                        written: Vec::new(),
+                        written: change.rewritten_lists().keys().cloned().collect(),
                     }));
                 }
                 let scaffold = plan.write(root)?;

@@ -1,5 +1,6 @@
 //! Classifies each stem a slice touches against the built revision and the tree.
 
+mod rewrite;
 mod touch;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,6 +12,7 @@ pub use self::touch::TouchPoint;
 use self::touch::TouchPoints;
 use crate::layout;
 use crate::scaffold::{DesignKey, trigger};
+use crate::syntax::ExportedFn;
 use crate::tree::Tree;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,6 +29,9 @@ pub struct Change {
     stems: BTreeMap<String, StemChange>,
     kept_requirements: Vec<String>,
     touch_points: Vec<TouchPoint>,
+    prior_exports: Vec<ExportedFn>,
+    rewritten_lists: BTreeMap<String, String>,
+    vanished_lines: BTreeSet<String>,
     is_retiring: bool,
 }
 
@@ -43,12 +48,10 @@ impl Change {
         let mut classified = BTreeMap::new();
         for stem in &stems {
             let dir = layout::crate_dir(stem);
-            let status = if !existing.contains(dir) {
+            let status = if !existing.contains(dir) || built_before.contains(stem) {
                 StemChange::Reached { first: false }
             } else if reached.contains(stem) {
-                StemChange::Reached {
-                    first: !built_before.contains(stem),
-                }
+                StemChange::Reached { first: true }
             } else {
                 StemChange::Kept
             };
@@ -83,6 +86,9 @@ impl Change {
             stems: classified,
             kept_requirements,
             touch_points,
+            prior_exports: Vec::new(),
+            rewritten_lists: BTreeMap::new(),
+            vanished_lines: BTreeSet::new(),
             is_retiring: slice.is_retiring(),
         }
     }
@@ -95,12 +101,28 @@ impl Change {
         self.stems.get(stem) == Some(&StemChange::Kept)
     }
 
+    pub fn is_rewritten(&self, stem: &str) -> bool {
+        self.stems.get(stem) == Some(&StemChange::Reached { first: true })
+    }
+
     pub fn kept_requirements(&self) -> &[String] {
         &self.kept_requirements
     }
 
     pub fn touch_points(&self) -> &[TouchPoint] {
         &self.touch_points
+    }
+
+    pub fn prior_exports(&self) -> &[ExportedFn] {
+        &self.prior_exports
+    }
+
+    pub const fn rewritten_lists(&self) -> &BTreeMap<String, String> {
+        &self.rewritten_lists
+    }
+
+    pub const fn vanished_lines(&self) -> &BTreeSet<String> {
+        &self.vanished_lines
     }
 }
 
@@ -161,7 +183,7 @@ fn reached_stems(slice: &Slice, change: &SliceChange, stems: &[String]) -> BTree
             reached.insert(stem);
         }
     }
-    if reached.is_empty() && !change.sections.is_empty() {
+    if reached.is_empty() && !slice.is_retiring() {
         reached.extend(stems.iter().cloned());
     }
     reached

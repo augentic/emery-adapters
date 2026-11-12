@@ -26,6 +26,7 @@ use self::reference::{Idiom, Role, Rules};
 use self::stem::{Kind, Stem, lines_of};
 pub use self::types::DesignKey;
 use crate::change::{Change, TouchPoint};
+use crate::syntax::ExportedFn;
 use crate::{layout, syntax};
 
 // A slice's skeleton as read against the tree and not yet written: each
@@ -49,9 +50,12 @@ pub struct Plan {
     // slice falls under it.
     gate: Option<Gate>,
     rules: Rules,
-    exports: Vec<Export>,
+    exports: Vec<ExportedFn>,
     skips: Vec<Skip>,
     touch_points: Vec<TouchPoint>,
+    prior_exports: Vec<ExportedFn>,
+    rewritten_lists: BTreeMap<String, String>,
+    vanished_lines: BTreeSet<String>,
 }
 
 impl Plan {
@@ -111,6 +115,9 @@ impl Plan {
             write_whole(root, path, Standing::File, text.as_bytes())
                 .map_err(|err| server_error!("writing `{path}`: {err}"))?;
             written.push(path.to_owned());
+        }
+        for path in self.rewritten_lists.keys() {
+            push_unique(&mut written, path.clone());
         }
         let listing = layout::listing(root)?;
         Ok(Scaffold {
@@ -216,6 +223,9 @@ impl Scaffold {
             exports,
             skips,
             touch_points: change.touch_points().to_vec(),
+            prior_exports: change.prior_exports().to_vec(),
+            rewritten_lists: change.rewritten_lists().clone(),
+            vanished_lines: change.vanished_lines().clone(),
         })
     }
 
@@ -250,9 +260,14 @@ impl Scaffold {
                 keeps.entry(&line.path).or_default().extend(tokens);
             }
         }
+        for (path, text) in &self.plan.rewritten_lists {
+            keeps.entry(path.as_str()).or_default().extend(lines_of(text));
+        }
+        let vanished = &self.plan.vanished_lines;
         keeps
             .into_iter()
-            .map(|(path, tokens)| {
+            .map(|(path, mut tokens)| {
+                tokens.retain(|token| !vanished.contains(token));
                 Guarded::new(path, unique(tokens))
                     .with_markers(markers.remove(path).unwrap_or_default())
             })
@@ -402,7 +417,7 @@ impl<'s> Sorted<'s> {
             match plans.iter_mut().find(|plan| plan.stem.name == name) {
                 Some(plan) => plan.requirements.push(requirement),
                 None => plans.push(StemPlan {
-                    stem: Stem::new(&name, slice),
+                    stem: Stem::new(&name, slice, change.is_rewritten(&name)),
                     requirements: vec![requirement],
                     owned: Vec::new(),
                 }),
@@ -470,51 +485,22 @@ fn resolve_gate(
 // How many exported functions of other stems the brief lists.
 const MAX_EXPORTS: usize = 24;
 
-// A `pub fn` a stem already in the tree exports, which a slice of another
-// stem calls rather than writing again.
-struct Export {
-    // The function's path from the crate root, `customers::customers::authenticate`.
-    path: String,
-    file: String,
-    line: usize,
-    signature: String,
-    doc: Option<String>,
-}
-
 // The `pub fn`s the stem crates already in the tree export from their
 // modules, in crate and path order, up to `MAX_EXPORTS`: those of a stem
 // the slice lays are its own and left out, and a file `syn` refuses is
 // passed over, since the checks name it.
-fn exports(root: &Path, existing: &BTreeSet<String>, stems: &[Stem]) -> Result<Vec<Export>, Error> {
+fn exports(
+    root: &Path, existing: &BTreeSet<String>, stems: &[Stem],
+) -> Result<Vec<ExportedFn>, Error> {
     let mut exports = Vec::new();
     for dir in existing.iter().filter(|dir| layout::is_stem_crate(dir)) {
         if stems.iter().any(|stem| layout::crate_dir(&stem.name) == dir.as_str()) {
             continue;
         }
-        let stem = if dir == layout::crate_dir("common") { "common" } else { dir.as_str() };
-        let crate_ident = layout::package(stem).replace('-', "_");
-        for source in layout::sources(&root.join("crates").join(dir).join("src"))? {
-            let Some(module) = source.file_stem().and_then(|stem| stem.to_str()) else { continue };
-            if module == "lib" {
-                continue;
-            }
-            let text = layout::read(&source)?;
-            let Ok(file) = syntax::parse(&text) else { continue };
-            let relative = layout::relative(root, &source);
-            for exported in syntax::exported_fns(&file) {
-                if exported.name == "handlers" {
-                    continue;
-                }
-                exports.push(Export {
-                    path: format!("{crate_ident}::{module}::{}", exported.name),
-                    file: relative.clone(),
-                    line: exported.from,
-                    signature: syntax::signature(&text, &exported),
-                    doc: exported.doc,
-                });
-                if exports.len() == MAX_EXPORTS {
-                    return Ok(exports);
-                }
+        for exported in syntax::crate_exported_fns(root, dir)? {
+            exports.push(exported);
+            if exports.len() == MAX_EXPORTS {
+                return Ok(exports);
             }
         }
     }

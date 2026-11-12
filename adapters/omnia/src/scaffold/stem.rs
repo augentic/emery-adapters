@@ -32,6 +32,9 @@ pub struct Stem {
     // Whether the slice is a later serial slice (`index > 1`) of its part,
     // extending a held module and test file in place.
     serial: bool,
+    // Whether the stem's crate was removed and re-laid fresh by this change
+    // slice.
+    pub rewritten: bool,
     pub manifest: File,
     pub entry: File,
     pub module: File,
@@ -59,7 +62,7 @@ pub struct Stem {
 }
 
 impl Stem {
-    pub fn new(name: &str, slice: &Slice) -> Self {
+    pub fn new(name: &str, slice: &Slice, rewritten: bool) -> Self {
         let part = part_of(&slice.name, name);
         let doc = match slice.brief.first() {
             Some(paragraph) if !paragraph.trim().is_empty() => {
@@ -75,6 +78,7 @@ impl Stem {
             package: package(name),
             brief: slice.brief.join("\n"),
             serial: slice.index > 1,
+            rewritten,
             manifest: File::at(format!("{root}/Cargo.toml")),
             entry: File::at(format!("{root}/src/lib.rs")),
             module: File::at(format!("{root}/src/{part}.rs")),
