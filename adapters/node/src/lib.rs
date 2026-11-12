@@ -13,40 +13,35 @@ use std::path::Path;
 use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, TargetAdapter, Task};
 use emery_sdk::{Doc, Error, Model, server_error, tracing};
 
-const RULES: &[MergeRule] = &[
-    MergeRule::ours("package-lock.json"),
-    MergeRule::union("src/index.ts"),
-    MergeRule::union("**/index.ts"),
-];
-const NPM: Grant = Grant {
-    egress: &["registry.npmjs.org"],
-    read: &[],
-    env: &[],
-};
-const NVM: Grant = Grant {
-    egress: &[],
-    read: &["~/.nvm/versions/node"],
-    env: &[],
-};
-const VOLTA: Grant = Grant {
-    egress: &[],
-    read: &["~/.volta"],
-    env: &[("VOLTA_HOME", "~/.volta")],
-};
-const FNM: Grant = Grant {
-    egress: &[],
-    read: &["~/.local/share/fnm"],
-    env: &[],
-};
-
 /// The adapter implementation.
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
     fn metadata() -> Metadata {
+        let npm = Grant {
+            egress: vec!["registry.npmjs.org".into()],
+            ..Grant::default()
+        };
+        let nvm = Grant {
+            read: vec!["~/.nvm/versions/node".into()],
+            ..Grant::default()
+        };
+        let volta = Grant {
+            read: vec!["~/.volta".into()],
+            env: vec![("VOLTA_HOME".into(), "~/.volta".into())],
+            ..Grant::default()
+        };
+        let fnm = Grant {
+            read: vec!["~/.local/share/fnm".into()],
+            ..Grant::default()
+        };
         Metadata {
-            rules: RULES,
-            grants: &[NPM, NVM, VOLTA, FNM],
+            rules: vec![
+                MergeRule::ours("package-lock.json"),
+                MergeRule::union("src/index.ts"),
+                MergeRule::union("**/index.ts"),
+            ],
+            grants: vec![npm, nvm, volta, fnm],
             budget: NonZeroU32::new(12),
         }
     }
@@ -54,6 +49,7 @@ impl TargetAdapter for Adapter {
     async fn run<P: Model>(task: Task<'_, P>) -> Result<Outcome, Error> {
         match task {
             Task::Init(ctx) => init(ctx.workspace).map(|()| Outcome::Initialised),
+            Task::Scope(ctx) => Ok(Outcome::Scoped(target::scope::conservative(ctx.change))),
             Task::Build(ctx) => {
                 target::build(&ctx, PROSE, |_| Ok(Vec::new())).await.map(Outcome::Built)
             }

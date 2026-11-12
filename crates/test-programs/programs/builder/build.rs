@@ -6,7 +6,9 @@ use std::path::Path;
 
 use emery_sdk::target::capability::{Target, Task};
 use emery_sdk::target::{
-    DesignType, MergeRule, MergeStrategy, Outcome, Report, Requirement, Scenario, Slice, Verdict,
+    Change, Departure, DesignType, MergeRule, MergeStrategy, Outcome, PartReach, Report,
+    Requirement, Scenario, SectionChange, Slice, SliceChange, Standing as RequirementStanding,
+    TypeChange, Verdict,
 };
 use emery_sdk::{Standing, Trigger, standing};
 use test_programs::{ADAPTER, Caller, WORKSPACE, arguments, check_version};
@@ -60,6 +62,29 @@ async fn scenario() {
             };
             check_verdict(&verdict);
         }
+        ["scope", expected @ ..] => {
+            let change = change();
+            let outcome = run(&Task::Scope(change.clone())).await;
+            let Outcome::Scoped(scoped) = outcome else {
+                panic!("a scope answers scoped parts, not {outcome}");
+            };
+            let findings = change.findings(&scoped);
+            assert!(findings.is_empty(), "scope gate findings:\n{}", findings.join("\n"));
+            assert_eq!(scoped, expected, "the scoped parts the adapter answered");
+
+            assert_eq!(
+                run(&Task::Init).await,
+                Outcome::Initialised,
+                "an init answers an initialised tree"
+            );
+
+            let slice = changed_slice();
+            let outcome = run(&Task::Build(slice.clone())).await;
+            let Outcome::Built(report) = outcome else {
+                panic!("a build answers a report, not {outcome}");
+            };
+            check_report(&report, &slice);
+        }
         ["metadata", expected @ ..] => {
             let declared: Vec<String> = metadata
                 .budget
@@ -73,7 +98,10 @@ async fn scenario() {
             );
         }
         other => {
-            panic!("no argument or `metadata [budget=<n>] <glob>=<strategy>..`; got {other:?}")
+            panic!(
+                "no argument, `serial`, `scope <part>..`, or `metadata [budget=<n>] \
+                 <glob>=<strategy>..`; got {other:?}"
+            )
         }
     }
 }
@@ -116,38 +144,119 @@ fn format_rule(rule: &MergeRule) -> String {
 // statement does not spell.
 fn slice() -> Slice {
     Slice {
-        id: "SLICE-001".to_owned(),
-        part: "PART-001".to_owned(),
-        name: "orders".to_owned(),
+        id: "SLICE-001".into(),
+        part: "PART-001".into(),
+        name: "orders".into(),
         index: 1,
         count: 1,
-        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        base: "0123456789abcdef0123456789abcdef01234567".into(),
         requirements: vec![Requirement {
-            id: "REQ-001".to_owned(),
-            subject: "orders.create".to_owned(),
-            statement: vec!["Creates an order from at least one item in the body.".to_owned()],
+            id: "REQ-001".into(),
+            subject: "orders.create".into(),
+            statement: vec!["Creates an order from at least one item in the body.".into()],
             scenarios: vec![Scenario {
-                name: "An order is created".to_owned(),
-                given: vec!["an item".to_owned()],
-                when: "an order is placed with it".to_owned(),
-                then: "the order is answered".to_owned(),
+                name: "An order is created".into(),
+                given: vec!["an item".into()],
+                when: "an order is placed with it".into(),
+                then: "the order is answered".into(),
                 and: Vec::new(),
             }],
             trigger: Some(Trigger::http("POST /orders").expect("valid route")),
         }],
         types: vec![DesignType {
-            key: "orders.Order".to_owned(),
-            signature: "interface Order { id: string; items: string[] }".to_owned(),
+            key: "orders.Order".into(),
+            signature: "interface Order { id: string; items: string[] }".into(),
         }],
-        brief: vec!["Create an order from its items.".to_owned()],
+        brief: vec!["Create an order from its items.".into()],
         spec: "# Specification\n\n## Requirement: orders.create\n\nID: REQ-001\n\nPOST /orders \
                creates an order from at least one item in the body.\n"
-            .to_owned(),
-        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
+            .into(),
+        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".into(),
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001\nTypes: orders.Order\n\
                Depends on: none\n"
-            .to_owned(),
+            .into(),
+        change: None,
     }
+}
+
+fn change() -> Change {
+    Change {
+        built: "rev-001".into(),
+        commit: "0123456789abcdef0123456789abcdef01234567".into(),
+        parts: vec![
+            PartReach {
+                id: "PART-001".into(),
+                name: "orders".into(),
+                requirements: vec!["REQ-001".into()],
+                reasons: vec!["requirements".into()],
+            },
+            PartReach {
+                id: "PART-002".into(),
+                name: "customers".into(),
+                requirements: vec!["REQ-002".into()],
+                reasons: Vec::new(),
+            },
+        ],
+        retired: vec![Departure {
+            requirement: Requirement {
+                id: "REQ-003".into(),
+                subject: "orders.cancel".into(),
+                statement: vec!["Cancels an order.".into()],
+                scenarios: Vec::new(),
+                trigger: None,
+            },
+            moved_to: None,
+        }],
+        types: vec![TypeChange {
+            key: "orders.Order".into(),
+            before: Some("interface Order { id: string }".into()),
+            after: Some("interface Order { id: string; items: string[] }".into()),
+        }],
+        sections: vec![SectionChange {
+            kind: "apis".into(),
+            before: Some("Inbound HTTP: POST /orders.".into()),
+            after: Some("Inbound HTTP: POST /orders (v2).".into()),
+        }],
+    }
+}
+
+fn changed_slice() -> Slice {
+    let mut slice = slice();
+    slice.change = Some(SliceChange {
+        built: "rev-001".into(),
+        commit: "0123456789abcdef0123456789abcdef01234567".into(),
+        standing: vec![RequirementStanding::Changed],
+        prior: vec![Requirement {
+            id: "REQ-001".into(),
+            subject: "orders.create".into(),
+            statement: vec!["Creates an order.".into()],
+            scenarios: Vec::new(),
+            trigger: Some(Trigger::http("POST /orders").expect("valid route")),
+        }],
+        departed: vec![Departure {
+            requirement: Requirement {
+                id: "REQ-003".into(),
+                subject: "orders.cancel".into(),
+                statement: vec!["Cancels an order.".into()],
+                scenarios: Vec::new(),
+                trigger: None,
+            },
+            moved_to: Some("PART-002".into()),
+        }],
+        built_before: Vec::new(),
+        vanished: vec!["legacy".into()],
+        types: vec![TypeChange {
+            key: "orders.Order".into(),
+            before: Some("interface Order { id: string }".into()),
+            after: Some("interface Order { id: string; items: string[] }".into()),
+        }],
+        sections: vec![SectionChange {
+            kind: "apis".into(),
+            before: Some("Inbound HTTP: POST /orders.".into()),
+            after: Some("Inbound HTTP: POST /orders (v2).".into()),
+        }],
+    });
+    slice
 }
 
 fn first_serial_slice() -> Slice {
@@ -158,33 +267,34 @@ fn first_serial_slice() -> Slice {
 
 fn second_serial_slice() -> Slice {
     Slice {
-        id: "SLICE-002".to_owned(),
-        part: "PART-001".to_owned(),
-        name: "orders".to_owned(),
+        id: "SLICE-002".into(),
+        part: "PART-001".into(),
+        name: "orders".into(),
         index: 2,
         count: 2,
-        base: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        base: "0123456789abcdef0123456789abcdef01234567".into(),
         requirements: vec![Requirement {
-            id: "REQ-002".to_owned(),
-            subject: "orders.read".to_owned(),
-            statement: vec!["Reads an order by its id.".to_owned()],
+            id: "REQ-002".into(),
+            subject: "orders.read".into(),
+            statement: vec!["Reads an order by its id.".into()],
             scenarios: vec![Scenario {
-                name: "An order is read".to_owned(),
-                given: vec!["an order 42".to_owned()],
-                when: "GET /orders/42 is called".to_owned(),
-                then: "the order is answered".to_owned(),
+                name: "An order is read".into(),
+                given: vec!["an order 42".into()],
+                when: "GET /orders/42 is called".into(),
+                then: "the order is answered".into(),
                 and: Vec::new(),
             }],
             trigger: Some(Trigger::http("GET /orders/{id}").expect("valid route")),
         }],
         types: Vec::new(),
-        brief: vec!["Create and read an order.".to_owned()],
+        brief: vec!["Create and read an order.".into()],
         spec: "# Specification\n\n## Requirement: orders.read\n\nID: REQ-002\n\nGET /orders/{id} \
                reads an order by its id.\n"
-            .to_owned(),
-        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".to_owned(),
+            .into(),
+        design: "# Design\n\n## Type: orders.Order\n\nAn id and its items.\n".into(),
         plan: "## Part: orders\n\nID: PART-001\nRequirements: REQ-001, REQ-002\nTypes: \
                orders.Order\nDepends on: none\n"
-            .to_owned(),
+            .into(),
+        change: None,
     }
 }

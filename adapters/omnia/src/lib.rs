@@ -20,33 +20,30 @@ use emery_sdk::{Error, Model, tracing};
 use self::scaffold::Scaffold;
 use self::tree::Tree;
 
-const RULES: &[MergeRule] = &[
-    MergeRule::ours("Cargo.lock"),
-    MergeRule::union("Cargo.toml"),
-    MergeRule::union("src/lib.rs"),
-    MergeRule::union("crates/common/src/topic.rs"),
-    MergeRule::union("crates/*/Cargo.toml"),
-    MergeRule::union("crates/*/src/lib.rs"),
-];
-const CARGO: Grant = Grant {
-    egress: &["index.crates.io", "static.crates.io", "github.com"],
-    read: &[],
-    env: &[],
-};
-const RUSTUP: Grant = Grant {
-    egress: &[],
-    read: &["~/.rustup", "~/.cargo/bin"],
-    env: &[("RUSTUP_HOME", "~/.rustup")],
-};
-
 /// The adapter implementation.
 pub struct Adapter;
 
 impl TargetAdapter for Adapter {
     fn metadata() -> Metadata {
+        let cargo = Grant {
+            egress: vec!["index.crates.io".into(), "static.crates.io".into(), "github.com".into()],
+            ..Grant::default()
+        };
+        let rustup = Grant {
+            read: vec!["~/.rustup".into(), "~/.cargo/bin".into()],
+            env: vec![("RUSTUP_HOME".into(), "~/.rustup".into())],
+            ..Grant::default()
+        };
         Metadata {
-            rules: RULES,
-            grants: &[CARGO, RUSTUP],
+            rules: vec![
+                MergeRule::ours("Cargo.lock"),
+                MergeRule::union("Cargo.toml"),
+                MergeRule::union("src/lib.rs"),
+                MergeRule::union("crates/common/src/topic.rs"),
+                MergeRule::union("crates/*/Cargo.toml"),
+                MergeRule::union("crates/*/src/lib.rs"),
+            ],
+            grants: vec![cargo, rustup],
             budget: NonZeroU32::new(12),
         }
     }
@@ -59,6 +56,7 @@ impl TargetAdapter for Adapter {
                 tracing::info!(scaffolded = scaffolded.len(), "scaffolded the guest template");
                 Ok(Outcome::Initialised)
             }
+            Task::Scope(ctx) => Ok(Outcome::Scoped(target::scope::conservative(ctx.change))),
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
                 let plan = Scaffold::plan(ctx.slice, root)?;

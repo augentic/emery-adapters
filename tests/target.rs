@@ -8,8 +8,8 @@ use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use emery_sdk::target::{
-    BuildContext, DesignType, Grant, InitContext, Outcome, Report, Requirement, Scenario, Slice,
-    TargetAdapter, Task, Verdict, VerifyContext,
+    BuildContext, Change, DesignType, Grant, InitContext, Outcome, PartReach, Report, Requirement,
+    Scenario, ScopeContext, SectionChange, Slice, TargetAdapter, Task, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
@@ -316,6 +316,20 @@ impl<A: TargetAdapter> Shipped<A> {
         }
     }
 
+    // One scope of `change` over `project`, as the component's export puts it
+    // before any slice of a change build runs.
+    async fn scoped(&self, project: &Scratch, change: &Change) -> Result<Vec<String>, Error> {
+        let ctx = ScopeContext {
+            adapter_id: self.name,
+            workspace: root(project),
+            change,
+        };
+        match A::run(Task::<ScriptedModel>::Scope(ctx)).await? {
+            Outcome::Scoped(parts) => Ok(parts),
+            outcome => panic!("a scope answers part ids, not {outcome}"),
+        }
+    }
+
     // One build of the slice into `project`, as the component's export puts it.
     async fn build(&self, project: &Scratch, model: &ScriptedModel) -> Result<Report, Error> {
         self.build_slice(project, model, &slice()).await
@@ -325,11 +339,12 @@ impl<A: TargetAdapter> Shipped<A> {
     async fn build_slice(
         &self, project: &Scratch, model: &ScriptedModel, slice: &Slice,
     ) -> Result<Report, Error> {
+        let metadata = A::metadata();
         let ctx = BuildContext {
             adapter_id: self.name,
             slice,
             workspace: root(project),
-            grants: A::metadata().grants,
+            grants: &metadata.grants,
             model,
             scaffold: None,
         };
@@ -341,10 +356,11 @@ impl<A: TargetAdapter> Shipped<A> {
 
     // One verification of `project`, as the component's export puts it.
     async fn verify(&self, project: &Scratch, model: &ScriptedModel) -> Result<Verdict, Error> {
+        let metadata = A::metadata();
         let ctx = VerifyContext {
             adapter_id: self.name,
             workspace: root(project),
-            grants: A::metadata().grants,
+            grants: &metadata.grants,
             model,
         };
         match A::run(Task::Verify(ctx)).await? {
@@ -355,7 +371,7 @@ impl<A: TargetAdapter> Shipped<A> {
 
     // The grant the adapter's `grants` put on a turn, as the script records it.
     fn granted() -> Option<SeenWorker> {
-        Grant::union(A::metadata().grants).map(SeenWorker::from)
+        Grant::union(&A::metadata().grants).map(SeenWorker::from)
     }
 
     // The prompt at `path` as this build compiled it in.
@@ -583,6 +599,7 @@ fn slice_for(name: &str, subjects: &[&str]) -> Slice {
         requirements,
         types: Vec::new(),
         brief: Vec::new(),
+        change: None,
     }
 }
 
@@ -779,6 +796,40 @@ async fn node_init() {
     assert_eq!(
         files_under(project.path()),
         ["package.json", "tsconfig.json"].map(str::to_owned).into()
+    );
+}
+
+#[tokio::test]
+async fn node_scope() {
+    let project = scratch();
+    let mut change = Change {
+        parts: vec![
+            PartReach {
+                id: "PART-001".into(),
+                name: "orders".into(),
+                requirements: vec!["REQ-001".into()],
+                reasons: vec!["requirements".into()],
+            },
+            PartReach {
+                id: "PART-002".into(),
+                name: "customers".into(),
+                requirements: vec!["REQ-002".into()],
+                reasons: Vec::new(),
+            },
+        ],
+        ..Change::default()
+    };
+
+    assert_eq!(NODE.scoped(&project, &change).await.expect("conservative scope"), ["PART-001"]);
+
+    change.sections.push(SectionChange {
+        kind: "apis".into(),
+        before: Some("Before.".into()),
+        after: Some("After.".into()),
+    });
+    assert_eq!(
+        NODE.scoped(&project, &change).await.expect("widened scope"),
+        ["PART-001", "PART-002"]
     );
 }
 

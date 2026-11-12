@@ -63,7 +63,7 @@ Located under `adapters/{documentation,intent,typescript,python}` (crate name `e
 
 Located under `adapters/{node,omnia}` (crate name `emery-<kind>`):
 
-- `src/lib.rs`: Declares merge rules (`RULES`), worker sandbox grants (`Grant`), `pub struct Adapter` implementing `emery_sdk::target::TargetAdapter` (`metadata` and `run` over `Task::Init`, `Task::Build`, and `Task::Verify`), `pub static PROSE`, and `emery_sdk::export_target!(Adapter)` on `wasm32`.
+- `src/lib.rs`: Declares `pub struct Adapter` implementing `emery_sdk::target::TargetAdapter` (`metadata` with merge rules, worker sandbox grants, and default slice budget, and `run` over `Task::Init`, `Task::Scope`, `Task::Build`, and `Task::Verify`), `pub static PROSE`, and `emery_sdk::export_target!(Adapter)` on `wasm32`.
 - Scaffolding and syntax checks (`omnia`): `adapters/omnia` scaffolds the workspace template from [`omnia-template`](https://github.com/augentic/omnia-exemplar) during `Task::Init`, generates per-slice Rust skeletons (`src/scaffold.rs`) before `Task::Build`, and validates the resulting syntax tree with `syn` (`src/tree.rs`) on every build and verify turn.
 - `prose/`: Embedded Markdown prompts (`build.md`, `verify.md`, and `references/`).
 

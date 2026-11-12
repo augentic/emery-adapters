@@ -87,8 +87,8 @@ fn led(request: &Seen, docs: &[Doc], prompt: &str) {
 // its turns, as the host records it.
 fn granted<A: TargetAdapter>(seen: &[Seen]) {
     let grants = A::metadata().grants;
-    assert_eq!(Grant::findings(grants), Vec::<String>::new());
-    let grant = Grant::union(grants).map(SeenWorker::from);
+    assert_eq!(Grant::findings(&grants), Vec::<String>::new());
+    let grant = Grant::union(&grants).map(SeenWorker::from);
     assert!(grant.is_some(), "the shipped target spells what its worker reaches");
     for request in seen {
         assert_eq!(request.worker, grant, "the turn carries the adapter's worker grant");
@@ -98,11 +98,12 @@ fn granted<A: TargetAdapter>(seen: &[Seen]) {
 // Every file the template scaffolds as a list is union-merged; static seed
 // files are not; the glob rules are a stem's manifest and its entry.
 fn omnia_union_rules_follow_template() {
-    let union: Vec<&str> = emery_omnia::Adapter::metadata()
+    let metadata = emery_omnia::Adapter::metadata();
+    let union: Vec<&str> = metadata
         .rules
         .iter()
         .filter(|rule| rule.strategy == MergeStrategy::Union)
-        .map(|rule| rule.paths.as_ref())
+        .map(|rule| rule.paths.as_str())
         .collect();
     let listed: BTreeSet<&str> = omnia_template::ENTRIES
         .iter()
@@ -469,4 +470,71 @@ async fn emery_omnia_serial() {
         assert!(tests.contains(carried), "the extended test file carries `{carried}`: {tests}");
     }
     assert!(!tests.contains("#[ignore"), "both scenario tests are filled: {tests}");
+}
+
+fn assert_change_lifted(brief: &str) {
+    for carried in [
+        "## The change\n\nBuilt revision: `rev-001` at commit \
+         `0123456789abcdef0123456789abcdef01234567`.",
+        "- `REQ-001` `orders.create` [changed]",
+        "  - Prior: Creates an order.",
+        "  - Current: Creates an order from at least one item in the body.",
+        "- `REQ-003` `orders.cancel` [moved to `PART-002`]: Cancels an order.",
+        "Vanished stems: `legacy`.",
+        "Type `orders.Order` [changed]:",
+        "Section `apis` [changed]:",
+    ] {
+        assert!(brief.contains(carried), "the lifted slice change carries `{carried}`: {brief}");
+    }
+}
+
+// `Task::Scope` lifts `Change` across the world and lowers `Outcome::Scoped`;
+// `Task::Build` lifts `SliceChange` on the slice and renders `## The change`
+// in the turn's brief.
+#[tokio::test]
+async fn emery_node_scope() {
+    let project = scratch();
+    let written = serde_json::json!({ "files": [
+        { "path": "src/orders/index.ts", "content": "export function createOrder() {}\n" },
+        { "path": "src/index.ts", "content": "export * as orders from \"./orders/index.ts\";\n" },
+    ]})
+    .to_string();
+    let model = ScriptedModel::answering([REPORT]).calling(0, [("write_files", written)]);
+
+    let model = support::build(
+        test_programs::TARGET_EMERY_NODE,
+        &project,
+        &["scope", "PART-001", "PART-002"],
+        model,
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "the scope and init open no turn; the build opens one");
+    assert_change_lifted(&seen[0].messages[0]);
+}
+
+#[tokio::test]
+async fn emery_omnia_scope() {
+    let project = scratch();
+    let edits = serde_json::json!({ "edits": [
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_HANDLER_MARKER, "replace": OMNIA_HANDLER_FILLED },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
+        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
+        { "path": "crates/orders/tests/orders.rs", "find": OMNIA_TEST_MARKER, "replace": OMNIA_TEST_FILLED },
+    ]})
+    .to_string();
+    let model = ScriptedModel::answering([OMNIA_REPORT]).calling(0, [("edit_files", edits)]);
+
+    let model = support::build(
+        test_programs::TARGET_EMERY_OMNIA,
+        &project,
+        &["scope", "PART-001", "PART-002"],
+        model,
+    )
+    .await;
+
+    let seen = model.seen();
+    assert_eq!(seen.len(), 1, "the scope and init open no turn; the build opens one");
+    assert_change_lifted(&seen[0].messages[0]);
 }
