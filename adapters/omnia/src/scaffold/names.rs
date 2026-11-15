@@ -40,8 +40,7 @@ pub fn pascal(text: &str) -> String {
             let mut chars = word.chars();
             chars
                 .next()
-                .map(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
-                .unwrap_or_default()
+                .map_or_default(|first| first.to_ascii_uppercase().to_string() + chars.as_str())
         })
         .collect();
     if name.starts_with(|ch: char| ch.is_ascii_digit()) {

@@ -2,24 +2,70 @@
 //! mention one of those crates.
 
 use std::collections::BTreeSet;
-
-use syn::{Item, UseTree};
+use std::fmt;
 
 use crate::layout::{self, Toml};
-use crate::syntax::{self, Mentions};
+use crate::syntax::{self, ItemHead};
 use crate::tree::Tree;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TouchKind {
+    Use,
+    Item(String),
+    Dependency(String),
+}
+
+impl fmt::Display for TouchKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Use => f.write_str("use"),
+            Self::Item(name) => f.write_str(name),
+            Self::Dependency(package) => write!(f, "dependency {package}"),
+        }
+    }
+}
+
+impl From<ItemHead> for TouchKind {
+    fn from(head: ItemHead) -> Self {
+        match head {
+            ItemHead::Use => Self::Use,
+            ItemHead::Named(name) => Self::Item(name),
+        }
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TouchPoint {
     pub file: String,
-    pub item: String,
+    pub kind: TouchKind,
     pub line: usize,
+}
+
+impl TouchPoint {
+    pub fn names_dependency(&self, names: &BTreeSet<String>) -> bool {
+        matches!(&self.kind, TouchKind::Dependency(package) if names.contains(package))
+    }
+
+    pub fn admits_item(points: &[Self], head: &ItemHead) -> bool {
+        match head {
+            ItemHead::Use => !points.is_empty(),
+            ItemHead::Named(name) => points
+                .iter()
+                .any(|point| matches!(&point.kind, TouchKind::Item(item) if item == name)),
+        }
+    }
+
+    pub fn admits_dependency(points: &[Self], package: &str) -> bool {
+        points
+            .iter()
+            .any(|point| matches!(&point.kind, TouchKind::Dependency(name) if name == package))
+    }
 }
 
 pub struct TouchPoints;
 
 impl TouchPoints {
-    pub fn read(tree: &Tree<'_>, stems: &[String]) -> Vec<TouchPoint> {
+    pub fn read(tree: &Tree, stems: &[String]) -> Vec<TouchPoint> {
         if stems.is_empty() {
             return Vec::new();
         }
@@ -34,12 +80,12 @@ impl TouchPoints {
                 continue;
             }
             let file = format!("crates/{dir}/Cargo.toml");
-            for (line, name) in Toml::read(manifest).dependencies() {
-                if packages.contains(name) || dirs.contains(name) {
+            for dep in Toml::read(manifest).dependencies() {
+                if packages.contains(&dep.package) || dirs.contains(&dep.package) {
                     points.push(TouchPoint {
                         file: file.clone(),
-                        item: format!("dependency {name}"),
-                        line,
+                        kind: TouchKind::Dependency(dep.package),
+                        line: dep.line,
                     });
                 }
             }
@@ -50,66 +96,14 @@ impl TouchPoints {
                 continue;
             }
             let Some(file) = module.file() else { continue };
-            let imported = imported_symbols(file, &idents);
-            for item in &file.items {
-                let Some((line, head)) = item_touch(item, &idents, &imported) else { continue };
+            for declared in syntax::items_mentioning(file, |ident| idents.contains(ident)) {
                 points.push(TouchPoint {
                     file: module.path.clone(),
-                    item: head,
-                    line,
+                    kind: TouchKind::from(declared.head),
+                    line: declared.line,
                 });
             }
         }
         points
-    }
-}
-
-fn imported_symbols(file: &syn::File, idents: &BTreeSet<String>) -> BTreeSet<String> {
-    let mut symbols = BTreeSet::new();
-    for item in &file.items {
-        if let Item::Use(item) = item {
-            collect_imported(&item.tree, false, idents, &mut symbols);
-        }
-    }
-    symbols
-}
-
-fn collect_imported(
-    tree: &UseTree, under_target: bool, idents: &BTreeSet<String>, symbols: &mut BTreeSet<String>,
-) {
-    match tree {
-        UseTree::Path(path) => {
-            if under_target || idents.contains(&path.ident.to_string()) {
-                collect_imported(&path.tree, true, idents, symbols);
-            }
-        }
-        UseTree::Name(name) if under_target => {
-            symbols.insert(name.ident.to_string());
-        }
-        UseTree::Rename(rename) if under_target => {
-            symbols.insert(rename.rename.to_string());
-        }
-        UseTree::Group(group) => {
-            for item in &group.items {
-                collect_imported(item, under_target, idents, symbols);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn item_touch(
-    item: &Item, idents: &BTreeSet<String>, imported: &BTreeSet<String>,
-) -> Option<(usize, String)> {
-    let mentions = Mentions::of_item(item);
-    let touches = idents.iter().any(|ident| mentions.path_leads(ident))
-        || (!matches!(item, Item::Use(_))
-            && imported.iter().any(|symbol| mentions.contains(symbol)));
-    if !touches {
-        return None;
-    }
-    match item {
-        Item::Use(item) => Some((syntax::line(item.use_token.span), "use".to_owned())),
-        _ => syntax::item_head(item),
     }
 }

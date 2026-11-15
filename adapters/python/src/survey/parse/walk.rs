@@ -364,17 +364,13 @@ impl<'s> Walker<'s> {
         let name = class.name.to_string();
         let range = class.range();
         let lines = self.lines(range);
-        let bases: Vec<String> = class
-            .arguments
-            .as_deref()
-            .map(|arguments| {
-                arguments
-                    .args
-                    .iter()
-                    .filter_map(|base| head_path(base).and_then(|mut path| path.pop()))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let bases: Vec<String> = class.arguments.as_deref().map_or_default(|arguments| {
+            arguments
+                .args
+                .iter()
+                .filter_map(|base| head_path(base).and_then(|mut path| path.pop()))
+                .collect()
+        });
 
         let header_start = class
             .decorator_list

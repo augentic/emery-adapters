@@ -41,7 +41,7 @@ const DEFAULTED_WITH: &[(&[&str], &str)] = &[
     (&["Default", "default"], ".unwrap_or_else(Default::default)"),
 ];
 
-impl Tree<'_> {
+impl Tree {
     pub fn empty_misses(&self) -> Option<String> {
         let mut lines: Vec<String> = self.modules.iter().flat_map(Module::empty_misses).collect();
         if lines.is_empty() {

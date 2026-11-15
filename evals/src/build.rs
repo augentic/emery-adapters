@@ -226,7 +226,7 @@ pub fn resumed(
     )
     .ok()
     .and_then(|stdout| serde_json::from_str::<Value>(&stdout).ok());
-    let mut empty = envelope.as_ref().map(|out| empty_before(out, wave)).unwrap_or_default();
+    let mut empty = envelope.as_ref().map_or_default(|out| empty_before(out, wave));
     empty.retain(|slice| !slices.contains(&slice.id));
     for slice in empty.iter().skip(1) {
         let head = git(&repository, &["rev-parse", &format!("refs/heads/{label}")])?;
@@ -603,13 +603,9 @@ impl Build {
     // The waves whose verify changed the tree before it passed, as the
     // envelope lists them.
     pub fn repaired(&self) -> Vec<usize> {
-        self.envelope
-            .as_ref()
-            .and_then(|out| out["repaired"].as_array())
-            .map(|waves| {
-                waves.iter().filter_map(Value::as_u64).filter_map(|k| k.try_into().ok()).collect()
-            })
-            .unwrap_or_default()
+        self.envelope.as_ref().and_then(|out| out["repaired"].as_array()).map_or_default(|waves| {
+            waves.iter().filter_map(Value::as_u64).filter_map(|k| k.try_into().ok()).collect()
+        })
     }
 
     // What each wave's verify sealed besides the lockfile, by wave: the
@@ -799,36 +795,33 @@ impl Empty {
 pub fn empty_before(envelope: &Value, wave: usize) -> Vec<Empty> {
     let budget =
         envelope["budget"].as_u64().and_then(|budget| usize::try_from(budget).ok()).unwrap_or(12);
-    let mut empty: Vec<Empty> = envelope["slices"]
-        .as_array()
-        .map(|slices| {
-            slices
-                .iter()
-                .filter(|slice| slice["commit"].is_null())
-                .filter_map(|slice| {
-                    let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
-                    (landed < wave).then(|| {
-                        let id = slice["id"].as_str().unwrap_or("").to_owned();
-                        let part = slice["part"]
-                            .as_str()
-                            .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned);
-                        let covered = strings(&slice["covered"]);
-                        let mut requirements = covered.clone();
-                        requirements.extend(strings(&slice["uncovered"]));
-                        Empty {
-                            id,
-                            part,
-                            name: slice["name"].as_str().unwrap_or("").to_owned(),
-                            wave: landed,
-                            budget,
-                            requirements,
-                            covered,
-                        }
-                    })
+    let mut empty: Vec<Empty> = envelope["slices"].as_array().map_or_default(|slices| {
+        slices
+            .iter()
+            .filter(|slice| slice["commit"].is_null())
+            .filter_map(|slice| {
+                let landed: usize = slice["wave"].as_u64()?.try_into().ok()?;
+                (landed < wave).then(|| {
+                    let id = slice["id"].as_str().unwrap_or("").to_owned();
+                    let part = slice["part"]
+                        .as_str()
+                        .map_or_else(|| id.replace("SLICE-", "PART-"), str::to_owned);
+                    let covered = strings(&slice["covered"]);
+                    let mut requirements = covered.clone();
+                    requirements.extend(strings(&slice["uncovered"]));
+                    Empty {
+                        id,
+                        part,
+                        name: slice["name"].as_str().unwrap_or("").to_owned(),
+                        wave: landed,
+                        budget,
+                        requirements,
+                        covered,
+                    }
                 })
-                .collect()
-        })
-        .unwrap_or_default();
+            })
+            .collect()
+    });
     empty.sort_by(|a, b| (a.wave, &a.id).cmp(&(b.wave, &b.id)));
     empty
 }
@@ -955,8 +948,7 @@ impl WaveTurns<'_> {
 pub fn strings(value: &Value) -> Vec<String> {
     value
         .as_array()
-        .map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned).collect())
-        .unwrap_or_default()
+        .map_or_default(|items| items.iter().filter_map(Value::as_str).map(str::to_owned).collect())
 }
 
 // Reads `budget` and `budget-source` from the build envelope, or from the
@@ -1087,7 +1079,7 @@ fn log(at: &Path, tip: &str) -> Vec<Landed> {
                   %(trailers:key=Slice,valueonly)%x1f%(trailers:key=Wave,valueonly)%x1f\
                   %(trailers:key=Requirements,valueonly)%x1f%(trailers:key=Covered,valueonly)%x1f";
     let log = git(at, &["log", "--first-parent", "--name-only", format, tip]);
-    log.map(|text| chain(&text)).unwrap_or_default()
+    log.map_or_default(|text| chain(&text))
 }
 
 // The chain as `log` asks git to spell it: one record per commit led by

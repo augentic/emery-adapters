@@ -606,8 +606,7 @@ fn dev_dependency_additions(
         .get("workspace")
         .and_then(|workspace| workspace.get("dependencies"))
         .and_then(toml::Value::as_table)
-        .map(|table| table.keys().map(String::as_str).collect())
-        .unwrap_or_default();
+        .map_or_default(|table| table.keys().map(String::as_str).collect());
     let mut additions = String::new();
     for dependency in SHARED_DEPENDENCIES.iter().chain(extra) {
         if present.contains(dependency.name) {
@@ -643,10 +642,7 @@ fn package_dependency_names(manifest: &toml::Table) -> BTreeSet<String> {
 }
 
 fn table_keys(value: Option<&toml::Value>) -> BTreeSet<String> {
-    value
-        .and_then(toml::Value::as_table)
-        .map(|table| table.keys().cloned().collect())
-        .unwrap_or_default()
+    value.and_then(toml::Value::as_table).map_or_default(|table| table.keys().cloned().collect())
 }
 
 // What a guest's tree spells, measured alike on both sides: the crates

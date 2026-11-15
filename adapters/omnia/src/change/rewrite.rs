@@ -40,12 +40,7 @@ impl Change {
             }
         }
 
-        let vanished: Vec<String> = self
-            .stems
-            .iter()
-            .filter(|(_, status)| **status == StemChange::Vanished)
-            .map(|(stem, _)| stem.clone())
-            .collect();
+        let vanished: Vec<String> = self.vanished_stems().map(str::to_owned).collect();
         let list_edits = self.plan_vanished_lists(root, &vanished)?;
 
         for (stem, status) in &self.stems {
@@ -124,13 +119,8 @@ impl Change {
             if let Some(text) = read_file(root, &path)?
                 && let Some(next) = drop_lines(&text, |line| stem_deps.contains(line.trim()))
             {
-                self.touch_points.retain(|point| {
-                    !(point.file == path
-                        && point
-                            .item
-                            .strip_prefix("dependency ")
-                            .is_some_and(|name| stem_names.contains(name)))
-                });
+                self.touch_points
+                    .retain(|point| !(point.file == path && point.names_dependency(&stem_names)));
                 edits.push((path, next));
             }
         }

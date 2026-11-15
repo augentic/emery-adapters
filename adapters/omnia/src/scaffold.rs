@@ -12,6 +12,7 @@ pub mod trigger;
 mod types;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
 use std::path::Path;
 
 use emery_sdk::target::{DesignType, Guarded, Marker, Requirement, Slice};
@@ -56,6 +57,8 @@ pub struct Plan {
     prior_exports: Vec<ExportedFn>,
     rewritten_lists: BTreeMap<String, String>,
     vanished_lines: BTreeSet<String>,
+    vanished_packages: BTreeSet<String>,
+    is_change: bool,
 }
 
 impl Plan {
@@ -120,12 +123,49 @@ impl Plan {
             push_unique(&mut written, path.clone());
         }
         let listing = layout::listing(root)?;
+        let prior_files = if self.is_change {
+            Some(snapshot_prior_files(root, &self.stems, &self.touch_points)?)
+        } else {
+            None
+        };
         Ok(Scaffold {
             plan: self,
             written,
             listing,
+            prior_files,
         })
     }
+}
+
+// One file of a stem crate the slice does not lay, as it stood before the
+// turn, with the touch points the brief admitted in it.
+pub struct PriorFile {
+    pub bytes: Vec<u8>,
+    pub touch_points: Vec<TouchPoint>,
+}
+
+fn snapshot_prior_files(
+    root: &Path, stems: &[Stem], touch_points: &[TouchPoint],
+) -> Result<BTreeMap<String, PriorFile>, Error> {
+    let own: BTreeSet<&str> = stems.iter().map(|stem| stem.dir.as_str()).collect();
+    let mut points_by_file: BTreeMap<&str, Vec<TouchPoint>> = BTreeMap::new();
+    for point in touch_points {
+        points_by_file.entry(point.file.as_str()).or_default().push(point.clone());
+    }
+
+    let mut prior = BTreeMap::new();
+    for dir in layout::crates(root)? {
+        if !layout::is_stem_crate(&dir) || own.contains(dir.as_str()) {
+            continue;
+        }
+        for file in layout::files(&root.join("crates").join(&dir))? {
+            let path = layout::relative(root, &file);
+            let bytes = fs::read(&file).map_err(|err| server_error!("reading `{path}`: {err}"))?;
+            let touch_points = points_by_file.remove(path.as_str()).unwrap_or_default();
+            prior.insert(path, PriorFile { bytes, touch_points });
+        }
+    }
+    Ok(prior)
 }
 
 // Creates the file the plan found absent, its directories made one at a
@@ -157,6 +197,7 @@ pub struct Scaffold {
     plan: Plan,
     written: Vec<String>,
     listing: BTreeSet<String>,
+    prior_files: Option<BTreeMap<String, PriorFile>>,
 }
 
 impl Scaffold {
@@ -226,6 +267,8 @@ impl Scaffold {
             prior_exports: change.prior_exports().to_vec(),
             rewritten_lists: change.rewritten_lists().clone(),
             vanished_lines: change.vanished_lines().clone(),
+            vanished_packages: change.vanished_stems().map(layout::package).collect(),
+            is_change: slice.change.is_some(),
         })
     }
 
@@ -292,6 +335,14 @@ impl Scaffold {
     // stray.
     pub const fn listing(&self) -> &BTreeSet<String> {
         &self.listing
+    }
+
+    pub const fn prior_files(&self) -> Option<&BTreeMap<String, PriorFile>> {
+        self.prior_files.as_ref()
+    }
+
+    pub const fn vanished_packages(&self) -> &BTreeSet<String> {
+        &self.plan.vanished_packages
     }
 
     pub fn stems(&self) -> impl Iterator<Item = &str> {

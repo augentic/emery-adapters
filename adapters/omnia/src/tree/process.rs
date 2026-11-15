@@ -20,9 +20,9 @@ const LIFECYCLE_FNS: &[(&str, &str)] = &[
 
 const LIFECYCLE_TYPES: &[&str] = &["Main", "App", "Server", "Application"];
 
-impl Tree<'_> {
+impl Tree {
     pub fn simulated_process(&self) -> Result<Vec<String>, Error> {
-        let start = start_files(self.root)?;
+        let start = start_files(&self.root)?;
         let mut lifecycle = Vec::new();
         for module in &self.modules {
             let mut found = Lifecycle::default();

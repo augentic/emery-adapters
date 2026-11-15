@@ -715,7 +715,7 @@ fn router_tag(module: &Module, decorated: &Decorated) -> Option<String> {
 }
 
 fn spelled(decorated: &Decorated) -> String {
-    let argument = decorated.literal.as_ref().map(|l| format!("(\"{l}\")")).unwrap_or_default();
+    let argument = decorated.literal.as_ref().map_or_default(|l| format!("(\"{l}\")"));
     format!("{}{argument}", decorated.name.join("."))
 }
 
@@ -809,21 +809,18 @@ fn export_enclosing(module: &Module, lines: Lines) -> Option<&Export> {
 }
 
 fn methods(module: &Module, name: &str) -> Vec<(String, Lines)> {
-    module
-        .class(name)
-        .map(|class| {
-            class
-                .members
-                .iter()
-                .filter(|m| {
-                    !m.private
-                        && !parse::dunder(&m.name)
-                        && matches!(m.kind, MemberKind::Method | MemberKind::Getter)
-                })
-                .map(|m| (m.name.clone(), m.lines))
-                .collect()
-        })
-        .unwrap_or_default()
+    module.class(name).map_or_default(|class| {
+        class
+            .members
+            .iter()
+            .filter(|m| {
+                !m.private
+                    && !parse::dunder(&m.name)
+                    && matches!(m.kind, MemberKind::Method | MemberKind::Getter)
+            })
+            .map(|m| (m.name.clone(), m.lines))
+            .collect()
+    })
 }
 
 fn view_methods(module: &Module, name: &str) -> Vec<(String, Lines)> {

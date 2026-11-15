@@ -855,7 +855,7 @@ pub fn blocks(text: &str) -> Vec<&str> {
 // what the design says of the part whole.
 fn part_ids(slice: &Slice) -> BTreeSet<String> {
     let listed = slice.plan.lines().find_map(|line| line.strip_prefix("Requirements:"));
-    let mut ids: BTreeSet<String> = listed.map(cited).unwrap_or_default().into_iter().collect();
+    let mut ids: BTreeSet<String> = listed.map_or_default(cited).into_iter().collect();
     ids.extend(slice.requirements.iter().map(|requirement| requirement.id.clone()));
     ids
 }

@@ -39,12 +39,9 @@ impl Resolver {
             .and_then(|base| normalize("", base));
         if let Some(paths) = options.and_then(|o| o.get("paths")).and_then(Value::as_object) {
             for (pattern, targets) in paths {
-                let targets: Vec<String> = targets
-                    .as_array()
-                    .map(|targets| {
-                        targets.iter().filter_map(Value::as_str).map(str::to_owned).collect()
-                    })
-                    .unwrap_or_default();
+                let targets: Vec<String> = targets.as_array().map_or_default(|targets| {
+                    targets.iter().filter_map(Value::as_str).map(str::to_owned).collect()
+                });
                 resolver.paths.push((pattern.clone(), targets));
             }
         }
@@ -273,18 +270,12 @@ impl Manifest {
             Some(Value::Object(paths)) => paths.values().find_map(Value::as_str).map(str::to_owned),
             _ => None,
         };
-        let scripts = value
-            .get("scripts")
-            .and_then(Value::as_object)
-            .map(|scripts| {
-                scripts
-                    .iter()
-                    .filter_map(|(name, command)| {
-                        Some((name.clone(), command.as_str()?.to_owned()))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        let scripts = value.get("scripts").and_then(Value::as_object).map_or_default(|scripts| {
+            scripts
+                .iter()
+                .filter_map(|(name, command)| Some((name.clone(), command.as_str()?.to_owned())))
+                .collect()
+        });
         Self {
             name: value.get("name").and_then(Value::as_str).map(str::to_owned),
             main: value.get("main").and_then(Value::as_str).map(str::to_owned),

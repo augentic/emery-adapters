@@ -36,7 +36,7 @@ pub struct Change {
 }
 
 impl Change {
-    pub fn read(slice: &Slice, tree: &Tree<'_>) -> Self {
+    pub fn read(slice: &Slice, tree: &Tree) -> Self {
         let Some(change) = &slice.change else {
             return Self::default();
         };
@@ -95,6 +95,13 @@ impl Change {
 
     pub const fn is_retiring(&self) -> bool {
         self.is_retiring
+    }
+
+    pub fn vanished_stems(&self) -> impl Iterator<Item = &str> {
+        self.stems
+            .iter()
+            .filter(|(_, status)| **status == StemChange::Vanished)
+            .map(|(stem, _)| stem.as_str())
     }
 
     pub fn is_kept(&self, stem: &str) -> bool {
@@ -191,7 +198,7 @@ fn reached_stems(slice: &Slice, change: &SliceChange, stems: &[String]) -> BTree
 
 // The stems of `stems` that an earlier slice of this build already rebuilt,
 // identified by a `built_before` requirement id appearing in the stem's crate.
-fn built_before_stems(tree: &Tree<'_>, change: &SliceChange, stems: &[String]) -> BTreeSet<String> {
+fn built_before_stems(tree: &Tree, change: &SliceChange, stems: &[String]) -> BTreeSet<String> {
     if change.built_before.is_empty() {
         return BTreeSet::new();
     }

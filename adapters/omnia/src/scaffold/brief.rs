@@ -327,7 +327,7 @@ impl Scaffold {
                  vanished crate, the only items outside those crates this turn may edit:\n\n",
             );
             for point in &self.plan.touch_points {
-                let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.item);
+                let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.kind);
             }
             text.push('\n');
         }

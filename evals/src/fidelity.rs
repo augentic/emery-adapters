@@ -651,10 +651,8 @@ impl Fidelity {
         // the tests the tree declares, against the covered scenarios
         let names = target.test_names(&export)?;
         let integrated = build.integrated();
-        let requirements = spec
-            .and_then(|spec| spec["requirements"].as_array())
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+        let requirements =
+            spec.and_then(|spec| spec["requirements"].as_array()).map_or_default(Vec::as_slice);
         let scenarios = scenarios_of(requirements, &integrated, &names);
 
         // the modules the lists do not reach, the routes they mount, the
@@ -941,7 +939,7 @@ pub fn scenarios_of(
             continue;
         }
         let stem = requirement["subject"].as_str().and_then(stem).unwrap_or("").to_owned();
-        let listed = requirement["scenarios"].as_array().map(Vec::as_slice).unwrap_or_default();
+        let listed = requirement["scenarios"].as_array().map_or_default(Vec::as_slice);
         for scenario in listed {
             scenarios.push(Scenario {
                 stem: stem.clone(),

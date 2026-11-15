@@ -6876,56 +6876,25 @@ async fn omnia_unwired_handler() {
 #[tokio::test]
 async fn omnia_change_kept() {
     let project = omnia_tree().await;
-    project.write(
-        "crates/customers/Cargo.toml",
-        format!(
-            "{}orders = {{ path = \"../orders\" }}\n",
-            OMNIA_MANIFEST.replace("orders", "customers")
-        ),
-    );
-    project.write("crates/customers/src/lib.rs", OMNIA_ENTRY.replace("orders", "customers"));
     let kept_module = "//! Kept customers.\n\nuse orders::reading::check;\n\npub fn verify() {\n    check();\n}\n";
-    project.write("crates/customers/src/reading.rs", kept_module);
-    project.write(
-        "Cargo.toml",
-        omnia_seed("Cargo.toml").replace(
-            OMNIA_PATH_CRATE_ANCHOR,
-            &format!("{OMNIA_PATH_CRATE_ANCHOR}customers = {{ path = \"crates/customers\" }}\n"),
-        ),
-    );
-    project.write(
-        "src/lib.rs",
-        omnia_seed("src/lib.rs").replace(
-            OMNIA_ROOT_ANCHOR,
-            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
-             the end\n        customers::handlers(),\n    ])\n    \
-             .with_state(Client::new(provider))\n",
-        ),
-    );
+    let customers = CustomersTree::plant(&project, kept_module);
 
-    let mut slice = slice_for("orders-reading", &["orders.check", "customers.verify"]);
-    slice.change = Some(SliceChange {
-        built: "rev-001".to_owned(),
-        commit: "abc1234".to_owned(),
-        standing: vec![Standing::Changed, Standing::Unchanged],
-        prior: vec![Requirement {
-            id: "REQ-001".to_owned(),
-            subject: "orders.check".to_owned(),
-            statement: vec!["Prior statement.".to_owned()],
-            scenarios: Vec::new(),
-            trigger: None,
-        }],
-        ..SliceChange::default()
-    });
-    let marker = "REQ-001 orders.check: the behaviour";
-    let filled = "pub fn check() -> Result<()> {\n    Ok(())\n}";
     let model = ScriptedModel::answering([
         r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#,
     ])
-    .calling(0, [edit_files(&[("crates/orders/src/reading.rs", marker, filled)])]);
+    .calling(
+        0,
+        [edit_files(&[(
+            "crates/orders/src/reading.rs",
+            &customers.orders_marker,
+            &customers.orders_filled,
+        )])],
+    );
 
-    let report =
-        OMNIA.build_slice(&project, &model, &slice).await.expect("change slice with kept stem");
+    let report = OMNIA
+        .build_slice(&project, &model, &customers.slice)
+        .await
+        .expect("change slice with kept stem");
     model.assert_exhausted();
 
     assert_eq!(
@@ -6950,6 +6919,68 @@ async fn omnia_change_kept() {
         "- `crates/customers/src/reading.rs:5`: `fn verify`",
     ] {
         assert!(brief.contains(touch), "the brief lists `{touch}`: {brief}");
+    }
+}
+
+// A `customers` crate already built over `orders`, with a change slice whose
+// `orders.check` changed and whose `customers.verify` stands unchanged so
+// `customers` is kept.
+struct CustomersTree {
+    slice: Slice,
+    orders_marker: String,
+    orders_filled: String,
+}
+
+impl CustomersTree {
+    fn plant(project: &Scratch, module: &str) -> Self {
+        project.write(
+            "crates/customers/Cargo.toml",
+            format!(
+                "{}orders = {{ path = \"../orders\" }}\n",
+                OMNIA_MANIFEST.replace("orders", "customers")
+            ),
+        );
+        project.write("crates/customers/src/lib.rs", OMNIA_ENTRY.replace("orders", "customers"));
+        project.write("crates/customers/src/reading.rs", module);
+        project.write(
+            "Cargo.toml",
+            omnia_seed("Cargo.toml").replace(
+                OMNIA_PATH_CRATE_ANCHOR,
+                &format!(
+                    "{OMNIA_PATH_CRATE_ANCHOR}customers = {{ path = \"crates/customers\" }}\n"
+                ),
+            ),
+        );
+        project.write(
+            "src/lib.rs",
+            omnia_seed("src/lib.rs").replace(
+                OMNIA_ROOT_ANCHOR,
+                "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added \
+                 at the end\n        customers::handlers(),\n    ])\n    \
+                 .with_state(Client::new(provider))\n",
+            ),
+        );
+
+        let mut slice = slice_for("orders-reading", &["orders.check", "customers.verify"]);
+        slice.change = Some(SliceChange {
+            built: "rev-001".to_owned(),
+            commit: "abc1234".to_owned(),
+            standing: vec![Standing::Changed, Standing::Unchanged],
+            prior: vec![Requirement {
+                id: "REQ-001".to_owned(),
+                subject: "orders.check".to_owned(),
+                statement: vec!["Prior statement.".to_owned()],
+                scenarios: Vec::new(),
+                trigger: None,
+            }],
+            ..SliceChange::default()
+        });
+
+        Self {
+            slice,
+            orders_marker: "REQ-001 orders.check: the behaviour".to_owned(),
+            orders_filled: "pub fn check() -> Result<()> {\n    Ok(())\n}".to_owned(),
+        }
     }
 }
 
@@ -7074,37 +7105,7 @@ async fn omnia_change_rewrite() {
 #[tokio::test]
 async fn omnia_change_vanished() {
     let project = omnia_tree().await;
-    project.write("crates/returns/Cargo.toml", OMNIA_MANIFEST.replace("orders", "returns"));
-    project.write("crates/returns/src/lib.rs", OMNIA_ENTRY.replace("orders", "returns"));
-    project.write("crates/returns/src/reading.rs", "pub fn refund() {}\n");
-    project.write(
-        "crates/orders/Cargo.toml",
-        format!("{OMNIA_MANIFEST}returns = {{ path = \"../returns\" }}\n"),
-    );
-    project.write("crates/orders/src/lib.rs", OMNIA_ENTRY);
-    project.write(
-        "crates/orders/src/reading.rs",
-        "//! Orders.\n\nuse returns::reading::refund;\n\npub fn check() {\n    refund();\n}\n",
-    );
-    project.write(
-        "Cargo.toml",
-        omnia_seed("Cargo.toml").replace(
-            OMNIA_PATH_CRATE_ANCHOR,
-            &format!(
-                "{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}returns = {{ path = \
-                 \"crates/returns\" }}\n"
-            ),
-        ),
-    );
-    project.write(
-        "src/lib.rs",
-        omnia_seed("src/lib.rs").replace(
-            OMNIA_ROOT_ANCHOR,
-            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
-             the end\n        orders::handlers(),\n        returns::handlers(),\n    ])\n    \
-             .with_state(Client::new(provider))\n",
-        ),
-    );
+    let returns = ReturnsTree::plant(&project);
 
     let slice = retiring_returns_slice();
     let root_without_returns = omnia_seed("Cargo.toml").replace(
@@ -7120,8 +7121,8 @@ async fn omnia_change_vanished() {
             write_files(&[("Cargo.toml", &root_without_returns)]),
             edit_files(&[(
                 "crates/orders/src/reading.rs",
-                "use returns::reading::refund;\n\npub fn check() {\n    refund();\n}",
-                "pub fn check() {}",
+                &returns.mentions,
+                &returns.replacement,
             )]),
         ],
     );
@@ -7158,4 +7159,186 @@ async fn omnia_change_vanished() {
         refusal.description()
     );
     assert_eq!(refusal.description(), "`crates/returns` is a symlink");
+}
+
+// A `returns` crate and an `orders` crate over it, `orders` depending on it
+// and calling it, both in the root lists.
+struct ReturnsTree {
+    dependency: String,
+    manifest: String,
+    mentions: String,
+    replacement: String,
+    dropped: String,
+}
+
+impl ReturnsTree {
+    fn plant(project: &Scratch) -> Self {
+        let dependency = "returns = { path = \"../returns\" }\n".to_owned();
+        let manifest = format!("{OMNIA_MANIFEST}{dependency}");
+        let mentions =
+            "use returns::reading::refund;\n\npub fn check() {\n    refund();\n}".to_owned();
+        let replacement = "pub fn check() {}".to_owned();
+        let dropped = format!("//! Orders.\n\n{replacement}\n");
+
+        project.write("crates/returns/Cargo.toml", OMNIA_MANIFEST.replace("orders", "returns"));
+        project.write("crates/returns/src/lib.rs", OMNIA_ENTRY.replace("orders", "returns"));
+        project.write("crates/returns/src/reading.rs", "pub fn refund() {}\n");
+        project.write("crates/orders/Cargo.toml", &manifest);
+        project.write("crates/orders/src/lib.rs", OMNIA_ENTRY);
+        project.write("crates/orders/src/reading.rs", format!("//! Orders.\n\n{mentions}\n"));
+        project.write(
+            "Cargo.toml",
+            omnia_seed("Cargo.toml").replace(
+                OMNIA_PATH_CRATE_ANCHOR,
+                &format!(
+                    "{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}returns = {{ path = \
+                     \"crates/returns\" }}\n"
+                ),
+            ),
+        );
+        project.write(
+            "src/lib.rs",
+            omnia_seed("src/lib.rs").replace(
+                OMNIA_ROOT_ANCHOR,
+                "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added \
+                 at the end\n        orders::handlers(),\n        returns::handlers(),\n    ])\n    \
+                 .with_state(Client::new(provider))\n",
+            ),
+        );
+
+        Self {
+            dependency,
+            manifest,
+            mentions,
+            replacement,
+            dropped,
+        }
+    }
+}
+
+// On a change build, the turn edits the touch points outside the slice's
+// crates and nothing else there: an edit to another item of a kept crate is
+// named item by item, while the touch point's edit and its file pass every
+// rule, `split_stems` and `strays` among them; putting the item back is
+// accepted.
+#[tokio::test]
+async fn omnia_change_touch_points() {
+    let project = omnia_tree().await;
+    let verify = "pub fn verify() {\n    check();\n}";
+    let audit = "pub fn audit() {}";
+    let kept_module =
+        format!("//! Kept customers.\n\nuse orders::reading::check;\n\n{verify}\n\n{audit}\n");
+    let customers = CustomersTree::plant(&project, &kept_module);
+
+    let verified = "pub fn verify() {\n    let _ = check();\n}";
+    let audited = "pub fn audit() {\n    verify();\n}";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/customers/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                (
+                    "crates/orders/src/reading.rs",
+                    &customers.orders_marker,
+                    &customers.orders_filled,
+                ),
+                ("crates/customers/src/reading.rs", verify, verified),
+                ("crates/customers/src/reading.rs", audit, audited),
+            ])],
+        )
+        .calling(1, [edit_files(&[("crates/customers/src/reading.rs", audited, audit)])]);
+
+    let accepted = OMNIA
+        .build_slice(&project, &model, &customers.slice)
+        .await
+        .expect("the touch point's edit alone is accepted");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001", "REQ-002"]);
+    assert_eq!(
+        text(&project, "crates/customers/src/reading.rs"),
+        kept_module.replace(verify, verified),
+        "the touch point's edit stands"
+    );
+    let correction = correction(&model);
+    let expected = format!(
+        "crates/customers/src/reading.rs:{}: `fn audit` changed, and it is no touch point",
+        line_of(&kept_module, audit)
+    );
+    assert!(
+        correction.contains("a change build rewrites the slice's own crates")
+            && correction.contains(&expected),
+        "the correction names the item beyond the touch points: {correction}"
+    );
+    for admitted in ["`fn verify`", "`use`", "written beside the slice", "no stem of this slice"] {
+        assert!(!correction.contains(admitted), "`{admitted}` is admitted: {correction}");
+    }
+}
+
+// A module still naming a crate the change removed is named at each item
+// that names it, at a build and, by the path dependency left on it, at a
+// verify; dropping the mentions is accepted.
+#[tokio::test]
+async fn omnia_change_dangling_mention() {
+    let project = omnia_tree().await;
+    let returns = ReturnsTree::plant(&project);
+    let report = r#"{"covered": [], "written": ["crates/orders/src/reading.rs"]}"#;
+    let drop =
+        edit_files(&[("crates/orders/src/reading.rs", &returns.mentions, &returns.replacement)]);
+    let model = ScriptedModel::answering([report, report]).calling(1, [drop]);
+
+    OMNIA
+        .build_slice(&project, &model, &retiring_returns_slice())
+        .await
+        .expect("the dropped mentions are accepted");
+    model.assert_exhausted();
+
+    assert_eq!(text(&project, "crates/orders/src/reading.rs"), returns.dropped);
+    let built = correction(&model);
+    for line in [
+        "a crate the change removed is named nowhere in the tree",
+        "crates/orders/src/reading.rs:3: `use` names `returns`, whose crate the tree no longer \
+         holds",
+        "crates/orders/src/reading.rs:5: `fn check` names `returns`, whose crate the tree no \
+         longer holds",
+    ] {
+        assert!(built.contains(line), "the build's correction carries `{line}`: {built}");
+    }
+
+    let verified = omnia_tree().await;
+    let returns = ReturnsTree::plant(&verified);
+    std::fs::remove_dir_all(verified.path().join("crates/returns")).expect("removing `returns`");
+    verified.write(
+        "Cargo.toml",
+        omnia_seed("Cargo.toml").replace(
+            OMNIA_PATH_CRATE_ANCHOR,
+            &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+        ),
+    );
+    verified
+        .write("src/lib.rs", omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE));
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(
+        1,
+        [edit_files(&[
+            ("crates/orders/Cargo.toml", &returns.dependency, ""),
+            ("crates/orders/src/reading.rs", &returns.mentions, &returns.replacement),
+        ])],
+    );
+
+    let verdict = OMNIA.verify(&verified, &model).await.expect("the repaired tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let repaired = correction(&model);
+    for line in [
+        &format!(
+            "crates/orders/Cargo.toml:{}: `returns` is a dependency on a crate the tree no longer \
+             holds",
+            line_of(&returns.manifest, returns.dependency.trim_end())
+        ),
+        "crates/orders/src/reading.rs:3: `use` names `returns`",
+        "crates/orders/src/reading.rs:5: `fn check` names `returns`",
+    ] {
+        assert!(repaired.contains(line), "the verify's correction carries `{line}`: {repaired}");
+    }
 }

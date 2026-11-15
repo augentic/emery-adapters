@@ -361,7 +361,7 @@ fn at_export(tree: &Tree<TypeScript>, module: &Module, export: &Export, stem: &s
 }
 
 fn spelled(decorated: &Decorated) -> String {
-    let argument = decorated.literal.as_ref().map(|l| format!("(\"{l}\")")).unwrap_or_default();
+    let argument = decorated.literal.as_ref().map_or_default(|l| format!("(\"{l}\")"));
     format!("{}{argument}", decorated.name.join("."))
 }
 
@@ -457,17 +457,14 @@ fn file_routed(path: &str, stem: &str) -> Vec<String> {
 }
 
 fn methods<'m>(module: &'m Module, name: &str) -> Vec<(&'m str, Lines)> {
-    module
-        .class(name)
-        .map(|class| {
-            class
-                .members
-                .iter()
-                .filter(|m| !m.private && matches!(m.kind, MemberKind::Method | MemberKind::Getter))
-                .map(|m| (m.name.as_str(), m.lines))
-                .collect()
-        })
-        .unwrap_or_default()
+    module.class(name).map_or_default(|class| {
+        class
+            .members
+            .iter()
+            .filter(|m| !m.private && matches!(m.kind, MemberKind::Method | MemberKind::Getter))
+            .map(|m| (m.name.as_str(), m.lines))
+            .collect()
+    })
 }
 
 fn module_stem(module: &Module) -> String {

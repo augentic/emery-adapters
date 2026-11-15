@@ -11,7 +11,7 @@ use crate::layout::{self, Toml};
 use crate::scaffold::registration;
 use crate::syntax;
 
-impl Tree<'_> {
+impl Tree {
     // The template keeps a path entry by its shape alone, so one left behind
     // after its crate went is no drift and compiles nothing.
     pub fn dangling_entries(&self) -> Result<Option<String>, Error> {
@@ -22,13 +22,14 @@ impl Tree<'_> {
         let manifest = layout::read(&file)?;
         let lines: Vec<String> = Toml::read(&manifest)
             .path_entries()
-            .filter(|entry| !self.root.join("crates").join(entry.dir).join("Cargo.toml").is_file())
+            .into_iter()
+            .filter(|entry| !self.root.join("crates").join(&entry.dir).join("Cargo.toml").is_file())
             .map(|entry| {
                 format!(
                     "{}:{}: `{}` names `crates/{}`, which the tree lacks",
                     Manifest::PATH,
                     entry.line,
-                    entry.stem,
+                    entry.package,
                     entry.dir
                 )
             })
@@ -48,16 +49,17 @@ impl Tree<'_> {
         let mut lines = Vec::new();
         for (stem, manifest) in self.stem_manifests() {
             let code: Vec<&Module> = self.stem_files(stem).collect();
-            for (number, name) in Toml::read(manifest).dependencies() {
-                let ident = name.replace('-', "_");
-                if layout::STEM_DEPENDENCIES.contains(&name)
+            for dep in Toml::read(manifest).dependencies() {
+                let ident = dep.package.replace('-', "_");
+                if layout::STEM_DEPENDENCIES.contains(&dep.package.as_str())
                     || code.iter().any(|module| module.mentions.contains(&ident))
                 {
                     continue;
                 }
                 lines.push(format!(
-                    "crates/{stem}/Cargo.toml:{number}: dependency `{name}` is used by no file of \
-                     `crates/{stem}/`"
+                    "crates/{stem}/Cargo.toml:{}: dependency `{}` is used by no file of \
+                     `crates/{stem}/`",
+                    dep.line, dep.package
                 ));
             }
         }

@@ -26,7 +26,7 @@ const ACCESSORS: &[(&str, &str)] = &[
     ("vcs", "Vcs"),
 ];
 
-impl Tree<'_> {
+impl Tree {
     pub fn broad_bounds(&self) -> Option<String> {
         let mut lines: Vec<String> = self.modules.iter().flat_map(Module::broad_bounds).collect();
         if lines.is_empty() {

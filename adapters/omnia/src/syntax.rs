@@ -1,8 +1,8 @@
 //! What the scaffold and the checks read of Rust through `syn`: the parse, the lines, and the shapes several rules share.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::mem;
 use std::path::Path as StdPath;
+use std::{fmt, mem};
 
 use emery_sdk::Error;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
@@ -358,6 +358,130 @@ pub fn item_head(item: &Item) -> Option<(usize, String)> {
         _ => return None,
     };
     Some((line(span), head))
+}
+
+// How a top-level item's declaration is named by touch points and findings.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ItemHead {
+    Use,
+    Named(String),
+}
+
+impl fmt::Display for ItemHead {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Use => f.write_str("use"),
+            Self::Named(name) => f.write_str(name),
+        }
+    }
+}
+
+// A top-level item's opening line and declaration head.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DeclaredItem {
+    pub line: usize,
+    pub head: ItemHead,
+}
+
+pub fn declared_item(item: &Item) -> DeclaredItem {
+    match item {
+        Item::Use(item) => DeclaredItem {
+            line: line(item.use_token.span),
+            head: ItemHead::Use,
+        },
+        Item::ExternCrate(item) => DeclaredItem {
+            line: line(item.extern_token.span),
+            head: ItemHead::Named(format!("extern crate {}", item.ident)),
+        },
+        Item::ForeignMod(item) => DeclaredItem {
+            line: line(item.abi.extern_token.span),
+            head: ItemHead::Named("extern".to_owned()),
+        },
+        _ => {
+            let (line, name) = item_head(item).unwrap_or_else(|| (1, "item".to_owned()));
+            DeclaredItem {
+                line,
+                head: ItemHead::Named(name),
+            }
+        }
+    }
+}
+
+// Every top-level item of `file` that names a crate `matches_crate` accepts,
+// either by a `<crate>::..` path or through a symbol imported from one by a
+// top-level `use`.
+pub fn items_mentioning(
+    file: &syn::File, matches_crate: impl Fn(&str) -> bool,
+) -> Vec<DeclaredItem> {
+    let mut imported = BTreeSet::new();
+    for item in &file.items {
+        if let Item::Use(item) = item {
+            collect_imported(&item.tree, None, false, &matches_crate, &mut imported);
+        }
+    }
+
+    let mut found = Vec::new();
+    for item in &file.items {
+        let mentions_target = if let Item::Use(item) = item {
+            use_mentions(&item.tree, &matches_crate)
+        } else {
+            let mentions = Mentions::of_item(item);
+            mentions.paths().any(|path| path.first().is_some_and(|head| matches_crate(head)))
+                || imported.iter().any(|symbol| mentions.contains(symbol))
+        };
+        if mentions_target {
+            found.push(declared_item(item));
+        }
+    }
+    found
+}
+
+fn collect_imported(
+    tree: &UseTree, parent: Option<&Ident>, under_target: bool,
+    matches_crate: &impl Fn(&str) -> bool, symbols: &mut BTreeSet<String>,
+) {
+    match tree {
+        UseTree::Path(path) => {
+            let targeted = under_target || matches_crate(&path.ident.to_string());
+            if targeted || parent.is_none() {
+                collect_imported(&path.tree, Some(&path.ident), targeted, matches_crate, symbols);
+            }
+        }
+        UseTree::Name(name) if under_target => {
+            if name.ident == "self" {
+                if let Some(module) = parent {
+                    let module = module.to_string();
+                    if !matches_crate(&module) {
+                        symbols.insert(module);
+                    }
+                }
+            } else {
+                symbols.insert(name.ident.to_string());
+            }
+        }
+        UseTree::Rename(rename)
+            if (under_target || (parent.is_none() && matches_crate(&rename.ident.to_string())))
+                && rename.rename != "_" =>
+        {
+            symbols.insert(rename.rename.to_string());
+        }
+        UseTree::Group(group) => {
+            for item in &group.items {
+                collect_imported(item, parent, under_target, matches_crate, symbols);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn use_mentions(tree: &UseTree, matches_crate: &impl Fn(&str) -> bool) -> bool {
+    match tree {
+        UseTree::Path(path) => matches_crate(&path.ident.to_string()),
+        UseTree::Name(name) => matches_crate(&name.ident.to_string()),
+        UseTree::Rename(rename) => matches_crate(&rename.ident.to_string()),
+        UseTree::Group(group) => group.items.iter().any(|item| use_mentions(item, matches_crate)),
+        UseTree::Glob(_) => false,
+    }
 }
 
 // The line an expression starts on, for the shapes a finding is spelled at.

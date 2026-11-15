@@ -281,12 +281,9 @@ fn interface(rest: &str) -> Parsed {
     let name = ident_head(rest);
     let head = rest.split('{').next().unwrap_or(rest);
     let generics = generics(head);
-    let bases = head
-        .split_once(" extends ")
-        .map(|(_, bases)| {
-            split_top(bases, ',').filter_map(|base| ident_head(base.trim())).collect()
-        })
-        .unwrap_or_default();
+    let bases = head.split_once(" extends ").map_or_default(|(_, bases)| {
+        split_top(bases, ',').filter_map(|base| ident_head(base.trim())).collect()
+    });
     let Some((body, _)) = between(rest, '{', '}') else {
         return Parsed {
             name,
@@ -350,13 +347,10 @@ fn class(rest: &str) -> Parsed {
     let name = ident_head(rest);
     let head = rest.split('{').next().unwrap_or(rest);
     let generics = generics(head);
-    let bases = head
-        .split_once(" extends ")
-        .map(|(_, bases)| {
-            let bases = bases.split(" implements ").next().unwrap_or(bases);
-            split_top(bases, ',').filter_map(|base| ident_head(base.trim())).collect()
-        })
-        .unwrap_or_default();
+    let bases = head.split_once(" extends ").map_or_default(|(_, bases)| {
+        let bases = bases.split(" implements ").next().unwrap_or(bases);
+        split_top(bases, ',').filter_map(|base| ident_head(base.trim())).collect()
+    });
     let Some((body, _)) = between(rest, '{', '}') else {
         return Parsed {
             name,
@@ -581,11 +575,9 @@ fn default_of(value: &str) -> Option<Literal> {
 // The type parameters a head declares, `T` and `U` for `Page<T, U extends Base>`.
 fn generics(head: &str) -> Vec<String> {
     let head = head.split(" extends ").next().unwrap_or(head);
-    between(head, '<', '>')
-        .map(|(params, _)| {
-            split_top(params, ',').map(param_name).filter(|param| !param.is_empty()).collect()
-        })
-        .unwrap_or_default()
+    between(head, '<', '>').map_or_default(|(params, _)| {
+        split_top(params, ',').map(param_name).filter(|param| !param.is_empty()).collect()
+    })
 }
 
 // The identifier `text` leads with.

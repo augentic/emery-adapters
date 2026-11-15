@@ -1,14 +1,15 @@
 //! Holds the lent tree to the layout's rules before a report or verdict is accepted.
 
 mod bounds;
+mod change;
 mod lists;
 mod misses;
 mod process;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use emery_sdk::Error;
 use emery_sdk::target::Report;
@@ -25,8 +26,8 @@ const MAX_DIFF_LINES: usize = 24;
 // The Rust files of a tree, read once: the stems' sources, the stems' tests,
 // and the root list the tree holds, with the crates under `crates/` and
 // the manifest of each that holds one.
-pub struct Tree<'a> {
-    root: &'a Path,
+pub struct Tree {
+    root: PathBuf,
     crates: Vec<String>,
     manifests: BTreeMap<String, String>,
     modules: Vec<Module>,
@@ -34,8 +35,8 @@ pub struct Tree<'a> {
     lists: Vec<Module>,
 }
 
-impl<'a> Tree<'a> {
-    pub fn read(root: &'a Path) -> Result<Self, Error> {
+impl Tree {
+    pub fn read(root: &Path) -> Result<Self, Error> {
         let crates = layout::crates(root)?;
         let mut manifests = BTreeMap::new();
         let mut modules = Vec::new();
@@ -64,7 +65,7 @@ impl<'a> Tree<'a> {
             lists.push(Module::read(root, &file)?);
         }
         Ok(Self {
-            root,
+            root: root.to_path_buf(),
             crates,
             manifests,
             modules,
@@ -77,6 +78,8 @@ impl<'a> Tree<'a> {
         let mut findings = Vec::new();
         findings.extend(self.split_stems(scaffold));
         findings.extend(self.strays(scaffold)?);
+        findings.extend(self.touched_beyond(scaffold)?);
+        findings.extend(self.dangling_mentions(scaffold.vanished_packages())?);
         findings.extend(self.markers_left(&report.covered));
         findings.extend(self.unfilled_gate(scaffold));
         findings.extend(self.untested_scenarios(scaffold, &report.covered));
@@ -90,6 +93,7 @@ impl<'a> Tree<'a> {
 
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
+        findings.extend(self.dangling_mentions(&BTreeSet::new())?);
         findings.extend(self.check_common()?);
         Ok(findings)
     }
@@ -210,7 +214,7 @@ impl<'a> Tree<'a> {
                 .filter(|dir| layout::is_start_stem(dir))
                 .map(|dir| format!("crates/{dir}/")),
         );
-        let lines: Vec<String> = layout::listing(self.root)?
+        let lines: Vec<String> = layout::listing(&self.root)?
             .difference(scaffold.listing())
             .filter(|path| path.as_str() != "Cargo.lock")
             .filter(|path| !own.iter().any(|dir| path.starts_with(dir.as_str())))
@@ -550,7 +554,7 @@ impl<'a> Tree<'a> {
     }
 
     fn static_drift(&self) -> Result<Vec<String>, Error> {
-        let drift = omnia_template::drift(self.root).map_err(|err| layout::refusal(&err))?;
+        let drift = omnia_template::drift(&self.root).map_err(|err| layout::refusal(&err))?;
         let mut findings = Vec::new();
         for file in drift.files() {
             let finding = if self.lacks(file.path) {
@@ -583,7 +587,7 @@ impl<'a> Tree<'a> {
     }
 
     fn manifest_drift(&self) -> Result<Option<String>, Error> {
-        let drift = Manifest::new(self.root).drift().map_err(|err| layout::refusal(&err))?;
+        let drift = Manifest::new(&self.root).drift().map_err(|err| layout::refusal(&err))?;
         if drift.is_empty() {
             return Ok(None);
         }
@@ -623,7 +627,7 @@ impl<'a> Tree<'a> {
     // The topic table as the tree holds it; empty where the tree lacks it
     // or `syn` refused it, which `unparsed` reports.
     fn topics(&self) -> TopicTable {
-        self.module(layout::TOPICS).and_then(Module::file).map(TopicTable::of).unwrap_or_default()
+        self.module(layout::TOPICS).and_then(Module::file).map_or_default(TopicTable::of)
     }
 }
 
@@ -649,7 +653,7 @@ impl Module {
         let path = layout::relative(root, file);
         let text = layout::read(file)?;
         let parsed = syntax::parse(&text);
-        let mentions = parsed.as_ref().ok().map(Mentions::of).unwrap_or_default();
+        let mentions = parsed.as_ref().ok().map_or_default(Mentions::of);
         Ok(Self {
             path,
             text,

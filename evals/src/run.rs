@@ -439,12 +439,10 @@ impl Run {
     // The plan's shape: how many waves, then each wave's width, so `3 (1/2/1)`
     // is three waves of one, two, and one slices; `0` where no plan was staged.
     pub fn waves(&self) -> String {
-        let widths: Vec<usize> = self
-            .waves
-            .as_ref()
-            .and_then(Value::as_array)
-            .map(|waves| waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len)).collect())
-            .unwrap_or_default();
+        let widths: Vec<usize> =
+            self.waves.as_ref().and_then(Value::as_array).map_or_default(|waves| {
+                waves.iter().map(|wave| wave.as_array().map_or(0, Vec::len)).collect()
+            });
         format_wave_shape(&widths)
     }
 
@@ -812,7 +810,7 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
                     reasoning: count("reasoning_tokens"),
                 },
                 shell: span_n(head).and_then(|n| shells.remove(&n)).unwrap_or_default(),
-                writes: open.remove(turn).map(|(writes, _)| writes).unwrap_or_default(),
+                writes: open.remove(turn).map_or_default(|(writes, _)| writes),
             });
         } else if let Some((head, tail)) = line.split_once(" tool call tool=shell") {
             if let (Some(n), Some(at)) = (span_n(head), instant(line)) {
