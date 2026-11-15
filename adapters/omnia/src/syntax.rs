@@ -6,10 +6,12 @@ use std::{fmt, mem};
 
 use emery_sdk::Error;
 use proc_macro2::{Ident, Span, TokenStream, TokenTree};
+use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
-    Expr, ExprLit, ExprMethodCall, FnArg, Item, ItemFn, ItemUse, Lit, LitStr, Macro, MetaList,
-    Path, Type, UseTree, Visibility,
+    Attribute, Expr, ExprLit, ExprMethodCall, Fields, FnArg, ImplItemConst, Item, ItemConst,
+    ItemFn, ItemStruct, ItemUse, Lit, LitStr, Macro, MetaList, Path, Token, Type, UseTree,
+    Visibility,
 };
 
 // Where `syn` refused a file, and why.
@@ -66,6 +68,10 @@ impl Mentions {
 
     pub fn paths(&self) -> impl Iterator<Item = &[String]> {
         self.paths.iter().map(Vec::as_slice)
+    }
+
+    pub fn idents(&self) -> impl Iterator<Item = &str> {
+        self.idents.keys().map(String::as_str)
     }
 
     fn ident(&mut self, ident: &Ident) {
@@ -287,7 +293,7 @@ pub fn signature(text: &str, exported: &Exported) -> String {
 // modules, in path order; a file `syn` refuses is passed over, since the
 // checks name it.
 pub fn crate_exported_fns(root: &StdPath, dir: &str) -> Result<Vec<ExportedFn>, Error> {
-    let stem = if dir == crate::layout::crate_dir("common") { "common" } else { dir };
+    let stem = crate::layout::stem_of(dir);
     let crate_ident = crate::layout::package(stem).replace('-', "_");
     let mut exports = Vec::new();
     for source in crate::layout::sources(&root.join("crates").join(dir).join("src"))? {
@@ -805,4 +811,145 @@ pub fn is_handler_fn(item: &ItemFn) -> bool {
         return false;
     };
     matches!(&*first.ty, Type::Path(ty) if path_ends(&ty.path, &["Context"]))
+}
+
+// Whether a `#[derive(..)]` among `attrs` names `name`.
+pub fn derives(attrs: &[Attribute], name: &str) -> bool {
+    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
+        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
+            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
+    })
+}
+
+// A setting a file declares, at its line: a `const KEY: &str = "KEY"` or a
+// field of a `#[derive(Settings)]` struct, keyed as the derive spells it.
+pub struct SettingKey {
+    pub line: usize,
+    pub key: String,
+}
+
+pub fn setting_keys(file: &syn::File) -> Vec<SettingKey> {
+    #[derive(Default)]
+    struct Keys {
+        found: Vec<SettingKey>,
+    }
+
+    impl Keys {
+        fn constant(&mut self, at: usize, name: &Ident, expr: &Expr) {
+            let Expr::Lit(ExprLit {
+                lit: Lit::Str(value), ..
+            }) = expr
+            else {
+                return;
+            };
+            let key = name.to_string();
+            if value.value() == key {
+                self.found.push(SettingKey { line: at, key });
+            }
+        }
+    }
+
+    impl<'ast> Visit<'ast> for Keys {
+        fn visit_item_const(&mut self, node: &'ast ItemConst) {
+            self.constant(line(node.const_token.span), &node.ident, &node.expr);
+            visit::visit_item_const(self, node);
+        }
+
+        fn visit_impl_item_const(&mut self, node: &'ast ImplItemConst) {
+            self.constant(line(node.const_token.span), &node.ident, &node.expr);
+            visit::visit_impl_item_const(self, node);
+        }
+
+        fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
+            if !derives(&node.attrs, "Settings") {
+                return;
+            }
+            let prefix = setting_attr(&node.attrs, "prefix").unwrap_or_default();
+            let Fields::Named(fields) = &node.fields else { return };
+            for field in &fields.named {
+                let Some(ident) = &field.ident else { continue };
+                let key = setting_attr(&field.attrs, "key").unwrap_or_else(|| {
+                    let raw = ident.to_string();
+                    let stem = raw.strip_prefix("r#").unwrap_or(&raw);
+                    format!("{prefix}{}", stem.to_ascii_uppercase())
+                });
+                self.found.push(SettingKey {
+                    line: line(ident.span()),
+                    key,
+                });
+            }
+        }
+    }
+
+    let mut keys = Keys::default();
+    keys.visit_file(file);
+    keys.found
+}
+
+fn setting_attr(attrs: &[Attribute], name: &str) -> Option<String> {
+    attrs.iter().filter(|attr| attr.path().is_ident("setting")).find_map(|attr| {
+        let mut value = None;
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident(name) {
+                let lit: LitStr = meta.value()?.parse()?;
+                value = Some(lit.value());
+            } else if meta.input.peek(Token![=]) {
+                let _: Expr = meta.value()?.parse()?;
+            }
+            Ok(())
+        });
+        value
+    })
+}
+
+// Every string literal `file` spells outside doc comments, including inside
+// macro and attribute token streams.
+pub fn string_literals(file: &syn::File) -> Vec<String> {
+    #[derive(Default)]
+    struct Literals {
+        found: Vec<String>,
+    }
+
+    impl Literals {
+        fn tokens(&mut self, stream: TokenStream) {
+            for token in stream {
+                match token {
+                    TokenTree::Literal(literal) => {
+                        if let Lit::Str(lit) = Lit::new(literal) {
+                            self.found.push(lit.value());
+                        }
+                    }
+                    TokenTree::Group(group) => self.tokens(group.stream()),
+                    TokenTree::Ident(_) | TokenTree::Punct(_) => {}
+                }
+            }
+        }
+    }
+
+    impl<'ast> Visit<'ast> for Literals {
+        fn visit_attribute(&mut self, node: &'ast Attribute) {
+            if node.path().is_ident("doc") {
+                return;
+            }
+            visit::visit_attribute(self, node);
+        }
+
+        fn visit_lit_str(&mut self, node: &'ast LitStr) {
+            self.found.push(node.value());
+        }
+
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.tokens(node.tokens.clone());
+            visit::visit_macro(self, node);
+        }
+
+        fn visit_meta_list(&mut self, node: &'ast MetaList) {
+            self.tokens(node.tokens.clone());
+            visit::visit_meta_list(self, node);
+        }
+    }
+
+    let mut literals = Literals::default();
+    literals.visit_file(file);
+    literals.found
 }

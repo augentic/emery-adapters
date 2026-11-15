@@ -7342,3 +7342,206 @@ async fn omnia_change_dangling_mention() {
         assert!(repaired.contains(line), "the verify's correction carries `{line}`: {repaired}");
     }
 }
+
+struct ScopeCase {
+    section: SectionChange,
+    expected: Vec<String>,
+}
+
+impl ScopeCase {
+    fn modified(kind: &str, before: &str, after: &str, expected: &[&str]) -> Self {
+        Self {
+            section: SectionChange {
+                kind: kind.to_owned(),
+                before: Some(before.to_owned()),
+                after: Some(after.to_owned()),
+            },
+            expected: expected.iter().map(|id| (*id).to_owned()).collect(),
+        }
+    }
+
+    fn added(kind: &str, after: &str, expected: &[&str]) -> Self {
+        Self {
+            section: SectionChange {
+                kind: kind.to_owned(),
+                before: None,
+                after: Some(after.to_owned()),
+            },
+            expected: expected.iter().map(|id| (*id).to_owned()).collect(),
+        }
+    }
+}
+
+fn plant_scope_tree(project: &Scratch) -> Change {
+    project.write(
+        "crates/orders/src/orders.rs",
+        "//! Orders.\n\nuse omnia_sdk::Settings;\n\npub(crate) const API_ORDERS: &str = \
+         \"/api/orders\";\n\n#[derive(Debug, Settings)]\n#[setting(prefix = \
+         \"SHIPPING_\")]\npub(crate) struct OrdersSettings {\n    api_key: String,\n    api_url: \
+         String,\n}\n\n// REQ-001 orders.place: Places an order.\npub fn quote_url(base: &str, \
+         zone: &str) -> String {\n    format!(\"{base}/rates?zone={zone}\")\n}\n",
+    );
+    project.write(
+        "crates/customers/src/customers.rs",
+        "//! Customers.\n\nuse omnia_sdk::Settings;\n\npub(crate) const API_CUSTOMERS_ID: &str = \
+         \"/api/customers/{id}\";\n\n#[derive(Debug, Settings)]\npub(crate) struct \
+         CustomersSettings {\n    crm_token: String,\n}\n\n// REQ-002 customers.read: Reads a \
+         customer.\npub fn check() {}\n",
+    );
+    project.write(
+        "crates/health/src/health.rs",
+        "//! Health.\n\npub(crate) const HEALTH_LIVE: &str = \"/health/live\";\n\n// REQ-003 \
+         health.live: Answers liveness.\npub fn live() {}\n",
+    );
+    Change {
+        built: "rev-001".to_owned(),
+        commit: "abc1234".to_owned(),
+        parts: vec![
+            PartReach {
+                id: "PART-001".to_owned(),
+                name: "orders".to_owned(),
+                requirements: vec!["REQ-001".to_owned()],
+                reasons: Vec::new(),
+            },
+            PartReach {
+                id: "PART-002".to_owned(),
+                name: "customers".to_owned(),
+                requirements: vec!["REQ-002".to_owned()],
+                reasons: Vec::new(),
+            },
+            PartReach {
+                id: "PART-003".to_owned(),
+                name: "health".to_owned(),
+                requirements: vec!["REQ-003".to_owned()],
+                reasons: Vec::new(),
+            },
+        ],
+        ..Change::default()
+    }
+}
+
+fn scope_cases() -> Vec<ScopeCase> {
+    vec![
+        ScopeCase::modified(
+            "apis",
+            "Inbound HTTP: POST /api/orders (REQ-001); GET /health/live (REQ-003).\n\nCustomer \
+             CRM sync retries twice (REQ-002).",
+            "Inbound HTTP: POST /api/orders (REQ-001); GET /health/live (REQ-003).\n\nCustomer \
+             CRM sync retries three times (REQ-002).",
+            &["PART-002"],
+        ),
+        ScopeCase::modified(
+            "apis",
+            "Courier rates calls HTTP.",
+            "Courier rates sends `SHIPPING_API_KEY` in `x-api-key`.",
+            &["PART-001"],
+        ),
+        ScopeCase::modified(
+            "observability",
+            "Logs sync failures.",
+            "Redacts `CRM_TOKEN` from sync error fields.",
+            &["PART-002"],
+        ),
+        ScopeCase::modified(
+            "apis",
+            "Quotes upstream `https://rates.courier.example/rates?zone={zone}`.",
+            "Quotes upstream `https://rates.courier.example/rates?zone={zone}` with 2s timeout.",
+            &["PART-001"],
+        ),
+        ScopeCase::modified(
+            "technical-logic",
+            "Customer lookup at `/api/customers/:id`.",
+            "Customer lookup at `/api/customers/:id` trims whitespace.",
+            &["PART-002"],
+        ),
+        ScopeCase::modified(
+            "technical-logic",
+            "Bearer authentication gates `/api`.",
+            "Bearer authentication gates `/api` and rejects blank tokens.",
+            &["PART-001", "PART-002"],
+        ),
+        ScopeCase::modified(
+            "technical-logic",
+            "Timestamps are ISO-8601.",
+            "Timestamps use millisecond precision.",
+            &["PART-001", "PART-002", "PART-003"],
+        ),
+        ScopeCase::added(
+            "observability",
+            "Exports counters under `OTEL_SERVICE_NAMESPACE` at `/metrics`.",
+            &["PART-001", "PART-002", "PART-003"],
+        ),
+    ]
+}
+
+// Omnia scopes changed design prose against the built tree: a changed paragraph
+// citing `REQ-` ids reaches those ids' parts; an uncited paragraph in `apis`,
+// `technical-logic`, or `observability` reaches parts whose crates mention one
+// of its `SCREAMING_SNAKE` keys or `/`-paths, falling back to every part when
+// nothing matches; `overview` and `ui-layout` reach nothing.
+#[tokio::test]
+async fn omnia_scope() {
+    let project = omnia_tree().await;
+    let base = plant_scope_tree(&project);
+
+    // `overview` and `ui-layout` reach nothing, keeping the engine's minimum
+    let mut overview = base.clone();
+    overview.parts[2].reasons = vec!["requirements".to_owned()];
+    overview.sections = vec![
+        SectionChange {
+            kind: "overview".to_owned(),
+            before: Some("Before (REQ-001).".to_owned()),
+            after: Some("After (REQ-001, REQ-002) with SHIPPING_API_KEY.".to_owned()),
+        },
+        SectionChange {
+            kind: "ui-layout".to_owned(),
+            before: None,
+            after: Some("Two-column layout.".to_owned()),
+        },
+    ];
+    assert_eq!(OMNIA.scoped(&project, &overview).await.expect("overview scope"), ["PART-003"]);
+
+    // a changed paragraph citing `REQ-` ids reaches those ids' parts, while a
+    // withdrawn retired paragraph in the same hunk never masks an uncited addition
+    let mut cited = base.clone();
+    cited.retired.push(Departure {
+        requirement: Requirement {
+            id: "REQ-004".to_owned(),
+            subject: "returns.create".to_owned(),
+            statement: vec!["Creates a return.".to_owned()],
+            scenarios: Vec::new(),
+            trigger: None,
+        },
+        moved_to: None,
+    });
+    cited.sections = vec![SectionChange {
+        kind: "apis".to_owned(),
+        before: Some(
+            "Inbound HTTP: POST /api/orders (REQ-001); GET /health/live (REQ-003).\n\nCustomer \
+             CRM sync retries twice (REQ-002).\n\nReturns surface: POST /api/returns (REQ-004)."
+                .to_owned(),
+        ),
+        after: Some(
+            "Inbound HTTP: POST /api/orders (REQ-001); GET /health/live (REQ-003).\n\nCustomer \
+             CRM sync retries three times (REQ-002).\n\nCourier rates sends `SHIPPING_API_KEY`."
+                .to_owned(),
+        ),
+    }];
+    assert_eq!(
+        OMNIA.scoped(&project, &cited).await.expect("cited and uncited scope"),
+        ["PART-001", "PART-002"]
+    );
+
+    // cited changes and uncited mention-matched or unmatched changes
+    for case in scope_cases() {
+        let mut change = base.clone();
+        change.sections = vec![case.section.clone()];
+        assert_eq!(
+            OMNIA.scoped(&project, &change).await.expect("section scope"),
+            case.expected,
+            "scope for `{}` {:?}",
+            case.section.kind,
+            case.section.after
+        );
+    }
+}

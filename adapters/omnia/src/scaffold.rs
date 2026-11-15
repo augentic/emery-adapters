@@ -22,8 +22,9 @@ use emery_sdk::{
 };
 
 use self::lists::{Lists, Placement, Topics};
-pub use self::reference::{Gate, Inbound, Wire, registration};
+pub use self::reference::{Gate, Inbound, Wire, blocks, cited, registration};
 use self::reference::{Idiom, Role, Rules};
+pub use self::settings::Settings;
 use self::stem::{Kind, Stem, lines_of};
 pub use self::types::DesignKey;
 use crate::change::{Change, TouchPoint};

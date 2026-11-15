@@ -58,7 +58,10 @@ impl TargetAdapter for Adapter {
                 tracing::info!(scaffolded = scaffolded.len(), "scaffolded the guest template");
                 Ok(Outcome::Initialised)
             }
-            Task::Scope(ctx) => Ok(Outcome::Scoped(target::scope::conservative(ctx.change))),
+            Task::Scope(ctx) => {
+                let tree = Tree::read(Path::new(ctx.workspace))?;
+                Ok(Outcome::Scoped(change::scope(ctx.change, &tree)))
+            }
             Task::Build(ctx) => {
                 let root = Path::new(ctx.workspace);
                 let mut change = Change::read(ctx.slice, &Tree::read(root)?);

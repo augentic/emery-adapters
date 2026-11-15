@@ -187,16 +187,12 @@ impl Found {
 
 // The crate identifier of the stem a crate directory holds.
 fn ident(dir: &str) -> String {
-    layout::package(stem_of(dir)).replace('-', "_")
-}
-
-fn stem_of(dir: &str) -> &str {
-    if dir == layout::crate_dir("common") { "common" } else { dir }
+    layout::package(layout::stem_of(dir)).replace('-', "_")
 }
 
 fn dependency(dir: &str) -> Dependency {
     Dependency {
-        package: layout::package(stem_of(dir)),
+        package: layout::package(layout::stem_of(dir)),
         dir: dir.to_owned(),
     }
 }

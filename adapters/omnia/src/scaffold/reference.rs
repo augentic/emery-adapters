@@ -961,7 +961,7 @@ fn spell(text: &str, into: &mut BTreeSet<String>) {
 
 // The requirement ids the paragraph cites, a `REQ-a through REQ-b` range
 // expanded to every id within it.
-fn cited(paragraph: &str) -> Vec<String> {
+pub fn cited(paragraph: &str) -> Vec<String> {
     const ID: &str = "REQ-";
     const THROUGH: &str = " through REQ-";
     let mut ids = Vec::new();

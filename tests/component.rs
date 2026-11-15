@@ -517,6 +517,7 @@ async fn emery_node_scope() {
 #[tokio::test]
 async fn emery_omnia_scope() {
     let project = scratch();
+    plant_omnia_built_tree(&project);
     let edits = serde_json::json!({ "edits": [
         { "path": "crates/orders/src/orders.rs", "find": OMNIA_HANDLER_MARKER, "replace": OMNIA_HANDLER_FILLED },
         { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
@@ -526,15 +527,79 @@ async fn emery_omnia_scope() {
     .to_string();
     let model = ScriptedModel::answering([OMNIA_REPORT]).calling(0, [("edit_files", edits)]);
 
-    let model = support::build(
-        test_programs::TARGET_EMERY_OMNIA,
-        &project,
-        &["scope", "PART-001", "PART-002"],
-        model,
-    )
-    .await;
+    let model =
+        support::build(test_programs::TARGET_EMERY_OMNIA, &project, &["scope", "PART-001"], model)
+            .await;
 
     let seen = model.seen();
     assert_eq!(seen.len(), 1, "the scope and init open no turn; the build opens one");
-    assert_change_lifted(&seen[0].messages[0]);
+    let brief = &seen[0].messages[0];
+    assert_change_lifted(brief);
+    assert!(
+        brief.contains(
+            "Rewritten for this change: `crates/orders/` is written from the slice, the prior \
+             crate is not in the tree."
+        ) && brief.contains("orders::orders::validate_order"),
+        "the build rewrites the scoped stem over the lent tree: {brief}"
+    );
+}
+
+fn plant_omnia_built_tree(project: &Scratch) {
+    let seed = |path: &str| {
+        omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body
+    };
+    project.write(
+        "Cargo.toml",
+        seed("Cargo.toml").replace(
+            "omnia-sdk.workspace = true\n",
+            "omnia-sdk.workspace = true\ncustomers = { path = \"crates/customers\" }\norders = { \
+             path = \"crates/orders\" }\n",
+        ),
+    );
+    project.write(
+        "src/lib.rs",
+        seed("src/lib.rs").replace(
+            "// one `<stem>::handlers(),` per stem, each added at the end\n",
+            "// one `<stem>::handlers(),` per stem, each added at the end\n        \
+             customers::handlers(),\n        orders::handlers(),\n",
+        ),
+    );
+    let stem_manifest = |stem: &str| {
+        format!(
+            "[package]\nname = \"{stem}\"\ndescription = \"The `{stem}` \
+             stem\"\npublish.workspace = true\nedition.workspace = true\nrust-version.workspace = \
+             true\nversion.workspace = true\n\n[lints]\nworkspace = true\n\n# Target-gated so the \
+             guest's wasm32 dependency graph never sees the doubles.\n[target.'cfg(not(target_arch \
+             = \"wasm32\"))'.dev-dependencies]\nomnia-test = {{ workspace = true, features = \
+             [\"guest\"] }}\ntokio.workspace = true\n\n# One line per crate the stem's files use, \
+             each added at the end.\n[dependencies]\naxum.workspace = true\nomnia-sdk.workspace = \
+             true\nserde.workspace = true\nserde_json.workspace = true\n"
+        )
+    };
+    let stem_entry = |stem: &str| {
+        format!(
+            "//! # {stem}\n//!\n//! The `{stem}` stem.\n\npub mod {stem};\n\nuse \
+             omnia_sdk::Capabilities;\nuse omnia_sdk::api::Handlers;\n\n/// The stem's handlers, \
+             merged onto the root routers.\npub fn handlers<P: Capabilities>() -> Handlers<P> {{\n    \
+             Handlers::from([{stem}::handlers()])\n}}\n"
+        )
+    };
+    project.write("crates/customers/Cargo.toml", stem_manifest("customers"));
+    project.write("crates/customers/src/lib.rs", stem_entry("customers"));
+    project.write(
+        "crates/customers/src/customers.rs",
+        "//! Customers.\n\nuse axum::Json;\nuse axum::routing::get;\nuse \
+         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, \
+         Result};\n\npub(crate) const CUSTOMERS: &str = \"/customers\";\n\npub(crate) fn \
+         handlers<P: Capabilities>() -> Handlers<P> {\n    Handlers::new().route(CUSTOMERS, \
+         get(list))\n}\n\n// REQ-002 customers.list: Lists customers.\npub(crate) async fn \
+         list<P>(_context: Context<P>) -> Result<Json<()>> {\n    Ok(Json(()))\n}\n",
+    );
+    project.write("crates/orders/Cargo.toml", stem_manifest("orders"));
+    project.write("crates/orders/src/lib.rs", stem_entry("orders"));
+    project.write(
+        "crates/orders/src/orders.rs",
+        "//! Prior orders.\n\npub(crate) const ORDERS: &str = \"/orders\";\n\n/// Validates an \
+         order id.\npub fn validate_order(id: &str) -> bool {\n    !id.is_empty()\n}\n",
+    );
 }

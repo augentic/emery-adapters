@@ -649,6 +649,10 @@ impl Module {
         self.parsed.as_ref().ok()
     }
 
+    pub const fn mentions(&self) -> &Mentions {
+        &self.mentions
+    }
+
     fn read(root: &Path, file: &Path) -> Result<Self, Error> {
         let path = layout::relative(root, file);
         let text = layout::read(file)?;

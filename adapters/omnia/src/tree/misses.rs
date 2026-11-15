@@ -2,12 +2,10 @@
 //! response wrappers, refusals answered `Ok(())`, skips answered as refusals,
 //! and format settings.
 
-use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
-    Arm, Attribute, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemConst,
-    ImplItemFn, Item, ItemConst, ItemFn, ItemStruct, Lit, Local, Macro, Pat, PatGuard, PatIdent,
-    Path, Stmt, Token, TraitItemFn,
+    Arm, Expr, ExprCall, ExprIf, ExprMethodCall, ExprReturn, Fields, ImplItemFn, Item, ItemFn,
+    ItemStruct, Local, Macro, Pat, PatGuard, PatIdent, Path, Stmt, TraitItemFn,
 };
 
 use super::{Module, Tree};
@@ -182,11 +180,12 @@ impl Module {
     }
 
     fn format_settings(&self) -> Vec<(usize, String)> {
-        let mut settings = Settings::default();
-        if let Some(file) = self.file() {
-            settings.visit_file(file);
-        }
-        settings.found
+        let Some(file) = self.file() else { return Vec::new() };
+        syntax::setting_keys(file)
+            .into_iter()
+            .filter(|setting| setting.key.split('_').any(|segment| segment == "FORMAT"))
+            .map(|setting| (setting.line, setting.key))
+            .collect()
     }
 
     fn empty_misses(&self) -> Vec<String> {
@@ -468,71 +467,6 @@ fn is_unit_ok(call: &ExprCall) -> bool {
         && matches!(call.args.first(), Some(Expr::Tuple(tuple)) if tuple.elems.is_empty())
 }
 
-// The settings a module reads: a `const KEY: &str = "KEY"` and each field
-// of a `#[derive(Settings)]` struct, keyed as the derive spells it.
-#[derive(Default)]
-struct Settings {
-    found: Vec<(usize, String)>,
-}
-
-impl Settings {
-    fn setting(&mut self, line: usize, name: &syn::Ident, expr: &Expr) {
-        let Expr::Lit(literal) = expr else { return };
-        let Lit::Str(value) = &literal.lit else { return };
-        let name = name.to_string();
-        if value.value() == name {
-            self.key(line, name);
-        }
-    }
-
-    fn key(&mut self, line: usize, key: String) {
-        if key.split('_').any(|segment| segment == "FORMAT") {
-            self.found.push((line, key));
-        }
-    }
-}
-
-impl<'ast> Visit<'ast> for Settings {
-    fn visit_item_const(&mut self, node: &'ast ItemConst) {
-        self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
-        visit::visit_item_const(self, node);
-    }
-
-    fn visit_impl_item_const(&mut self, node: &'ast ImplItemConst) {
-        self.setting(syntax::line(node.const_token.span), &node.ident, &node.expr);
-        visit::visit_impl_item_const(self, node);
-    }
-
-    fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
-        if !derives(&node.attrs, "Settings") {
-            return;
-        }
-        let prefix = setting_attr(&node.attrs, "prefix").unwrap_or_default();
-        let Fields::Named(fields) = &node.fields else { return };
-        for field in &fields.named {
-            let Some(ident) = &field.ident else { continue };
-            let key = setting_attr(&field.attrs, "key")
-                .unwrap_or_else(|| format!("{prefix}{}", ident.to_string().to_ascii_uppercase()));
-            self.key(syntax::line(ident.span()), key);
-        }
-    }
-}
-
-// The `#[setting(<name> = "..")]` value among `attrs`.
-fn setting_attr(attrs: &[Attribute], name: &str) -> Option<String> {
-    attrs.iter().filter(|attr| attr.path().is_ident("setting")).find_map(|attr| {
-        let mut value = None;
-        let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident(name) {
-                let lit: syn::LitStr = meta.value()?.parse()?;
-                value = Some(lit.value());
-            }
-            Ok(())
-        });
-        value
-    })
-}
-
 #[derive(Default)]
 struct Wrappers {
     found: Vec<(usize, String)>,
@@ -547,18 +481,10 @@ impl<'ast> Visit<'ast> for Wrappers {
                 .first()
                 .and_then(|field| field.ident.as_ref())
                 .is_some_and(|ident| ident == "data");
-        if data && derives(&node.attrs, "Deserialize") {
+        if data && syntax::derives(&node.attrs, "Deserialize") {
             self.found.push((syntax::line(node.struct_token.span), node.ident.to_string()));
         }
     }
-}
-
-// Whether a `#[derive(..)]` among `attrs` names `name`.
-fn derives(attrs: &[Attribute], name: &str) -> bool {
-    attrs.iter().filter(|attr| attr.path().is_ident("derive")).any(|attr| {
-        attr.parse_args_with(Punctuated::<Path, Token![,]>::parse_terminated)
-            .is_ok_and(|paths| paths.iter().any(|path| path_ends(path, &[name])))
-    })
 }
 
 // Each function body read for its misses on its own, nested functions

@@ -45,7 +45,7 @@ tokio.workspace = true
 
 // The stem's manifest header for `dir`, a crate directory under `crates/`.
 pub fn stem_manifest_header(dir: &str) -> String {
-    let stem = if dir == "common-stem" { "common" } else { dir };
+    let stem = stem_of(dir);
     STEM_MANIFEST_HEADER.replace("<package>", &package(stem)).replace("<stem>", stem)
 }
 
@@ -97,6 +97,11 @@ impl TopicTable {
 // otherwise.
 pub fn crate_dir(stem: &str) -> &str {
     if stem == "common" { "common-stem" } else { stem }
+}
+
+// The stem a crate directory under `crates/` stands for.
+pub fn stem_of(dir: &str) -> &str {
+    if dir == "common-stem" { "common" } else { dir }
 }
 
 // A stem named as a crate the template pins, or as `common` or `guest`,

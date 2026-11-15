@@ -24,7 +24,7 @@ impl Settings {
         let keys: BTreeSet<&str> = texts
             .into_iter()
             .flat_map(|text| text.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_'))
-            .filter(|word| is_key(word) && !excluded(word))
+            .filter(|word| Self::is_key(word) && !excluded(word))
             .collect();
         if keys.is_empty() {
             return None;
@@ -50,6 +50,22 @@ impl Settings {
 
     pub fn keys(&self) -> impl Iterator<Item = &str> {
         self.fields.iter().map(|field| field.key.as_str())
+    }
+
+    // Whether `word` has a setting key's shape and names neither an HTTP
+    // status nor a header or format constant.
+    pub fn is_key(word: &str) -> bool {
+        let mut segments = word.split('_');
+        let opens_with_letter = word.starts_with(|ch: char| ch.is_ascii_uppercase());
+        let screaming = segments.by_ref().all(|segment| {
+            !segment.is_empty()
+                && segment.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
+        });
+        opens_with_letter
+            && screaming
+            && word.matches('_').count() >= 1
+            && !STATUSES.contains(&word)
+            && !NOT_SETTINGS.contains(&word)
     }
 }
 
@@ -124,20 +140,6 @@ const STATUSES: &[&str] = &[
 // header, an encoding, a format.
 const NOT_SETTINGS: &[&str] =
     &["APPLICATION_JSON", "CONTENT_LENGTH", "CONTENT_TYPE", "ISO_8601", "RFC_3339", "UTF_8"];
-
-// Whether `word` has a key's shape and is no status.
-fn is_key(word: &str) -> bool {
-    let mut segments = word.split('_');
-    let opens_with_letter = word.starts_with(|ch: char| ch.is_ascii_uppercase());
-    let screaming = segments.by_ref().all(|segment| {
-        !segment.is_empty() && segment.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit())
-    });
-    opens_with_letter
-        && screaming
-        && word.matches('_').count() >= 1
-        && !STATUSES.contains(&word)
-        && !NOT_SETTINGS.contains(&word)
-}
 
 // The first segment every key shares, with its underscore, where every key
 // has a segment after it; the derive reads each field under it.

@@ -1,6 +1,7 @@
-//! Classifies each stem a slice touches against the built revision and the tree.
+//! Scopes a revision change and classifies each stem a slice touches against the built tree.
 
 mod rewrite;
+mod scope;
 mod touch;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -8,6 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use emery_sdk::push_unique;
 use emery_sdk::target::{Slice, SliceChange, Standing};
 
+pub use self::scope::scope;
 pub use self::touch::TouchPoint;
 use self::touch::TouchPoints;
 use crate::layout;
