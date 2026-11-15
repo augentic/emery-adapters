@@ -1,0 +1,19 @@
+title = "Delete a customer"
+via = "patch"
+
+[amend]
+added = [1, 2]
+changed = 0
+retired = 0
+stems = ["customers"]
+
+[scope]
+minimum = ["customers"]
+widened = []
+rebuilt = ["customers"]
+retiring = []
+
+[crates]
+customers = "rewrite"
+orders = "touch"
+health = "carried"

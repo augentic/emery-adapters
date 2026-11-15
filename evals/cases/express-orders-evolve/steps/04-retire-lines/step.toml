@@ -1,0 +1,27 @@
+title = "Retire the lines amendment"
+via = "patch"
+
+[amend]
+added = 0
+changed = 0
+retired = [1, 2]
+stems = ["orders"]
+
+[scope]
+minimum = ["orders"]
+widened = []
+rebuilt = ["orders"]
+retiring = []
+
+[crates]
+orders = "rewrite"
+customers = "carried"
+returns = "carried"
+health = "carried"
+
+[oracle]
+remove = [
+    "orders/amend-paid.json",
+    "orders/amend-pending.json",
+    "orders/amend-unknown.json",
+]

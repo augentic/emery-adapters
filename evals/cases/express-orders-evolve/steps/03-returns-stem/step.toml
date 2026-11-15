@@ -1,0 +1,21 @@
+title = "New stem: returns"
+via = "patch"
+
+[amend]
+added = [2, 4]
+changed = 0
+retired = 0
+stems = ["returns"]
+parts-added = ["returns"]
+
+[scope]
+minimum = ["returns"]
+widened = []
+rebuilt = ["returns"]
+retiring = []
+
+[crates]
+returns = "laid"
+orders = "carried"
+customers = "carried"
+health = "carried"

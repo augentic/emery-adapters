@@ -9,6 +9,7 @@ use std::{fs, io};
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::evolve::Evolution;
 use crate::stage::skipped_entry;
 
 pub const CASES: &str = "evals/cases";
@@ -16,6 +17,27 @@ pub const CASES: &str = "evals/cases";
 pub struct Case {
     pub name: String,
     pub expected: Expected,
+}
+
+impl Case {
+    pub fn read(root: &Path, name: &str) -> Result<Self, String> {
+        let dir = root.join(CASES).join(name);
+        let expected = Expected::read(&dir, name)?;
+        if let Some(fixture) = expected.absent_fixture(root) {
+            return Err(format!("{name}: no fixture at `{fixture}`"));
+        }
+        for tree in expected.trees() {
+            let path = root.join(tree);
+            if !path.is_dir() {
+                return Err(format!("{name}: no tree at `{tree}`"));
+            }
+            check_tree(&path, tree).map_err(|error| format!("{name}: {error}"))?;
+        }
+        Ok(Self {
+            name: name.to_owned(),
+            expected,
+        })
+    }
 }
 
 #[derive(Deserialize)]
@@ -45,6 +67,23 @@ pub struct Expected {
 }
 
 impl Expected {
+    const FILE: &str = "expected.toml";
+
+    fn read(dir: &Path, name: &str) -> Result<Self, String> {
+        let text = fs::read_to_string(dir.join(Self::FILE))
+            .map_err(|error| format!("{name}: {}: {error}", Self::FILE))?;
+        let expected: Self = toml::from_str(&text).map_err(|error| format!("{name}: {error}"))?;
+        expected.check().map_err(|error| format!("{name}: {} {error}", Self::FILE))?;
+        Ok(expected)
+    }
+
+    fn absent_fixture(&self, root: &Path) -> Option<&str> {
+        self.sources
+            .iter()
+            .filter_map(|source| source.fixture.as_deref())
+            .find(|fixture| !root.join(fixture).is_dir())
+    }
+
     pub fn adapters(&self) -> impl Iterator<Item = &str> {
         self.sources.iter().map(|source| source.adapter.as_str())
     }
@@ -323,11 +362,13 @@ pub fn cases(
         if !dir.is_dir() {
             continue;
         }
-        let expected = fs::read_to_string(dir.join("expected.toml"))
-            .map_err(|error| format!("{name}: expected.toml: {error}"))?;
-        let expected: Expected =
-            toml::from_str(&expected).map_err(|error| format!("{name}: {error}"))?;
-        expected.check().map_err(|error| format!("{name}: expected.toml {error}"))?;
+        if !dir.join(Expected::FILE).is_file() && dir.join(Evolution::FILE).is_file() {
+            if filter.contains(name) {
+                return Err(format!("{name}: evolution case; pass `--evolve`").into());
+            }
+            continue;
+        }
+        let expected = Expected::read(&dir, name)?;
         let selected = filter.is_empty()
             || filter.contains(name)
             || expected.adapters().any(|adapter| filter.contains(adapter));
@@ -336,12 +377,7 @@ pub fn cases(
         }
         // a fixture the checkout lacks (the vendored ones are gitignored until
         // fetched) skips its case unless the case was asked for by name
-        let absent = expected
-            .sources
-            .iter()
-            .filter_map(|source| source.fixture.as_deref())
-            .find(|fixture| !root.join(fixture).is_dir());
-        if let Some(fixture) = absent {
+        if let Some(fixture) = expected.absent_fixture(root) {
             if filter.contains(name) {
                 return Err(format!("{name}: no fixture at `{fixture}`").into());
             }

@@ -1,0 +1,43 @@
+# Step 01 (`01-bulk-threshold`) updates `BULK_DISCOUNT_MIN_UNITS` to `20`.
+
+kind = "http"
+
+[auth]
+header = "authorization"
+token = "test-token"
+guarded = "/api"
+
+[config]
+API_TOKENS = "test-token"
+BEARER_PREFIX = "Bearer "
+BULK_DISCOUNT_MIN_UNITS = "20"
+BULK_DISCOUNT_RATE = "0.05"
+CACHE_TTL_SECONDS = "300"
+DATABASE_URL = "postgres://api.test/orders"
+DEFAULT_PAGE_SIZE = "20"
+FREE_SHIPPING_THRESHOLD_CENTS = "10000"
+GST_RATE = "0.15"
+KEY_PREFIX = "orders-api:"
+LOG_LEVEL = "info"
+MAX_ATTEMPTS = "3"
+MAX_COURIER_NOTE = "200"
+MAX_EMAIL = "254"
+MAX_LINES = "50"
+MAX_LINE_QUANTITY = "999"
+MAX_NAME = "80"
+MAX_PAGE_SIZE = "100"
+NZ_POSTCODE = '^\d{4}$'
+ORDER_CACHE_TTL_SECONDS = "60"
+PORT = "3000"
+PROBE_TIMEOUT_MS = "2000"
+REDIS_URL = "redis://api.test:6379"
+REQUEST_TIMEOUT_MS = "5000"
+RETRY_BACKOFF_MS = "250"
+RURAL_SURCHARGE_CENTS = "650"
+SHIPPING_API_KEY = "rates-key"
+SHIPPING_API_URL = "http://api.test"
+SHUTDOWN_GRACE_MS = "10000"
+SKU_PATTERN = '^[A-Z]{2,4}-\d{3,6}$'
+SLOW_REQUEST_MS = "1000"
+TRADE_DISCOUNT_RATE = "0.1"
+VIP_DISCOUNT_RATE = "0.15"

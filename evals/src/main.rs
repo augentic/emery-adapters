@@ -21,6 +21,7 @@ use std::{env, fs, io};
 mod build;
 mod card;
 mod case;
+mod evolve;
 mod fidelity;
 mod grade;
 mod plan;
@@ -387,16 +388,27 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     let Args {
         filter,
         facts_only,
+        evolve,
         again,
         oracle,
         target,
         budget,
     } = Args::parse(env::args().skip(1))?;
+    let eval_dir = root.join("target/eval");
+
+    if let Some(mode) = evolve {
+        return match mode {
+            EvolveMode::Facts => evolve::run_facts(root, &eval_dir, &filter),
+            EvolveMode::Live => {
+                Err("`--evolve` requires `--facts`; the live chain runner lands in step 15".into())
+            }
+        };
+    }
+
     let cases = cases(root, &filter)?;
     if cases.is_empty() {
         return Err(format!("no case under `{CASES}` matches").into());
     }
-    let eval_dir = root.join("target/eval");
 
     // the oracle alone needs no binary, no component, and no model
     if let Some(card) = oracle {
@@ -485,13 +497,20 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     write_scorecard(&eval_dir, &settings, &reports, &started, &card_name)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EvolveMode {
+    Facts,
+    Live,
+}
+
 // What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--build`, `--rebuild <card>`, `--resume <card> --at
-// <wave>` with `--drifted` to admit a seed the template has moved under,
-// `--oracle <card>`) with the target a build goes through.
+// mode (`--facts`, `--evolve`, `--build`, `--rebuild <card>`, `--resume
+// <card> --at <wave>` with `--drifted` to admit a seed the template has
+// moved under, `--oracle <card>`) with the target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
+    evolve: Option<EvolveMode>,
     again: Option<Again>,
     // the card whose `omnia` build the reference's fixtures are driven through
     oracle: Option<String>,
@@ -533,7 +552,19 @@ impl Args {
         }
         let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
         let facts_only = filter.remove("--facts");
-        let build = filter.remove("--build") || again.is_some();
+        let evolve = filter.remove("--evolve");
+        let build_flag = filter.remove("--build");
+        let build = build_flag || again.is_some();
+        if evolve {
+            return Self::resolve_evolve(
+                filter,
+                facts_only,
+                build,
+                oracle.as_deref(),
+                target,
+                budget,
+            );
+        }
         if facts_only && filter.is_empty() {
             return Err("`--facts` names a case or an adapter".into());
         }
@@ -572,6 +603,7 @@ impl Args {
         Ok(Self {
             filter,
             facts_only,
+            evolve: None,
             again,
             oracle,
             target: build.then(|| target.unwrap_or_default()),
@@ -612,6 +644,37 @@ impl Args {
             return Err("`--drifted` admits the seed a `--resume` resumes over".into());
         }
         Ok(again)
+    }
+
+    fn resolve_evolve(
+        filter: BTreeSet<String>, facts_only: bool, build_requested: bool, oracle: Option<&str>,
+        target: Option<Target>, budget: Option<NonZeroUsize>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        if build_requested || oracle.is_some() {
+            return Err(
+                "`--evolve` cannot combine with `--build`, `--rebuild`, `--resume --at`, or `--oracle`"
+                    .into(),
+            );
+        }
+        if filter.is_empty() {
+            return Err("`--evolve` names an evolution case".into());
+        }
+        if facts_only && (target.is_some() || budget.is_some()) {
+            return Err(
+                "`--facts --evolve` spends no turn, so it cannot set `--target` or `--budget`"
+                    .into(),
+            );
+        }
+        let mode = if facts_only { EvolveMode::Facts } else { EvolveMode::Live };
+        Ok(Self {
+            filter,
+            facts_only: false,
+            evolve: Some(mode),
+            again: None,
+            oracle: None,
+            target,
+            budget,
+        })
     }
 }
 
@@ -705,6 +768,7 @@ mod tests {
     };
     use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
+    use crate::evolve::{AppliedChange, CountRange, CrateAction, StepInput, StepToml, evolutions};
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
         declared_tests, named_by, reexported, routes, scenarios_of, tap_counts, unrun,
@@ -962,6 +1026,35 @@ mod tests {
             &["--build", "--budget", "0", "express-orders"][..],
             &["--build", "--budget", "six", "express-orders"][..],
             &["--build", "--budget"][..],
+        ] {
+            assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
+        }
+
+        let evolve_facts = Args::parse(
+            ["--facts", "--evolve", "express-orders-evolve"].map(String::from).into_iter(),
+        )
+        .unwrap();
+        assert!(!evolve_facts.facts_only);
+        assert_eq!(evolve_facts.evolve, Some(EvolveMode::Facts));
+        assert_eq!(evolve_facts.filter, BTreeSet::from(["express-orders-evolve".to_owned()]));
+        let evolve_live = Args::parse(
+            ["--evolve", "--target", "omnia", "express-orders-evolve"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(evolve_live.evolve, Some(EvolveMode::Live));
+        assert_eq!(evolve_live.target, Some(Target::Omnia));
+        for argv in [
+            &["--evolve"][..],
+            &["--facts", "--evolve"][..],
+            &["--facts", "--evolve", "--target", "omnia", "express-orders-evolve"][..],
+            &["--facts", "--evolve", "--budget", "6", "express-orders-evolve"][..],
+            &["--evolve", "--build", "express-orders-evolve"][..],
+            &["--evolve", "--oracle", "card", "express-orders-evolve"][..],
+            &["--evolve", "--rebuild", "card", "express-orders-evolve"][..],
+            &["--evolve", "--resume", "card", "--at", "2", "express-orders-evolve"][..],
+            &["--evolve", "--drifted", "express-orders-evolve"][..],
         ] {
             assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
         }
@@ -3010,5 +3103,129 @@ mod tests {
             text.contains("| `SLICE-003` `orders` (2/2) | `PART-002` | 3 | 1 | 3 | yes | 120s |"),
             "{text}"
         );
+    }
+
+    #[test]
+    fn evolve_step_toml() {
+        let patch = StepToml::parse(
+            "title = \"Bulk threshold\"\n\
+             via = \"patch\"\n\
+             remove = [\"src/old.ts\"]\n\
+             [amend]\n\
+             added = 0\n\
+             changed = [1, 2]\n\
+             retired = 0\n\
+             stems = [\"orders\"]\n\
+             [scope]\n\
+             minimum = [\"orders\"]\n\
+             widened = []\n\
+             rebuilt = [\"orders\"]\n\
+             [crates]\n\
+             orders = \"rewrite\"\n\
+             customers = \"carried\"\n\
+             [oracle]\n\
+             remove = [\"orders/amend-paid.json\"]\n",
+        )
+        .unwrap();
+        assert_eq!(
+            patch.input,
+            StepInput::Patch {
+                remove: BTreeSet::from(["src/old.ts".to_owned()]),
+            }
+        );
+        assert_eq!(patch.amend.added, CountRange::Exact(0));
+        assert_eq!(patch.amend.changed, CountRange::Inclusive([1, 2]));
+        assert!(patch.amend.changed.contains(1));
+        assert!(patch.amend.changed.contains(2));
+        assert!(!patch.amend.changed.contains(0));
+        assert!(!patch.amend.changed.contains(3));
+        assert_eq!(patch.crates["orders"], CrateAction::Rewrite);
+        assert_eq!(patch.crates["customers"], CrateAction::Carried);
+
+        let intent = StepToml::parse(
+            "title = \"Rates decision\"\n\
+             via = \"intent\"\n\
+             description = \"Use x-api-key.\"\n\
+             [amend]\n\
+             sections = [\"apis\"]\n\
+             [scope]\n\
+             minimum = []\n\
+             widened = [\"orders\"]\n\
+             rebuilt = [\"orders\"]\n\
+             [oracle.upstream-headers]\n\
+             x-api-key = \"rates-key\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            intent.input,
+            StepInput::Intent {
+                description: "Use x-api-key.".to_owned(),
+            }
+        );
+        assert_eq!(intent.oracle.upstream_headers["x-api-key"], "rates-key");
+
+        for invalid in [
+            "title = \"\"\nvia = \"patch\"\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\ndescription = \"d\"\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"intent\"\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"intent\"\ndescription = \"d\"\nremove = [\"a.ts\"]\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\nremove = [\"../a.ts\"]\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\nremove = [\"src//a.ts\"]\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\nremove = [\"a.ts\", \"a.ts\"]\n[amend]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\nstems = [\"orders\", \"orders\"]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\nchanged = [3, 1]\n[scope]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\n[scope]\nminimum = [\"orders\"]\nrebuilt = []\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\n[scope]\nminimum = [\"orders\"]\nwidened = [\"orders\"]\nrebuilt = [\"orders\"]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\n[scope]\nminimum = [\"orders\"]\nrebuilt = [\"orders\"]\nretiring = [\"orders\"]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\n[scope]\n[oracle]\nremove = [\"orders/not-json.txt\"]\n",
+            "title = \"x\"\nvia = \"patch\"\n[amend]\n[scope]\n[oracle]\nremove = [\"flat.json\"]\n",
+        ] {
+            assert!(StepToml::parse(invalid).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn evolve_express_orders() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+
+        let standard = cases(root, &BTreeSet::from(["express-orders".to_owned()])).unwrap();
+        assert_eq!(standard.len(), 1);
+        let wrong_mode = cases(root, &BTreeSet::from(["express-orders-evolve".to_owned()]));
+        assert!(wrong_mode.is_err());
+
+        let found =
+            evolutions(root, &BTreeSet::from(["express-orders-evolve".to_owned()])).unwrap();
+        assert_eq!(found.len(), 1);
+        let evolution = &found[0];
+        assert_eq!(evolution.base.name, "express-orders");
+        assert_eq!(evolution.target, Target::Omnia);
+        assert_eq!(evolution.chains.get(), 3);
+        assert_eq!(evolution.steps.len(), 7);
+
+        let scratch_dir = scratch("evolve-express-orders", &[]);
+        let resolved = evolution.dry_run(&scratch_dir).unwrap();
+        assert_eq!(resolved.baseline_scenarios, 57);
+        let counts: Vec<usize> =
+            resolved.steps.iter().map(|step| step.oracle.total_scenarios).collect();
+        assert_eq!(counts, [58, 61, 64, 62, 60, 61, 61]);
+        assert_eq!(resolved.steps[2].number, 3);
+        assert!(matches!(&resolved.steps[2].change, AppliedChange::Patch(s) if s.added.len() == 5));
+        assert_eq!(resolved.steps[2].crates["returns"], CrateAction::Laid);
+        assert!(
+            matches!(&resolved.steps[4].change, AppliedChange::Patch(s) if s.removed.len() == 5)
+        );
+        assert_eq!(resolved.steps[4].crates["returns"], CrateAction::Removed);
+        assert!(matches!(&resolved.steps[5].change, AppliedChange::Intent(_)));
+        assert_eq!(resolved.steps[5].oracle.upstream_headers["x-api-key"], "rates-key");
+        assert_eq!(resolved.steps[6].oracle.upstream_headers["x-api-key"], "rates-key");
+
+        let rendered = resolved.to_string();
+        assert!(rendered.contains("# express-orders-evolve — evolution chain"), "{rendered}");
+        assert!(rendered.contains("- **01 Bulk threshold** (`01-bulk-threshold`):"), "{rendered}");
+        assert!(
+            rendered.contains("- **07 Revert the threshold** (`07-revert-threshold`):"),
+            "{rendered}"
+        );
+        fs::remove_dir_all(&scratch_dir).unwrap();
     }
 }

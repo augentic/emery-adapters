@@ -18,6 +18,8 @@ pub struct Reference {
     kind: Kind,
 }
 impl Reference {
+    pub const SPEC_FILE: &str = "oracle.toml";
+
     // The reference `named` relative to `root`, where its tree exists; one
     // the root lacks is reported and left out, since a reference is
     // vendored beside its fixture and may be absent.
@@ -28,11 +30,14 @@ impl Reference {
             eprintln!("eval: reference `{name}` is not a directory; nothing compared");
             return None;
         }
-        let kind = match fs::read_to_string(dir.join(SPEC)) {
+        let kind = match fs::read_to_string(dir.join(Self::SPEC_FILE)) {
             Ok(text) => match Spec::parse(&text) {
                 Ok(spec) => Kind::Scenarios(spec),
                 Err(why) => {
-                    eprintln!("eval: reference `{name}`: {SPEC} {why}; nothing compared");
+                    eprintln!(
+                        "eval: reference `{name}`: {} {why}; nothing compared",
+                        Self::SPEC_FILE
+                    );
                     return None;
                 }
             },
@@ -43,6 +48,14 @@ impl Reference {
             name: name.to_owned(),
             kind,
         })
+    }
+
+    pub fn check_spec(text: &str) -> Result<(), String> {
+        Spec::parse(text).map(|_| ())
+    }
+
+    pub fn check_scenario(scenario: &Value) -> Result<(), String> {
+        check_scenario(scenario)
     }
 
     // The built tree at `export` measured against a reference guest, and
@@ -487,8 +500,6 @@ fn generic_seed(upper: &str, token: &str) -> Option<String> {
 const GROUPS: [&str; 2] = ["static", "replay"];
 
 const HARNESS: &str = "reference_oracle";
-
-const SPEC: &str = "oracle.toml";
 
 fn harness_path() -> String {
     format!("tests/{HARNESS}.rs")

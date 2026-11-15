@@ -74,7 +74,7 @@ const UNCOPIED: &[&str] = &[
     ".ruff_cache",
 ];
 
-fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
+pub fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;

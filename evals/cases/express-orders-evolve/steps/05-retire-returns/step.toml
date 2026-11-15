@@ -1,0 +1,35 @@
+title = "Retire returns"
+via = "patch"
+remove = [
+    "src/domain/returns.ts",
+    "src/repositories/returns.ts",
+    "src/routes/returns.ts",
+    "src/schemas/returns.ts",
+    "src/services/returns.ts",
+]
+
+[amend]
+added = 0
+changed = 0
+retired = [2, 4]
+stems = ["returns"]
+parts-removed = ["returns"]
+
+[scope]
+minimum = []
+widened = []
+rebuilt = []
+retiring = ["returns"]
+
+[crates]
+returns = "removed"
+orders = "carried"
+customers = "carried"
+health = "carried"
+
+[oracle]
+remove = [
+    "returns/create-unknown.json",
+    "returns/create-unshipped.json",
+    "returns/create.json",
+]

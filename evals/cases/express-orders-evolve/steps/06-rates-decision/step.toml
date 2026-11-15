@@ -1,0 +1,24 @@
+title = "Design-only decision"
+via = "intent"
+description = "The courier rates service is called over HTTPS with its key in the x-api-key header."
+
+[amend]
+added = 0
+changed = 0
+retired = 0
+stems = []
+sections = ["apis"]
+
+[scope]
+minimum = []
+widened = ["orders"]
+rebuilt = ["orders"]
+retiring = []
+
+[crates]
+orders = "rewrite"
+customers = "carried"
+health = "carried"
+
+[oracle.upstream-headers]
+x-api-key = "rates-key"

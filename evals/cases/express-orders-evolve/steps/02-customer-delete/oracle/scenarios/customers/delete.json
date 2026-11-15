@@ -1,0 +1,41 @@
+{
+  "steps": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/api/customers",
+        "body": {
+          "email": "ada@example.nz",
+          "name": "Ada Lovelace"
+        }
+      },
+      "capture": {
+        "customer": "id"
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "request": {
+        "method": "DELETE",
+        "path": "/api/customers/{customer}"
+      },
+      "expect": {
+        "status": 204
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/customers/{customer}"
+      },
+      "expect": {
+        "status": 404,
+        "body": {
+          "error": "not-found"
+        }
+      }
+    }
+  ]
+}

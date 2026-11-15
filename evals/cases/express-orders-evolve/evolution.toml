@@ -1,0 +1,18 @@
+# End-to-end change-build evolution chain over `express-orders`: one baseline
+# `specify --apply` and `build`, then seven `amend -> apply -> build` steps
+# exercising crate rewrite, cross-crate touch points, a new stem, in-part
+# retirement, whole-part retirement, design-only `scope` precision, and a
+# round-trip revert.
+
+base = "express-orders"
+target = "omnia"
+chains = 3
+steps = [
+    "01-bulk-threshold",
+    "02-customer-delete",
+    "03-returns-stem",
+    "04-retire-lines",
+    "05-retire-returns",
+    "06-rates-decision",
+    "07-revert-threshold",
+]

@@ -1,0 +1,19 @@
+title = "Bulk threshold"
+via = "patch"
+
+[amend]
+added = 0
+changed = [1, 2]
+retired = 0
+stems = ["orders"]
+
+[scope]
+minimum = ["orders"]
+widened = []
+rebuilt = ["orders"]
+retiring = []
+
+[crates]
+orders = "rewrite"
+customers = "carried"
+health = "carried"
