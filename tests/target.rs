@@ -835,6 +835,61 @@ async fn node_scope() {
 }
 
 #[tokio::test]
+async fn node_change() {
+    let project = scratch();
+    NODE.init(&project).await.expect("init over the empty tree");
+    let prior_files = [
+        ("src/orders/legacy/index.ts", "export function legacyOrder() {}\n"),
+        ("src/orders/reading/old.ts", "export function oldRead() {}\n"),
+        ("src/customers/index.ts", "export function getCustomer() {}\n"),
+        ("src/returns/index.ts", "export function createReturn() {}\n"),
+    ];
+    for (path, content) in prior_files {
+        project.write(path, content);
+    }
+
+    let mut slice = slice();
+    let mut prior = slice.requirements[0].clone();
+    prior.statement = vec!["Returns the stored order.".into()];
+    slice.change = Some(SliceChange {
+        built: "rev-001".into(),
+        commit: "abc1234".into(),
+        standing: vec![Standing::Changed],
+        prior: vec![prior],
+        vanished: vec!["returns".into()],
+        ..SliceChange::default()
+    });
+
+    let model = ScriptedModel::answering([TYPESCRIPT_REPORT])
+        .calling(0, [write_files(&TYPESCRIPT_WRITTEN)]);
+    let report =
+        NODE.build_slice(&project, &model, &slice).await.expect("change build over the node tree");
+    model.assert_exhausted();
+
+    assert_eq!(report.covered, ["REQ-001"]);
+    let brief = &model.seen()[0].messages[0];
+    for expected in [
+        "## The change",
+        "Built revision: `rev-001` at commit `abc1234`.",
+        "- `REQ-001` `orders.get-id.return-order` [changed]",
+        "Prior: Returns the stored order.",
+        "Vanished stems: `returns`.",
+    ] {
+        assert!(brief.contains(expected), "the brief carries `{expected}`: {brief}");
+    }
+    for (path, expected) in prior_files {
+        assert_eq!(
+            text(&project, path),
+            expected,
+            "`{path}` stands untouched: node rewrites or deletes nothing before the turn"
+        );
+    }
+    for (path, expected) in TYPESCRIPT_WRITTEN {
+        assert_eq!(text(&project, path), expected, "the slice's write landed at `{path}`");
+    }
+}
+
+#[tokio::test]
 async fn node_verify() {
     let project = scratch();
     project.write("package.json", "{}");

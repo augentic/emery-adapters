@@ -261,7 +261,7 @@ The merge keeps every form it is given, and the verify then has two.
 - No crate. Your stem's is scaffolded, one word whatever its hyphens: `crates/order-items/` for `order-items`.
   A crate written under any other name is a finding.
 - No `crates/start/`. Never add `start` to `Cargo.toml`. The seed and the host are the program's start.
-- No `mount`, no router of your own beyond your part's `handlers()`, no change to `src/lib.rs` outside its array, and no edit to another stem's crate.
+- No `mount`, no router of your own beyond your part's `handlers()`, no change to `src/lib.rs` outside its array, and no edit to another stem's crate save at the touch points a change build's brief lists.
   The host runs a stem through its `handlers()` alone.
 - No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock`, the root `Cargo.toml`'s list, and `src/lib.rs`'s array is the exemplar's guest template, scaffolded when the repository was initialised.
   Read one where you need its text. Write or report none.
@@ -297,6 +297,25 @@ Where your slice carries requirements under `start` beside its own stem's, read 
   It lands as the [translation](references/translation.md) says: the capability that plays the role, the mechanism's own parts written nowhere.
 - A requirement whose whole statement is the mechanism is left out of `covered`, its marker standing. Do not stub it.
 - What a guest cannot do, what the host does for it, and the capability it reaches instead are in the [guardrails](references/guardrails.md).
+
+## A change build
+
+When the brief carries `## The change`, the tree holds an earlier revision's verified build and this run rebuilds only the parts the change reaches.
+See [a change build](references/change.md) for the stem shapes and a worked example.
+
+- **`## The change` states what moved.** Each slice requirement is `[added]`, `[changed]` (with `Prior` and `Current` statements), or `[unchanged]`.
+  `Departed from this part` lists requirements retired or moved elsewhere; `Vanished stems` lists stems whose crates and list lines the adapter already removed; changed design types and sections show `Before` and `After`.
+  Write nothing for departed requirements.
+- **A rewritten crate is written from the slice.** At the first slice of a build that reaches a stem, the adapter removes `crates/<stem>/` and lays a fresh skeleton from the slice, its root list lines already held.
+  Fill every marker of that stem — `[added]`, `[changed]`, and `[unchanged]` requirements alike — from the current specification and design alone.
+  Never patch from memory, and never run `git` to inspect the removed crate.
+- **Extended and kept stems.** Where an earlier slice of this build already rewrote the stem (`Built before in earlier slices of this part`), its files arrive **held, extended**: fill only your new markers and keep what that slice wrote.
+  A stem in the slice that the change did not reach has nothing scaffolded; leave its crate as it stands and the adapter records its requirements covered.
+- **Keep exported signatures other crates call.** Where the brief lists `Exported signatures of the rewritten crates before this slice`, keep each function's module path and signature in the rewritten crate unless the slice's changed specification or design changes it, so callers in other crates need no edit.
+- **Edit only listed touch points outside your slice's crates.** Every other crate stands as built.
+  Outside your slice's reached crates, edit only the items and manifest lines listed under `Touch points outside the slice's reached crates` (and `use` lines in those files) where a signature changed or a vanished crate was removed.
+  Changing any other item or manifest line, or leaving any mention of a vanished crate, is a finding on your report.
+- **A retiring slice.** A slice retiring a removed part holds no requirements: edit the listed touch points so nothing names the vanished crate, run the check command, and report `"covered": []`.
 
 ## The check
 
@@ -341,6 +360,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
 - A filled handler still bounded `P: Capabilities`; the finding lists the traits its body reaches. A required setting read through `Config::get` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
+- On a change build, an item or manifest line outside your slice's reached crates changed that is no listed touch point, or an item or manifest dependency still names a crate the change removed.
 
 Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
 

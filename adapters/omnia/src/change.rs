@@ -7,7 +7,7 @@ mod touch;
 use std::collections::{BTreeMap, BTreeSet};
 
 use emery_sdk::push_unique;
-use emery_sdk::target::{Slice, SliceChange, Standing};
+use emery_sdk::target::{Report, Slice, SliceChange, Standing};
 
 pub use self::scope::scope;
 pub use self::touch::TouchPoint;
@@ -114,8 +114,17 @@ impl Change {
         self.stems.get(stem) == Some(&StemChange::Reached { first: true })
     }
 
-    pub fn kept_requirements(&self) -> &[String] {
-        &self.kept_requirements
+    pub fn quiet_report(self) -> Report {
+        Report {
+            covered: self.kept_requirements,
+            written: self.rewritten_lists.into_keys().collect(),
+        }
+    }
+
+    pub fn cover_kept(self, report: &mut Report) {
+        for id in self.kept_requirements {
+            push_unique(&mut report.covered, id);
+        }
     }
 
     pub fn touch_points(&self) -> &[TouchPoint] {

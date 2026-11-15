@@ -1,10 +1,11 @@
 //! Builds each slice of a plan into an Omnia guest in Rust, and verifies the integrated tree.
 //!
 //! Initialises the repository with the guest template of [`omnia_template`],
-//! scaffolds each slice into its stem's member crate whose routers the root
-//! component merges, holds the tree to the layout's rules before accepting a
-//! report or verdict, and runs `cargo clippy`, `cargo test`, and the
-//! `wasm32-wasip2` check at each slice and wave.
+//! scopes changes against the built crates, scaffolds each slice into its
+//! stem's member crate whose routers the root component merges, holds the
+//! tree to the layout's rules before accepting a report or verdict, and runs
+//! `cargo clippy`, `cargo test`, and the `wasm32-wasip2` check at each slice
+//! and wave.
 
 mod change;
 mod layout;
@@ -15,8 +16,10 @@ mod tree;
 use std::num::NonZeroU32;
 use std::path::Path;
 
-use emery_sdk::target::{self, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task};
-use emery_sdk::{Error, Model, push_unique, tracing};
+use emery_sdk::target::{
+    self, BuildContext, Grant, MergeRule, Metadata, Outcome, Report, TargetAdapter, Task,
+};
+use emery_sdk::{Doc, Error, Model, tracing};
 
 use self::change::Change;
 use self::scaffold::Scaffold;
@@ -62,38 +65,7 @@ impl TargetAdapter for Adapter {
                 let tree = Tree::read(Path::new(ctx.workspace))?;
                 Ok(Outcome::Scoped(change::scope(ctx.change, &tree)))
             }
-            Task::Build(ctx) => {
-                let root = Path::new(ctx.workspace);
-                let mut change = Change::read(ctx.slice, &Tree::read(root)?);
-                change.rewrite(root)?;
-                let plan = Scaffold::plan(ctx.slice, root, &change)?;
-                if plan.is_empty() {
-                    tracing::info!(
-                        slice = ctx.slice.id,
-                        retiring = change.is_retiring(),
-                        "nothing to scaffold and no touch points; no turn"
-                    );
-                    return Ok(Outcome::Built(Report {
-                        covered: change.kept_requirements().to_vec(),
-                        written: change.rewritten_lists().keys().cloned().collect(),
-                    }));
-                }
-                let scaffold = plan.write(root)?;
-                tracing::info!(
-                    scaffolded = scaffold.written().len(),
-                    "scaffolded the slice's skeleton"
-                );
-                let prepared = scaffold.prepare(PROSE);
-                let ctx = ctx.with_scaffold(prepared.as_target());
-                let mut report = target::build(&ctx, PROSE, |report| {
-                    Tree::read(root)?.check_build(&scaffold, report)
-                })
-                .await?;
-                for id in change.kept_requirements() {
-                    push_unique(&mut report.covered, id.clone());
-                }
-                Ok(Outcome::Built(report))
-            }
+            Task::Build(ctx) => build(ctx).await.map(Outcome::Built),
             Task::Verify(ctx) => {
                 let root = Path::new(ctx.workspace);
                 target::verify(&ctx, PROSE, |_| Tree::read(root)?.check_verify())
@@ -104,8 +76,34 @@ impl TargetAdapter for Adapter {
     }
 }
 
+async fn build<P: Model>(ctx: BuildContext<'_, P>) -> Result<Report, Error> {
+    let root = Path::new(ctx.workspace);
+    let mut change = Change::read(ctx.slice, &Tree::read(root)?);
+    change.rewrite(root)?;
+
+    let plan = Scaffold::plan(ctx.slice, root, &change)?;
+    if plan.is_empty() {
+        tracing::info!(
+            slice = ctx.slice.id,
+            retiring = change.is_retiring(),
+            "nothing to scaffold and no touch points; no turn"
+        );
+        return Ok(change.quiet_report());
+    }
+
+    let scaffold = plan.write(root)?;
+    tracing::info!(scaffolded = scaffold.written().len(), "scaffolded the slice's skeleton");
+    let prepared = scaffold.prepare(PROSE);
+    let ctx = ctx.with_scaffold(prepared.as_target());
+    let mut report =
+        target::build(&ctx, PROSE, |report| Tree::read(root)?.check_build(&scaffold, report))
+            .await?;
+    change.cover_kept(&mut report);
+    Ok(report)
+}
+
 /// The prompts and the references embedded in the adapter.
-pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
+pub static PROSE: &[Doc] = emery_sdk::prose![
     "../prose/build.md",
     "../prose/verify.md",
     "../prose/references/layout.md",
@@ -114,6 +112,7 @@ pub static PROSE: &[emery_sdk::Doc] = emery_sdk::prose![
     "../prose/references/testing.md",
     "../prose/references/guardrails.md",
     "../prose/references/translation.md",
+    "../prose/references/change.md",
 ];
 
 #[cfg(target_arch = "wasm32")]

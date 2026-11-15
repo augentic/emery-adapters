@@ -81,6 +81,8 @@ The rules are:
   A check that fails for a crate the pins lack is repaired in the stem's manifest, where the crate carries its version, never in the root's.
   An entry of the root manifest's list naming a crate the tree lacks, `start = { path = "crates/start" }` with no `crates/start/Cargo.toml`, is a finding at its line.
   The repair drops it through `edit_files`.
+- **No removed crate is named.** Where a crate the tree lacks is still named by a stem manifest's path dependency or by a `use` or item of any module, each line is a finding.
+  The repair drops the dependency line and the mentions through `edit_files`.
 - **Every stem is merged.** Every stem's `handlers()` is listed by a `<stem>::handlers()` entry of the `Handlers::from([..])` array in `src/lib.rs`.
   A stem the array does not name compiles clean and serves nothing, which no check sees.
   The repair adds the stem's entry at the end of the array through `edit_files` and rewrites no other.
