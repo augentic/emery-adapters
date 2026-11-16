@@ -17,7 +17,9 @@ use super::settings::Settings;
 use super::stem::{Act, Consumer, Function, Handler, Kind, Stated, Stem, Test, Type};
 use super::trigger;
 use super::types::{Body, DefaultFn, LaidField, LaidVariant};
-use crate::layout::{HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER};
+use crate::layout::{
+    HANDLER_LIST_ANCHOR, STEM_DEPENDENCIES, STEM_MANIFEST_HEADER, crate_ident, handlers_call,
+};
 use crate::syntax;
 
 const DERIVES: &str = "Debug, Clone, PartialEq, Eq, Serialize, Deserialize";
@@ -96,6 +98,41 @@ pub fn fenced(lang: &str, text: &str) -> String {
     format!("{fence}{lang}\n{}\n{fence}\n", text.trim_end_matches('\n'))
 }
 
+pub fn render_item(item: impl Into<Item>) -> String {
+    let mut source = Source::default();
+    source.push(item);
+    source.render().trim_end().to_owned()
+}
+
+pub fn requires_trait<B: Into<String>>(bounds: impl IntoIterator<Item = B>) -> Trait {
+    Trait::new("Requires").vis(Vis::Pub).bounds(bounds)
+}
+
+pub fn requires_impl<B: Into<String>>(bounds: impl IntoIterator<Item = B>) -> Impl {
+    Impl::blanket("impl<P> Requires for P", "P", bounds)
+}
+
+pub fn add_use(text: &str, path: &str, name: &str) -> Option<String> {
+    let parsed = syntax::parse(text).ok()?;
+    if let Some(block) = syntax::use_block(text, &parsed) {
+        let mut uses = Uses::default();
+        for (mod_path, names) in &block.entries {
+            let refs: Vec<&str> = names.iter().map(String::as_str).collect();
+            uses.add(mod_path, &refs);
+        }
+        uses.add(path, &[name]);
+        let rendered = render_item(uses);
+        let mut next = text.to_owned();
+        next.replace_range(block.bytes, &rendered);
+        return Some(next);
+    }
+    let mut uses = Uses::default();
+    uses.add(path, &[name]);
+    let mut next = text.to_owned();
+    insert_uses(&mut next, uses, Some(&parsed));
+    Some(next)
+}
+
 impl Stem {
     pub fn render(&self, kind: Kind) -> String {
         match kind {
@@ -125,7 +162,11 @@ impl Stem {
     // its list where the part registers anything.
     fn render_entry(&self) -> String {
         let gated = self.handlers.iter().any(|handler| handler.gated);
-        let bounds = if gated { "Config + Send + Sync + 'static" } else { "Send + Sync + 'static" };
+        let mut bounds = Vec::new();
+        if gated {
+            bounds.push("Config");
+        }
+        bounds.extend(["Send", "Sync", "'static"]);
         let mut source = Source::default();
         source.push(Doc::new([
             format!("# {}", self.name),
@@ -139,16 +180,11 @@ impl Stem {
         }
         uses.add("omnia_sdk::api", &["Handlers"]);
         source.push(uses);
-        source.push(
-            Trait::new("Requires")
-                .docs([
-                    "The capabilities the stem's handlers reach, implemented by every provider \
-                     that has them.",
-                ])
-                .vis(Vis::Pub)
-                .bounds(bounds),
-        );
-        source.push(Impl::new(format!("impl<P> Requires for P where P: {bounds}")));
+        source.push(requires_trait(bounds.iter().copied()).docs([
+            "The capabilities the stem's handlers reach, implemented by every provider that has \
+             them.",
+        ]));
+        source.push(requires_impl(bounds));
         source.push(
             Fn::new("handlers")
                 .docs(["The stem's handlers, merged onto the root routers."])
@@ -161,8 +197,8 @@ impl Stem {
         if !self.registers() {
             return text;
         }
-        let line = format!("{}::handlers()", self.part);
-        insert(&text, &line, &Place::After(HANDLER_LIST_ANCHOR)).unwrap_or(text)
+        let line = handlers_call(&self.part);
+        insert(&text, &line, &Place::After(HANDLER_LIST_ANCHOR.to_owned())).unwrap_or(text)
     }
 
     fn render_module(&self) -> String {
@@ -207,7 +243,7 @@ impl Stem {
     fn render_tests(&self) -> String {
         let sending = self.sending();
         let delivering = self.delivering();
-        let ident = self.package.replace('-', "_");
+        let ident = crate_ident(&self.package);
 
         let mut source = Source::default();
         source.push(Doc::new([format!(
@@ -403,7 +439,7 @@ impl Stem {
         let uses = missing_uses(self.test_imports(), parsed.as_ref());
         insert_uses(&mut next, uses, parsed.as_ref());
 
-        let ident = self.package.replace('-', "_");
+        let ident = crate_ident(&self.package);
         let mut appended = Source::default();
         if !self.held_fn("provider") {
             appended.push(provider(&self.seeded()));

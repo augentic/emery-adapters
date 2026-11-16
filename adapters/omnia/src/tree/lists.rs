@@ -50,7 +50,7 @@ impl Tree {
         for (stem, manifest) in self.stem_manifests() {
             let code: Vec<&Module> = self.stem_files(stem).collect();
             for dep in Toml::read(manifest).dependencies() {
-                let ident = dep.package.replace('-', "_");
+                let ident = layout::crate_ident(&dep.package);
                 if layout::STEM_DEPENDENCIES.contains(&dep.package.as_str())
                     || code.iter().any(|module| module.mentions.contains(&ident))
                 {
@@ -79,13 +79,14 @@ impl Tree {
         let mut lines = Vec::new();
         for module in &self.modules {
             let Some(stem) = module.entry_stem() else { continue };
-            let ident = layout::package(stem).replace('-', "_");
+            let ident = layout::stem_ident(stem);
             if let Some(number) = module.exposes("handlers")
                 && !self.list_names(layout::ENTRY, &[&ident, "handlers"])
             {
                 lines.push(format!(
-                    "{}:{number}: `{ident}::handlers()` is listed by no entry of `{}`",
+                    "{}:{number}: `{}` is listed by no entry of `{}`",
                     module.path,
+                    layout::handlers_call(&ident),
                     layout::ENTRY
                 ));
             }
@@ -199,7 +200,7 @@ impl Tree {
                 self.modules.iter().partition(|module| module.path.starts_with(&prefix));
             let registers =
                 own.iter().any(|module| module.entry_stem() == Some(stem) && module.registers());
-            let ident = layout::package(stem).replace('-', "_");
+            let ident = layout::stem_ident(stem);
             let reached = others
                 .iter()
                 .any(|module| !module.is_common() && module.mentions.path_leads(&ident));
@@ -273,20 +274,7 @@ impl Module {
             .filter(|item| match item {
                 syn::Item::Mod(item) => item.content.is_some(),
                 syn::Item::Fn(item) => item.sig.ident != "handlers",
-                syn::Item::Trait(item) => {
-                    !(syntax::is_pub(&item.vis)
-                        && item.ident == "Requires"
-                        && item.items.is_empty())
-                }
-                syn::Item::Impl(item) => {
-                    let is_requires = item.modifiers.polarity.is_none()
-                        && item
-                            .trait_
-                            .as_ref()
-                            .is_some_and(|(path, _)| syntax::path_ends(path, &["Requires"]));
-                    !(is_requires && item.items.is_empty())
-                }
-                _ => true,
+                item => !syntax::is_requires_item(item),
             })
             .filter_map(syntax::item_head)
             .collect()

@@ -72,12 +72,19 @@ pub struct Uses(Vec<(String, Vec<String>)>);
 impl Uses {
     // The names taken from `path`, each once in sorted order.
     pub fn add(&mut self, path: &str, names: &[&str]) {
+        if names.is_empty() {
+            return;
+        }
+        if let Some((_, existing)) = self.0.iter_mut().find(|(held, _)| held == path) {
+            existing.extend(names.iter().copied().map(str::to_owned));
+            existing.sort_unstable();
+            existing.dedup();
+            return;
+        }
         let mut names = names.to_vec();
         names.sort_unstable();
         names.dedup();
-        if !names.is_empty() {
-            self.0.push((path.to_owned(), names.into_iter().map(str::to_owned).collect()));
-        }
+        self.0.push((path.to_owned(), names.into_iter().map(str::to_owned).collect()));
     }
 
     pub const fn is_empty(&self) -> bool {
@@ -609,6 +616,8 @@ impl Variant {
 // relative to the block, indented once when rendered.
 pub struct Impl {
     head: String,
+    param: String,
+    bounds: Vec<String>,
     body: Vec<String>,
 }
 
@@ -616,6 +625,19 @@ impl Impl {
     pub fn new(head: impl Into<String>) -> Self {
         Self {
             head: head.into(),
+            param: String::new(),
+            bounds: Vec::new(),
+            body: Vec::new(),
+        }
+    }
+
+    pub fn blanket<B: Into<String>>(
+        head: impl Into<String>, param: impl Into<String>, bounds: impl IntoIterator<Item = B>,
+    ) -> Self {
+        Self {
+            head: head.into(),
+            param: param.into(),
+            bounds: bounds.into_iter().map(Into::into).collect(),
             body: Vec::new(),
         }
     }
@@ -629,7 +651,33 @@ impl Impl {
 
     fn render(&self, out: &mut String) {
         if self.body.is_empty() {
-            let _ = writeln!(out, "{} {{}}", self.head);
+            if self.bounds.is_empty() {
+                let _ = writeln!(out, "{} {{}}", self.head);
+                return;
+            }
+            let joined = self.bounds.join(" + ");
+            let inline = format!("{} where {}: {joined} {{}}", self.head, self.param);
+            if width(&inline) <= MAX_WIDTH {
+                let _ = writeln!(out, "{inline}");
+            } else if TAB + width(&self.param) + 2 + width(&joined) <= MAX_WIDTH {
+                let _ = writeln!(
+                    out,
+                    "{} where\n{}{}: {joined}\n{{\n}}",
+                    self.head,
+                    pad(TAB),
+                    self.param
+                );
+            } else {
+                let _ = writeln!(out, "{} where", self.head);
+                for (i, bound) in self.bounds.iter().enumerate() {
+                    if i == 0 {
+                        let _ = writeln!(out, "{}{}: {bound}", pad(TAB), self.param);
+                    } else {
+                        let _ = writeln!(out, "{}+ {bound}", pad(TAB * 2));
+                    }
+                }
+                out.push_str("{\n}\n");
+            }
             return;
         }
         let _ = writeln!(out, "{} {{", self.head);
@@ -645,7 +693,7 @@ pub struct Trait {
     docs: Doc,
     vis: Vis,
     name: String,
-    bounds: String,
+    bounds: Vec<String>,
 }
 
 impl Trait {
@@ -666,16 +714,32 @@ impl Trait {
         self
     }
 
-    pub fn bounds(mut self, bounds: impl Into<String>) -> Self {
-        self.bounds = bounds.into();
+    pub fn bounds<B: Into<String>>(mut self, bounds: impl IntoIterator<Item = B>) -> Self {
+        self.bounds = bounds.into_iter().map(Into::into).collect();
         self
     }
 
     fn render(&self, out: &mut String) {
         self.docs.render("///", out);
-        let bounds =
-            if self.bounds.is_empty() { String::new() } else { format!(": {}", self.bounds) };
-        let _ = writeln!(out, "{}trait {}{bounds} {{}}", self.vis.prefix(), self.name);
+        let decl = format!("{}trait {}", self.vis.prefix(), self.name);
+        if self.bounds.is_empty() {
+            let _ = writeln!(out, "{decl} {{}}");
+            return;
+        }
+        let joined = self.bounds.join(" + ");
+        let inline = format!("{decl}: {joined} {{}}");
+        if width(&inline) <= MAX_WIDTH {
+            let _ = writeln!(out, "{inline}");
+        } else if TAB + width(&joined) <= MAX_WIDTH {
+            let _ = writeln!(out, "{decl}:\n{}{joined}\n{{\n}}", pad(TAB));
+        } else {
+            let _ = writeln!(out, "{decl}:");
+            for (i, bound) in self.bounds.iter().enumerate() {
+                let prefix = if i == 0 { "" } else { "+ " };
+                let _ = writeln!(out, "{}{prefix}{bound}", pad(TAB));
+            }
+            out.push_str("{\n}\n");
+        }
     }
 }
 

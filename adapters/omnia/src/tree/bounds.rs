@@ -2,6 +2,7 @@
 //! deployment setting to the part's `#[derive(Settings)]` struct.
 
 use std::collections::BTreeSet;
+use std::fmt;
 
 use syn::visit::{self, Visit};
 use syn::{Expr, ExprCall, ExprMethodCall, FnArg, ItemConst, ItemFn, Lit, Pat, TypeParamBound};
@@ -103,10 +104,27 @@ impl Module {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum BroadBound {
+    CrateRequires,
+    Requires,
+    Capabilities,
+}
+
+impl fmt::Display for BroadBound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::CrateRequires => "P: crate::Requires",
+            Self::Requires => "P: Requires",
+            Self::Capabilities => "P: Capabilities",
+        })
+    }
+}
+
 // Whether the fn's generics bound a parameter on `Requires` or `Capabilities`,
-// inline or in its `where` clause, returning the bound spelled.
-fn broad_bound(item: &ItemFn) -> Option<&'static str> {
-    struct Bounds(Option<&'static str>);
+// inline or in its `where` clause.
+fn broad_bound(item: &ItemFn) -> Option<BroadBound> {
+    struct Bounds(Option<BroadBound>);
 
     impl<'ast> Visit<'ast> for Bounds {
         fn visit_type_param_bound(&mut self, node: &'ast TypeParamBound) {
@@ -114,11 +132,11 @@ fn broad_bound(item: &ItemFn) -> Option<&'static str> {
                 && let TypeParamBound::Trait(bound) = node
             {
                 if path_ends(&bound.path, &["crate", "Requires"]) {
-                    self.0 = Some("P: crate::Requires");
+                    self.0 = Some(BroadBound::CrateRequires);
                 } else if path_ends(&bound.path, &["Requires"]) {
-                    self.0 = Some("P: Requires");
+                    self.0 = Some(BroadBound::Requires);
                 } else if path_ends(&bound.path, &["Capabilities"]) {
-                    self.0 = Some("P: Capabilities");
+                    self.0 = Some(BroadBound::Capabilities);
                 }
             }
             visit::visit_type_param_bound(self, node);

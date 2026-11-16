@@ -7,7 +7,7 @@ use std::path::Path;
 use emery_sdk::{Error, NoFollow, Standing, bad_request, server_error, standing};
 
 use super::names::{Names, screaming};
-use super::render::{MAX_WIDTH, TAB, pad};
+use super::render::{self, MAX_WIDTH, TAB, pad};
 use crate::layout::{self, insert_after};
 use crate::syntax;
 
@@ -20,7 +20,25 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn new(path: &str, text: String, place: Place) -> Self {
+    pub fn after(path: &str, anchor: impl Into<String>, text: String) -> Self {
+        Self::new(path, text, Place::After(anchor.into()))
+    }
+
+    pub fn file_end(path: &str, text: String) -> Self {
+        Self::new(path, text, Place::FileEnd)
+    }
+
+    pub fn pub_mod(path: &str, module: &str) -> Self {
+        Self::new(path, format!("pub mod {module};"), Place::PubModList)
+    }
+
+    pub fn requires_supertrait(path: &str, supertrait: impl Into<String>) -> Self {
+        let supertrait = supertrait.into();
+        let text = format!("Requires: {supertrait}");
+        Self::new(path, text, Place::RequiresSupertrait(supertrait))
+    }
+
+    fn new(path: &str, text: String, place: Place) -> Self {
         Self {
             path: path.to_owned(),
             text,
@@ -44,12 +62,13 @@ impl Line {
     // for an array's entry, anywhere in the text, since the formatter lays
     // a short array on the anchor's own line.
     fn held_by(&self, text: &str) -> bool {
-        if matches!(self.place, Place::RequiresConfig) {
-            return requires_holds_config(text);
+        if let Place::RequiresSupertrait(supertrait) = &self.place {
+            return syntax::parse(text)
+                .is_ok_and(|file| syntax::requires_bounds(&file, supertrait));
         }
         let key = self.key();
         text.lines().any(|held| held.trim() == key)
-            || matches!(self.place, Place::After(anchor) if anchor.ends_with('['))
+            || matches!(&self.place, Place::After(anchor) if anchor.ends_with('['))
                 && text.contains(key.trim_end_matches(','))
     }
 
@@ -72,16 +91,16 @@ pub enum Place {
     // After the template's anchor, as the template's own insertion lays it:
     // on the line after the anchor's, or, for an anchor opening an array,
     // as the array's last entry.
-    After(&'static str),
+    After(String),
     // The topic table: the end of the file.
     FileEnd,
     // Among the `pub mod` lines of a stem's entry, in the order the
     // formatter keeps them; before its first `use`, a blank line between,
     // where the entry holds none.
     PubModList,
-    // `Config` among the supertraits of `Requires` and its blanket `impl` in
-    // a held stem entry, with `omnia_sdk::Config` imported.
-    RequiresConfig,
+    // A capability trait among the supertraits of `Requires` and its blanket
+    // `impl` in a held stem entry, imported from `omnia_sdk`.
+    RequiresSupertrait(String),
 }
 
 // The text of each list a line is placed in, read once; a list the tree
@@ -201,144 +220,47 @@ pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
                 at
             }
         }
-        Place::RequiresConfig => return widen_requires_config(text),
+        Place::RequiresSupertrait(supertrait) => return widen_requires(text, supertrait),
     };
     lines.insert(at, line);
     Some(lines.join("\n") + "\n")
 }
 
-fn requires_holds_config(text: &str) -> bool {
-    let Ok(file) = syntax::parse(text) else { return false };
-    let trait_has = file.items.iter().any(|item| {
-        let syn::Item::Trait(item) = item else { return false };
-        item.ident == "Requires" && bounds_config(item.supertraits.iter())
-    });
-    let impl_has = file.items.iter().any(|item| {
-        let syn::Item::Impl(item) = item else { return false };
-        let is_requires = item.modifiers.polarity.is_none()
-            && item.trait_.as_ref().is_some_and(|(path, _)| syntax::path_ends(path, &["Requires"]));
-        is_requires && impl_bounds_config(item)
-    });
-    trait_has && impl_has
-}
-
-fn bounds_config<'b>(mut bounds: impl Iterator<Item = &'b syn::TypeParamBound>) -> bool {
-    bounds.any(|bound| {
-        matches!(
-            bound,
-            syn::TypeParamBound::Trait(bound) if syntax::path_ends(&bound.path, &["Config"])
-        )
-    })
-}
-
-fn impl_bounds_config(item: &syn::ItemImpl) -> bool {
-    let inline = item.generics.type_params().any(|param| bounds_config(param.bounds.iter()));
-    let clauses =
-        item.generics.where_clause.iter().flat_map(|clause| &clause.predicates).any(|predicate| {
-            match predicate {
-                syn::WherePredicate::Type(ty) => bounds_config(ty.bounds.iter()),
-                _ => false,
-            }
-        });
-    inline || clauses
-}
-
-fn widen_requires_config(text: &str) -> Option<String> {
+fn widen_requires(text: &str, supertrait: &str) -> Option<String> {
     let parsed = syntax::parse(text).ok()?;
-    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    let spans = syntax::requires_spans(text, &parsed)?;
+    let bounds = insert_supertrait(spans.bounds, supertrait);
+    let rendered_trait = render::render_item(render::requires_trait(&bounds));
+    let rendered_impl = render::render_item(render::requires_impl(&bounds));
 
-    let trait_at = lines.iter().position(|line| {
-        let trimmed = line.trim();
-        trimmed.starts_with("pub trait Requires:") && trimmed.ends_with("{}")
-    })?;
-    let trait_raw =
-        lines[trait_at].trim().strip_prefix("pub trait Requires:")?.strip_suffix("{}")?;
-    lines[trait_at] = format!("pub trait Requires: {} {{}}", insert_config_bound(trait_raw));
-
-    if let Some(impl_at) = lines.iter().position(|line| {
-        let trimmed = line.trim();
-        trimmed.starts_with("impl<P> Requires for P where P:") && trimmed.ends_with("{}")
-    }) {
-        let impl_raw = lines[impl_at]
-            .trim()
-            .strip_prefix("impl<P> Requires for P where P:")?
-            .strip_suffix("{}")?;
-        let bounds = insert_config_bound(impl_raw);
-        let single = format!("impl<P> Requires for P where P: {bounds} {{}}");
-        lines[impl_at] = if single.chars().count() <= MAX_WIDTH {
-            single
-        } else {
-            format!("impl<P> Requires for P\nwhere\n{}P: {bounds},\n{{\n}}", pad(TAB))
-        };
+    let mut next = text.to_owned();
+    if spans.trait_bytes.start <= spans.impl_bytes.start {
+        next.replace_range(spans.impl_bytes, &rendered_impl);
+        next.replace_range(spans.trait_bytes, &rendered_trait);
     } else {
-        let impl_at = lines.iter().position(|line| line.trim() == "impl<P> Requires for P")?;
-        let where_offset = lines[impl_at + 1..]
-            .iter()
-            .take_while(|line| line.trim() != "{")
-            .position(|line| line.trim().starts_with("P:"))?;
-        let where_at = impl_at + 1 + where_offset;
-        let impl_raw = lines[where_at].trim().strip_prefix("P:")?.trim_end_matches(',');
-        lines[where_at] = format!("{}P: {},", pad(TAB), insert_config_bound(impl_raw));
+        next.replace_range(spans.trait_bytes, &rendered_trait);
+        next.replace_range(spans.impl_bytes, &rendered_impl);
     }
 
-    if !syntax::Mentions::of(&parsed).contains("Config") {
-        insert_config_use(&mut lines)?;
+    if !syntax::Mentions::of(&parsed).contains(supertrait) {
+        next = render::add_use(&next, "omnia_sdk", supertrait)?;
     }
-    Some(lines.join("\n") + "\n")
+    Some(next)
 }
 
-fn insert_config_bound(raw: &str) -> String {
-    let mut parts: Vec<&str> =
-        raw.split('+').map(str::trim).filter(|part| !part.is_empty()).collect();
-    if !parts.contains(&"Config") {
-        let at = parts
+fn insert_supertrait(mut bounds: Vec<String>, supertrait: &str) -> Vec<String> {
+    if !bounds.iter().any(|bound| bound == supertrait) {
+        let at = bounds
             .iter()
-            .position(|part| {
-                *part == "Send" || *part == "Sync" || part.starts_with('\'') || *part > "Config"
+            .position(|bound| {
+                matches!(bound.as_str(), "Send" | "Sync")
+                    || bound.starts_with('\'')
+                    || bound.as_str() > supertrait
             })
-            .unwrap_or(parts.len());
-        parts.insert(at, "Config");
+            .unwrap_or(bounds.len());
+        bounds.insert(at, supertrait.to_owned());
     }
-    parts.join(" + ")
-}
-
-fn insert_config_use(lines: &mut Vec<String>) -> Option<()> {
-    if let Some(at) = lines.iter().position(|line| {
-        let trimmed = line.trim();
-        trimmed.starts_with("use omnia_sdk::{") && trimmed.ends_with("};")
-    }) {
-        let inner = lines[at].trim().strip_prefix("use omnia_sdk::{")?.strip_suffix("};")?;
-        let mut names: Vec<&str> =
-            inner.split(',').map(str::trim).filter(|name| !name.is_empty()).collect();
-        names.push("Config");
-        names.sort_unstable();
-        names.dedup();
-        lines[at] = format!("use omnia_sdk::{{{}}};", names.join(", "));
-        return Some(());
-    }
-    if let Some(at) = lines.iter().position(|line| {
-        let trimmed = line.trim();
-        trimmed
-            .strip_prefix("use omnia_sdk::")
-            .and_then(|rest| rest.strip_suffix(';'))
-            .is_some_and(|ident| !ident.contains("::") && !ident.contains('{'))
-    }) {
-        let single =
-            lines.remove(at).trim().strip_prefix("use omnia_sdk::")?.strip_suffix(';')?.to_owned();
-        let mut names = vec!["Config", single.as_str()];
-        names.sort_unstable();
-        names.dedup();
-        let braced = format!("use omnia_sdk::{{{}}};", names.join(", "));
-        let target = lines
-            .iter()
-            .rposition(|line| line.trim().starts_with("use omnia_sdk::api::"))
-            .map_or(at, |api_at| api_at + 1);
-        lines.insert(target, braced);
-        return Some(());
-    }
-    let api_at = lines.iter().position(|line| line.trim().starts_with("use omnia_sdk::api::"))?;
-    lines.insert(api_at, "use omnia_sdk::Config;".to_owned());
-    Some(())
+    bounds
 }
 
 // `text` with the array `anchor` opens laid as the formatter lays it: on

@@ -1,6 +1,7 @@
 //! What the scaffold and the checks read of Rust through `syn`: the parse, the lines, and the shapes several rules share.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::{Range, RangeInclusive};
 use std::path::Path as StdPath;
 use std::{fmt, mem};
 
@@ -10,8 +11,8 @@ use syn::punctuated::Punctuated;
 use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, ExprLit, ExprMethodCall, Fields, FnArg, ImplItemConst, Item, ItemConst,
-    ItemFn, ItemStruct, ItemUse, Lit, LitStr, Macro, MetaList, Path, Token, Type, UseTree,
-    Visibility,
+    ItemFn, ItemImpl, ItemStruct, ItemTrait, ItemUse, Lit, LitStr, Macro, MetaList, Path, Token,
+    Type, TypeParamBound, UseTree, Visibility, WherePredicate,
 };
 
 // Where `syn` refused a file, and why.
@@ -211,7 +212,7 @@ pub fn pub_consts(file: &syn::File) -> Vec<Const> {
         .collect()
 }
 
-pub const fn is_pub(vis: &Visibility) -> bool {
+const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
@@ -294,7 +295,7 @@ pub fn signature(text: &str, exported: &Exported) -> String {
 // checks name it.
 pub fn crate_exported_fns(root: &StdPath, dir: &str) -> Result<Vec<ExportedFn>, Error> {
     let stem = crate::layout::stem_of(dir);
-    let crate_ident = crate::layout::package(stem).replace('-', "_");
+    let crate_ident = crate::layout::stem_ident(stem);
     let mut exports = Vec::new();
     for source in crate::layout::sources(&root.join("crates").join(dir).join("src"))? {
         let Some(module) = source.file_stem().and_then(|name| name.to_str()) else { continue };
@@ -354,10 +355,9 @@ pub fn item_head(item: &Item) -> Option<(usize, String)> {
                 }
                 _ => None,
             };
-            let trait_name = item
-                .trait_
-                .as_ref()
-                .and_then(|(path, _)| path.segments.last().map(|s| s.ident.to_string()));
+            let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
+                path.segments.last().map(|segment| segment.ident.to_string())
+            });
             let is_blanket = self_name
                 .as_deref()
                 .is_some_and(|name| item.generics.type_params().any(|param| param.ident == name));
@@ -589,6 +589,205 @@ pub fn last_use_line(file: &syn::File) -> Option<usize> {
             _ => None,
         })
         .max()
+}
+
+// Whether `item` is the stem entry's `pub trait Requires` or its empty `impl`.
+pub fn is_requires_item(item: &Item) -> bool {
+    match item {
+        Item::Trait(item) => is_requires_trait(item),
+        Item::Impl(item) => is_requires_impl(item),
+        _ => false,
+    }
+}
+
+fn is_requires_trait(item: &ItemTrait) -> bool {
+    is_pub(&item.vis) && item.ident == "Requires" && item.items.is_empty()
+}
+
+fn is_requires_impl(item: &ItemImpl) -> bool {
+    item.modifiers.polarity.is_none()
+        && item.items.is_empty()
+        && item.trait_.as_ref().is_some_and(|(path, _)| path_ends(path, &["Requires"]))
+}
+
+fn is_blanket_requires_impl(item: &ItemImpl) -> bool {
+    if !is_requires_impl(item) || item.generics.params.len() != 1 {
+        return false;
+    }
+    let Some(param) = item.generics.type_params().next() else { return false };
+    matches!(&*item.self_ty, Type::Path(path) if path.path.is_ident(&param.ident))
+}
+
+// Whether `file`'s `Requires` trait and its `impl` both bound on `trait_name`.
+pub fn requires_bounds(file: &syn::File, trait_name: &str) -> bool {
+    let trait_has = file.items.iter().any(|item| {
+        let Item::Trait(item) = item else { return false };
+        is_requires_trait(item) && bounds_include(item.supertraits.iter(), trait_name)
+    });
+    let impl_has = file.items.iter().any(|item| {
+        let Item::Impl(item) = item else { return false };
+        is_requires_impl(item) && impl_bounds_include(item, trait_name)
+    });
+    trait_has && impl_has
+}
+
+fn bounds_include<'b>(mut bounds: impl Iterator<Item = &'b TypeParamBound>, name: &str) -> bool {
+    bounds.any(
+        |bound| matches!(bound, TypeParamBound::Trait(bound) if path_ends(&bound.path, &[name])),
+    )
+}
+
+fn impl_bounds_include(item: &ItemImpl, name: &str) -> bool {
+    let inline = item.generics.type_params().any(|param| bounds_include(param.bounds.iter(), name));
+    let clauses =
+        item.generics.where_clause.iter().flat_map(|clause| &clause.predicates).any(|predicate| {
+            match predicate {
+                WherePredicate::Type(ty) => bounds_include(ty.bounds.iter(), name),
+                _ => false,
+            }
+        });
+    inline || clauses
+}
+
+// Byte and line spans of `pub trait Requires` and its blanket `impl` in an
+// entry file, with its current supertrait spellings.
+pub struct RequiresSpans {
+    pub trait_bytes: Range<usize>,
+    pub trait_lines: RangeInclusive<usize>,
+    pub impl_bytes: Range<usize>,
+    pub impl_lines: RangeInclusive<usize>,
+    pub bounds: Vec<String>,
+}
+
+pub fn requires_spans(text: &str, file: &syn::File) -> Option<RequiresSpans> {
+    let mut traits = file.items.iter().filter_map(|item| match item {
+        Item::Trait(item) if is_requires_trait(item) => Some(item),
+        _ => None,
+    });
+    let trait_item = traits.next().filter(|_| traits.next().is_none())?;
+    let Visibility::Public(pub_token) = &trait_item.vis else { return None };
+
+    let mut impls = file.items.iter().filter_map(|item| match item {
+        Item::Impl(item) if is_blanket_requires_impl(item) => Some(item),
+        _ => None,
+    });
+    let impl_item = impls.next().filter(|_| impls.next().is_none())?;
+
+    let (trait_start, trait_end) =
+        (pub_token.span.start(), trait_item.brace_token.span.close().end());
+    let (impl_start, impl_end) =
+        (impl_item.impl_token.span.start(), impl_item.brace_token.span.close().end());
+
+    let trait_bytes = byte_offset(text, trait_start.line, trait_start.column)?
+        ..byte_offset(text, trait_end.line, trait_end.column)?;
+    let impl_bytes = byte_offset(text, impl_start.line, impl_start.column)?
+        ..byte_offset(text, impl_end.line, impl_end.column)?;
+    let bounds = trait_item.supertraits.iter().map(bound_spelling).collect::<Option<Vec<_>>>()?;
+
+    Some(RequiresSpans {
+        trait_bytes,
+        trait_lines: trait_start.line..=trait_end.line,
+        impl_bytes,
+        impl_lines: impl_start.line..=impl_end.line,
+        bounds,
+    })
+}
+
+fn bound_spelling(bound: &TypeParamBound) -> Option<String> {
+    match bound {
+        TypeParamBound::Trait(bound) => {
+            if bound.lifetimes.is_some()
+                || bound.maybe.is_some()
+                || bound.modifiers != syn::TraitBoundModifiers::default()
+                || bound.path.segments.iter().any(|segment| !segment.arguments.is_empty())
+            {
+                return None;
+            }
+            let segments: Vec<String> =
+                bound.path.segments.iter().map(|segment| segment.ident.to_string()).collect();
+            Some(segments.join("::"))
+        }
+        TypeParamBound::Lifetime(lifetime) => Some(format!("'{}", lifetime.ident)),
+        _ => None,
+    }
+}
+
+// Top-level `use` block span in `text` and its `module -> names` bindings,
+// when every `use` is public/private without attributes or `as` renames.
+pub struct UseBlock {
+    pub bytes: Range<usize>,
+    pub entries: Vec<(String, Vec<String>)>,
+}
+
+pub fn use_block(text: &str, file: &syn::File) -> Option<UseBlock> {
+    let mut first_span = None;
+    let mut last_span = None;
+    let mut seen_non_use = false;
+    let mut entries = Vec::new();
+    for item in &file.items {
+        let Item::Use(item) = item else {
+            if first_span.is_some() {
+                seen_non_use = true;
+            }
+            continue;
+        };
+        if seen_non_use || !matches!(item.vis, Visibility::Inherited) || !item.attrs.is_empty() {
+            return None;
+        }
+        first_span.get_or_insert_with(|| item.use_token.span.start());
+        last_span = Some(item.semi_token.span.end());
+        collect_use_entries(&item.tree, &mut Vec::new(), &mut entries)?;
+    }
+    let (start, end) = (first_span?, last_span?);
+    let bytes =
+        byte_offset(text, start.line, start.column)?..byte_offset(text, end.line, end.column)?;
+    Some(UseBlock { bytes, entries })
+}
+
+fn collect_use_entries(
+    tree: &UseTree, prefix: &mut Vec<String>, out: &mut Vec<(String, Vec<String>)>,
+) -> Option<()> {
+    match tree {
+        UseTree::Path(path) => {
+            prefix.push(path.ident.to_string());
+            collect_use_entries(&path.tree, prefix, out)?;
+            prefix.pop();
+            Some(())
+        }
+        UseTree::Name(name) if !prefix.is_empty() => {
+            out.push((prefix.join("::"), vec![name.ident.to_string()]));
+            Some(())
+        }
+        UseTree::Group(group) if !prefix.is_empty() => {
+            let mut leaves = Vec::new();
+            for sub in &group.items {
+                match sub {
+                    UseTree::Name(name) => leaves.push(name.ident.to_string()),
+                    _ => collect_use_entries(sub, prefix, out)?,
+                }
+            }
+            if !leaves.is_empty() {
+                out.push((prefix.join("::"), leaves));
+            }
+            Some(())
+        }
+        _ => None,
+    }
+}
+
+// Line ranges of root `use omnia_sdk::..` capability imports (excluding
+// `use omnia_sdk::api::..`), which a whole write of an entry may widen.
+pub fn sdk_capability_use_lines(file: &syn::File) -> Vec<RangeInclusive<usize>> {
+    file.items
+        .iter()
+        .filter_map(|item| {
+            let Item::Use(item) = item else { return None };
+            let UseTree::Path(path) = &item.tree else { return None };
+            let is_api = matches!(&*path.tree, UseTree::Path(sub) if sub.ident == "api");
+            (path.ident == "omnia_sdk" && !is_api)
+                .then(|| line(item.use_token.span)..=line(item.semi_token.span))
+        })
+        .collect()
 }
 
 // The methods a part's `handlers()` chains over `Handlers::new()`.

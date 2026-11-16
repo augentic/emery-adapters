@@ -68,29 +68,24 @@ impl Change {
             return Ok(Vec::new());
         }
         let mut root_deps = BTreeSet::new();
-        let mut requires = BTreeSet::new();
-        let mut handlers = BTreeSet::new();
+        let mut entry_lines = BTreeSet::new();
         let mut stem_deps = BTreeSet::new();
         let mut stem_names = BTreeSet::new();
         for stem in vanished {
             let dir = layout::crate_dir(stem);
             let pkg = layout::package(stem);
-            let ident = pkg.replace('-', "_");
-            let root_dep = format!("{pkg} = {{ path = \"crates/{dir}\" }}");
-            let req = format!("P: {ident}::Requires");
-            let req_comma = format!("{req},");
-            let call = format!("{ident}::handlers()");
-            let call_comma = format!("{call},");
-            let stem_dep = format!("{pkg} = {{ path = \"../{dir}\" }}");
+            let ident = layout::crate_ident(&pkg);
+            let root_dep = layout::root_dependency(&pkg, dir);
+            let stem_dep = layout::sibling_dependency(&pkg, dir);
             self.vanished_lines.insert(root_dep.clone());
-            self.vanished_lines.insert(req.clone());
-            self.vanished_lines.insert(req_comma);
-            self.vanished_lines.insert(call.clone());
-            self.vanished_lines.insert(call_comma);
             self.vanished_lines.insert(stem_dep.clone());
+            for entry in [layout::requires_bound(&ident), layout::handlers_call(&ident)] {
+                let trimmed = entry.trim().trim_end_matches(',').to_owned();
+                self.vanished_lines.insert(format!("{trimmed},"));
+                self.vanished_lines.insert(trimmed.clone());
+                entry_lines.insert(trimmed);
+            }
             root_deps.insert(root_dep);
-            requires.insert(req);
-            handlers.insert(call);
             stem_deps.insert(stem_dep);
             stem_names.insert(pkg);
             stem_names.insert(dir.to_owned());
@@ -103,10 +98,8 @@ impl Change {
             edits.push(("Cargo.toml".to_owned(), next));
         }
         if let Some(text) = read_file(root, layout::ENTRY)?
-            && let Some(next) = drop_lines(&text, |line| {
-                let trimmed = line.trim().trim_end_matches(',');
-                requires.contains(trimmed) || handlers.contains(trimmed)
-            })
+            && let Some(next) =
+                drop_lines(&text, |line| entry_lines.contains(line.trim().trim_end_matches(',')))
         {
             edits.push((layout::ENTRY.to_owned(), next));
         }
@@ -127,8 +120,10 @@ impl Change {
             if let Some(text) = read_file(root, &path)?
                 && let Some(next) = drop_lines(&text, |line| stem_deps.contains(line.trim()))
             {
-                self.touch_points
-                    .retain(|point| !(point.file == path && point.names_dependency(&stem_names)));
+                self.touch_points.retain(|point| {
+                    !(point.file == path
+                        && point.dependency().is_some_and(|pkg| stem_names.contains(pkg)))
+                });
                 edits.push((path, next));
             }
         }

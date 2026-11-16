@@ -183,7 +183,7 @@ impl Tree {
                     format!(
                         "`crates/{dir}/` is written for `{dir}`, the head of the stem `{stem}`, \
                          whose crate is `crates/{stem_dir}/` (package `{pkg}`, path `{}`)",
-                        pkg.replace('-', "_")
+                        layout::crate_ident(&pkg)
                     )
                 },
             ));

@@ -117,9 +117,8 @@ pub struct Dependency {
 }
 
 impl Dependency {
-    // `<package> = { path = "../<dir>" }`, the stem's line for the crate.
     pub fn line(&self) -> String {
-        format!("{} = {{ path = \"../{}\" }}", self.package, self.dir)
+        layout::sibling_dependency(&self.package, &self.dir)
     }
 }
 
@@ -187,7 +186,7 @@ impl Found {
 
 // The crate identifier of the stem a crate directory holds.
 fn ident(dir: &str) -> String {
-    layout::package(layout::stem_of(dir)).replace('-', "_")
+    layout::stem_ident(layout::stem_of(dir))
 }
 
 fn dependency(dir: &str) -> Dependency {

@@ -10,9 +10,8 @@ use omnia_template::Manifest;
 use syn::Item;
 
 use super::Tree;
-use crate::change::TouchPoint;
 use crate::layout::{self, Toml};
-use crate::scaffold::Scaffold;
+use crate::scaffold::{PriorFile, Scaffold};
 use crate::syntax::{self, DeclaredItem};
 
 impl Tree {
@@ -45,9 +44,9 @@ impl Tree {
                 (String::from_utf8_lossy(&prior.bytes), String::from_utf8_lossy(&after));
             let file = Path::new(path);
             if file.extension().is_some_and(|ext| ext == "rs") {
-                lines.extend(changed_items(path, &before, &after, &prior.touch_points));
+                lines.extend(changed_items(path, &before, &after, prior));
             } else if file.file_name().is_some_and(|name| name == "Cargo.toml") {
-                lines.extend(changed_dependencies(path, &before, &after, &prior.touch_points));
+                lines.extend(changed_dependencies(path, &before, &after, prior));
             } else {
                 lines.push(format!("{path}: changed, and it is no touch point"));
             }
@@ -150,7 +149,7 @@ impl RemovedCrate {
     fn new(package: &str) -> Self {
         Self {
             package: package.to_owned(),
-            ident: package.replace('-', "_"),
+            ident: layout::crate_ident(package),
         }
     }
 }
@@ -158,29 +157,29 @@ impl RemovedCrate {
 // The items of `after` no item of `before` equals, and those of `before`
 // none of `after` equals, each named unless a touch point admits it. A file
 // `syn` refuses after the turn is `unparsed`'s.
-fn changed_items(path: &str, before: &str, after: &str, points: &[TouchPoint]) -> Vec<String> {
+fn changed_items(path: &str, before: &str, after: &str, prior: &PriorFile) -> Vec<String> {
     let Ok(after) = syntax::parse(after) else { return Vec::new() };
     let Ok(before) = syntax::parse(before) else {
         return vec![format!("{path}: changed, and it is no touch point")];
     };
 
-    let mut prior: Vec<&Item> = before.items.iter().collect();
+    let mut held: Vec<&Item> = before.items.iter().collect();
     let mut after_only = Vec::new();
     for item in &after.items {
-        if let Some(at) = prior.iter().position(|old| *old == item) {
-            prior.remove(at);
+        if let Some(at) = held.iter().position(|old| *old == item) {
+            held.remove(at);
         } else {
             after_only.push(syntax::declared_item(item));
         }
     }
-    let before_only: Vec<DeclaredItem> = prior.into_iter().map(syntax::declared_item).collect();
+    let before_only: Vec<DeclaredItem> = held.into_iter().map(syntax::declared_item).collect();
 
     let mut lines = Vec::new();
     if before.attrs != after.attrs {
         lines.push(format!("{path}:1: the module's inner attributes changed"));
     }
     for item in &after_only {
-        if TouchPoint::admits_item(points, &item.head) {
+        if prior.admits_item(&item.head) {
             continue;
         }
         let what =
@@ -191,9 +190,7 @@ fn changed_items(path: &str, before: &str, after: &str, points: &[TouchPoint]) -
         ));
     }
     for item in &before_only {
-        if TouchPoint::admits_item(points, &item.head)
-            || after_only.iter().any(|new| new.head == item.head)
-        {
+        if prior.admits_item(&item.head) || after_only.iter().any(|new| new.head == item.head) {
             continue;
         }
         lines.push(format!(
@@ -207,15 +204,13 @@ fn changed_items(path: &str, before: &str, after: &str, points: &[TouchPoint]) -
 // The `[dependencies]` lines of a stem manifest the turn added or removed,
 // each named unless it is a touch point's dependency. A line outside
 // `[dependencies]` is `stem_manifest_drift`'s.
-fn changed_dependencies(
-    path: &str, before: &str, after: &str, points: &[TouchPoint],
-) -> Vec<String> {
+fn changed_dependencies(path: &str, before: &str, after: &str, prior: &PriorFile) -> Vec<String> {
     let before = Toml::dependency_entries(before);
     let after = Toml::dependency_entries(after);
     let mut lines = Vec::new();
     for dep in &after {
         if !before.iter().any(|old| old.entry == dep.entry)
-            && !TouchPoint::admits_dependency(points, &dep.package)
+            && !prior.admits_dependency(&dep.package)
         {
             lines.push(format!(
                 "{path}:{}: `{}` added, and it is no touch point",
@@ -224,8 +219,7 @@ fn changed_dependencies(
         }
     }
     for dep in &before {
-        if !after.iter().any(|new| new.entry == dep.entry)
-            && !TouchPoint::admits_dependency(points, &dep.package)
+        if !after.iter().any(|new| new.entry == dep.entry) && !prior.admits_dependency(&dep.package)
         {
             lines.push(format!(
                 "{path}: `{}` removed, and it is no touch point; it stood at line {} before the \

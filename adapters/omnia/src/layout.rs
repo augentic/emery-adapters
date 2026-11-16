@@ -116,6 +116,30 @@ pub fn package(stem: &str) -> String {
     }
 }
 
+pub fn crate_ident(package: &str) -> String {
+    package.replace('-', "_")
+}
+
+pub fn stem_ident(stem: &str) -> String {
+    crate_ident(&package(stem))
+}
+
+pub fn root_dependency(package: &str, dir: &str) -> String {
+    format!("{package} = {{ path = \"crates/{dir}\" }}")
+}
+
+pub fn sibling_dependency(package: &str, dir: &str) -> String {
+    format!("{package} = {{ path = \"../{dir}\" }}")
+}
+
+pub fn requires_bound(ident: &str) -> String {
+    format!("    P: {ident}::Requires,")
+}
+
+pub fn handlers_call(ident: &str) -> String {
+    format!("{ident}::handlers()")
+}
+
 fn template_pins(name: &str) -> bool {
     omnia_template::entry(Manifest::PATH).is_some_and(|entry| Toml::read(entry.body).pins(name))
 }

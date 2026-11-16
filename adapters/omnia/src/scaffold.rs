@@ -28,7 +28,7 @@ pub use self::settings::Settings;
 use self::stem::{Kind, Stem, entry_lines_of, lines_of};
 pub use self::types::DesignKey;
 use crate::change::{Change, TouchPoint};
-use crate::syntax::ExportedFn;
+use crate::syntax::{ExportedFn, ItemHead};
 use crate::{layout, syntax};
 
 // A slice's skeleton as read against the tree and not yet written: each
@@ -143,20 +143,36 @@ impl Plan {
 pub struct PriorFile {
     pub bytes: Vec<u8>,
     pub touch_points: Vec<TouchPoint>,
+    // A stem entry whose crate holds a touch point may widen or narrow its
+    // `Requires` supertraits and `use` lines to match touched handlers.
+    pub admits_requires: bool,
+}
+
+impl PriorFile {
+    pub fn admits_item(&self, head: &ItemHead) -> bool {
+        match head {
+            ItemHead::Use => !self.touch_points.is_empty() || self.admits_requires,
+            ItemHead::Named(name) => {
+                (self.admits_requires
+                    && matches!(name.as_str(), "trait Requires" | "impl Requires"))
+                    || self.touch_points.iter().any(|point| point.item() == Some(name))
+            }
+        }
+    }
+
+    pub fn admits_dependency(&self, package: &str) -> bool {
+        self.touch_points.iter().any(|point| point.dependency() == Some(package))
+    }
 }
 
 fn snapshot_prior_files(
     root: &Path, stems: &[Stem], touch_points: &[TouchPoint],
 ) -> Result<BTreeMap<String, PriorFile>, Error> {
     let own: BTreeSet<&str> = stems.iter().map(|stem| stem.dir.as_str()).collect();
-    let mut touched_dirs: BTreeSet<&str> = BTreeSet::new();
+    let touched_dirs: BTreeSet<&str> =
+        touch_points.iter().filter_map(TouchPoint::crate_dir).collect();
     let mut points_by_file: BTreeMap<&str, Vec<TouchPoint>> = BTreeMap::new();
     for point in touch_points {
-        if let Some(dir) =
-            point.file.strip_prefix("crates/").and_then(|rest| rest.split('/').next())
-        {
-            touched_dirs.insert(dir);
-        }
         points_by_file.entry(point.file.as_str()).or_default().push(point.clone());
     }
 
@@ -170,11 +186,16 @@ fn snapshot_prior_files(
         for file in layout::files(&root.join("crates").join(&dir))? {
             let path = layout::relative(root, &file);
             let bytes = fs::read(&file).map_err(|err| server_error!("reading `{path}`: {err}"))?;
-            let mut touch_points = points_by_file.remove(path.as_str()).unwrap_or_default();
-            if touched_crate && path == entry_path {
-                touch_points.extend(TouchPoint::entry_requires(&path));
-            }
-            prior.insert(path, PriorFile { bytes, touch_points });
+            let touch_points = points_by_file.remove(path.as_str()).unwrap_or_default();
+            let admits_requires = touched_crate && path == entry_path;
+            prior.insert(
+                path,
+                PriorFile {
+                    bytes,
+                    touch_points,
+                    admits_requires,
+                },
+            );
         }
     }
     Ok(prior)

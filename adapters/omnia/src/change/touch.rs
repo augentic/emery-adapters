@@ -42,40 +42,22 @@ pub struct TouchPoint {
 }
 
 impl TouchPoint {
-    pub fn names_dependency(&self, names: &BTreeSet<String>) -> bool {
-        matches!(&self.kind, TouchKind::Dependency(package) if names.contains(package))
+    pub fn crate_dir(&self) -> Option<&str> {
+        self.file.strip_prefix("crates/")?.split('/').next()
     }
 
-    pub fn admits_item(points: &[Self], head: &ItemHead) -> bool {
-        match head {
-            ItemHead::Use => !points.is_empty(),
-            ItemHead::Named(name) => points
-                .iter()
-                .any(|point| matches!(&point.kind, TouchKind::Item(item) if item == name)),
+    pub fn item(&self) -> Option<&str> {
+        match &self.kind {
+            TouchKind::Item(name) => Some(name),
+            TouchKind::Use | TouchKind::Dependency(_) => None,
         }
     }
 
-    pub fn admits_dependency(points: &[Self], package: &str) -> bool {
-        points
-            .iter()
-            .any(|point| matches!(&point.kind, TouchKind::Dependency(name) if name == package))
-    }
-
-    // Admits `trait Requires`, `impl Requires`, and `use` in a stem entry
-    // `crates/<dir>/src/lib.rs` whose crate holds at least one touch point.
-    pub fn entry_requires(file: &str) -> [Self; 2] {
-        [
-            Self {
-                file: file.to_owned(),
-                kind: TouchKind::Item("trait Requires".to_owned()),
-                line: 0,
-            },
-            Self {
-                file: file.to_owned(),
-                kind: TouchKind::Item("impl Requires".to_owned()),
-                line: 0,
-            },
-        ]
+    pub fn dependency(&self) -> Option<&str> {
+        match &self.kind {
+            TouchKind::Dependency(package) => Some(package),
+            TouchKind::Use | TouchKind::Item(_) => None,
+        }
     }
 }
 
@@ -89,7 +71,8 @@ impl TouchPoints {
         let dirs: BTreeSet<String> =
             stems.iter().map(|stem| layout::crate_dir(stem).to_owned()).collect();
         let packages: BTreeSet<String> = stems.iter().map(|stem| layout::package(stem)).collect();
-        let idents: BTreeSet<String> = packages.iter().map(|pkg| pkg.replace('-', "_")).collect();
+        let idents: BTreeSet<String> =
+            packages.iter().map(|pkg| layout::crate_ident(pkg)).collect();
 
         let mut points = Vec::new();
         for (dir, manifest) in tree.stem_manifests() {

@@ -15,7 +15,7 @@ use super::names::escape;
 use super::reference::{self, Gate, Laid, Needs, Wire};
 use super::stem::{Consumer, Handler, Kind, Stem};
 use super::{Scaffold, registration, render, trigger};
-use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
+use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir, handlers_call};
 use crate::syntax::ExportedFn;
 
 const CHECK: &str = "cargo check --target wasm32-wasip3 && cargo +nightly fmt --all -- --check";
@@ -488,7 +488,7 @@ impl Stem {
         );
         let mut entry_lines = vec![format!("`pub mod {};`", self.part)];
         if self.registers() {
-            entry_lines.push(format!("`{}::handlers()`", self.part));
+            entry_lines.push(format!("`{}`", handlers_call(&self.part)));
         }
         let _ = writeln!(
             text,
