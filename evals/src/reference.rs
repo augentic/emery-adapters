@@ -16,6 +16,7 @@ pub struct Reference {
     dir: PathBuf,
     name: String,
     kind: Kind,
+    upstream_headers: BTreeMap<String, String>,
 }
 impl Reference {
     pub const SPEC_FILE: &str = "oracle.toml";
@@ -26,27 +27,35 @@ impl Reference {
     pub fn locate(root: &Path, named: Option<&str>) -> Option<Self> {
         let name = named?;
         let dir = root.join(name);
+        match Self::at(&dir, name, BTreeMap::new()) {
+            Ok(reference) => Some(reference),
+            Err(why) => {
+                eprintln!("eval: {why}; nothing compared");
+                None
+            }
+        }
+    }
+
+    pub fn at(
+        dir: &Path, name: &str, upstream_headers: BTreeMap<String, String>,
+    ) -> Result<Self, String> {
         if !dir.is_dir() {
-            eprintln!("eval: reference `{name}` is not a directory; nothing compared");
-            return None;
+            return Err(format!("reference `{name}` is not a directory"));
         }
         let kind = match fs::read_to_string(dir.join(Self::SPEC_FILE)) {
             Ok(text) => match Spec::parse(&text) {
                 Ok(spec) => Kind::Scenarios(spec),
                 Err(why) => {
-                    eprintln!(
-                        "eval: reference `{name}`: {} {why}; nothing compared",
-                        Self::SPEC_FILE
-                    );
-                    return None;
+                    return Err(format!("reference `{name}`: {} {why}", Self::SPEC_FILE));
                 }
             },
             Err(_) => Kind::Guest,
         };
-        Some(Self {
-            dir,
+        Ok(Self {
+            dir: dir.to_path_buf(),
             name: name.to_owned(),
             kind,
+            upstream_headers,
         })
     }
 
@@ -234,6 +243,7 @@ impl Reference {
             "schema": schema,
             "tables": tables,
             "http": http,
+            "upstream_headers": self.upstream_headers,
             "scenarios": scenarios
                 .iter()
                 .map(|(name, scenario)| {
@@ -263,6 +273,14 @@ impl Comparison {
     // among it; empty where the harness could not run.
     pub fn log(&self) -> &str {
         &self.log
+    }
+
+    pub fn outcomes(&self) -> &[Outcome] {
+        &self.oracle.outcomes
+    }
+
+    pub fn note(&self) -> Option<&str> {
+        self.oracle.note.as_deref()
     }
 
     // The one line the card's build findings carry.
@@ -372,6 +390,19 @@ fn check_scenario(scenario: &Value) -> Result<(), String> {
     for entry in scenario["seed"]["http"].as_array().into_iter().flatten() {
         if entry["path"].as_str().is_none_or(|path| !path.starts_with('/')) {
             return Err("seeds an upstream answer with no `path`".to_owned());
+        }
+        if let Some(headers) = entry.get("headers").filter(|headers| !headers.is_null()) {
+            let Some(map) = headers.as_object() else {
+                return Err("`seed.http[].headers` must be a JSON object".to_owned());
+            };
+            for (name, value) in map {
+                if name.trim().is_empty() {
+                    return Err("`seed.http[].headers` has an empty header name".to_owned());
+                }
+                if !value.is_string() && !value.is_null() {
+                    return Err(format!("`seed.http[].headers.{name}` must be a string or null"));
+                }
+            }
         }
     }
     let mut captured: BTreeSet<String> =
@@ -1203,10 +1234,17 @@ fn marked<'a>(line: &'a str, marker: &str) -> Option<&'a str> {
 
 // One fixture or scenario driven through the guest: what it recorded, and
 // every way the guest's answer differed, none for a pass.
-struct Outcome {
-    fixture: String,
-    expected: String,
-    reasons: Vec<String>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Outcome {
+    pub fixture: String,
+    pub expected: String,
+    pub reasons: Vec<String>,
+}
+
+impl Outcome {
+    pub const fn passed(&self) -> bool {
+        self.reasons.is_empty()
+    }
 }
 
 // The test the eval writes into the built tree as `tests/reference_oracle.rs`,
@@ -2310,8 +2348,8 @@ fn panic_text(join: tokio::task::JoinError) -> String {
 }
 
 // What every scenario runs over: the configuration, the bearer the guarded
-// paths take, the store's schema and seeds, and each upstream path's
-// default answer.
+// paths take, the store's schema and seeds, each upstream path's default
+// answer, and any headers every upstream request must carry.
 struct Settings {
     config: Vec<(String, String)>,
     header: String,
@@ -2320,6 +2358,7 @@ struct Settings {
     schema: String,
     tables: Map<String, Value>,
     http: Map<String, Value>,
+    upstream_headers: BTreeMap<String, String>,
 }
 
 impl Settings {
@@ -2337,6 +2376,12 @@ impl Settings {
             schema: oracle["schema"].as_str().unwrap_or("").to_owned(),
             tables: oracle["tables"].as_object().cloned().unwrap_or_default(),
             http: oracle["http"].as_object().cloned().unwrap_or_default(),
+            upstream_headers: oracle["upstream_headers"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .filter_map(|(key, value)| Some((key.clone(), value.as_str()?.to_owned())))
+                .collect(),
         }
     }
 
@@ -2369,8 +2414,7 @@ impl Settings {
     fn upstream(&self, entries: &Value) -> MatchedHttp {
         let mut http = MatchedHttp::default();
         for entry in entries.as_array().into_iter().flatten() {
-            let method = entry["method"].as_str().unwrap_or("GET");
-            let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
+            let (method, urls) = entry_urls(entry);
             let path = entry["path"].as_str().unwrap_or("/");
             let status = u16::try_from(entry["status"].as_u64().unwrap_or(200)).unwrap_or(500);
             let body = match entry.get("body") {
@@ -2378,30 +2422,7 @@ impl Settings {
                 None if status >= 400 => Value::Null.to_string(),
                 None => self.http.get(path).cloned().unwrap_or(Value::Null).to_string(),
             };
-            let params: Vec<(String, String)> = entry["query"]
-                .as_object()
-                .into_iter()
-                .flatten()
-                .map(|(key, value)| {
-                    let value = match value {
-                        Value::String(text) => text.clone(),
-                        other => other.to_string(),
-                    };
-                    (key.clone(), value)
-                })
-                .collect();
-            let mut orders = vec![params.clone()];
-            if params.len() == 2 {
-                orders.push(vec![params[1].clone(), params[0].clone()]);
-            }
-            for order in orders {
-                let query: Vec<String> =
-                    order.iter().map(|(key, value)| format!("{key}={value}")).collect();
-                let url = if query.is_empty() {
-                    format!("{BASE_URL}{path}")
-                } else {
-                    format!("{BASE_URL}{path}?{}", query.join("&"))
-                };
+            for url in urls {
                 let response = Response::builder()
                     .status(status)
                     .header("content-type", "application/json")
@@ -2412,6 +2433,41 @@ impl Settings {
         }
         http
     }
+}
+
+fn entry_urls(entry: &Value) -> (Method, Vec<String>) {
+    let method = entry["method"].as_str().unwrap_or("GET");
+    let method = Method::from_bytes(method.as_bytes()).unwrap_or(Method::GET);
+    let path = entry["path"].as_str().unwrap_or("/");
+    let params: Vec<(String, String)> = entry["query"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(key, value)| {
+            let value = match value {
+                Value::String(text) => text.clone(),
+                other => other.to_string(),
+            };
+            (key.clone(), value)
+        })
+        .collect();
+    let mut orders = vec![params.clone()];
+    if params.len() == 2 {
+        orders.push(vec![params[1].clone(), params[0].clone()]);
+    }
+    let urls = orders
+        .into_iter()
+        .map(|order| {
+            let query: Vec<String> =
+                order.iter().map(|(key, value)| format!("{key}={value}")).collect();
+            if query.is_empty() {
+                format!("{BASE_URL}{path}")
+            } else {
+                format!("{BASE_URL}{path}?{}", query.join("&"))
+            }
+        })
+        .collect();
+    (method, urls)
 }
 
 #[tokio::test]
@@ -2458,6 +2514,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
         count => format!("{count} steps to {last_status}"),
     };
     let provider = settings.provider(&scenario["seed"]);
+    let http = provider.http.clone();
     let tables = provider.tables.clone();
     let logged = Logged::default();
     let router = __CRATE__::router(provider);
@@ -2562,6 +2619,10 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
         }
     }
 
+    if reasons.is_empty() {
+        check_upstream_headers(settings, &scenario["seed"]["http"], &http, &mut reasons);
+    }
+
     // what the store and the guest said as it failed
     if !reasons.is_empty() {
         if let Some(error) = tables.last_error() {
@@ -2572,6 +2633,109 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
         }
     }
     Driven { expected, reasons }
+}
+
+struct SeededUpstream {
+    method: Method,
+    urls: Vec<String>,
+    headers: Vec<(String, Option<String>)>,
+}
+
+impl SeededUpstream {
+    fn from_entry(entry: &Value) -> Self {
+        let (method, urls) = entry_urls(entry);
+        let headers = entry["headers"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(name, value)| (name.clone(), value.as_str().map(str::to_owned)))
+            .collect();
+        Self {
+            method,
+            urls,
+            headers,
+        }
+    }
+
+    fn matches(&self, method: &Method, url: &str) -> bool {
+        self.method == *method && self.urls.iter().any(|seeded| seeded == url)
+    }
+}
+
+fn check_upstream_headers(
+    settings: &Settings, entries: &Value, http: &MatchedHttp, reasons: &mut Vec<String>,
+) {
+    let seeded: Vec<SeededUpstream> = entries
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(SeededUpstream::from_entry)
+        .collect();
+    if settings.upstream_headers.is_empty() && seeded.iter().all(|entry| entry.headers.is_empty()) {
+        return;
+    }
+
+    let requests = http.requests();
+    for request in &requests {
+        let url = request.uri.to_string();
+        let matching: Vec<&SeededUpstream> = seeded
+            .iter()
+            .filter(|entry| entry.matches(&request.method, &url))
+            .collect();
+        for (header, want) in &settings.upstream_headers {
+            let overridden = matching
+                .iter()
+                .flat_map(|entry| &entry.headers)
+                .any(|(name, _)| name.eq_ignore_ascii_case(header));
+            if overridden {
+                continue;
+            }
+            let have = request.headers.get(header.as_str()).and_then(|value| value.to_str().ok());
+            if have != Some(want.as_str()) {
+                reasons.push(format!(
+                    "upstream {} {url}: header `{header}` is {}, `{want}` expected",
+                    request.method,
+                    have.map_or_else(|| "absent".to_owned(), |have| format!("`{}`", flat(have))),
+                ));
+            }
+        }
+        for entry in matching {
+            for (header, want) in &entry.headers {
+                let have =
+                    request.headers.get(header.as_str()).and_then(|value| value.to_str().ok());
+                match (want.as_deref(), have) {
+                    (Some(want), have) if have != Some(want) => reasons.push(format!(
+                        "upstream {} {url}: header `{header}` is {}, `{want}` expected",
+                        request.method,
+                        have.map_or_else(
+                            || "absent".to_owned(),
+                            |have| format!("`{}`", flat(have))
+                        ),
+                    )),
+                    (None, Some(have)) => reasons.push(format!(
+                        "upstream {} {url}: header `{header}` is `{}`, absent expected",
+                        request.method,
+                        flat(have),
+                    )),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    for entry in &seeded {
+        if !entry.headers.is_empty()
+            && !requests
+                .iter()
+                .any(|request| entry.matches(&request.method, &request.uri.to_string()))
+        {
+            let first = entry.urls.first().map_or(BASE_URL, String::as_str);
+            reasons.push(format!(
+                "upstream {} {first}: no request sent where upstream headers were expected",
+                entry.method
+            ));
+        }
+    }
 }
 
 // The step's request: its method, path, headers, and JSON body with every
@@ -3047,6 +3211,24 @@ tokio = \"1\"
             "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": { "status": 200 } }]
         });
         assert!(check_scenario(&seed).unwrap_err().contains("no `path`"));
+
+        let with_headers = serde_json::json!({
+            "seed": { "http": [{ "path": "/rates", "headers": { "x-api-key": "rates-key", "authorization": null } }] },
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": { "status": 200 } }]
+        });
+        check_scenario(&with_headers).unwrap();
+
+        let bad_headers = serde_json::json!({
+            "seed": { "http": [{ "path": "/rates", "headers": ["x-api-key"] }] },
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": { "status": 200 } }]
+        });
+        assert!(check_scenario(&bad_headers).unwrap_err().contains("JSON object"));
+
+        let bad_header_val = serde_json::json!({
+            "seed": { "http": [{ "path": "/rates", "headers": { "x-api-key": 123 } }] },
+            "steps": [{ "request": { "method": "GET", "path": "/" }, "expect": { "status": 200 } }]
+        });
+        assert!(check_scenario(&bad_header_val).unwrap_err().contains("string or null"));
     }
 
     // The table's own keys stand; a built key the table lacks takes the

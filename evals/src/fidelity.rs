@@ -684,10 +684,13 @@ impl Fidelity {
                     }
                 }
             });
-        if let Some(comparison) = &reference
-            && !comparison.log().is_empty()
-        {
-            fs::write(project.join(format!("{tag}.oracle.log")), comparison.log())?;
+        if let Some(comparison) = &reference {
+            let log = if comparison.log().is_empty() {
+                comparison.to_string()
+            } else {
+                comparison.log().to_owned()
+            };
+            fs::write(project.join(format!("{tag}.oracle.log")), log)?;
         }
         fs::remove_dir_all(&export)?;
 

@@ -21,6 +21,133 @@ use crate::{Settings, Turns, emery};
 
 const APPLY: &[&str] = &["apply", "--config", "emery.toml"];
 
+// One seal + build pass over `project` at `n` and `tag`.
+pub struct BuildJob<'a> {
+    pub project: &'a Path,
+    pub settings: &'a Settings,
+    pub rust_log: &'a str,
+    pub name: &'a str,
+    pub n: usize,
+    pub tag: &'a str,
+    pub revision: &'a str,
+}
+
+impl<'a> BuildJob<'a> {
+    fn for_case(
+        project: &'a Path, settings: &'a Settings, case: &'a Case, n: usize, tag: &'a str,
+        revision: &'a str, rust_log: &'a str,
+    ) -> Self {
+        Self {
+            project,
+            settings,
+            rust_log,
+            name: &case.name,
+            n,
+            tag,
+            revision,
+        }
+    }
+
+    pub fn apply(&self) -> io::Result<()> {
+        let output = emery(
+            self.project,
+            self.settings,
+            self.rust_log,
+            self.settings.build_rung,
+            APPLY,
+            Turns::Live,
+        )?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        fs::write(self.project.join(format!("{}.apply.stderr", self.tag)), stderr.as_bytes())?;
+        fs::write(self.project.join(format!("{}.apply.stdout", self.tag)), &output.stdout)?;
+        if !output.status.success() {
+            return Err(io::Error::other(format!(
+                "`{}` of `{}`: `emery apply` exited {}:\n{}",
+                self.tag,
+                self.name,
+                output.status.code().map_or_else(|| "killed".to_owned(), |code| code.to_string()),
+                tail(&stderr)
+            )));
+        }
+        let envelope: Value = serde_json::from_slice(&output.stdout)?;
+        let sealed = envelope["revision"].as_str().unwrap_or("");
+        if sealed != self.revision {
+            return Err(io::Error::other(format!(
+                "`{}` of `{}`: `emery apply` sealed `{sealed}`, not the staged `{}`",
+                self.tag, self.name, self.revision
+            )));
+        }
+        Ok(())
+    }
+
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "the eval is a native operator tool, not a guest"
+    )]
+    pub fn build(self, spec: Option<&Value>, reference: Option<&Reference>) -> io::Result<Build> {
+        let jobs = self.settings.jobs.map(|jobs| jobs.to_string());
+        let budget = self.settings.budget.map(|budget| budget.to_string());
+        let mut args = vec!["build", "--config", "emery.toml"];
+        if let Some(jobs) = &jobs {
+            args.extend(["--jobs", jobs]);
+        }
+        if let Some(budget) = &budget {
+            args.extend(["--budget", budget]);
+        }
+        let started = Instant::now();
+        let output = emery(
+            self.project,
+            self.settings,
+            self.rust_log,
+            self.settings.build_rung,
+            &args,
+            Turns::Live,
+        )?;
+        let wall = started.elapsed();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        fs::write(self.project.join(format!("{}.build.stderr", self.tag)), stderr.as_bytes())?;
+        fs::write(self.project.join(format!("{}.build.stdout", self.tag)), stdout.as_bytes())?;
+        let target = self
+            .settings
+            .target
+            .ok_or_else(|| io::Error::other("a build runs through a target"))?;
+
+        let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
+        let (budget, budget_source) = budget_from(envelope.as_ref(), &stderr);
+        let schedule = schedule_from(envelope.as_ref());
+        let mut build = Build {
+            target,
+            wall,
+            exit: output.status.code(),
+            envelope,
+            budget,
+            budget_source,
+            schedule,
+            failure: failure(&stderr),
+            completions: completions(&stderr),
+            history: history(self.project, self.n, self.revision),
+            tail: tail(&stderr),
+            fidelity: None,
+            rewound: None,
+        };
+        // the host's pass is read beside the build, never in its place: a
+        // toolchain the host lacks leaves the cells empty and the card whole
+        if let Some(tree) = Tree::left(self.project, self.n, self.revision, &build) {
+            eprintln!("eval: `{}` host checks over {tree}", self.tag);
+            match Fidelity::read(self.project, self.tag, &tree, &build, spec, target, reference) {
+                Ok(fidelity) => {
+                    fs::write(self.project.join(&fidelity.file), fidelity.to_string())?;
+                    build.fidelity = Some(fidelity);
+                }
+                Err(error) => eprintln!("eval: `{}` host checks not read: {error}", self.tag),
+            }
+        }
+
+        Ok(build)
+    }
+}
+
 // One `emery apply` of the staged candidate `revision`, sealing it as the
 // root commit of the repository the engine creates for the run's `[target]`,
 // so `build` finds it there; the log and envelope are kept as
@@ -31,27 +158,7 @@ pub fn apply(
     project: &Path, settings: &Settings, case: &Case, tag: &str, revision: &str,
 ) -> io::Result<()> {
     let rust_log = settings.rust_log(case);
-    let output = emery(project, settings, &rust_log, settings.build_rung, APPLY, Turns::Live)?;
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    fs::write(project.join(format!("{tag}.apply.stderr")), stderr.as_bytes())?;
-    fs::write(project.join(format!("{tag}.apply.stdout")), &output.stdout)?;
-    if !output.status.success() {
-        return Err(io::Error::other(format!(
-            "`{tag}` of `{}`: `emery apply` exited {}:\n{}",
-            case.name,
-            output.status.code().map_or_else(|| "killed".to_owned(), |code| code.to_string()),
-            tail(&stderr)
-        )));
-    }
-    let envelope: Value = serde_json::from_slice(&output.stdout)?;
-    let sealed = envelope["revision"].as_str().unwrap_or("");
-    if sealed != revision {
-        return Err(io::Error::other(format!(
-            "`{tag}` of `{}`: `emery apply` sealed `{sealed}`, not the staged `{revision}`",
-            case.name
-        )));
-    }
-    Ok(())
+    BuildJob::for_case(project, settings, case, 1, tag, revision, &rust_log).apply()
 }
 
 // One `emery build` of the revision run `n` sealed, at the build rung, into
@@ -59,64 +166,14 @@ pub fn apply(
 // the tree it left; the build's log and envelope are kept as
 // `<tag>.build.stderr` / `<tag>.build.stdout`, the pass as
 // `<tag>.fidelity.md`.
-#[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
 pub fn build(
     project: &Path, settings: &Settings, case: &Case, n: usize, tag: &str, revision: &str,
     spec: Option<&Value>,
 ) -> io::Result<Build> {
     let rust_log = settings.rust_log(case);
     let reference = Reference::locate(&settings.root, case.expected.reference.as_deref());
-    let jobs = settings.jobs.map(|jobs| jobs.to_string());
-    let budget = settings.budget.map(|budget| budget.to_string());
-    let mut args = vec!["build", "--config", "emery.toml"];
-    if let Some(jobs) = &jobs {
-        args.extend(["--jobs", jobs]);
-    }
-    if let Some(budget) = &budget {
-        args.extend(["--budget", budget]);
-    }
-    let started = Instant::now();
-    let output = emery(project, settings, &rust_log, settings.build_rung, &args, Turns::Live)?;
-    let wall = started.elapsed();
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    fs::write(project.join(format!("{tag}.build.stderr")), stderr.as_bytes())?;
-    fs::write(project.join(format!("{tag}.build.stdout")), stdout.as_bytes())?;
-    let target =
-        settings.target.ok_or_else(|| io::Error::other("a build runs through a target"))?;
-
-    let envelope: Option<Value> = serde_json::from_str(&stdout).ok();
-    let (budget, budget_source) = budget_from(envelope.as_ref(), &stderr);
-    let schedule = schedule_from(envelope.as_ref());
-    let mut build = Build {
-        target,
-        wall,
-        exit: output.status.code(),
-        envelope,
-        budget,
-        budget_source,
-        schedule,
-        failure: failure(&stderr),
-        completions: completions(&stderr),
-        history: history(project, n, revision),
-        tail: tail(&stderr),
-        fidelity: None,
-        rewound: None,
-    };
-    // the host's pass is read beside the build, never in its place: a
-    // toolchain the host lacks leaves the cells empty and the card whole
-    if let Some(tree) = Tree::left(project, n, revision, &build) {
-        eprintln!("eval: `{tag}` host checks over {tree}");
-        match Fidelity::read(project, tag, &tree, &build, spec, target, reference.as_ref()) {
-            Ok(fidelity) => {
-                fs::write(project.join(&fidelity.file), fidelity.to_string())?;
-                build.fidelity = Some(fidelity);
-            }
-            Err(error) => eprintln!("eval: `{tag}` host checks not read: {error}"),
-        }
-    }
-
-    Ok(build)
+    BuildJob::for_case(project, settings, case, n, tag, revision, &rust_log)
+        .build(spec, reference.as_ref())
 }
 
 // Builds the plan `run-1` of `case` sealed under `card` again. The staged
@@ -340,7 +397,7 @@ impl Build {
     // A build read back from the files `build` kept beside its run, with the
     // chain it left where it stands: the exit is the envelope's success or
     // the failure's class, and the wall time, unkept, is zero.
-    fn recorded(
+    pub fn recorded(
         project: &Path, n: usize, tag: &str, target: Target, revision: &str,
     ) -> io::Result<Self> {
         let stdout = fs::read_to_string(project.join(format!("{tag}.build.stdout")))?;

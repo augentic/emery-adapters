@@ -53,7 +53,7 @@ pub fn stage(dir: &Path, case: &Case, settings: &Settings) -> io::Result<PathBuf
     Ok(project)
 }
 
-fn toml_escaped(text: &str) -> String {
+pub fn toml_escaped(text: &str) -> String {
     text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n")
 }
 
@@ -201,7 +201,7 @@ pub fn seed_drift(repository: &Path, commit: &str, scratch: &Path) -> io::Result
     clippy::disallowed_types,
     reason = "the eval creates and reads its repositories with the host's git"
 )]
-fn git_file(at: &Path, commit: &str, path: &str) -> io::Result<Option<Vec<u8>>> {
+pub fn git_file(at: &Path, commit: &str, path: &str) -> io::Result<Option<Vec<u8>>> {
     let output = std::process::Command::new("git")
         .arg("-C")
         .arg(at)
@@ -351,7 +351,7 @@ pub fn restaged(
     })
 }
 
-fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
+pub fn copy_tree_whole(from: &Path, to: &Path) -> io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;

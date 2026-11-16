@@ -24,6 +24,7 @@ mod case;
 mod evolve;
 mod fidelity;
 mod grade;
+mod locality;
 mod plan;
 mod reference;
 mod run;
@@ -378,7 +379,11 @@ fn main() -> ExitCode {
     }
 }
 
-#[expect(clippy::disallowed_methods, reason = "the eval is a native operator tool, not a guest")]
+#[expect(
+    clippy::disallowed_methods,
+    clippy::too_many_lines,
+    reason = "the eval is a native operator tool dispatching modes and ladder runs"
+)]
 fn eval() -> Result<(), Box<dyn std::error::Error>> {
     // the crate sits one level beneath the repository root, which every
     // fixture, binary, and scorecard path is relative to
@@ -399,8 +404,20 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(mode) = evolve {
         return match mode {
             EvolveMode::Facts => evolve::run_facts(root, &eval_dir, &filter),
-            EvolveMode::Live => {
-                Err("`--evolve` requires `--facts`; the live chain runner lands in step 15".into())
+            EvolveMode::Live { steps, resume } => {
+                let started = now();
+                let card_name = started.replace(':', "-");
+                evolve::run_live(evolve::LiveOptions {
+                    root,
+                    eval_dir: &eval_dir,
+                    filter: &filter,
+                    target,
+                    budget,
+                    steps,
+                    resume,
+                    started: &started,
+                    card_name: &card_name,
+                })
             }
         };
     }
@@ -497,16 +514,17 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     write_scorecard(&eval_dir, &settings, &reports, &started, &card_name)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum EvolveMode {
     Facts,
-    Live,
+    Live { steps: Option<evolve::StepRange>, resume: Option<evolve::EvolveResume> },
 }
 
 // What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--evolve`, `--build`, `--rebuild <card>`, `--resume
-// <card> --at <wave>` with `--drifted` to admit a seed the template has
-// moved under, `--oracle <card>`) with the target a build goes through.
+// mode (`--facts`, `--evolve` with `--steps A..B` or `--resume <card>
+// --at-step <K>`, `--build`, `--rebuild <card>`, `--resume <card> --at
+// <wave>` with `--drifted` to admit a seed the template has moved under,
+// `--oracle <card>`) with the target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
@@ -520,51 +538,87 @@ struct Args {
     budget: Option<NonZeroUsize>,
 }
 
-impl Args {
-    fn parse(argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut argv = argv;
-        let mut filter: BTreeSet<String> = BTreeSet::new();
-        let mut rebuild: Option<String> = None;
-        let mut resume: Option<String> = None;
-        let mut at: Option<usize> = None;
-        let mut oracle: Option<String> = None;
-        let mut target: Option<Target> = None;
-        let mut budget: Option<NonZeroUsize> = None;
+#[derive(Default)]
+struct RawFlags {
+    filter: BTreeSet<String>,
+    rebuild: Option<String>,
+    resume: Option<String>,
+    at: Option<usize>,
+    at_step: Option<usize>,
+    chain: Option<usize>,
+    steps: Option<evolve::StepRange>,
+    oracle: Option<String>,
+    target: Option<Target>,
+    budget: Option<NonZeroUsize>,
+}
+
+impl RawFlags {
+    fn collect(mut argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut raw = Self::default();
         while let Some(arg) = argv.next() {
-            if arg == "--rebuild" {
-                rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?);
-            } else if arg == "--resume" {
-                resume = Some(argv.next().ok_or("`--resume` names a card")?);
-            } else if arg == "--at" {
-                let wave = argv.next().ok_or("`--at` names a wave")?;
-                at = Some(wave.parse().map_err(|error| format!("`--at {wave}`: {error}"))?);
-            } else if arg == "--oracle" {
-                oracle = Some(argv.next().ok_or("`--oracle` names a card")?);
-            } else if arg == "--target" {
-                let name = argv.next().ok_or("`--target` names a target adapter")?;
-                target = Some(Target::parse(&name)?);
-            } else if arg == "--budget" {
-                let cap = argv.next().ok_or("`--budget` names a requirement budget")?;
-                budget = Some(cap.parse().map_err(|error| format!("`--budget {cap}`: {error}"))?);
-            } else {
-                filter.insert(arg);
+            match arg.as_str() {
+                "--rebuild" => raw.rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?),
+                "--resume" => raw.resume = Some(argv.next().ok_or("`--resume` names a card")?),
+                "--at" => {
+                    let wave = argv.next().ok_or("`--at` names a wave")?;
+                    raw.at = Some(wave.parse().map_err(|err| format!("`--at {wave}`: {err}"))?);
+                }
+                "--at-step" => {
+                    let step = argv.next().ok_or("`--at-step` names a step")?;
+                    raw.at_step =
+                        Some(step.parse().map_err(|err| format!("`--at-step {step}`: {err}"))?);
+                }
+                "--chain" => {
+                    let num = argv.next().ok_or("`--chain` names a chain number")?;
+                    raw.chain = Some(num.parse().map_err(|err| format!("`--chain {num}`: {err}"))?);
+                }
+                "--steps" => {
+                    let range = argv.next().ok_or("`--steps` names a step range `A..B`")?;
+                    raw.steps = Some(evolve::StepRange::parse(&range)?);
+                }
+                "--oracle" => raw.oracle = Some(argv.next().ok_or("`--oracle` names a card")?),
+                "--target" => {
+                    let name = argv.next().ok_or("`--target` names a target adapter")?;
+                    raw.target = Some(Target::parse(&name)?);
+                }
+                "--budget" => {
+                    let cap = argv.next().ok_or("`--budget` names a requirement budget")?;
+                    raw.budget =
+                        Some(cap.parse().map_err(|err| format!("`--budget {cap}`: {err}"))?);
+                }
+                _ => {
+                    raw.filter.insert(arg);
+                }
             }
         }
-        let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
-        let facts_only = filter.remove("--facts");
-        let evolve = filter.remove("--evolve");
-        let build_flag = filter.remove("--build");
-        let build = build_flag || again.is_some();
+        Ok(raw)
+    }
+}
+
+impl Args {
+    fn parse(argv: impl Iterator<Item = String>) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut raw = RawFlags::collect(argv)?;
+        let facts_only = raw.filter.remove("--facts");
+        let evolve = raw.filter.remove("--evolve");
+        let build_flag = raw.filter.remove("--build");
         if evolve {
-            return Self::resolve_evolve(
-                filter,
-                facts_only,
-                build,
-                oracle.as_deref(),
-                target,
-                budget,
-            );
+            return Self::resolve_evolve(raw, facts_only, build_flag);
         }
+        if raw.at_step.is_some() || raw.steps.is_some() || raw.chain.is_some() {
+            return Err("`--steps`, `--at-step`, and `--chain` require `--evolve`".into());
+        }
+        let RawFlags {
+            mut filter,
+            rebuild,
+            resume,
+            at,
+            oracle,
+            target,
+            budget,
+            ..
+        } = raw;
+        let again = Self::resolve_again(rebuild, resume, at, &mut filter)?;
+        let build = build_flag || again.is_some();
         if facts_only && filter.is_empty() {
             return Err("`--facts` names a case or an adapter".into());
         }
@@ -647,25 +701,87 @@ impl Args {
     }
 
     fn resolve_evolve(
-        filter: BTreeSet<String>, facts_only: bool, build_requested: bool, oracle: Option<&str>,
-        target: Option<Target>, budget: Option<NonZeroUsize>,
+        raw: RawFlags, facts_only: bool, build_flag: bool,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        if build_requested || oracle.is_some() {
+        let RawFlags {
+            mut filter,
+            rebuild,
+            resume,
+            at: at_wave,
+            at_step,
+            chain,
+            steps,
+            oracle,
+            target,
+            budget,
+        } = raw;
+        if build_flag || rebuild.is_some() || at_wave.is_some() || oracle.is_some() {
             return Err(
-                "`--evolve` cannot combine with `--build`, `--rebuild`, `--resume --at`, or `--oracle`"
+                "`--evolve` cannot combine with `--build`, `--rebuild`, `--at`, or `--oracle`"
                     .into(),
             );
         }
+        let drifted = filter.remove("--drifted");
+        let evolve_resume = match (resume, at_step) {
+            (Some(card), Some(step)) => {
+                if step == 0 {
+                    return Err(
+                        "`--at-step` names a step >= 1; step 00 is a fresh `--evolve` run".into()
+                    );
+                }
+                let chain_num = chain.unwrap_or(1);
+                if chain_num == 0 {
+                    return Err("`--chain` must be >= 1".into());
+                }
+                Some(evolve::EvolveResume {
+                    card,
+                    chain: chain_num,
+                    at_step: step,
+                    drifted,
+                })
+            }
+            (Some(_), None) => {
+                return Err("`--evolve --resume` requires `--at-step <K>`".into());
+            }
+            (None, Some(_)) => {
+                return Err("`--at-step` requires `--resume <card>`".into());
+            }
+            (None, None) => {
+                if drifted {
+                    return Err(
+                        "`--drifted` requires `--resume <card> --at-step <K>` under `--evolve`"
+                            .into(),
+                    );
+                }
+                if chain.is_some() {
+                    return Err(
+                        "`--chain` requires `--resume <card> --at-step <K>` under `--evolve`"
+                            .into(),
+                    );
+                }
+                None
+            }
+        };
         if filter.is_empty() {
             return Err("`--evolve` names an evolution case".into());
         }
-        if facts_only && (target.is_some() || budget.is_some()) {
+        if facts_only
+            && (target.is_some() || budget.is_some() || steps.is_some() || evolve_resume.is_some())
+        {
             return Err(
-                "`--facts --evolve` spends no turn, so it cannot set `--target` or `--budget`"
+                "`--facts --evolve` spends no turn, so it cannot set `--target`, `--budget`, \
+                 `--steps`, or `--resume`"
                     .into(),
             );
         }
-        let mode = if facts_only { EvolveMode::Facts } else { EvolveMode::Live };
+        let mode = if facts_only {
+            EvolveMode::Facts
+        } else {
+            EvolveMode::Live {
+                steps,
+                resume: evolve_resume,
+            }
+        };
         Ok(Self {
             filter,
             facts_only: false,
@@ -768,12 +884,19 @@ mod tests {
     };
     use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
-    use crate::evolve::{AppliedChange, CountRange, CrateAction, StepInput, StepToml, evolutions};
+    use crate::evolve::{
+        AppliedChange, CountRange, CrateAction, OraclePartition, StepInput, StepRange, StepToml,
+        evolutions, rewind_repo_head, step_intent_config, step_source_config, step_tag,
+    };
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
         declared_tests, named_by, reexported, routes, scenarios_of, tap_counts, unrun,
     };
     use crate::grade::{absent, behaviours, identifier};
+    use crate::locality::{
+        AmendGrade, GitShellCall, ScopeGrade, StepComparison, StepLocality, TouchKind, TouchPoint,
+        TreeSnapshot, scan_git_shell_calls,
+    };
     use crate::plan::{Edge, PlanShape, type_name};
     use crate::run::{
         Landing, ShellUse, Tokens, Writes, accepted, cap_exhaustions, completions, surveyed,
@@ -1043,18 +1166,76 @@ mod tests {
                 .into_iter(),
         )
         .unwrap();
-        assert_eq!(evolve_live.evolve, Some(EvolveMode::Live));
+        assert_eq!(
+            evolve_live.evolve,
+            Some(EvolveMode::Live {
+                steps: None,
+                resume: None
+            })
+        );
         assert_eq!(evolve_live.target, Some(Target::Omnia));
+        let evolve_steps = Args::parse(
+            ["--evolve", "--steps", "00..04", "--budget", "8", "express-orders-evolve"]
+                .map(String::from)
+                .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            evolve_steps.evolve,
+            Some(EvolveMode::Live {
+                steps: Some(evolve::StepRange { start: 0, end: 4 }),
+                resume: None,
+            })
+        );
+        assert_eq!(evolve_steps.budget, NonZeroUsize::new(8));
+        let evolve_resume = Args::parse(
+            [
+                "--evolve",
+                "--resume",
+                "2026-11-12T03-10-00Z",
+                "--at-step",
+                "4",
+                "--chain",
+                "2",
+                "--drifted",
+                "express-orders-evolve",
+            ]
+            .map(String::from)
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            evolve_resume.evolve,
+            Some(EvolveMode::Live {
+                steps: None,
+                resume: Some(evolve::EvolveResume {
+                    card: "2026-11-12T03-10-00Z".to_owned(),
+                    chain: 2,
+                    at_step: 4,
+                    drifted: true,
+                }),
+            })
+        );
         for argv in [
             &["--evolve"][..],
             &["--facts", "--evolve"][..],
             &["--facts", "--evolve", "--target", "omnia", "express-orders-evolve"][..],
             &["--facts", "--evolve", "--budget", "6", "express-orders-evolve"][..],
+            &["--facts", "--evolve", "--steps", "00..03", "express-orders-evolve"][..],
+            &["--facts", "--evolve", "--resume", "card", "--at-step", "2", "express-orders-evolve"]
+                [..],
             &["--evolve", "--build", "express-orders-evolve"][..],
             &["--evolve", "--oracle", "card", "express-orders-evolve"][..],
             &["--evolve", "--rebuild", "card", "express-orders-evolve"][..],
             &["--evolve", "--resume", "card", "--at", "2", "express-orders-evolve"][..],
+            &["--evolve", "--resume", "card", "express-orders-evolve"][..],
+            &["--evolve", "--resume", "card", "--at-step", "0", "express-orders-evolve"][..],
+            &["--evolve", "--at-step", "2", "express-orders-evolve"][..],
+            &["--evolve", "--chain", "2", "express-orders-evolve"][..],
             &["--evolve", "--drifted", "express-orders-evolve"][..],
+            &["--evolve", "--steps", "05..02", "express-orders-evolve"][..],
+            &["--steps", "00..02", "express-orders"][..],
+            &["--at-step", "2", "express-orders"][..],
         ] {
             assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
         }
@@ -3227,5 +3408,241 @@ mod tests {
             "{rendered}"
         );
         fs::remove_dir_all(&scratch_dir).unwrap();
+
+        assert_eq!(step_tag(0), "step-00");
+        assert_eq!(step_tag(6), "step-06");
+        assert_eq!(StepRange::parse("00..04").unwrap(), StepRange { start: 0, end: 4 });
+        assert_eq!(StepRange::parse("2..=5").unwrap(), StepRange { start: 2, end: 5 });
+        assert_eq!(StepRange::parse("03").unwrap(), StepRange { start: 3, end: 3 });
+        StepRange::parse("00..08").unwrap().validate(7).unwrap_err();
+
+        let src_cfg = step_source_config(&evolution.base, "eval:typescript@0.12.0");
+        assert!(src_cfg.contains("scope = \"whole\""), "{src_cfg}");
+        assert!(src_cfg.contains("path = \"typescript/\""), "{src_cfg}");
+        let intent_cfg = step_intent_config("eval:intent@0.12.0", "Use x-api-key.");
+        assert!(intent_cfg.contains("name = \"intent\""), "{intent_cfg}");
+        assert!(intent_cfg.contains("description = \"Use x-api-key.\""), "{intent_cfg}");
+        assert!(!intent_cfg.contains("[target]"), "{intent_cfg}");
+    }
+
+    #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "locality git snapshots, touch points, removed crates, amend/scope grading, and git shell scan share one test"
+    )]
+    fn evolve_locality_and_trace() {
+        let repo = scratch(
+            "evolve-locality",
+            &[
+                (
+                    "Cargo.toml",
+                    "[package]\nname = \"guest\"\n[dependencies]\norders = { path = \"crates/orders\" }\n\
+                     customers = { path = \"crates/customers\" }\nhealth = { path = \"crates/health\" }\n",
+                ),
+                (
+                    "src/lib.rs",
+                    "pub fn router() {\n    let _ = [\n        orders::handlers(),\n        customers::handlers(),\n        health::handlers(),\n    ];\n}\n",
+                ),
+                ("crates/common/src/topic.rs", "pub const T: &str = \"t\";\n"),
+                (
+                    "crates/customers/Cargo.toml",
+                    "[package]\nname = \"customers\"\n[dependencies]\nanyhow.workspace = true\n",
+                ),
+                ("crates/customers/src/lib.rs", "pub mod customers;\n"),
+                (
+                    "crates/customers/src/customers.rs",
+                    "pub fn authenticate() -> bool { true }\n#[test]\nfn auth_works() {}\n",
+                ),
+                (
+                    "crates/orders/Cargo.toml",
+                    "[package]\nname = \"orders\"\n[dependencies]\ncustomers = { path = \"../customers\" }\n",
+                ),
+                ("crates/orders/src/lib.rs", "pub mod orders;\n"),
+                (
+                    "crates/orders/src/orders.rs",
+                    "use customers::customers::authenticate;\n\npub fn place() -> bool { authenticate() }\n\npub fn untouched() -> i32 { 42 }\n#[tokio::test]\nasync fn places_order() {}\n",
+                ),
+                ("crates/health/Cargo.toml", "[package]\nname = \"health\"\n[dependencies]\n"),
+                ("crates/health/src/lib.rs", "pub fn live() {}\n"),
+            ],
+        );
+        git(&repo, &["init", "--quiet", "--initial-branch=main"]).unwrap();
+        git(&repo, &["add", "--all"]).unwrap();
+        git(&repo, &["commit", "--quiet", "-m", "step 00"]).unwrap();
+        git(&repo, &["branch", "emery/rev0"]).unwrap();
+
+        let snap0 = TreeSnapshot::read(&repo, "refs/heads/emery/rev0").unwrap();
+        assert_eq!(
+            snap0.crates.keys().cloned().collect::<Vec<_>>(),
+            ["customers", "health", "orders"]
+        );
+        assert_eq!(snap0.crates["orders"].size.tests, 1);
+
+        let touch = snap0.touch_points(&BTreeSet::from(["customers".to_owned()]));
+        assert_eq!(
+            touch,
+            vec![
+                TouchPoint {
+                    file: "crates/orders/Cargo.toml".to_owned(),
+                    kind: TouchKind::Dependency("customers".to_owned()),
+                    line: 4,
+                },
+                TouchPoint {
+                    file: "crates/orders/src/orders.rs".to_owned(),
+                    kind: TouchKind::Use,
+                    line: 1,
+                },
+                TouchPoint {
+                    file: "crates/orders/src/orders.rs".to_owned(),
+                    kind: TouchKind::Item("fn place".to_owned()),
+                    line: 3,
+                },
+            ]
+        );
+
+        // step 1: rewrite `customers`, edit admitted touch point `fn place` in `orders`, keep `health` identical
+        fs::write(
+            repo.join("crates/customers/src/customers.rs"),
+            "pub fn authenticate(tok: &str) -> bool { !tok.is_empty() }\n#[test]\nfn auth_works() {}\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("crates/orders/src/orders.rs"),
+            "use customers::customers::authenticate;\n\npub fn place() -> bool { authenticate(\"ok\") }\n\npub fn untouched() -> i32 { 42 }\n#[tokio::test]\nasync fn places_order() {}\n",
+        )
+        .unwrap();
+        git(&repo, &["add", "--all"]).unwrap();
+        git(&repo, &["commit", "--quiet", "-m", "step 01"]).unwrap();
+        git(&repo, &["branch", "emery/rev1"]).unwrap();
+        let snap1 = TreeSnapshot::read(&repo, "refs/heads/emery/rev1").unwrap();
+
+        let step_toml = StepToml::parse(
+            "title = \"Delete customer\"\nvia = \"patch\"\n[amend]\nadded = [1, 2]\nstems = [\"customers\"]\n\
+             [scope]\nminimum = [\"customers\"]\nrebuilt = [\"customers\"]\n\
+             [crates]\ncustomers = \"rewrite\"\norders = \"touch\"\nhealth = \"carried\"\n",
+        )
+        .unwrap();
+        let amendment_json = serde_json::json!({
+            "changes": [
+                {"id": "REQ-010", "subject": "customers.delete", "class": "added"},
+                {"id": "REQ-001", "subject": "orders.place", "class": "unchanged"},
+            ],
+            "sections": {"preamble": false, "added": [], "removed": [], "changed": []},
+            "parts": [{"id": "PART-002", "name": "customers", "class": "changed", "brief": "kept"}],
+        });
+        let amend_grade = AmendGrade::evaluate(&amendment_json, &step_toml.amend);
+        assert!(amend_grade.passed(), "{:?}", amend_grade.mismatches);
+
+        let build_env = serde_json::json!({
+            "change": {
+                "from": "rev0",
+                "commit": snap0.commit,
+                "rebuilt": [{"id": "PART-002", "name": "customers", "reasons": ["requirements"]}],
+                "carried": ["PART-001", "PART-003"],
+                "retiring": [],
+            },
+            "schedule": [],
+        });
+        let plan_json = serde_json::json!({
+            "parts": [
+                {"id": "PART-001", "name": "orders"},
+                {"id": "PART-002", "name": "customers"},
+                {"id": "PART-003", "name": "health"},
+            ]
+        });
+        let scope_grade =
+            ScopeGrade::evaluate(&build_env, Some(&plan_json), None, &step_toml.scope);
+        assert!(scope_grade.passed(), "{:?}", scope_grade.mismatches);
+
+        let loc1 = StepLocality::compare(StepComparison {
+            repo: &repo,
+            step: 1,
+            slug: "01-delete-customer",
+            before: &snap0,
+            after: &snap1,
+            expected_crates: &step_toml.crates,
+            amend: Some(amend_grade),
+            scope: Some(scope_grade),
+            build_envelope: Some(&build_env),
+            build_stderr: "",
+            round_trip_bases: &[(0, &snap0)],
+        })
+        .unwrap();
+        assert!(loc1.carried_byte_identical());
+        assert!(loc1.touch_violations().is_empty(), "{:?}", loc1.touch_violations());
+        assert!(loc1.round_trips[0].loc_within_ten_percent());
+
+        // step 2: edit `fn untouched` in `orders` (violation!) and remove `health` while leaving `src/lib.rs` mention
+        fs::write(
+            repo.join("crates/orders/src/orders.rs"),
+            "use customers::customers::authenticate;\n\npub fn place() -> bool { authenticate(\"ok\") }\n\npub fn untouched() -> i32 { 99 }\n#[tokio::test]\nasync fn places_order() {}\n",
+        )
+        .unwrap();
+        fs::remove_dir_all(repo.join("crates/health")).unwrap();
+        git(&repo, &["add", "--all"]).unwrap();
+        git(&repo, &["commit", "--quiet", "-m", "step 02"]).unwrap();
+        git(&repo, &["branch", "emery/rev2"]).unwrap();
+        let snap2 = TreeSnapshot::read(&repo, "refs/heads/emery/rev2").unwrap();
+
+        let bad_crates = BTreeMap::from([
+            ("customers".to_owned(), CrateAction::Rewrite),
+            ("orders".to_owned(), CrateAction::Touch),
+            ("health".to_owned(), CrateAction::Removed),
+        ]);
+        let retiring_env = serde_json::json!({
+            "change": { "retiring": ["SLICE-003"] }
+        });
+        let retiring_stderr = timed("build-SLICE-003", "ok", 1000)
+            + "2026-11-16T00:00:00.000000Z TRACE complete{n=1 label=\"build-SLICE-003\"}: omnia_cursor::tools: tool call args tool=shell args={\"command\":\"cargo test && git show HEAD~1:crates/health/src/lib.rs\"}\n"
+            + "2026-11-16T00:00:01.000000Z DEBUG complete{n=1 label=\"build-SLICE-003\"}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo clippy -p orders\"\n";
+        let loc2 = StepLocality::compare(StepComparison {
+            repo: &repo,
+            step: 2,
+            slug: "02-bad-touch-and-remove",
+            before: &snap1,
+            after: &snap2,
+            expected_crates: &bad_crates,
+            amend: None,
+            scope: None,
+            build_envelope: Some(&retiring_env),
+            build_stderr: &retiring_stderr,
+            round_trip_bases: &[],
+        })
+        .unwrap();
+        assert!(
+            loc2.touch_violations().iter().any(|v| v.contains("`fn untouched` changed")),
+            "{:?}",
+            loc2.touch_violations()
+        );
+        assert!(!loc2.removed_clean());
+        assert_eq!(loc2.retiring_turns, 1);
+        assert_eq!(
+            loc2.git_calls,
+            vec![GitShellCall {
+                label: "build-SLICE-003".to_owned(),
+                command: "cargo test && git show HEAD~1:crates/health/src/lib.rs".to_owned(),
+            }]
+        );
+        assert_eq!(
+            scan_git_shell_calls(
+                "DEBUG complete{n=1 label=\"verify\"}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo build --target wasm32-wasip2\"\n"
+            ),
+            [] as [GitShellCall; 0]
+        );
+
+        let md = loc2.to_string();
+        assert!(md.contains("## Removed crates"), "{md}");
+        assert!(md.contains("1 `git` shell invocation(s)"), "{md}");
+
+        let rev1_sha = git(&repo, &["rev-parse", "refs/heads/emery/rev1"]).unwrap();
+        rewind_repo_head(&repo, &rev1_sha).unwrap();
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), rev1_sha);
+        assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]).unwrap(), rev1_sha);
+
+        fs::remove_dir_all(&repo).unwrap();
+
+        let empty_part = OraclePartition::default();
+        assert!(empty_part.carried_clean());
+        assert!(!empty_part.step_clean());
     }
 }

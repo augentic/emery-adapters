@@ -1247,8 +1247,10 @@ version = "0.12.0"
 dependencies = [
  "emery-sdk",
  "omnia-template",
+ "proc-macro2",
  "serde",
  "serde_json",
+ "syn 3.0.9",
  "toml",
 ]
 
