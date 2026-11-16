@@ -19,9 +19,9 @@ Nothing outside `$WORKSPACE` is reachable.
 
 The tree is an omnia guest in the [layout](references/layout.md):
 
-- the root package `guest`: `src/lib.rs`, whose `router()` composes every stem's `handlers()` in one `Handlers::from([..])` array and exports it to the host, and the two rungs under `tests/`;
+- the root package `guest`: `src/lib.rs`, whose `router()` bounds `P` on every stem's `Requires`, composes every stem's `handlers()` in one `Handlers::from([..])` array, and exports it to the host, and the two rungs under `tests/`;
 - `crates/common`: the topic table;
-- one crate per stem beside it, its entry composing its parts' `handlers()` the same way, each with its own manifest and tests;
+- one crate per stem beside it, its entry declaring `pub trait Requires` and composing its parts' `handlers()` the same way, each with its own manifest and tests;
 - the root `Cargo.toml`, pinning every shared crate and listing each stem's path.
 
 Five checks are yours to run. The layout's own rules the adapter holds for you when you answer, as [the rules held](#the-rules-held) says.
@@ -36,7 +36,8 @@ Mark the time first: `touch "$TMPDIR/before"`. Then run each check in `$WORKSPAC
    A `disallowed` method, type, or macro names the capability to reach instead. The repair is that capability, never an `allow` or an `expect`.
    The merge may have kept one slice's `Cargo.lock` over another's. The first cargo run resolves the workspace again and rewrites it.
    What fails here, and its repair:
-   - an entry of the root's array naming a stem the root `Cargo.toml`'s `[dependencies]` lacks: add the stem's `<stem> = { path = "crates/<stem>" }` line at the end of the list;
+   - a stem named in `src/lib.rs` that the root `Cargo.toml`'s `[dependencies]` lacks, or listed in `router()`'s array without `P: <stem>::Requires,` in its `where` list: add the missing line;
+   - a handler bounded on a capability trait its stem's `Requires` in `crates/<stem>/src/lib.rs` does not list: add the trait to `pub trait Requires`, its blanket `impl`, and `use omnia_sdk::{..};`;
    - a `pub mod` line naming no file: remove the line;
    - an entry of a stem's array naming a part with no `handlers()`: remove the entry;
    - a module using a crate its stem's manifest does not name: add the line at the end of the stem's `[dependencies]`;
@@ -45,7 +46,7 @@ Mark the time first: `touch "$TMPDIR/before"`. Then run each check in `$WORKSPAC
    A panic in `tests/routes.rs` naming an overlapping route is two slices routing one path with one method.
    A panic in `tests/messaging.rs` naming a duplicate topic is two slices consuming one topic.
    The owner is whichever slice's requirement states it.
-3. **The guest builds.** `cargo build --target wasm32-wasip2` exits 0 and `target/wasm32-wasip2/debug/guest.wasm` exists.
+3. **The guest builds.** `cargo build --target wasm32-wasip3` exits 0 and `target/wasm32-wasip3/debug/guest.wasm` exists.
    The whole program compiles for the component, every crate the array names included.
 4. **It is formatted.** `cargo +nightly fmt --all -- --check` exits 0, where `rustup run nightly rustfmt --version` succeeds.
    Where it does not succeed, skip this check and name no failure for it.
@@ -71,9 +72,9 @@ It refuses the verdict with every rule the tree breaks as a finding under `## Fi
 Each finding names the file, the line, and the repair. Make the repair through the two tools. Run the checks the repair touches again. Answer again.
 The rules are:
 
-- **The static files stand.** Every file of the seed outside the three lists is held to the exemplar's guest template.
+- **The static files stand.** Every file of the seed outside the three root list files is held to the exemplar's guest template.
   Those are `tests/routes.rs`, `tests/messaging.rs`, `examples/runtime.rs`, `crates/common/Cargo.toml`, `crates/common/src/lib.rs`, `clippy.toml`,
-  the toolchain and tooling files, `supply-chain/`, and `.github/` whole. `src/lib.rs` outside its array and the root `Cargo.toml` outside its list are held the same way.
+  the toolchain and tooling files, `supply-chain/`, and `.github/` whole. `src/lib.rs` outside its two stem lists (`where` bounds and `Handlers::from([..])` array) and the root `Cargo.toml` outside its list are held the same way.
   The finding is the `-` lines of the template to put back and the `+` lines of the tree to drop, or the template's body whole for a file the tree lacks.
   Nothing is put back before this turn. A drift a slice merged is yours to repair as the finding spells it, through `edit_files`, or `write_files` for a file written whole.
   So is a drift your own repair made.
@@ -83,18 +84,18 @@ The rules are:
   The repair drops it through `edit_files`.
 - **No removed crate is named.** Where a crate the tree lacks is still named by a stem manifest's path dependency or by a `use` or item of any module, each line is a finding.
   The repair drops the dependency line and the mentions through `edit_files`.
-- **Every stem is merged.** Every stem's `handlers()` is listed by a `<stem>::handlers()` entry of the `Handlers::from([..])` array in `src/lib.rs`.
-  A stem the array does not name compiles clean and serves nothing, which no check sees.
-  The repair adds the stem's entry at the end of the array through `edit_files` and rewrites no other.
-  The static text around the array stands as the seed spells it, and every entry of the array is one stem, once.
+- **Every stem is merged.** Every stem's `handlers()` is listed by a `<stem>::handlers(),` entry of the `Handlers::from([..])` array in `src/lib.rs`, with `P: <stem>::Requires,` in `router()`'s `where` list.
+  A stem the list does not name compiles clean and serves nothing, which no check sees.
+  The repair adds `P: <stem>::Requires,` to the `where` list and `<stem>::handlers(),` at the end of the array through `edit_files` and rewrites no other.
+  The static text around both lists stands as the seed spells it, and every entry is one stem, once.
   The array is laid one `<stem>::handlers(),` per line under the comment that heads it, which stays: the repair is one line added before the closing `])`, never the array folded onto one line.
 - **Every part is declared, and the entry holds nothing of its own.** Every `crates/<stem>/src/<part>.rs` is listed by a `pub mod <part>;` line of the stem's `src/lib.rs`.
   A module nothing declares is compiled by nothing and serves nothing, which the checks pass over.
-  An entry that exposes `handlers()` holds its `pub mod` lines, its `use` lines, and the one fold, and no handler, type, constant, or inline module.
+  An entry that exposes `handlers()` holds its `pub mod` lines, its `use` lines, `pub trait Requires` and its blanket `impl`, and the one fold, and no handler, type, constant, or inline module.
   One standing there is a part folded into the entry where its file was, as a `mv` through the shell leaves the tree.
   The repair adds the missing line among the entry's `pub mod` lines through `edit_files`.
   A folded item goes back into its part, `crates/<stem>/src/<part>.rs`, declared by its line and named in the entry's array, through `write_files` and `edit_files`; no file is moved through the shell.
-- **Every topic is named.** Every constant of `crates/common/src/topic.rs` is named by a module, as `topic::<NAME>` in a `.topic(..)` registration or a `context.publish().send(..)` call.
+- **Every topic is named.** Every constant of `crates/common/src/topic.rs` is named by a module, as `topic::<NAME>` in a `.topic(..)` registration or a `context.publisher().publish(..)` call.
   One nothing names is a topic nothing publishes or consumes.
   The repair names it from the part whose requirement publishes or consumes the topic, or removes the constant with its doc comment through `edit_files`.
 - **No `crates/start/` crate is written.** The seed and the host are `start`, as the [guardrails](references/guardrails.md) spell out under what `start` becomes.
@@ -108,7 +109,7 @@ The rules are:
   A function that returns an empty collection on `Ok(None)`, by a `return` or as its tail, or defaults the miss, has lost the table.
   A default on the hit's own arm decodes what the store held and is none. A read under a key built from the input is a lookup and passes.
   The repair writes the fetch into the reading function through `edit_files`.
-  On `Ok(None)` it fetches the table from its upstream as the design spells the call, stores it under the same key with a TTL, and answers what it fetched.
+  On `Ok(None)` it fetches the table from its upstream (`HttpClient`) or database (`SqlDb`) as the design spells the call, stores it under the same portable `.`-separated key with a `Duration` TTL, and answers what it fetched.
 - **No struct wraps an HTTP response in a single `data` field.** Under `crates/*/src`, a `Deserialize` struct whose body holds a single `data` field wraps the response in the source's client property.
   The wire never carries that. The repair removes the wrapper struct through `edit_files`.
   Read the response through `fetch_json` directly into `Vec<T>` for a JSON array, or into a struct with the body's fields at its root.
@@ -117,7 +118,7 @@ The rules are:
 - **Every dependency is used.** Every crate a stem's `[dependencies]` names beyond the layout's four fixed lines is spelled by a module or a test of the stem.
   One no file spells is compiled for nothing, and a slice that named it meant to use it.
   The repair removes the line through `edit_files`, or writes the use the slice's requirement states, and runs the first two checks again.
-- **Every stem that publishes is reached.** A part spelling `Publish` in a stem whose entry registers no part's `handlers()`, and whose crate no other stem's module names, is never run.
+- **Every stem that publishes is reached.** A part spelling `Publisher` in a stem whose entry registers no part's `handlers()`, and whose crate no other stem's module names, is never run.
   The host runs a stem through its `handlers()` alone.
   The repair is the trigger the design's `## APIs and integrations` spells for the stem's inbound stream, through `edit_files`, then the first two checks again:
   - the constant at the end of the topic table, its value the topic as the design states it;
@@ -129,12 +130,12 @@ The rules are:
   `Ok(())` stays only where a valid message is filtered out by a rule. A test that expected the swallow is repaired to expect the error.
 - **No setting names a format.** A settings field, or a `const NAME: &str = "NAME"`, whose name spells `format` reads a parser's syntax from the deployment.
   The repair holds the syntax in a constant of the module, `"%d/%m/%Y"` for a criterion's `DD/MM/YYYY`, through `edit_files`, and the module parses with it.
-- **Every filled handler is bounded on what it reaches.** A handler whose body is filled and whose `P` is still bounded `Capabilities` hides which capabilities it uses.
+- **Every filled handler is bounded on what it reaches.** A handler whose body is filled and whose `P` is still bounded `P: crate::Requires` (or `P: Requires`) hides which capabilities it uses.
   The finding lists the traits the body reaches through the context's accessors, `StateStore` for `context.state()`, `Config` for `context.config()`.
-  The repair replaces `P: Capabilities` with those traits, `where P: StateStore + Config`, adding the bounds of any helper the body hands `context.provider()` to, through `edit_files`.
-- **Every required setting is a field of the part's `Settings` struct.** A `pub(crate) const KEY: &str = "KEY"` read through `Config::get(.., KEY).await?` or `context.config().get(KEY).await?`, or a key spelled at such a read, is the old shape.
+  The repair replaces the broad bound with those traits (`where P: StateStore + Config`, or drops the `where` clause when it reaches none, adding the bounds of any helper the body hands `context.provider()` to) and lists any new traits on `Requires` and its blanket `impl` in `crates/<stem>/src/lib.rs`, through `edit_files`.
+- **Every required setting is a field of the part's `Settings` struct.** A `pub(crate) const KEY: &str = "KEY"` read through `Config::get(.., KEY).await?`, `ConfigExt::require(.., KEY).await?`, `context.config().get(KEY).await?`, or `context.config().require(KEY).await?`, or a key spelled at such a read, is the old shape.
   The repair declares a `#[derive(Settings)]` struct for the part, `#[setting(prefix = "<PART>_")]` over a shared prefix or `#[setting(key = "..")]` per field, typed as its value parses, loads it with `<Part>Settings::load(context.config()).await?`, and replaces each read, through `edit_files`.
-  A read whose failure the body handles itself, `.await.ok()` or `.await.is_ok_and(..)`, is an optional setting and no finding.
+  A read whose absence or failure the body handles itself, `.await?` matched on `None` or `.await.ok()`, is an optional setting and no finding.
 
 ## Repairs
 
@@ -144,7 +145,7 @@ A failure in the merged tree is the seam between two slices. The repair is the s
   keep the struct, parser, and validation of the module whose slice owns the type key, and have the later module of the stem `use` and call `crate::<earlier_part>::*`.
   Every module of the stem then reads one shape and runs one pipeline.
 - One slice depending on a crate the other did not write: the line in the stem's manifest.
-- A list missing a line, or an array missing an entry: add it at the end.
+- A list missing a line, `Requires` missing a supertrait, or an array missing an entry: add it where the layout says.
 - An entry's array holding an entry for a part with no `handlers()`: remove the entry.
 - A manifest missing a crate a file uses: add the line.
 - Two slices routing one path with one method, or consuming one topic: the owner is whichever slice's requirement states it.
@@ -165,6 +166,11 @@ A repair is one `edit_files` call. Its `find` is the text as the file holds it. 
 ```json
 {
   "edits": [
+    {
+      "path": "src/lib.rs",
+      "find": "    P: health::Requires,\n",
+      "replace": "    P: health::Requires,\n    P: orders::Requires,\n"
+    },
     {
       "path": "src/lib.rs",
       "find": "        health::handlers(),\n    ])\n",

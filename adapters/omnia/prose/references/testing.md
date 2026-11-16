@@ -4,7 +4,7 @@ One test per acceptance scenario, in the stem's `tests/` as the [layout](layout.
 
 ## The file
 
-`crates/<stem>/tests/<part>.rs` builds the stem's router over a `Client` of the doubles, as the root does, and sends it one request per scenario. The adapter scaffolds the file before the turn: the prelude, then one ignored test per scenario over the act its requirement carries. Filled, the file reads:
+`crates/<stem>/tests/<part>.rs` builds the stem's router over the doubles, as the root does, and sends it one request per scenario. The adapter scaffolds the file before the turn: the prelude, then one ignored test per scenario over the act its requirement carries. Filled, the file reads:
 
 ```rust
 //! The acceptance scenarios of the `placing` part of the `orders` stem, over the guest doubles.
@@ -13,7 +13,7 @@ use axum::body::Body;
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{Request, StatusCode};
 use common::topic;
-use omnia_sdk::api::{Client, Router};
+use omnia_sdk::api::Router;
 use omnia_test::guest::{MapConfig, Provider, send};
 use orders::placing::Placed;
 use serde_json::Value;
@@ -25,7 +25,7 @@ fn provider() -> Provider {
 
 // The stem's router over the doubles, as the guest builds it.
 fn router(provider: &Provider) -> Router<Provider> {
-    orders::handlers().with_state(Client::new(provider.clone()))
+    orders::handlers().with_state(provider.clone())
 }
 
 // One request through the stem's router, answered as its status and its body as JSON:
@@ -58,7 +58,7 @@ async fn an_order_within_the_limit_is_placed() {
     assert_eq!(status, StatusCode::OK, "{body}");
     let placed: Placed = serde_json::from_value(body).expect("a placement");
     assert_eq!(placed.lines, 2);
-    let sent = provider.publish.sent();
+    let sent = provider.publisher.sent();
     assert_eq!(sent.len(), 1, "the placement is published once");
     assert_eq!(sent[0].0, topic::ORDER_PLACED);
 }
@@ -76,15 +76,15 @@ async fn an_order_past_the_limit_is_refused() {
         .expect("request");
     let (status, _body) = call(&provider, request).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert!(provider.publish.sent().is_empty(), "nothing is published");
+    assert!(provider.publisher.sent().is_empty(), "nothing is published");
 }
 ```
 
 - One `#[tokio::test]` per scenario, named by the scenario in snake_case: `an_order_with_no_items_is_refused`. The adapter scaffolds each before the turn, under `#[ignore = "<id> <scenario>: unfilled"]`, with the scenario's `GIVEN`, `WHEN`, and `THEN` in a comment above it and its act laid from the requirement's route or message — the request built and sent through `call`, a path parameter bound above it by a `let <param> = "<param>";` line, a body `"{}"`; a delivery through `deliver` with the payload `b"{}"`; a module with no route or topic over `provider()` alone — and a `todo!("<id> <scenario>: arrange, act, assert")` under it. Fill the test as one edit over the block the brief quotes: the `#[ignore = ..]` line gone, the parameter, body, or payload the scenario states in place of the placeholders, the `let _ = ..;` line that held the act's results replaced by the assertions. A scenario the specification gives you is a test; invent none, and delete none.
 - The `WHEN` is the request — its method, path, headers, and body — and the state the doubles start in; the `THEN` is the response's status and body, and what the doubles hold after. A handler's `Ok` is `200` with the output as JSON, or the status it names; its `Err` is the class's status, `400` for `bad_request`, `404` for `not_found`, `500` for `server_error`, `502` for `bad_gateway`, with the body `{"error": "<code>", "message": ".."}`, so a test asserts the status and, where the scenario states the reason, the body's `error` or `message`. When a scenario's `THEN` is `[unknown]`, derive the assertion from the outcome stated in the requirement's statement itself (for example, `StatusCode::BAD_REQUEST` when the requirement states an input is rejected or skipped on validation failure, or asserting the returned value or published messages), and include the requirement in `covered`.
-- The prelude is the adapter's, rendered with the functions the part's tests use and nothing more: `provider()`, the doubles every scenario starts from, each setting the part's `Settings` struct reads seeded under its key with a `"<value>"` placeholder the turn replaces with the value the scenarios run under; `router(&provider)`, the stem's `handlers()` closed over a `Client` of the doubles, as the root closes it; `call(&provider, request)`, one request through it answered as `(StatusCode, serde_json::Value)`, the body read as JSON so an assertion is over a field, `body["status"]`, or a typed read, `serde_json::from_value(body)`, and never over the bytes of a literal. A delivery is `deliver(&router(&provider), topic::NAME, payload)` from `omnia_test::guest`, the topic the table's constant. Each takes the provider by reference, so a test reads the doubles after the act from the same `provider`. A setting one scenario alone changes is set in its arrangement by building the config whole, `provider().config(MapConfig::default().with([("ORDERS_LIMIT", "3")]))`, since `.config(..)` sets the double rather than adding to it, so every key the part reads goes with it; a response an upstream answers is `.http(..)` on the same provider. A `GET` is `Request::get("/orders/42").body(Body::empty())`, a query `Request::get("/orders?status=open")`, as the laid act spells it.
+- The prelude is the adapter's, rendered with the functions the part's tests use and nothing more: `provider()`, the doubles every scenario starts from, each setting the part's `Settings` struct reads seeded under its key with a `"<value>"` placeholder the turn replaces with the value the scenarios run under; `router(&provider)`, the stem's `handlers()` closed over `provider.clone()`, as the root closes it; `call(&provider, request)`, one request through it answered as `(StatusCode, serde_json::Value)`, the body read as JSON so an assertion is over a field, `body["status"]`, or a typed read, `serde_json::from_value(body)`, and never over the bytes of a literal. A delivery is `deliver(&router(&provider), topic::NAME, payload)` from `omnia_test::guest`, the topic the table's constant. Each takes the provider by reference, so a test reads the doubles after the act from the same `provider`. A setting one scenario alone changes is set in its arrangement by building the config whole, `provider().config(MapConfig::default().with([("ORDERS_LIMIT", "3")]))`, since `.config(..)` sets the double rather than adding to it, so every key the part reads goes with it; a response an upstream answers is `.http(..)` on the same provider. A `GET` is `Request::get("/orders/42").body(Body::empty())`, a query `Request::get("/orders?status=open")`, as the laid act spells it.
 - The file declares nothing `pub`: the workspace lints want a doc on every public item, a test file included, and a helper is a private `fn`.
-- The tests reach the stem as another crate would, through `<stem>::handlers()` and `<stem>::<part>::<Type>` for the `pub` types a response or a payload decodes into; what the handler stored is read back from the doubles under the key the module spells, `provider.storage.state("orders/order/42")`, or through a `pub fn order_key` the module shares with its readers.
+- The tests reach the stem as another crate would, through `<stem>::handlers()` and `<stem>::<part>::<Type>` for the `pub` types a response or a payload decodes into; what the handler stored is read back from the doubles under the portable `.`-separated key the module spells, `provider.storage.state("orders.order.42")`, or through a `pub fn order_key` the module shares with its readers.
 - A consumer is driven through the stem's router with `deliver`: the delivery's `topic` the table's constant and its `payload` the wire's bytes:
 
 ```rust
@@ -104,12 +104,13 @@ async fn placements_are_counted() {
         let payload = serde_json::to_vec(&Placed { lines }).expect("a placement");
         deliver(&router, topic::ORDER_PLACED, payload).await.expect("a placement is counted");
     }
-    let total = StateStore::increment(&provider, "orders/lines-placed", 0).await.expect("the count");
+    let total =
+        StateStore::increment(&provider, "orders.lines-placed", 0, None).await.expect("the count");
     assert_eq!(total, 3, "the placements are counted");
 }
 ```
 
-  A delivery the handler rejects is `Err(DeliveryError::Rejected(..))`, `expect_err` and `matches!` over it; a delivery that arrives malformed fails in the decoder the same way, `DeliveryError` from `omnia_sdk::api::messaging`.
+  A delivery the handler rejects is `Err(error)` — an `omnia_sdk::Error` carrying the handler's status and `error.code()`, `expect_err` over it; a delivery that arrives malformed fails in the decoder with `error.code() == "undecodable"`.
 
 - Where a handler or a helper deserializes an XML payload or an upstream JSON response, the test feeds the exact root wire format — `<Envelope><ShipmentNotice><primaryRef>5226</primaryRef>...` for XML, a top-level JSON array `[{"facility_code":"WH-101",...}]` or a root object `{"all":[{"carrierId":"..."}]}` without an outer `{"data":...}` wrapper for `MatchedHttp` — and asserts that the parsed fields (`primary_ref`, `secondary_ref`, `issue_date`, `legs`) and the published message's nested wire fields (`eventType`, `receivedAt`, `messageData.timestamp`, `remoteData.externalId`, `locationData.latitude`) match.
 - A module with no route or topic is tested through the `pub fn`s it exports, each scenario a call and an assertion over its result.
@@ -123,13 +124,13 @@ async fn placements_are_counted() {
 | Capability | Set with | Read back |
 | --- | --- | --- |
 | `Config` | `.config(MapConfig::default().with([("RATES_URL", "https://rates.example/v1")]))` | — |
-| `StateStore`, `BlobStore` | `provider.storage.insert_state(key, bytes)`, `provider.storage.insert_object(container, name, bytes)` | `provider.storage.state(key)`, `provider.storage.object(container, name)` |
-| `HttpRequest` | `.http(MatchedHttp::default().on(Method::GET, "https://rates.example/v1/NZD", response))`, `response` an `http::Response<Bytes>` | `provider.http.requests()` |
-| `Publish` | `.publish(Sink::default())` | `provider.publish.sent()`, a `(topic, Message)` per call |
-| `Broadcast` | `.broadcast(Sink::default())` | `provider.broadcast.broadcasts()` |
+| `StateStore`, `BlobStore`, `SecretStore` | `provider.storage.insert_state(key, bytes)`, `provider.storage.insert_object(container, name, bytes)`, `provider.storage.insert_secret(key, bytes)` | `provider.storage.state(key)`, `provider.storage.object(container, name)`, `provider.storage.secret(key)` |
+| `HttpClient` | `.http(MatchedHttp::default().on(Method::GET, "https://rates.example/v1/NZD", response))`, `response` an `http::Response<Bytes>` | `provider.http.requests()` |
+| `Publisher` | `.publisher(Sink::default())` | `provider.publisher.sent()`, a `(topic, Message)` per call |
+| `WebSockets` | `.websockets(Sink::default())` | `provider.websockets.broadcasts()` |
 | `Identity` | `.identity(FixedIdentity::new("token"))` | `provider.identity.asked()` |
-| `DocumentStore` | `.docs(MemoryDocs::default())` | `provider.docs.documents(store).await` |
-| `TableStore` | `.tables(ScriptedTables::default().on_query(matches, rows).on_exec(matches, affected))` | `provider.tables.statements()` |
+| `DocumentDb` | `.docs(MemoryDocs::default())` | `provider.docs.documents(collection).await` |
+| `SqlDb` | `.sql(ScriptedTables::default().on_query(matches, rows).on_exec(matches, affected))` | `provider.sql.statements()` |
 
 An arrangement over an upstream and a topic:
 
@@ -149,10 +150,10 @@ assert_eq!(status, StatusCode::OK, "{body}");
 let seen: Rate = serde_json::from_value(body).expect("a rate");
 assert_eq!(seen.currency, "NZD");
 assert_eq!(provider.http.requests().len(), 1);
-assert_eq!(provider.publish.sent()[0].0, topic::RATE_SEEN);
+assert_eq!(provider.publisher.sent()[0].0, topic::RATE_SEEN);
 ```
 
-A request the `MatchedHttp` holds no answer for, or a statement the `ScriptedTables` holds no rule for, panics naming it, so the arrangement scripts every call the handler makes; a scenario of an upstream that fails is a scripted `503` response, never a missing match. An entry `Memory` holds under a TTL expires after it, so a scenario of a stale cache seeds the entry and asserts the store was read.
+A request the `MatchedHttp` holds no answer for, or a statement the `ScriptedTables` holds no rule for, panics naming it, so the arrangement scripts every call the handler makes; a scenario of an upstream that fails is a scripted `503` response, never a missing match. An entry `Memory` holds under a `Duration` TTL expires after it, so a scenario of a stale cache seeds the entry and asserts the store was read.
 
 ## The root rungs
 

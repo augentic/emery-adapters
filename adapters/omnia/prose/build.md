@@ -26,7 +26,7 @@ Work in this order. Do not skip ahead.
 1. Read the brief whole. It carries the text of every file the adapter wrote or extended for you. Do not read those files again.
 2. Read a file the brief names as **held** once, in the tree, before you edit it. An earlier slice wrote it. When the brief names a module or test file as **held, extended** (a later slice of a part at `index > 1`), the adapter has already appended your new markers, test stubs, and registrations to the held file: fill only your new markers through `edit_files` and never rewrite or delete the types, handlers, functions, or tests that earlier slices of the part built.
 3. Fill the markers, in the brief's order. Each marker is one `edit_files` edit: its `find` the key the brief quotes beside the marker, alone, and its `replace` the whole text that takes the quoted block's place, indented as the block is.
-4. Add the list lines and any unanchored registrations the brief says are yours to add, through `edit_files`.
+4. Widen `Requires` and its blanket `impl` in `crates/<stem>/src/lib.rs` with every capability trait your stem's handlers reach, and add the list lines and any unanchored registrations the brief says are yours to add, through `edit_files`.
 5. Run the check command the brief spells. Read what it prints. Repair it through `edit_files`. Run it again. Stop when it passes.
 6. Answer with one JSON object: `covered` and `written`.
 
@@ -44,11 +44,11 @@ Write through this call's two tools alone.
 
 The [layout](references/layout.md) is the one shape every slice follows.
 The root package is the guest. `common` holds the topic table every stem shares.
-Each stem is a crate under `crates/` whose entry composes its parts' `handlers()` into one `Handlers`. The root's `router()` composes the stems' the same way.
+Each stem is a crate under `crates/` whose entry declares `pub trait Requires` for the capabilities its handlers reach and composes its parts' `handlers()` into one `Handlers`. The root's `router()` bounds `P` on each stem's `Requires` and composes the stems' `handlers()` the same way.
 
 The adapter laid your slice's place in it before this turn, from the requirements and types the slice carries:
 
-- The stem's crate, `crates/<stem>/`, with its manifest and entry where the tree lacked them.
+- The stem's crate, `crates/<stem>/`, with its manifest and entry (`pub trait Requires: Send + Sync + 'static {}`, plus `Config` where a gated handler is laid) where the tree lacked them.
 - Your part, `crates/<stem>/src/<part>.rs`:
   - a path constant and a `.route(..)` in its `handlers()` per route your requirements carry;
   - a handler per route, over the route's extractors and an output struct, an input struct where the method carries a body and the route's requirements or scenarios state one;
@@ -64,7 +64,7 @@ The adapter laid your slice's place in it before this turn, from the requirement
   A gated handler answers `std::result::Result<_, GateError>`, so the gate's refusal and the host's errors both reach the wire through `?`.
 - Your tests, `crates/<stem>/tests/<part>.rs`: the prelude every test shares and one ignored test per acceptance scenario.
   Each test already sends the request or the delivery its requirement carries.
-- Your lines in every list: the stem's at the root, `<stem>::handlers()` in `src/lib.rs` and `<stem> = { path = "crates/<stem>" }` in `Cargo.toml`, and the part's in the entry.
+- Your lines in every list: the stem's three at the root — `P: <stem>::Requires,` and `<stem>::handlers(),` in `src/lib.rs`, and `<stem> = { path = "crates/<stem>" }` in `Cargo.toml` — and the part's in the entry.
 
 Each place your code goes is a marker: `todo!("REQ-.. <subject>: ..")` in a body, or `{}` on a type.
 The brief quotes every marker with its key, the one block to replace, and the file it stands in.
@@ -114,11 +114,12 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
 - Fill `<Name>Output` with the response's fields.
 - Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
 - A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
-- Reach the host through the context's accessors: `context.state()`, `context.config()`, `context.http()`, `context.publish()`, `context.tables()`.
-  Narrow `P: Capabilities` to the traits the body reaches, `where P: StateStore + Config`. A wider bound on a filled handler is a finding on your report.
+- Reach the host through the context's accessors: `context.state()`, `context.config()`, `context.http()`, `context.publisher()`, `context.sql()`, `context.docs()`, `context.blobs()`, `context.identity()`, `context.secrets()`, `context.websockets()`.
+  Narrow `P: crate::Requires` to the traits the body reaches (`where P: StateStore + Config`, or drop the `where` clause when it reaches none), and widen `Requires` and its blanket `impl` in `crates/<stem>/src/lib.rs` to include every capability trait the stem's handlers reach. A wider bound on a filled handler is a finding on your report.
+- State keys are portable and `.`-separated (`orders.order.{id}`), holding only ASCII letters, digits, `.`, `_`, and `-` (never `:` or `/`).
 - A setting is a field of your part's `<Part>Settings` struct. Load it with `<Part>Settings::load(context.config()).await?` where the body needs it.
   Narrow each field from `String` to the type its value parses as.
-- A topic you publish is a constant of `common::topic`: `context.publish().send(topic::NAME, &Message::json(&value)?).await?`.
+- A topic you publish is a constant of `common::topic`: `context.publisher().publish(topic::NAME, &Message::json(&value)?).await?` (`omnia_sdk::messaging::Message`).
 - Every failure is a classified `omnia_sdk::Error`, propagated with `?`: a fetch that errors, a status that is not success, a body that does not parse.
   Never catch one and answer `Ok(())` or an empty collection.
 - One handler serves every requirement its marker names. Two requirements at one method and path are one route.
@@ -145,8 +146,8 @@ It is registered in your part's `handlers()` under the table's constant for the 
 The adapter declared the constant at the end of `crates/common/src/topic.rs` where no slice had, and added `common.workspace = true` to the stem's manifest.
 
 - Fill the input with the delivery's fields.
-- Write the body as a handler's. A rejected delivery is `Err(bad_request!(..))`, never `Ok(())`.
-- Where the payload is not JSON, register it through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part.
+- Write the body as a handler's, narrowing `P: crate::Requires` to the traits it reaches (or dropping the `where` clause when it reaches none) and widening `Requires` in `crates/<stem>/src/lib.rs` to include them. A rejected delivery is `Err(bad_request!(..))`, never `Ok(())`.
+- Where the payload is not JSON, register it through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn decode(delivery: &Delivery) -> Result<<Input>>` of the part.
 - The registration itself is never a requirement. The host registers and acknowledges.
 
 ```json
@@ -155,7 +156,7 @@ The adapter declared the constant at the end of `crates/common/src/topic.rs` whe
     {
       "path": "crates/orders/src/fulfilment.rs",
       "find": "REQ-032 orders.on-placed.count-lines: the consumer",
-      "replace": "    let delta = i64::from(input.lines);\n    context.state().increment(LINES_PLACED, delta).await?;\n    Ok(())"
+      "replace": "    let delta = i64::from(input.lines);\n    context.state().increment(LINES_PLACED, delta, None).await?;\n    Ok(())"
     }
   ]
 }
@@ -187,12 +188,12 @@ Where such a requirement consumes a topic that no `Message:` line carries, the f
 The design's `## APIs and integrations` lists an inbound stream whose bullet cites it or another requirement of your stem.
 Or the stream's deliveries are what its scenario's `when` describes.
 
-- Make it a `pub(crate) async fn(context: Context<P>, input: <Input>) -> Result<()>`.
+- Make it a `pub(crate) async fn(context: Context<P>, input: <Input>) -> Result<()>`, bounded on the traits its body reaches.
 - Register it in your part's `handlers()` chain: `.topic(topic::<NAME>, <handler>)`, which decodes each delivery as JSON.
-- Where the stream's bullet, or the design elsewhere, says the payload is XML, CSV, or bytes, register `.topic_with(topic::<NAME>, <handler>, decode)` instead, over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the part that reads the payload through the format's `serde` reader — `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML, with `quick-xml.workspace = true` in your stem's `[dependencies]` — as the [translation](references/translation.md)'s consumed-message row spells it. A `.topic(..)` over such a stream refuses every delivery as malformed JSON.
+- Where the stream's bullet, or the design elsewhere, says the payload is XML, CSV, or bytes, register `.topic_with(topic::<NAME>, <handler>, decode)` instead, over a `fn decode(delivery: &Delivery) -> Result<<Input>>` of the part that reads the payload through the format's `serde` reader — `quick_xml::de::from_reader(&delivery.payload[..])` for XML, with `quick-xml.workspace = true` in your stem's `[dependencies]` — as the [translation](references/translation.md)'s consumed-message row spells it. A `.topic(..)` over such a stream refuses every delivery as malformed JSON.
 - Add the constant at the end of `crates/common/src/topic.rs` where no slice has declared it, and `common.workspace = true` at the end of your stem's `[dependencies]` where it lacks the line.
 
-A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `context.publish()`.
+A topic you publish to and no requirement of yours consumes is its constant in the topic table alone, named from your handler through `context.publisher()`.
 The slice that ends a pipeline registers the consumer where no part of the stem has. That is the slice that publishes, or that `depends-on` the stem's other slices.
 Its handler calls the earlier parts' functions in the pipeline's order.
 A part that publishes in a stem no route or topic reaches, and no other stem calls, is a finding on your report. Nothing ever runs it.
@@ -226,10 +227,11 @@ Replace the block the brief quotes with the filled test, as [testing](references
 
 ### A list line
 
-The adapter added the stem's line in each root list, the part's `pub mod` line and its `<part>::handlers()` entry in the entry, and the constant of each topic your requirements carry.
+The adapter added the stem's three lines at the root, the part's `pub mod` line and its `<part>::handlers()` entry in the entry, and the constant of each topic your requirements carry.
 The brief says `added` or `already held` for each.
-What the adapter does not derive is yours to add, at the end of its list, where the layout's table says:
+What the adapter does not derive is yours to add, where the layout's table says:
 
+- The capability traits your stem's handlers reach, imported from `omnia_sdk` and added to `pub trait Requires` and its blanket `impl` in `crates/<stem>/src/lib.rs`.
 - The constant of a topic you publish to, and the `common.workspace = true` line of your stem's manifest where it lacks one.
 - A `.topic(..)` registration for a consumer no `Message:` line carried.
 - One `<crate>.workspace = true` line at the end of your stem's `[dependencies]` for each crate your code uses beyond the four the manifest holds.
@@ -261,9 +263,9 @@ The merge keeps every form it is given, and the verify then has two.
 - No crate. Your stem's is scaffolded, one word whatever its hyphens: `crates/order-items/` for `order-items`.
   A crate written under any other name is a finding.
 - No `crates/start/`. Never add `start` to `Cargo.toml`. The seed and the host are the program's start.
-- No `mount`, no router of your own beyond your part's `handlers()`, no change to `src/lib.rs` outside its array, and no edit to another stem's crate save at the touch points a change build's brief lists.
+- No `mount`, no router of your own beyond your part's `handlers()`, no change to `src/lib.rs` outside its two stem lists, and no edit to another stem's crate save at the touch points a change build's brief lists (and `Requires` in that stem's `src/lib.rs` when a touched handler's capability bounds change).
   The host runs a stem through its `handlers()` alone.
-- No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock`, the root `Cargo.toml`'s list, and `src/lib.rs`'s array is the exemplar's guest template, scaffolded when the repository was initialised.
+- No seed file. Every file outside `crates/<stem>/` beside `Cargo.lock`, the root `Cargo.toml`'s list, and `src/lib.rs`'s two stem lists is the exemplar's guest template, scaffolded when the repository was initialised.
   Read one where you need its text. Write or report none.
 - No change to the root `Cargo.toml` outside its stem list. A pin, a lint, or a feature changed there is a finding with the lines named.
 - No scaffolded file written whole without what its skeleton holds. Edit it, or send it whole with every marker and name kept.
@@ -313,14 +315,14 @@ See [a change build](references/change.md) for the stem shapes and a worked exam
   A stem in the slice that the change did not reach has nothing scaffolded; leave its crate as it stands and the adapter records its requirements covered.
 - **Keep exported signatures other crates call.** Where the brief lists `Exported signatures of the rewritten crates before this slice`, keep each function's module path and signature in the rewritten crate unless the slice's changed specification or design changes it, so callers in other crates need no edit.
 - **Edit only listed touch points outside your slice's crates.** Every other crate stands as built.
-  Outside your slice's reached crates, edit only the items and manifest lines listed under `Touch points outside the slice's reached crates` (and `use` lines in those files) where a signature changed or a vanished crate was removed.
+  Outside your slice's reached crates, edit only the items and manifest lines listed under `Touch points outside the slice's reached crates` (along with `use` lines in those files, and `Requires` in that stem's `src/lib.rs` when a touched handler's capability bounds change) where a signature changed or a vanished crate was removed.
   Changing any other item or manifest line, or leaving any mention of a vanished crate, is a finding on your report.
 - **A retiring slice.** A slice retiring a removed part holds no requirements: edit the listed touch points so nothing names the vanished crate, run the check command, and report `"covered": []`.
 
 ## The check
 
 The brief spells one command, with your stem filled in:
-`cargo clippy -p <stem> --all-targets -- -D warnings && cargo test -p <stem> && cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check`.
+`cargo clippy -p <stem> --all-targets -- -D warnings && cargo test -p <stem> && cargo check --target wasm32-wasip3 && cargo +nightly fmt --all -- --check`.
 Once your edits are in, run it in `$WORKSPACE` as the brief spells it. It stops at the first step that fails. What it prints is the one thing to repair.
 
 - `clippy` is your crate and its tests under the workspace's lints: `pedantic` and `nursery`, every `pub` item documented, no `unsafe`, and the host boundary.
@@ -359,7 +361,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A stem's `handlers()` that the root's array does not list. A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
 - A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
-- A filled handler still bounded `P: Capabilities`; the finding lists the traits its body reaches. A required setting read through `Config::get` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
+- A filled handler still bounded `P: crate::Requires` (or `P: Requires`); the finding lists the traits its body reaches, to narrow on the handler and list on `Requires` in `crates/<stem>/src/lib.rs`. A required setting read through `Config::get` or `ConfigExt::require` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
 - On a change build, an item or manifest line outside your slice's reached crates changed that is no listed touch point, or an item or manifest dependency still names a crate the change removed.
 
 Repair a finding through `edit_files` where it is a change within a file, `delete` where a file goes. Then answer again. The report is yours once the tree stands.
@@ -367,8 +369,8 @@ Repair a finding through `edit_files` where it is a change within a file, `delet
 ## Worked example
 
 A slice `orders-reading` (`SLICE-006`) implementing `REQ-030` and `REQ-031`, the first part of the `orders` stem, which another slice also builds this wave.
-The adapter scaffolded the stem's manifest and entry, the part with a handler per route and an ignored test per scenario, and the stem's lines in the root lists.
-The turn filled the handlers and the tests. It added a `chrono` line to the stem's manifest for the order's timestamp.
+The adapter scaffolded the stem's manifest and entry, the part with a handler per route and an ignored test per scenario, and the stem's three lines in the root lists.
+The turn filled the handlers and the tests, and widened `Requires` in `crates/orders/src/lib.rs` with the capabilities the handlers reach. It added a `chrono` line to the stem's manifest for the order's timestamp.
 It declared the constant of the topic it publishes to in the topic table.
 `REQ-031` depends on a `customers` module another slice is building this wave, so its test cannot pass yet.
 Its marker and its ignored test stand as scaffolded, and it is left uncovered:
@@ -378,6 +380,7 @@ Its marker and its ignored test stand as scaffolded, and it is left uncovered:
   "covered": ["REQ-030"],
   "written": [
     "crates/orders/Cargo.toml",
+    "crates/orders/src/lib.rs",
     "crates/orders/src/reading.rs",
     "crates/orders/tests/reading.rs",
     "crates/common/src/topic.rs"
