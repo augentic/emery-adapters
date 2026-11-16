@@ -6,7 +6,7 @@ mod support;
 
 use omnia_test::host::{ScriptedModel, scratch};
 use serde_json::Value;
-use support::{Barrier, Strict as _, run, traced};
+use support::{Barrier, run, traced};
 
 // Every probe program must have a matching test here.
 test_programs::foreach_probe!();
@@ -109,7 +109,7 @@ async fn probe_fanout() {
     let model = run(test_programs::PROBE_FANOUT, &scratch(), &[], model).await;
 
     assert_eq!(
-        model.script().seen().len(),
+        model.seen().len(),
         4,
         "each extract opens one completion per seam, both pending at once"
     );
@@ -122,7 +122,7 @@ async fn fanout_together() {
     let model = run(test_programs::PROBE_FANOUT, &scratch(), &["together"], model).await;
 
     assert_eq!(
-        model.script().seen().len(),
+        model.seen().len(),
         4,
         "two extracts dispatched together open two completions each, all four pending at once"
     );

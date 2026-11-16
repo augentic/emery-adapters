@@ -2,14 +2,16 @@
 
 #![expect(dead_code, reason = "shared by suites that each use a subset")]
 
+use std::borrow::Borrow;
+use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use omnia::{ExitStatus, FutureResult, HostCtx, Provides, Telemetry};
+use omnia::{ExitStatus, FutureResult, Telemetry};
 use omnia_test::host::{Backends, Deployment, Scratch, ScriptedModel};
 use omnia_wasi_model::{Answer, Error, Limits, ModelClient, Request, ToolHost, WasiModel};
-use omnia_wasi_otel::{OtelClient, WasiOtel};
+use omnia_wasi_otel::{OtelClient, OtelDefault};
 use opentelemetry_proto::tonic::collector::metrics::v1::ExportMetricsServiceRequest;
 use opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest;
 use tracing::Instrument as _;
@@ -18,35 +20,30 @@ use tracing::Instrument as _;
 // guest issued together.
 const HOLD: Duration = Duration::from_secs(5);
 
-/// A [`ScriptedModel`] that answers a completion only once `parties` are pending.
-///
-/// Concurrent requests pass the barrier together. A serial host reaches the
-/// bounded [`HOLD`] timeout instead, which identifies the missing party, and
-/// every completion after that fails at once. A party the guest fills late
-/// proves nothing about what the host ran together, since the SDK puts a
-/// seam whose turn failed upstream once more. The barrier resets for each
-/// party.
+// Holds each completion until `parties` are pending together.
+//
+// Once `HOLD` expires, every subsequent completion fails immediately: a party
+// the guest fills late proves nothing about concurrency because the SDK retries
+// a seam whose turn failed upstream.
 #[derive(Clone, Debug)]
 pub struct Barrier {
-    inner: ScriptedModel,
+    model: ScriptedModel,
     gate: Arc<tokio::sync::Barrier>,
     parties: usize,
     expired: Arc<AtomicBool>,
 }
 
 impl Barrier {
-    /// Holds each of `model`'s completions until `parties` are pending.
     #[must_use]
     pub fn new(model: ScriptedModel, parties: usize) -> Self {
         Self {
-            inner: model,
+            model,
             gate: Arc::new(tokio::sync::Barrier::new(parties)),
             parties,
             expired: Arc::default(),
         }
     }
 
-    // The diagnostic once a hold has expired.
     fn serialised(&self) -> Error {
         Error::Backend(format!(
             "completion held {HOLD:?} without {} pending at once: the host serialises one \
@@ -56,55 +53,52 @@ impl Barrier {
     }
 }
 
+impl Deref for Barrier {
+    type Target = ScriptedModel;
+
+    fn deref(&self) -> &Self::Target {
+        &self.model
+    }
+}
+
+impl Borrow<ScriptedModel> for Barrier {
+    fn borrow(&self) -> &ScriptedModel {
+        &self.model
+    }
+}
+
 impl ModelClient for Barrier {
     fn complete(&self, request: Request, tool_host: Arc<dyn ToolHost>) -> FutureResult<Answer> {
         let this = self.clone();
         Box::pin(async move {
-            if this.expired.load(Ordering::SeqCst) {
+            if this.expired.load(Ordering::Relaxed) {
                 return Err(this.serialised().into());
             }
             if tokio::time::timeout(HOLD, this.gate.wait()).await.is_err() {
-                this.expired.store(true, Ordering::SeqCst);
+                this.expired.store(true, Ordering::Relaxed);
                 return Err(this.serialised().into());
             }
-            this.inner.complete(request, tool_host).await
+            this.model.complete(request, tool_host).await
         })
     }
 
     fn limits(&self) -> Limits {
         // HACK: the inherent `limits(self, Limits)` builder shadows the trait method
-        ModelClient::limits(&self.inner)
+        ModelClient::limits(&self.model)
     }
 }
 
-/// A host model the runner holds to its script.
-///
-/// Every scripted turn is consumed, and none is requested past it.
-pub trait Strict: ModelClient + Clone {
-    /// Returns the script and its consumption record.
-    fn script(&self) -> &ScriptedModel;
-}
+pub trait Strict: ModelClient + Borrow<ScriptedModel> + Clone {}
 
-impl Strict for ScriptedModel {
-    fn script(&self) -> &ScriptedModel {
-        self
-    }
-}
+impl<M: ModelClient + Borrow<ScriptedModel> + Clone> Strict for M {}
 
-impl Strict for Barrier {
-    fn script(&self) -> &ScriptedModel {
-        &self.inner
-    }
-}
-
-/// Guest spans exported during one traced adapter run.
+// Guest spans exported during one traced adapter run.
 #[derive(Clone, Debug, Default)]
 pub struct Recording {
     traces: Arc<Mutex<Vec<ExportTraceServiceRequest>>>,
 }
 
 impl Recording {
-    /// Returns every exported span name in arrival order.
     #[must_use]
     pub fn span_names(&self) -> Vec<String> {
         self.traces
@@ -130,108 +124,67 @@ impl OtelClient for Recording {
     }
 }
 
-/// Runs the source driver in the mode `args` names against `adapter`.
-///
-/// `project` is mounted read-only as `.`. A clean exit and an exactly
-/// consumed script are required; the model's record is returned.
-///
-/// # Panics
-///
-/// Panics when deployment fails, the driver exits unsuccessfully, or the
-/// model script is not consumed exactly.
 pub async fn run<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
-    drive(test_programs::SOURCE_EXTRACT, adapter, project, false, args, model).await
+    Driver::Source.execute(adapter, project, args, model, OtelDefault).await
 }
 
-/// Runs the target driver in the mode `args` names against `adapter`.
-///
-/// `project` is mounted writable as `.`, since an init scaffolds the layout in
-/// the lent tree and a build writes it through the adapter's `write_files`
-/// tool. A clean exit and an exactly consumed script are required; the
-/// model's record is returned.
-///
-/// # Panics
-///
-/// Panics when deployment fails, the driver exits unsuccessfully, or the
-/// model script is not consumed exactly.
 pub async fn build<M: Strict>(adapter: &str, project: &Scratch, args: &[&str], model: M) -> M {
-    drive(test_programs::BUILDER_BUILD, adapter, project, true, args, model).await
+    Driver::Target.execute(adapter, project, args, model, OtelDefault).await
 }
 
-async fn drive<M: Strict>(
-    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str], model: M,
-) -> M {
-    let backends = Backends::defaults().await.model(model.clone());
-    let status = deployment(driver, adapter, project, writable, args)
-        .run_host::<WasiModel, _>(backends)
-        .await
-        .expect("the caller runs");
-    assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed against `{adapter}`");
-    model.script().assert_exhausted();
-    model
-}
-
-// No level is named: command mode's `info` default is the shipped runtime's on a bare run.
-fn deployment(
-    driver: &str, adapter: &str, project: &Scratch, writable: bool, args: &[&str],
-) -> Deployment {
-    Deployment::new()
-        .guest("caller", driver)
-        .guest(test_programs::ADAPTER, adapter)
-        .command("caller")
-        .mount(project.mount(writable))
-        .args(args.iter().copied())
-}
-
-/// Runs an adapter under recording telemetry and returns its model and spans.
-///
-/// Host telemetry is installed here, once per test process. The host grafts
-/// a guest's spans onto its own live span and drops them without one, so the
-/// run is driven inside a host span. `cargo nextest` gives every test its own
-/// process, and a second call in one process fails at the install.
-///
-/// # Panics
-///
-/// Panics when telemetry installation or deployment fails, the driver exits
-/// unsuccessfully, or the model script is not consumed exactly.
+// Host telemetry is installed once per test process, and the run is driven
+// inside a host span because the host drops guest spans when none is active.
 pub async fn traced<M: Strict>(
     adapter: &str, project: &Scratch, args: &[&str], model: M,
 ) -> (M, Recording) {
     Telemetry::new("adapter-tests").filter("info").build().expect("host telemetry installs");
 
     let otel = Recording::default();
-    let backends = Traced {
-        model: model.clone(),
-        otel: otel.clone(),
-    };
-    let status = deployment(test_programs::SOURCE_EXTRACT, adapter, project, false, args)
-        .run(backends, |deployment| {
-            deployment.host::<WasiModel>()?;
-            deployment.host::<WasiOtel>()?;
-            Ok(())
-        })
+    let model = Driver::Source
+        .execute(adapter, project, args, model, otel.clone())
         .instrument(tracing::info_span!("adapter_test"))
-        .await
-        .expect("the caller runs");
-    assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed against `{adapter}`");
-    model.script().assert_exhausted();
+        .await;
     (model, otel)
 }
 
-#[derive(Clone, Debug)]
-struct Traced<M> {
-    model: M,
-    otel: Recording,
+const CALLER: &str = "caller";
+
+#[derive(Clone, Copy)]
+enum Driver {
+    Source,
+    Target,
 }
 
-impl<M: ModelClient + Clone> Provides<WasiModel> for Traced<M> {
-    fn borrow(&mut self) -> <WasiModel as HostCtx>::Borrow<'_> {
-        &mut self.model
+impl Driver {
+    // No level is named: command mode's `info` default is the shipped runtime's on a bare run.
+    fn deployment(self, adapter: &str, project: &Scratch, args: &[&str]) -> Deployment {
+        let (program, writable) = match self {
+            Self::Source => (test_programs::SOURCE_EXTRACT, false),
+            Self::Target => (test_programs::BUILDER_BUILD, true),
+        };
+        Deployment::new()
+            .guest(CALLER, program)
+            .guest(test_programs::ADAPTER, adapter)
+            .command(CALLER)
+            .mount(project.mount(writable))
+            .args(args.iter().copied())
     }
-}
 
-impl<M: ModelClient + Clone> Provides<WasiOtel> for Traced<M> {
-    fn borrow(&mut self) -> <WasiOtel as HostCtx>::Borrow<'_> {
-        &mut self.otel
+    async fn execute<M, O>(
+        self, adapter: &str, project: &Scratch, args: &[&str], model: M, otel: O,
+    ) -> M
+    where
+        M: Strict,
+        O: OtelClient + Clone,
+    {
+        let backends = Backends::defaults().await.model(model.clone()).otel(otel);
+        let status = self
+            .deployment(adapter, project, args)
+            .run_host::<WasiModel, _>(backends)
+            .await
+            .expect("the caller runs");
+        assert_eq!(status, ExitStatus::SUCCESS, "the driver's checks failed against `{adapter}`");
+        model.borrow().assert_exhausted();
+        model
     }
 }
