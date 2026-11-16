@@ -206,8 +206,8 @@ pub async fn traced<M: Strict>(
     };
     let status = deployment(test_programs::SOURCE_EXTRACT, adapter, project, false, args)
         .run(backends, |deployment| {
-            deployment.host::<WasiModel, Traced<M>>()?;
-            deployment.host::<WasiOtel, Traced<M>>()?;
+            deployment.host::<WasiModel>()?;
+            deployment.host::<WasiOtel>()?;
             Ok(())
         })
         .instrument(tracing::info_span!("adapter_test"))

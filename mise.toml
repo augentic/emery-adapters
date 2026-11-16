@@ -2,7 +2,7 @@
 # Run: `mise run <task>` (the root Makefile forwards `make <task>` here)
 
 [task_config]
-includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.6.0"]
+includes = ["git::https://github.com/augentic/toolkit.git//mise/rust.toml?ref=v0.7.0"]
 
 # The shared `lint-wasm` pass is over the guest side alone — every adapter
 # and the guest programs — because the root package and the `evals` harness
@@ -26,7 +26,7 @@ run = '''
 kind="${1:?usage: make publish <kind>}"
 kind="${kind#emery-}"
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
-wasm="target/wasm32-wasip2/release/emery_${kind}.wasm"
+wasm="target/wasm32-wasip3/release/emery_${kind}.wasm"
 [ -f "$wasm" ] || { echo "no component at $wasm" >&2; exit 1; }
 wkg oci push "ghcr.io/augentic/emery/$kind:$version" "$wasm"
 '''

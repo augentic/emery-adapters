@@ -5,12 +5,6 @@
 //! module-level declarations joined as `type` claims. A workspace with no
 //! production module is refused.
 
-#![expect(
-    clippy::multiple_crate_versions,
-    reason = "ruff's `itertools` and the SDK's host-side `prost-derive` pin different minors; \
-              neither is this crate's to unify"
-)]
-
 mod survey;
 
 use emery_sdk::{Context, Error, Evidence, Metadata, Model, SourceAdapter, SourceKind};

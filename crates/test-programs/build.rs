@@ -1,4 +1,4 @@
-//! Builds adapter and test-program `wasm32-wasip2` components and generates `gen.rs`.
+//! Builds adapter and test-program `wasm32-wasip3` components and generates `gen.rs`.
 
 fn main() {
     omnia_test::build::Components::in_workspace("../..")

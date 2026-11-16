@@ -20,6 +20,7 @@ allowed-duplicate-crates = [
   "getrandom",
   "hashbrown",
   "io-lifetimes",
+  "itertools",
   "lock_api",
   "macro-string",
   "parking_lot",

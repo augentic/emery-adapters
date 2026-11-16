@@ -3,7 +3,7 @@ name: Publish adapters
 # First-party Wasm OCI packages for GHCR. Called from publish.yaml after
 # the shared publish workflow has tagged and created the GitHub Release.
 # Uses the same cargo / wkg commands as the release build
-# (`cargo build --workspace --target wasm32-wasip2 --release`) and
+# (`cargo build --workspace --target wasm32-wasip3 --release`) and
 # `make publish <name>` locally (RFC-76 Phase E).
 
 on:
@@ -29,11 +29,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip2
+          targets: wasm32-wasip3
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: release-wasm32-wasip2
+          key: release-wasm32-wasip3
 
       - uses: taiki-e/install-action@v2
         with:
@@ -47,7 +47,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build components
-        run: cargo build --workspace --exclude emery-adapters --exclude test-programs --target wasm32-wasip2 --release
+        run: cargo build --workspace --exclude emery-adapters --exclude test-programs --target wasm32-wasip3 --release
 
       - name: Publish components
         env:
@@ -58,7 +58,7 @@ jobs:
           publish() {
             local kind="$1"
             wkg oci push "ghcr.io/augentic/emery/${kind}:${version}" \
-              "target/wasm32-wasip2/release/emery_${kind}.wasm"
+              "target/wasm32-wasip3/release/emery_${kind}.wasm"
           }
           for kind in documentation intent typescript python node omnia; do
             publish "$kind"

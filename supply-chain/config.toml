@@ -28,9 +28,6 @@ url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/
 [policy.omnia]
 audit-as-crates-io = false
 
-[policy.omnia-backend]
-audit-as-crates-io = false
-
 [policy.omnia-cli]
 audit-as-crates-io = false
 
@@ -198,7 +195,7 @@ version = "0.2.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.cc]]
-version = "1.11.1"
+version = "1.11.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.cfg-if]]
@@ -234,7 +231,7 @@ version = "1.19.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.const-oid]]
-version = "0.10.2"
+version = "0.10.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.const_format]]
@@ -262,7 +259,7 @@ version = "0.2.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.crc32fast]]
-version = "1.5.4"
+version = "1.5.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.crossbeam-channel]]
@@ -377,16 +374,16 @@ criteria = "safe-to-deploy"
 version = "1.0.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.errno]]
+version = "0.3.15"
+criteria = "safe-to-deploy"
+
 [[exemptions.etcetera]]
 version = "0.11.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.fastrand]]
 version = "2.5.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.fixedbitset]]
-version = "0.5.7"
 criteria = "safe-to-deploy"
 
 [[exemptions.flagset]]
@@ -574,7 +571,7 @@ version = "0.10.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.itoa]]
-version = "1.0.18"
+version = "1.0.19"
 criteria = "safe-to-deploy"
 
 [[exemptions.jni]]
@@ -666,7 +663,7 @@ version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.mio]]
-version = "1.2.4"
+version = "1.2.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.moka]]
@@ -793,10 +790,6 @@ criteria = "safe-to-deploy"
 version = "0.157.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.petgraph]]
-version = "0.8.3"
-criteria = "safe-to-deploy"
-
 [[exemptions.phf]]
 version = "0.14.0"
 criteria = "safe-to-deploy"
@@ -850,15 +843,15 @@ version = "1.12.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost]]
-version = "0.14.4"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-derive]]
-version = "0.14.4"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.prost-types]]
-version = "0.14.4"
+version = "0.14.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.quinn]]
@@ -887,6 +880,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rand]]
 version = "0.9.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.rand]]
+version = "0.10.4"
 criteria = "safe-to-deploy"
 
 [[exemptions.rand_xorshift]]
@@ -966,7 +963,7 @@ version = "0.8.5"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-pki-types]]
-version = "1.15.1"
+version = "1.16.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-platform-verifier]]
@@ -978,7 +975,7 @@ version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
-version = "0.103.15"
+version = "0.103.17"
 criteria = "safe-to-deploy"
 
 [[exemptions.same-file]]
@@ -1086,7 +1083,7 @@ version = "0.8.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.sqlite-wasm-rs]]
-version = "0.6.2"
+version = "0.6.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.stable_deref_trait]]
@@ -1118,7 +1115,7 @@ version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.target-lexicon]]
-version = "0.13.5"
+version = "0.13.6"
 criteria = "safe-to-deploy"
 
 [[exemptions.tempfile]]
@@ -1246,7 +1243,7 @@ version = "0.2.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.uuid]]
-version = "1.29.1"
+version = "1.29.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.version_check]]
@@ -1286,11 +1283,11 @@ version = "0.2.130"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-pkg-client]]
-version = "0.16.1"
+version = "0.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-pkg-common]]
-version = "0.16.1"
+version = "0.16.2"
 criteria = "safe-to-deploy"
 
 [[exemptions.wasm-streams]]
@@ -1301,8 +1298,12 @@ criteria = "safe-to-deploy"
 version = "0.3.107"
 criteria = "safe-to-deploy"
 
+[[exemptions.webpki-root-certs]]
+version = "1.0.12"
+criteria = "safe-to-deploy"
+
 [[exemptions.webpki-roots]]
-version = "1.0.11"
+version = "1.0.12"
 criteria = "safe-to-deploy"
 
 [[exemptions.winx]]

@@ -37,12 +37,10 @@ members = ["adapters/*", "crates/*", "evals"]
 resolver = "3"
 
 [workspace.package]
-authors = ["Augentic"]
 edition = "2024"
-homepage = "https://augentic.io"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/augentic/emery-adapters"
-rust-version = "1.99"
+rust-version = "1.100"
 version = "0.12.0"
 publish = false
 
@@ -87,7 +85,6 @@ wasip3 = "0.10.0"
 
 test-programs = { path = "crates/test-programs" }
 
-emery-prose = "0.39.0"
 emery-sdk = "0.39.0"
 
 omnia = { version = "0.38.0", default-features = false, features = ["jit"] }
@@ -101,7 +98,6 @@ omnia-wasi-otel = "0.38.0"
 emery-prose = { git = "https://github.com/augentic/emery", branch = "build-change" }
 emery-sdk = { git = "https://github.com/augentic/emery", branch = "build-change" }
 omnia = { git = "https://github.com/augentic/omnia" }
-omnia-backend = { git = "https://github.com/augentic/omnia" }
 omnia-sdk = { git = "https://github.com/augentic/omnia" }
 omnia-test = { git = "https://github.com/augentic/omnia" }
 omnia-wasi-model = { git = "https://github.com/augentic/omnia" }

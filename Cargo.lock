@@ -79,7 +79,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -98,7 +98,7 @@ dependencies = [
  "manyhow",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -114,7 +114,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "quote-use",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -272,7 +272,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -287,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.20.3"
+version = "3.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+checksum = "87a0cf66fd1eb2fb7b822cb78370d82303750809bc6ba855f3f58e517d3238db"
 dependencies = [
  "allocator-api2",
 ]
@@ -359,9 +359,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.1"
+version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ff2a8126fff0f8c839080d619675a585e61720bb12d2baceae45769fd66f155"
+checksum = "33ef9e3e8154a45c7a95cff4c1299702106ad94062d7bb85fdc5d3a5afd91d45"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -456,7 +456,7 @@ dependencies = [
  "heck",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -526,9 +526,9 @@ dependencies = [
 
 [[package]]
 name = "const-oid"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
+checksum = "be95d4a884358a21a199689323c29e9256b4a1b315e22f183d155422041d3a9a"
 
 [[package]]
 name = "const_format"
@@ -765,9 +765,9 @@ checksum = "6f34b169b8cbbaed2b4995205f1d02d7eac4b2771df5479255fe5483e1334a39"
 
 [[package]]
 name = "crc32fast"
-version = "1.5.4"
+version = "1.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04"
+checksum = "2b929dd2a135771f40afabd1073f85eed59c800b7c61901e5c254270497dad64"
 dependencies = [
  "cfg-if",
 ]
@@ -893,7 +893,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strsim",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -926,7 +926,7 @@ checksum = "2ac7135c3ef02b2f7833bbeb1be5ba7f966dcde8a87c6b87f65a778d71a02785"
 dependencies = [
  "darling_core 0.24.1",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1032,7 +1032,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1085,7 +1085,7 @@ checksum = "edd0f118536f44f5ccd48bcb8b111bdc3de888b58c74639dfb034a357d0f206d"
 [[package]]
 name = "emery-adapter"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery?branch=build-change#0fc824fc0218b12cb0a8f19704d92dc8dc80cc1d"
+source = "git+https://github.com/augentic/emery?branch=build-change#e9eb733a81d5b9e3176341d5f72e248325e16746"
 dependencies = [
  "omnia-sdk",
  "schemars",
@@ -1114,7 +1114,7 @@ dependencies = [
  "omnia-wasi-otel",
  "opentelemetry-proto",
  "serde_json",
- "syn 3.0.9",
+ "syn 3.0.10",
  "test-programs",
  "tokio",
  "tracing",
@@ -1137,7 +1137,7 @@ dependencies = [
 [[package]]
 name = "emery-lexicon"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery?branch=build-change#0fc824fc0218b12cb0a8f19704d92dc8dc80cc1d"
+source = "git+https://github.com/augentic/emery?branch=build-change#e9eb733a81d5b9e3176341d5f72e248325e16746"
 
 [[package]]
 name = "emery-node"
@@ -1153,13 +1153,13 @@ dependencies = [
  "emery-sdk",
  "omnia-template",
  "proc-macro2",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "emery-prose"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery?branch=build-change#0fc824fc0218b12cb0a8f19704d92dc8dc80cc1d"
+source = "git+https://github.com/augentic/emery?branch=build-change#e9eb733a81d5b9e3176341d5f72e248325e16746"
 
 [[package]]
 name = "emery-python"
@@ -1174,7 +1174,7 @@ dependencies = [
 [[package]]
 name = "emery-sdk"
 version = "0.39.0"
-source = "git+https://github.com/augentic/emery?branch=build-change#0fc824fc0218b12cb0a8f19704d92dc8dc80cc1d"
+source = "git+https://github.com/augentic/emery?branch=build-change#e9eb733a81d5b9e3176341d5f72e248325e16746"
 dependencies = [
  "anyhow",
  "emery-adapter",
@@ -1223,9 +1223,9 @@ checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
 name = "errno"
-version = "0.3.14"
+version = "0.3.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
+checksum = "e35d6e78f4cebb90e51d543db8fe41528851d6deeef6ef21ebd4bfdc1e784776"
 dependencies = [
  "libc",
  "windows-sys 0.61.2",
@@ -1250,7 +1250,7 @@ dependencies = [
  "proc-macro2",
  "serde",
  "serde_json",
- "syn 3.0.9",
+ "syn 3.0.10",
  "toml",
 ]
 
@@ -1279,12 +1279,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
 
 [[package]]
-name = "fixedbitset"
-version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d674e81391d1e1ab681a28d99df07927c6d4aa5b027d7da16ba32d1d21ecd99"
-
-[[package]]
 name = "flagset"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1306,12 +1300,6 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
-name = "foldhash"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "foldhash"
@@ -1422,7 +1410,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1472,7 +1460,7 @@ checksum = "28f0daa179069133df60523e0f59d0a6bd2d3db9ccae01b630896d269c4a802e"
 dependencies = [
  "attribute-derive",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -1578,15 +1566,6 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 
 [[package]]
 name = "hashbrown"
-version = "0.15.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
-dependencies = [
- "foldhash 0.1.5",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
@@ -1598,7 +1577,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
- "foldhash 0.2.0",
+ "foldhash",
  "serde",
  "serde_core",
 ]
@@ -2028,9 +2007,9 @@ dependencies = [
 
 [[package]]
 name = "itoa"
-version = "1.0.18"
+version = "1.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
+checksum = "3bd1574e617a9a6c1f8f8181bd7e841e1f20e4277607ef28945765188d6284d4"
 
 [[package]]
 name = "jni"
@@ -2224,7 +2203,7 @@ checksum = "6e7b3a5bbb2f63aaa223a671ea1bd0e7bc16bd30ce387324cf63995deaddbbd2"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -2236,7 +2215,7 @@ dependencies = [
  "manyhow-macros",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -2304,9 +2283,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.2.4"
+version = "1.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee"
+checksum = "20521a903f02b0a573cd6840e9d0a5a0cc043d361fe924092cd70f8556cc9c4a"
 dependencies = [
  "libc",
  "wasi",
@@ -2486,7 +2465,7 @@ dependencies = [
 [[package]]
 name = "omnia"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
@@ -2504,29 +2483,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "omnia-backend"
-version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
-dependencies = [
- "anyhow",
- "bon",
- "bytes",
- "cap-std",
- "chrono",
- "futures",
- "opentelemetry-proto",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
- "wasm-pkg-common",
-]
-
-[[package]]
 name = "omnia-cli"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "clap",
@@ -2535,7 +2494,7 @@ dependencies = [
 [[package]]
 name = "omnia-compile"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -2544,7 +2503,7 @@ dependencies = [
 [[package]]
 name = "omnia-core"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "cap-fs-ext",
@@ -2552,14 +2511,14 @@ dependencies = [
  "fromenv",
  "futures",
  "http",
- "omnia-backend",
  "omnia-compile",
+ "omnia-host-macros",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
- "pastey",
  "serde",
  "sha2 0.11.1",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
@@ -2571,27 +2530,27 @@ dependencies = [
 [[package]]
 name = "omnia-guest-macros"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "omnia-host-macros"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
 name = "omnia-link"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
@@ -2603,33 +2562,36 @@ dependencies = [
 [[package]]
 name = "omnia-plugin"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "cap-std",
  "futures",
- "omnia-backend",
  "omnia-core",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
  "wasm-pkg-client",
  "wasmtime",
+ "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-sdk"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
+ "bon",
  "bytes",
  "clap",
  "clap_complete",
  "futures",
+ "getrandom 0.4.3",
  "http",
- "http-body",
- "omnia-backend",
+ "http-body-util",
  "omnia-guest-macros",
+ "omnia-plugin",
  "omnia-wasi-blobstore",
  "omnia-wasi-config",
  "omnia-wasi-docstore",
@@ -2649,18 +2611,17 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "wasip3",
- "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-template"
 version = "0.1.0"
-source = "git+https://github.com/augentic/omnia-exemplar#2555e25fdcb3383923cde2b1eb6cdea9fa5fe9d2"
+source = "git+https://github.com/augentic/omnia-exemplar#6f3c0ec5c2da87aa58bf2153ac9079a702aa1e86"
 
 [[package]]
 name = "omnia-test"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2669,7 +2630,6 @@ dependencies = [
  "http-body",
  "http-body-util",
  "omnia",
- "omnia-backend",
  "omnia-sdk",
  "omnia-wasi-blobstore",
  "omnia-wasi-config",
@@ -2684,52 +2644,48 @@ dependencies = [
  "omnia-wasi-vault",
  "omnia-wasi-vcs",
  "omnia-wasi-websocket",
+ "serde_json",
  "tempfile",
- "tokio",
  "tower",
 ]
 
 [[package]]
 name = "omnia-wasi-blobstore"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "bytes",
  "futures",
- "omnia-backend",
  "omnia-core",
  "parking_lot 0.13.0",
  "tracing",
  "wasmtime",
- "wasmtime-wasi",
  "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-config"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
- "futures",
- "omnia-backend",
  "omnia-core",
  "tracing",
  "wasmtime",
- "wasmtime-wasi",
+ "wasmtime-wasi-config",
  "wit-bindgen 0.63.0",
 ]
 
 [[package]]
 name = "omnia-wasi-docstore"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
- "omnia-backend",
  "omnia-core",
+ "serde_json",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
@@ -2739,7 +2695,7 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-http"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "axum",
@@ -2767,14 +2723,14 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-identity"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "fromenv",
  "futures",
  "oauth2",
- "omnia-backend",
  "omnia-core",
+ "serde",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",
@@ -2784,12 +2740,12 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-keyvalue"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
+ "fromenv",
  "futures",
  "moka",
- "omnia-backend",
  "omnia-core",
  "tracing",
  "wasmtime",
@@ -2800,12 +2756,12 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-messaging"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
- "omnia-backend",
  "omnia-core",
+ "thiserror 2.0.21",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -2817,12 +2773,11 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-model"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "cap-std",
  "futures",
- "omnia-backend",
  "omnia-core",
  "serde",
  "serde_json",
@@ -2837,13 +2792,12 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-otel"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
  "getrandom 0.4.3",
  "hex",
- "omnia-backend",
  "omnia-core",
  "omnia-guest-macros",
  "opentelemetry",
@@ -2860,12 +2814,10 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-sql"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
- "fromenv",
  "futures",
- "omnia-backend",
  "omnia-core",
  "parking_lot 0.13.0",
  "rusqlite",
@@ -2879,11 +2831,10 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vault"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "futures",
- "omnia-backend",
  "omnia-core",
  "parking_lot 0.13.0",
  "tracing",
@@ -2895,11 +2846,10 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-vcs"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "cap-std",
- "omnia-backend",
  "omnia-core",
  "tracing",
  "wasip3",
@@ -2911,14 +2861,13 @@ dependencies = [
 [[package]]
 name = "omnia-wasi-websocket"
 version = "0.38.0"
-source = "git+https://github.com/augentic/omnia#bcd5b17f62e719e2a58fa8d4649358d72fef2c1c"
+source = "git+https://github.com/augentic/omnia#a96c4075dad1382055d46af245d64cea9ab5cb9f"
 dependencies = [
  "anyhow",
  "dashmap",
  "futures",
  "futures-channel",
  "futures-util",
- "omnia-backend",
  "omnia-core",
  "tokio",
  "tokio-stream",
@@ -3052,7 +3001,7 @@ dependencies = [
  "phf",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3258,28 +3207,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "pastey"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ee67f1008b1ba2321834326597b8e186293b049a023cdef258527550b9935b4"
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
-
-[[package]]
-name = "petgraph"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8701b58ea97060d5e5b155d383a69952a60943f0e6dfe30b04c287beb0b27455"
-dependencies = [
- "fixedbitset",
- "hashbrown 0.15.5",
- "indexmap",
- "serde",
-]
 
 [[package]]
 name = "phf"
@@ -3411,7 +3342,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bfe0f4c752e450fc2faf62654f1c134747922825d5b04ca717b8874f41a40c0"
 dependencies = [
  "proc-macro2",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3444,7 +3375,7 @@ dependencies = [
  "chacha20",
  "core_detect",
  "num-traits",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rand_xorshift",
  "regex-syntax",
  "unarray",
@@ -3452,9 +3383,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.14.4"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "528ac67416ff8646872a3c02cad9cc4ee5dc9f9540c9b10771855c95cb2e5ae1"
+checksum = "3ef0b569d1d907ab3a28596aee62cf1f61dacb0529a4bedcd8e7460e2d5228b4"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -3462,12 +3393,12 @@ dependencies = [
 
 [[package]]
 name = "prost-derive"
-version = "0.14.4"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
+checksum = "1ad9c5423459fa2f729b8d9235fab810aa29628b171467744fc86d21460ad70d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.15.0",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -3475,9 +3406,9 @@ dependencies = [
 
 [[package]]
 name = "prost-types"
-version = "0.14.4"
+version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f94967dc7688f3054c7fac87473ffae4cc4c3904800e2d9f5b857246d8963b0a"
+checksum = "f29a7c4c7a84cef41a53d338a2d10d4f1b043ea5c3dde26db22ee2c9c1b1c75b"
 dependencies = [
  "prost",
 ]
@@ -3502,7 +3433,7 @@ checksum = "138a9a5997d9cba5e54c7c3b836d7164f2bfe0852c7e98d5835e1708d6efdf36"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3535,7 +3466,7 @@ dependencies = [
  "bytes",
  "getrandom 0.4.3",
  "lru-slab",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rand_pcg",
  "ring",
  "rustc-hash",
@@ -3590,7 +3521,7 @@ dependencies = [
  "proc-macro-utils",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -3628,9 +3559,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65c9fb96cbc91e3478eaae79a69fcd3f1ae4ad052e471fe6732fff548984b4af"
+checksum = "8f6fa277c67e6ea590466f04c3fe82cb509f0864fe470643e5570de9514a9b11"
 dependencies = [
  "chacha20",
  "getrandom 0.4.3",
@@ -3754,7 +3685,7 @@ checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4002,7 +3933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3b540b2b312bde02dbfd5261013e06dda9d3ecd33cb6e62f962b019903ae56c"
 dependencies = [
  "phf_codegen",
- "rand 0.10.3",
+ "rand 0.10.4",
 ]
 
 [[package]]
@@ -4093,9 +4024,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pki-types"
-version = "1.15.1"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f4925028c7eb5d1fcdaf196971378ed9d2c1c4efc7dc5d011256f76c99c0a96"
+checksum = "102f35f7de7b06d8c61f1cff6592f5253e0dea431c74867aad5dfd70f44663fb"
 dependencies = [
  "web-time",
  "zeroize",
@@ -4130,9 +4061,9 @@ checksum = "eec689c0bc40ff2458a5977b6619cb718087084a18e02a131c599b62d05e1a5f"
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.16"
+version = "0.103.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
+checksum = "e3a0760a887c14823fca5a1c970b01d47c328c696c0c64829d1df50e8f853fd5"
 dependencies = [
  "aws-lc-rs",
  "ring",
@@ -4192,7 +4123,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4277,7 +4208,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4288,7 +4219,7 @@ checksum = "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4483,9 +4414,9 @@ dependencies = [
 
 [[package]]
 name = "sqlite-wasm-rs"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36bd8e29bf08189a005b2df1df99823aa0861cabe9044e5f31ed54ca292ee618"
+checksum = "a6cd504cecbfe7eef649988840f9a6cb768d11085efec138f8e99f160632d867"
 dependencies = [
  "cc",
  "rsqlite-vfs",
@@ -4567,9 +4498,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.9"
+version = "3.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b"
+checksum = "4ae9ccbea3a7b0b09443036490c8f34a8b1b760fd345e5c0dae0aac718faea79"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4593,7 +4524,7 @@ checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4625,9 +4556,9 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 
 [[package]]
 name = "target-lexicon"
-version = "0.13.5"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
+checksum = "8c447be3a2abfa84b2d91680c56600bd6b2873866de27b36ec911be705e291da"
 
 [[package]]
 name = "tempfile"
@@ -4719,7 +4650,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -4793,7 +4724,7 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -5070,7 +5001,7 @@ dependencies = [
  "http",
  "httparse",
  "log",
- "rand 0.10.3",
+ "rand 0.10.4",
  "sha1",
  "thiserror 2.0.21",
 ]
@@ -5174,9 +5105,9 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "uuid"
-version = "1.29.1"
+version = "1.29.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a06f08a856b009bc7bbaf7d3e79808595d032dd19074c0c2ef26e49e03e6bdc"
+checksum = "bed99139f7dac9b5cfe5f17be4d66dc7079a34dee1d74bcc77217119240e267c"
 dependencies = [
  "getrandom 0.4.3",
  "js-sys",
@@ -5290,7 +5221,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
  "wasm-bindgen-shared",
 ]
 
@@ -5311,16 +5242,6 @@ checksum = "59972d6cd272259de647b7c1f1912e45e289c75ffd4be04e10695507cd7e1b59"
 dependencies = [
  "leb128fmt",
  "wasmparser 0.253.0",
-]
-
-[[package]]
-name = "wasm-encoder"
-version = "0.254.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebaca0b540bdb15d195ff34fb23074255948708b8916a11a339ba4513dc61906"
-dependencies = [
- "leb128fmt",
- "wasmparser 0.254.2",
 ]
 
 [[package]]
@@ -5367,25 +5288,6 @@ dependencies = [
 
 [[package]]
 name = "wasm-metadata"
-version = "0.254.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d1880dd9a848aa68f387966256c34ad49abb4607e3cfa35720d2723d0591cd3"
-dependencies = [
- "anyhow",
- "auditable-serde",
- "flate2",
- "indexmap",
- "serde",
- "serde_derive",
- "serde_json",
- "spdx",
- "url",
- "wasm-encoder 0.254.2",
- "wasmparser 0.254.2",
-]
-
-[[package]]
-name = "wasm-metadata"
 version = "0.261.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b88de21560ecd49deb8d8f1616b9b695f66fc312c5eca503f43accdc5795339e"
@@ -5409,10 +5311,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasm-pkg-client"
-version = "0.16.1"
+name = "wasm-metadata"
+version = "0.263.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c39aa5033e60ecdd6c7015ef6450f3e3141c3a04c8bbeedbedb49119c7fc82d4"
+checksum = "8997a297f42413bee775d73a750def062ee1ec4a6d904703cb08046c0296774d"
+dependencies = [
+ "anyhow",
+ "auditable-serde",
+ "flate2",
+ "indexmap",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "spdx",
+ "url",
+ "wasm-encoder 0.263.0",
+ "wasmparser 0.263.0",
+]
+
+[[package]]
+name = "wasm-pkg-client"
+version = "0.16.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "347bf698fa2e9e98b6d09434becbd621bf8d69e7062fd1c047e8936e98bbbf61"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5423,7 +5344,6 @@ dependencies = [
  "futures-util",
  "oci-client",
  "oci-wasm",
- "petgraph",
  "reqwest 0.13.5",
  "secrecy",
  "serde",
@@ -5435,19 +5355,18 @@ dependencies = [
  "tokio-util",
  "toml",
  "tracing",
- "tracing-subscriber",
  "url",
- "wasm-metadata 0.254.2",
+ "wasm-metadata 0.263.0",
  "wasm-pkg-common",
- "wit-component 0.254.2",
- "wit-parser 0.254.2",
+ "wit-component 0.263.0",
+ "wit-parser 0.263.0",
 ]
 
 [[package]]
 name = "wasm-pkg-common"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2c316a266be61c22568d7c3534046964535b44317c2f5ee8b5c0b8e0001b7e6"
+checksum = "c8fa294801b40f1913452a4dcc07c28f3d64a5ff3596a3280a0fb659d99e4c16"
 dependencies = [
  "anyhow",
  "base16ct",
@@ -5492,18 +5411,6 @@ dependencies = [
 
 [[package]]
 name = "wasmparser"
-version = "0.254.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5ff8685b587722894b6f25958fc608d315b93b8d23647bfb567664e7006d757"
-dependencies = [
- "bitflags",
- "hashbrown 0.17.1",
- "indexmap",
- "semver",
-]
-
-[[package]]
-name = "wasmparser"
 version = "0.261.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f20f20e44f7e8aeb6744823ea9d869ede51e51be4fdaedede2852282e54d2d8"
@@ -5534,7 +5441,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f5fa0a054ae153606df820eb0a84213e28cda41bbe04ba2628e71b6ba100fcb"
 dependencies = [
  "bitflags",
+ "hashbrown 0.17.1",
  "indexmap",
+ "semver",
 ]
 
 [[package]]
@@ -5630,7 +5539,7 @@ dependencies = [
  "anyhow",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
  "wasmtime-internal-component-util",
  "wasmtime-internal-wit-bindgen",
  "wit-parser 0.261.0",
@@ -5735,7 +5644,7 @@ checksum = "ce7c663ad018cc86ce824e21b35b8bed9877ee9ca6af8ef8672e28852450392e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
@@ -5762,7 +5671,7 @@ dependencies = [
  "bitflags",
  "bytes",
  "futures",
- "rand 0.10.3",
+ "rand 0.10.4",
  "rustix",
  "rustix-linux-procfs",
  "thiserror 2.0.21",
@@ -5772,6 +5681,15 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi-io",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "wasmtime-wasi-config"
+version = "50.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b8e2841ed16bd9aa38650827727f3a45eba8759b153b5d33aaef7722286708f"
+dependencies = [
+ "wasmtime",
 ]
 
 [[package]]
@@ -5854,18 +5772,18 @@ dependencies = [
 
 [[package]]
 name = "webpki-root-certs"
-version = "1.0.11"
+version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e49d0e65abc00c142e8f9428da991da9f1a250c39be97459901eb12b9b49f62a"
+checksum = "293198dcebfb821155b5092ab94b5a82ff180eddd7241df3bd6e66a4ffd1a585"
 dependencies = [
  "rustls-pki-types",
 ]
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.11"
+version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
+checksum = "7265c9301c16a8711c992c2d8da90ee77ef54b1ed51482d6dfeb00dc756b1297"
 dependencies = [
  "rustls-pki-types",
 ]
@@ -6168,7 +6086,7 @@ dependencies = [
  "heck",
  "indexmap",
  "prettyplease",
- "syn 3.0.9",
+ "syn 3.0.10",
  "wasm-metadata 0.262.0",
  "wit-bindgen-core",
  "wit-component 0.262.0",
@@ -6185,7 +6103,7 @@ dependencies = [
  "prettyplease",
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
  "wit-bindgen-core",
  "wit-bindgen-rust",
 ]
@@ -6207,26 +6125,6 @@ dependencies = [
  "wasm-metadata 0.253.0",
  "wasmparser 0.253.0",
  "wit-parser 0.253.0",
-]
-
-[[package]]
-name = "wit-component"
-version = "0.254.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c96b3cea6838dbea55173baa56991fcb087896c321b0a770db201e5a0bd3506"
-dependencies = [
- "anyhow",
- "bitflags",
- "indexmap",
- "log",
- "serde",
- "serde_derive",
- "serde_json",
- "wasm-encoder 0.254.2",
- "wasm-metadata 0.254.2",
- "wasmparser 0.254.2",
- "wat",
- "wit-parser 0.254.2",
 ]
 
 [[package]]
@@ -6268,6 +6166,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-component"
+version = "0.263.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4189bd180353b942b788715519dff886517b540e648c6f6e5129f57429945bf7"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "indexmap",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wasm-encoder 0.263.0",
+ "wasm-metadata 0.263.0",
+ "wasmparser 0.263.0",
+ "wat",
+ "wit-parser 0.263.0",
+]
+
+[[package]]
 name = "wit-parser"
 version = "0.253.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6284,25 +6202,6 @@ dependencies = [
  "serde_json",
  "unicode-ident",
  "wasmparser 0.253.0",
-]
-
-[[package]]
-name = "wit-parser"
-version = "0.254.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22672d61bfb9df46a16b46ce38522293aee1cc4749fc84a3464ce4083b3d5fd6"
-dependencies = [
- "anyhow",
- "hashbrown 0.17.1",
- "id-arena",
- "indexmap",
- "log",
- "semver",
- "serde",
- "serde_derive",
- "serde_json",
- "unicode-ident",
- "wasmparser 0.254.2",
 ]
 
 [[package]]
@@ -6344,6 +6243,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wit-parser"
+version = "0.263.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "874d6ce9db4261cb66980ab14f3da066b24292497b6f46f988c0d1b9b27913f3"
+dependencies = [
+ "anyhow",
+ "hashbrown 0.17.1",
+ "id-arena",
+ "indexmap",
+ "log",
+ "semver",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "unicode-ident",
+ "wasmparser 0.263.0",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6380,7 +6298,7 @@ checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
  "synstructure",
 ]
 
@@ -6421,7 +6339,7 @@ checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
  "synstructure",
 ]
 
@@ -6477,7 +6395,7 @@ checksum = "c3743ddbf47738d929cd1ae2e199d40d0162979dfe31aef8ae646d2bf00bf97a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.9",
+ "syn 3.0.10",
 ]
 
 [[package]]
