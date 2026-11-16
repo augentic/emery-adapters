@@ -60,6 +60,23 @@ impl TouchPoint {
             .iter()
             .any(|point| matches!(&point.kind, TouchKind::Dependency(name) if name == package))
     }
+
+    // Admits `trait Requires`, `impl Requires`, and `use` in a stem entry
+    // `crates/<dir>/src/lib.rs` whose crate holds at least one touch point.
+    pub fn entry_requires(file: &str) -> [Self; 2] {
+        [
+            Self {
+                file: file.to_owned(),
+                kind: TouchKind::Item("trait Requires".to_owned()),
+                line: 0,
+            },
+            Self {
+                file: file.to_owned(),
+                kind: TouchKind::Item("impl Requires".to_owned()),
+                line: 0,
+            },
+        ]
+    }
 }
 
 pub struct TouchPoints;

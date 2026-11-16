@@ -18,7 +18,7 @@ use super::{Scaffold, registration, render, trigger};
 use crate::layout::{ENTRY, STEM_DEPENDENCIES, TOPIC_DEPENDENCY, TOPICS, crate_dir};
 use crate::syntax::ExportedFn;
 
-const CHECK: &str = "cargo check --target wasm32-wasip2 && cargo +nightly fmt --all -- --check";
+const CHECK: &str = "cargo check --target wasm32-wasip3 && cargo +nightly fmt --all -- --check";
 
 const HELD: &str =
     "The tree already held it, so nothing was written over it; read it for what stands.";
@@ -73,9 +73,9 @@ impl Scaffold {
                 text,
                 "The design says the inbound stream's payload is {wire}: a consumer this slice \
                  registers goes through `.topic_with(topic::<NAME>, <handler>, decode)` over a \
-                 `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of \
-                 the part that reads the payload through the format's `serde` reader{reader}, \
-                 since `.topic(..)` decodes JSON and refuses every delivery of another format.\n",
+                 `fn decode(delivery: &Delivery) -> Result<<Input>>` of the part that reads the \
+                 payload through the format's `serde` reader{reader}, since `.topic(..)` decodes \
+                 JSON and refuses every delivery of another format.\n",
                 wire = wire.name(),
                 reader = wire.reader()
             );
@@ -324,7 +324,9 @@ impl Scaffold {
         if !self.plan.touch_points.is_empty() {
             text.push_str(
                 "Touch points outside the slice's reached crates that mention a reached or \
-                 vanished crate, the only items outside those crates this turn may edit:\n\n",
+                 vanished crate, the only items outside those crates this turn may edit (along \
+                 with `Requires` in that stem's `src/lib.rs` when a touched handler's capability \
+                 bounds change):\n\n",
             );
             for point in &self.plan.touch_points {
                 let _ = writeln!(text, "- `{}:{}`: `{}`", point.file, point.line, point.kind);
@@ -764,40 +766,11 @@ impl Stem {
         }
         for handler in &self.handlers {
             count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill {} with the wire's \
-                 fields, then replace this block with the body. {}{}{} Narrow `P: Capabilities` \
-                 to the traits the body reaches through the context, `P: StateStore + Config` \
-                 for `context.state()` and `context.config()`.\n\n{}",
-                handler.name,
-                handler.route,
-                self.module.path,
-                handler.marker,
-                handler.filled(),
-                handler.status_hint(),
-                handler.params_hint(),
-                handler.body_hint(),
-                render::fenced("rust", &handler.stub())
-            );
+            self.brief_handler_marker(handler, count, text);
         }
         for consumer in &self.consumers {
             count += 1;
-            let _ = writeln!(
-                text,
-                "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
-                 part's `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, \
-                 then replace this block with the body, narrowing `P: Capabilities` to the \
-                 traits the body reaches. {}\n\n{}",
-                consumer.name,
-                consumer.topic,
-                self.module.path,
-                consumer.marker,
-                consumer.constant,
-                consumer.input,
-                consumer.decoder_hint(wire),
-                render::fenced("rust", &consumer.stub())
-            );
+            self.brief_consumer_marker(consumer, count, wire, text);
         }
         for function in &self.functions {
             count += 1;
@@ -853,6 +826,50 @@ impl Stem {
             render::fenced("rust", &render::gate_stub(gate))
         );
     }
+
+    fn brief_handler_marker(&self, handler: &Handler, count: usize, text: &mut String) {
+        let _ = writeln!(
+            text,
+            "{count}. The handler `{}` of `{}` in `{}`, key `{}`: fill {} with the wire's \
+             fields, then replace this block with the body. {}{}{} Narrow `P: crate::Requires` \
+             to the traits the body reaches through the context (`P: StateStore + Config` for \
+             `context.state()` and `context.config()`, or drop the `where` clause when it \
+             reaches none), and widen `Requires` and its blanket `impl` in `{}` to include \
+             every trait the stem's handlers reach.\n\n{}",
+            handler.name,
+            handler.route,
+            self.module.path,
+            handler.marker,
+            handler.filled(),
+            handler.status_hint(),
+            handler.params_hint(),
+            handler.body_hint(),
+            self.entry.path,
+            render::fenced("rust", &handler.stub())
+        );
+    }
+
+    fn brief_consumer_marker(
+        &self, consumer: &Consumer, count: usize, wire: Option<Wire>, text: &mut String,
+    ) {
+        let _ = writeln!(
+            text,
+            "{count}. The consumer `{}` of the topic `{}` in `{}`, key `{}`, registered in the \
+             part's `handlers()` under `topic::{}`: fill `{}` with the delivery's fields, then \
+             replace this block with the body, narrowing `P: crate::Requires` to the traits the \
+             body reaches (or dropping the `where` clause when it reaches none) and widening \
+             `Requires` and its blanket `impl` in `{}` to include them. {}\n\n{}",
+            consumer.name,
+            consumer.topic,
+            self.module.path,
+            consumer.marker,
+            consumer.constant,
+            consumer.input,
+            self.entry.path,
+            consumer.decoder_hint(wire),
+            render::fenced("rust", &consumer.stub())
+        );
+    }
 }
 
 impl Consumer {
@@ -863,8 +880,8 @@ impl Consumer {
             || {
                 format!(
                     "Where the payload is not JSON, register it through `.topic_with(topic::{}, \
-                     {}, decode)` instead, over a `fn decode(delivery: &Delivery) -> \
-                     std::result::Result<{}, DecodeError>` of the part.",
+                     {}, decode)` instead, over a `fn decode(delivery: &Delivery) -> Result<{}>` \
+                     of the part.",
                     self.constant, self.name, self.input
                 )
             },
@@ -872,7 +889,7 @@ impl Consumer {
                 format!(
                     "The design says the payload is {}, so register it through \
                      `.topic_with(topic::{}, {}, decode)` instead, over a `fn decode(delivery: \
-                     &Delivery) -> std::result::Result<{}, DecodeError>` of the part{}.",
+                     &Delivery) -> Result<{}>` of the part{}.",
                     wire.name(),
                     self.constant,
                     self.name,

@@ -15,8 +15,8 @@ use super::settings::Settings;
 use super::trigger;
 use super::types::{self, DesignKey};
 use crate::layout::{
-    self, CRATE_LIST_ANCHOR, ENTRY, HANDLER_LIST_ANCHOR, TOPIC_DEPENDENCY, TOPICS, crate_dir,
-    package,
+    self, CRATE_LIST_ANCHOR, ENTRY, HANDLER_LIST_ANCHOR, REQUIRES_LIST_ANCHOR, TOPIC_DEPENDENCY,
+    TOPICS, crate_dir, package,
 };
 use crate::syntax;
 
@@ -420,13 +420,14 @@ impl Stem {
 
     // What a whole write of the file must keep: a module its requirement
     // ids and the items the scaffold named, a test file its ids and its
-    // tests, and a manifest or an entry every line it holds, so a list is
-    // added to and never cut.
+    // tests, a manifest every line it holds, and an entry every line it
+    // holds with `Requires` kept by prefix so a whole write may widen it.
     pub fn keeps(&self, kind: Kind) -> Vec<String> {
         match kind {
             Kind::Module => self.module_tokens(),
             Kind::Tests => self.test_tokens(),
-            Kind::Manifest | Kind::Entry => lines_of(&self.text(kind).unwrap_or_default()),
+            Kind::Manifest => lines_of(&self.text(kind).unwrap_or_default()),
+            Kind::Entry => entry_lines_of(&self.text(kind).unwrap_or_default()),
         }
     }
 
@@ -562,6 +563,11 @@ impl Stem {
                 format!("{} = {{ path = \"crates/{}\" }}", self.package, self.dir),
                 Place::After(CRATE_LIST_ANCHOR),
             ),
+            Line::new(
+                ENTRY,
+                format!("    P: {ident}::Requires,"),
+                Place::After(REQUIRES_LIST_ANCHOR),
+            ),
             Line::new(ENTRY, format!("{ident}::handlers()"), Place::After(HANDLER_LIST_ANCHOR)),
         ];
         for consumer in self.consumers.iter().filter(|consumer| !consumer.declared) {
@@ -582,6 +588,13 @@ impl Stem {
                 format!("pub mod {};", self.part),
                 Place::PubModList,
             ));
+            if self.handlers.iter().any(|handler| handler.gated) {
+                lines.push(Line::new(
+                    &self.entry.path,
+                    "Requires: Config".to_owned(),
+                    Place::RequiresConfig,
+                ));
+            }
             if self.registers() {
                 lines.push(Line::new(
                     &self.entry.path,
@@ -635,10 +648,7 @@ impl Default for Namespaces {
                 "send", "deliver", "load",
             ]),
             types: Names::taken(&[
-                "Capabilities",
-                "Client",
                 "Context",
-                "DecodeError",
                 "Delivery",
                 "Deserialize",
                 "Handlers",
@@ -648,6 +658,7 @@ impl Default for Namespaces {
                 "Path",
                 "Provider",
                 "Query",
+                "Requires",
                 "Result",
                 "Router",
                 "Serialize",
@@ -990,4 +1001,32 @@ const GATE_DEPENDENCIES: [&str; 2] = ["anyhow", "thiserror"];
 // list or a fixed file must keep.
 pub fn lines_of(text: &str) -> Vec<String> {
     text.lines().map(str::trim).filter(|line| !line.is_empty()).map(ToOwned::to_owned).collect()
+}
+
+const REQUIRES_TRAIT_PREFIX: &str = "pub trait Requires:";
+const REQUIRES_IMPL_PREFIX: &str = "impl<P> Requires for P where P:";
+
+// Every non-blank line of a stem's `src/lib.rs`, with `Requires`, its
+// blanket `impl`, and any root `omnia_sdk` capability import kept by prefix
+// so a whole write widening `Requires` is not rejected for dropping the
+// empty `Send + Sync + 'static` bound.
+pub fn entry_lines_of(text: &str) -> Vec<String> {
+    lines_of(text)
+        .into_iter()
+        .map(|line| {
+            if line.starts_with(REQUIRES_TRAIT_PREFIX) {
+                REQUIRES_TRAIT_PREFIX.to_owned()
+            } else if line.starts_with(REQUIRES_IMPL_PREFIX) {
+                REQUIRES_IMPL_PREFIX.to_owned()
+            } else if line.starts_with("P: ") && line.contains("Send") {
+                "P: ".to_owned()
+            } else if line.starts_with("use omnia_sdk::")
+                && !line.starts_with("use omnia_sdk::api::")
+            {
+                "use omnia_sdk::".to_owned()
+            } else {
+                line
+            }
+        })
+        .collect()
 }

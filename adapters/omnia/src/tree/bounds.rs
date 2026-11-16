@@ -12,18 +12,18 @@ use crate::syntax::{self, path_ends};
 // Each accessor of the context, with the trait it borrows the provider as.
 const ACCESSORS: &[(&str, &str)] = &[
     ("blobs", "BlobStore"),
-    ("broadcast", "Broadcast"),
     ("config", "Config"),
-    ("docs", "DocumentStore"),
-    ("http", "HttpRequest"),
+    ("docs", "DocumentDb"),
+    ("http", "HttpClient"),
     ("identity", "Identity"),
     ("model", "Model"),
     ("plugins", "Plugins"),
-    ("publish", "Publish"),
+    ("publisher", "Publisher"),
+    ("secrets", "SecretStore"),
+    ("sql", "SqlDb"),
     ("state", "StateStore"),
-    ("tables", "TableStore"),
-    ("vault", "Vault"),
     ("vcs", "Vcs"),
+    ("websockets", "WebSockets"),
 ];
 
 impl Tree {
@@ -35,11 +35,13 @@ impl Tree {
         lines.sort();
         Some(format!(
             "a filled handler is bounded on the traits its body reaches through the context, and \
-             no wider, since `P: Capabilities` grants every capability and hides which the \
-             handler uses: replace `P: Capabilities` on each handler named with the traits \
-             listed, `where P: StateStore + Config` for `context.state()` and \
-             `context.config()`, adding the bounds of any helper the body hands \
-             `context.provider()` to, through `edit_files`:\n{}",
+             no wider, since `P: crate::Requires` grants every capability of the stem and hides \
+             which the handler uses: replace the broad bound on each handler named with the \
+             traits listed (`where P: StateStore + Config` for `context.state()` and \
+             `context.config()`, or drop the `where` clause when it reaches none, adding the \
+             bounds of any helper the body hands `context.provider()` to), and list any new \
+             traits on `Requires` and its blanket `impl` in the stem's `src/lib.rs`, through \
+             `edit_files`:\n{}",
             lines.join("\n")
         ))
     }
@@ -71,8 +73,9 @@ impl Module {
                 syn::Item::Fn(item) if syntax::is_handler_fn(item) => Some(item),
                 _ => None,
             })
-            .filter(|item| !syntax::holds_marker(&item.block) && names_capabilities(item))
-            .map(|item| {
+            .filter(|item| !syntax::holds_marker(&item.block))
+            .filter_map(|item| {
+                let bound = broad_bound(item)?;
                 let line = syntax::line(item.sig.fn_token.span);
                 let reached = reached_traits(item);
                 let traits = if reached.is_empty() {
@@ -80,10 +83,10 @@ impl Module {
                 } else {
                     reached.iter().map(|name| format!("`{name}`")).collect::<Vec<_>>().join(", ")
                 };
-                format!(
-                    "{}:{line}: handler `{}` is bounded `P: Capabilities` and reaches {traits}",
+                Some(format!(
+                    "{}:{line}: handler `{}` is bounded `{bound}` and reaches {traits}",
                     self.path, item.sig.ident
-                )
+                ))
             })
             .collect()
     }
@@ -100,21 +103,29 @@ impl Module {
     }
 }
 
-// Whether the fn's generics bound a parameter on `Capabilities`, inline or
-// in its `where` clause.
-fn names_capabilities(item: &ItemFn) -> bool {
-    struct Bounds(bool);
+// Whether the fn's generics bound a parameter on `Requires` or `Capabilities`,
+// inline or in its `where` clause, returning the bound spelled.
+fn broad_bound(item: &ItemFn) -> Option<&'static str> {
+    struct Bounds(Option<&'static str>);
 
     impl<'ast> Visit<'ast> for Bounds {
         fn visit_type_param_bound(&mut self, node: &'ast TypeParamBound) {
-            if let TypeParamBound::Trait(bound) = node {
-                self.0 |= path_ends(&bound.path, &["Capabilities"]);
+            if self.0.is_none()
+                && let TypeParamBound::Trait(bound) = node
+            {
+                if path_ends(&bound.path, &["crate", "Requires"]) {
+                    self.0 = Some("P: crate::Requires");
+                } else if path_ends(&bound.path, &["Requires"]) {
+                    self.0 = Some("P: Requires");
+                } else if path_ends(&bound.path, &["Capabilities"]) {
+                    self.0 = Some("P: Capabilities");
+                }
             }
             visit::visit_type_param_bound(self, node);
         }
     }
 
-    let mut bounds = Bounds(false);
+    let mut bounds = Bounds(None);
     bounds.visit_generics(&item.sig.generics);
     bounds.0
 }
@@ -209,13 +220,16 @@ impl<'ast> Visit<'ast> for Reads<'_> {
         match inner {
             Expr::Call(ExprCall { func, args, .. }) => {
                 if let Expr::Path(path) = &**func
-                    && path_ends(&path.path, &["Config", "get"])
+                    && (path_ends(&path.path, &["Config", "get"])
+                        || path_ends(&path.path, &["ConfigExt", "require"]))
                     && let Some(key) = args.iter().nth(1)
                 {
                     self.read(syntax::head_line(func).unwrap_or_default(), key);
                 }
             }
-            Expr::MethodCall(call) if call.method == "get" && call.args.len() == 1 => {
+            Expr::MethodCall(call)
+                if (call.method == "get" || call.method == "require") && call.args.len() == 1 =>
+            {
                 if let Expr::MethodCall(accessor) = &*call.receiver
                     && accessor.method == "config"
                     && accessor.args.is_empty()

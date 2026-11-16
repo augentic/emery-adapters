@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 
 use self::item::{
     BODY_WIDTH, Call, Chain, Const, Consts, Doc, Enum, Expr, Fence, Field, Fn, Impl, Item, Source,
-    Struct, Uses, Variant, Vis, block,
+    Struct, Trait, Uses, Variant, Vis, block,
 };
 pub use self::item::{MAX_WIDTH, TAB, pad};
 use super::gate::Gating;
@@ -27,7 +27,7 @@ const DERIVES_WITHOUT_EQ: &str = "Debug, Clone, PartialEq, Serialize, Deserializ
 
 // The bound every scaffolded handler and consumer opens with: the turn
 // narrows it to the capabilities the body reaches.
-const BOUND: &str = "P: Capabilities";
+const BOUND: &str = "P: crate::Requires";
 
 // The value a seeded setting holds until the turn fills it.
 const PLACEHOLDER: &str = "<value>";
@@ -124,6 +124,8 @@ impl Stem {
     // The stem's entry, as the layout reference spells it, with the part in
     // its list where the part registers anything.
     fn render_entry(&self) -> String {
+        let gated = self.handlers.iter().any(|handler| handler.gated);
+        let bounds = if gated { "Config + Send + Sync + 'static" } else { "Send + Sync + 'static" };
         let mut source = Source::default();
         source.push(Doc::new([
             format!("# {}", self.name),
@@ -132,14 +134,26 @@ impl Stem {
         ]));
         source.push(Item::Mods(vec![self.part.clone()]));
         let mut uses = Uses::default();
-        uses.add("omnia_sdk", &["Capabilities"]);
+        if gated {
+            uses.add("omnia_sdk", &["Config"]);
+        }
         uses.add("omnia_sdk::api", &["Handlers"]);
         source.push(uses);
+        source.push(
+            Trait::new("Requires")
+                .docs([
+                    "The capabilities the stem's handlers reach, implemented by every provider \
+                     that has them.",
+                ])
+                .vis(Vis::Pub)
+                .bounds(bounds),
+        );
+        source.push(Impl::new(format!("impl<P> Requires for P where P: {bounds}")));
         source.push(
             Fn::new("handlers")
                 .docs(["The stem's handlers, merged onto the root routers."])
                 .vis(Vis::Pub)
-                .generics("<P: Capabilities>")
+                .generics("<P: Requires>")
                 .returns("Handlers<P>")
                 .body(["Handlers::from([])"]),
         );
@@ -262,9 +276,6 @@ impl Stem {
         }
         let tabled = self.types.iter().any(|design_type| design_type.body.is_table());
         let mut sdk = Vec::new();
-        if routed || consuming {
-            sdk.push("Capabilities");
-        }
         if laying {
             sdk.push("Config");
         }
@@ -304,7 +315,7 @@ impl Stem {
             .collect();
         Fn::new("handlers")
             .vis(Vis::Crate)
-            .generics("<P: Capabilities>")
+            .generics("<P: crate::Requires>")
             .returns("Handlers<P>")
             .body(Chain::new("Handlers::new()", calls).tail(0))
     }
@@ -443,7 +454,7 @@ impl Stem {
             uses.add("common", &["topic"]);
         }
         if sending || delivering {
-            uses.add("omnia_sdk::api", &["Client", "Router"]);
+            uses.add("omnia_sdk::api", &["Router"]);
         }
         let mut doubles = vec!["Provider"];
         if !self.seeded().is_empty() {
@@ -521,7 +532,7 @@ fn router(ident: &str) -> Fn {
         .comments(["The stem's router over the doubles, as the guest builds it."])
         .params(["provider: &Provider"])
         .returns("Router<Provider>")
-        .body([format!("{ident}::handlers().with_state(Client::new(provider.clone()))")])
+        .body([format!("{ident}::handlers().with_state(provider.clone())")])
 }
 
 // One request through the stem's router, its body read as JSON so a test

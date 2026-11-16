@@ -68,6 +68,7 @@ impl Change {
             return Ok(Vec::new());
         }
         let mut root_deps = BTreeSet::new();
+        let mut requires = BTreeSet::new();
         let mut handlers = BTreeSet::new();
         let mut stem_deps = BTreeSet::new();
         let mut stem_names = BTreeSet::new();
@@ -76,14 +77,19 @@ impl Change {
             let pkg = layout::package(stem);
             let ident = pkg.replace('-', "_");
             let root_dep = format!("{pkg} = {{ path = \"crates/{dir}\" }}");
+            let req = format!("P: {ident}::Requires");
+            let req_comma = format!("{req},");
             let call = format!("{ident}::handlers()");
             let call_comma = format!("{call},");
             let stem_dep = format!("{pkg} = {{ path = \"../{dir}\" }}");
             self.vanished_lines.insert(root_dep.clone());
+            self.vanished_lines.insert(req.clone());
+            self.vanished_lines.insert(req_comma);
             self.vanished_lines.insert(call.clone());
             self.vanished_lines.insert(call_comma);
             self.vanished_lines.insert(stem_dep.clone());
             root_deps.insert(root_dep);
+            requires.insert(req);
             handlers.insert(call);
             stem_deps.insert(stem_dep);
             stem_names.insert(pkg);
@@ -97,8 +103,10 @@ impl Change {
             edits.push(("Cargo.toml".to_owned(), next));
         }
         if let Some(text) = read_file(root, layout::ENTRY)?
-            && let Some(next) =
-                drop_lines(&text, |line| handlers.contains(line.trim().trim_end_matches(',')))
+            && let Some(next) = drop_lines(&text, |line| {
+                let trimmed = line.trim().trim_end_matches(',');
+                requires.contains(trimmed) || handlers.contains(trimmed)
+            })
         {
             edits.push((layout::ENTRY.to_owned(), next));
         }

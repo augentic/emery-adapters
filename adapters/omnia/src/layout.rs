@@ -11,7 +11,9 @@ use std::path::{Path, PathBuf};
 
 use emery_sdk::{Error, bad_request, server_error};
 use omnia_template::Manifest;
-pub use omnia_template::{CRATE_LIST_ANCHOR, HANDLER_LIST_ANCHOR, insert_after};
+pub use omnia_template::{
+    CRATE_LIST_ANCHOR, HANDLER_LIST_ANCHOR, REQUIRES_LIST_ANCHOR, insert_after,
+};
 
 pub use self::manifest::Toml;
 use crate::syntax;

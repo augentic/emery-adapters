@@ -9,6 +9,7 @@ use emery_sdk::{Error, NoFollow, Standing, bad_request, server_error, standing};
 use super::names::{Names, screaming};
 use super::render::{MAX_WIDTH, TAB, pad};
 use crate::layout::{self, insert_after};
+use crate::syntax;
 
 // A line a stem adds to a list, and where the list stands with it.
 pub struct Line {
@@ -43,6 +44,9 @@ impl Line {
     // for an array's entry, anywhere in the text, since the formatter lays
     // a short array on the anchor's own line.
     fn held_by(&self, text: &str) -> bool {
+        if matches!(self.place, Place::RequiresConfig) {
+            return requires_holds_config(text);
+        }
         let key = self.key();
         text.lines().any(|held| held.trim() == key)
             || matches!(self.place, Place::After(anchor) if anchor.ends_with('['))
@@ -75,6 +79,9 @@ pub enum Place {
     // formatter keeps them; before its first `use`, a blank line between,
     // where the entry holds none.
     PubModList,
+    // `Config` among the supertraits of `Requires` and its blanket `impl` in
+    // a held stem entry, with `omnia_sdk::Config` imported.
+    RequiresConfig,
 }
 
 // The text of each list a line is placed in, read once; a list the tree
@@ -194,9 +201,144 @@ pub fn insert(text: &str, line: &str, place: &Place) -> Option<String> {
                 at
             }
         }
+        Place::RequiresConfig => return widen_requires_config(text),
     };
     lines.insert(at, line);
     Some(lines.join("\n") + "\n")
+}
+
+fn requires_holds_config(text: &str) -> bool {
+    let Ok(file) = syntax::parse(text) else { return false };
+    let trait_has = file.items.iter().any(|item| {
+        let syn::Item::Trait(item) = item else { return false };
+        item.ident == "Requires" && bounds_config(item.supertraits.iter())
+    });
+    let impl_has = file.items.iter().any(|item| {
+        let syn::Item::Impl(item) = item else { return false };
+        let is_requires = item.modifiers.polarity.is_none()
+            && item.trait_.as_ref().is_some_and(|(path, _)| syntax::path_ends(path, &["Requires"]));
+        is_requires && impl_bounds_config(item)
+    });
+    trait_has && impl_has
+}
+
+fn bounds_config<'b>(mut bounds: impl Iterator<Item = &'b syn::TypeParamBound>) -> bool {
+    bounds.any(|bound| {
+        matches!(
+            bound,
+            syn::TypeParamBound::Trait(bound) if syntax::path_ends(&bound.path, &["Config"])
+        )
+    })
+}
+
+fn impl_bounds_config(item: &syn::ItemImpl) -> bool {
+    let inline = item.generics.type_params().any(|param| bounds_config(param.bounds.iter()));
+    let clauses =
+        item.generics.where_clause.iter().flat_map(|clause| &clause.predicates).any(|predicate| {
+            match predicate {
+                syn::WherePredicate::Type(ty) => bounds_config(ty.bounds.iter()),
+                _ => false,
+            }
+        });
+    inline || clauses
+}
+
+fn widen_requires_config(text: &str) -> Option<String> {
+    let parsed = syntax::parse(text).ok()?;
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+
+    let trait_at = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("pub trait Requires:") && trimmed.ends_with("{}")
+    })?;
+    let trait_raw =
+        lines[trait_at].trim().strip_prefix("pub trait Requires:")?.strip_suffix("{}")?;
+    lines[trait_at] = format!("pub trait Requires: {} {{}}", insert_config_bound(trait_raw));
+
+    if let Some(impl_at) = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("impl<P> Requires for P where P:") && trimmed.ends_with("{}")
+    }) {
+        let impl_raw = lines[impl_at]
+            .trim()
+            .strip_prefix("impl<P> Requires for P where P:")?
+            .strip_suffix("{}")?;
+        let bounds = insert_config_bound(impl_raw);
+        let single = format!("impl<P> Requires for P where P: {bounds} {{}}");
+        lines[impl_at] = if single.chars().count() <= MAX_WIDTH {
+            single
+        } else {
+            format!("impl<P> Requires for P\nwhere\n{}P: {bounds},\n{{\n}}", pad(TAB))
+        };
+    } else {
+        let impl_at = lines.iter().position(|line| line.trim() == "impl<P> Requires for P")?;
+        let where_offset = lines[impl_at + 1..]
+            .iter()
+            .take_while(|line| line.trim() != "{")
+            .position(|line| line.trim().starts_with("P:"))?;
+        let where_at = impl_at + 1 + where_offset;
+        let impl_raw = lines[where_at].trim().strip_prefix("P:")?.trim_end_matches(',');
+        lines[where_at] = format!("{}P: {},", pad(TAB), insert_config_bound(impl_raw));
+    }
+
+    if !syntax::Mentions::of(&parsed).contains("Config") {
+        insert_config_use(&mut lines)?;
+    }
+    Some(lines.join("\n") + "\n")
+}
+
+fn insert_config_bound(raw: &str) -> String {
+    let mut parts: Vec<&str> =
+        raw.split('+').map(str::trim).filter(|part| !part.is_empty()).collect();
+    if !parts.contains(&"Config") {
+        let at = parts
+            .iter()
+            .position(|part| {
+                *part == "Send" || *part == "Sync" || part.starts_with('\'') || *part > "Config"
+            })
+            .unwrap_or(parts.len());
+        parts.insert(at, "Config");
+    }
+    parts.join(" + ")
+}
+
+fn insert_config_use(lines: &mut Vec<String>) -> Option<()> {
+    if let Some(at) = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed.starts_with("use omnia_sdk::{") && trimmed.ends_with("};")
+    }) {
+        let inner = lines[at].trim().strip_prefix("use omnia_sdk::{")?.strip_suffix("};")?;
+        let mut names: Vec<&str> =
+            inner.split(',').map(str::trim).filter(|name| !name.is_empty()).collect();
+        names.push("Config");
+        names.sort_unstable();
+        names.dedup();
+        lines[at] = format!("use omnia_sdk::{{{}}};", names.join(", "));
+        return Some(());
+    }
+    if let Some(at) = lines.iter().position(|line| {
+        let trimmed = line.trim();
+        trimmed
+            .strip_prefix("use omnia_sdk::")
+            .and_then(|rest| rest.strip_suffix(';'))
+            .is_some_and(|ident| !ident.contains("::") && !ident.contains('{'))
+    }) {
+        let single =
+            lines.remove(at).trim().strip_prefix("use omnia_sdk::")?.strip_suffix(';')?.to_owned();
+        let mut names = vec!["Config", single.as_str()];
+        names.sort_unstable();
+        names.dedup();
+        let braced = format!("use omnia_sdk::{{{}}};", names.join(", "));
+        let target = lines
+            .iter()
+            .rposition(|line| line.trim().starts_with("use omnia_sdk::api::"))
+            .map_or(at, |api_at| api_at + 1);
+        lines.insert(target, braced);
+        return Some(());
+    }
+    let api_at = lines.iter().position(|line| line.trim().starts_with("use omnia_sdk::api::"))?;
+    lines.insert(api_at, "use omnia_sdk::Config;".to_owned());
+    Some(())
 }
 
 // `text` with the array `anchor` opens laid as the formatter lays it: on

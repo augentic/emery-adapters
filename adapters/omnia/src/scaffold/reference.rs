@@ -22,6 +22,7 @@ pub enum Role {
     Publish,
     Upstream,
     Identity,
+    Secret,
     State,
     Blob,
     Document,
@@ -95,6 +96,7 @@ const ROLE_WORDS: &[(Role, &[&str])] = &[
             "vault",
         ],
     ),
+    (Role::Secret, &["keyvault", "locker", "lockers", "secret", "secrets", "vault"]),
     (Role::State, &["cache", "cached", "caches", "caching", "memcached", "redis", "ttl"]),
     (Role::Blob, &["blob", "blobs", "bucket", "buckets", "gcs", "s3"]),
     (
@@ -314,7 +316,7 @@ impl Wire {
     pub const fn reader(self) -> &'static str {
         match self {
             Self::Xml => {
-                " — `quick_xml::de::from_reader(delivery.payload.as_slice())`, with \
+                " — `quick_xml::de::from_reader(&delivery.payload[..])`, with \
                  `quick-xml.workspace = true` in the stem's `[dependencies]`"
             }
             Self::Csv | Self::Protobuf | Self::Avro => "",
@@ -332,9 +334,9 @@ pub fn registration(wire: Option<Wire>) -> String {
         || {
             "`.topic(topic::<NAME>, <handler>)` in the part's `handlers()` with the handler \
              calling the earlier parts' functions — `.topic_with(topic::<NAME>, <handler>, \
-             decode)` over a `fn decode(delivery: &Delivery) -> std::result::Result<<Input>, \
-             DecodeError>` of the part where the payload is XML, CSV, or bytes rather than JSON, \
-             `quick_xml::de::from_reader(delivery.payload.as_slice())` for XML under \
+             decode)` over a `fn decode(delivery: &Delivery) -> Result<<Input>>` of the part \
+             where the payload is XML, CSV, or bytes rather than JSON, \
+             `quick_xml::de::from_reader(&delivery.payload[..])` for XML under \
              `quick-xml.workspace = true` in the stem's `[dependencies]`"
                 .to_owned()
         },
@@ -342,8 +344,8 @@ pub fn registration(wire: Option<Wire>) -> String {
             format!(
                 "`.topic_with(topic::<NAME>, <handler>, decode)` in the part's `handlers()`, \
                  with the handler calling the earlier parts' functions and `decode` a `fn \
-                 decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of \
-                 the part reading the {} payload the design says the stream carries{}",
+                 decode(delivery: &Delivery) -> Result<<Input>>` of the part reading the {} \
+                 payload the design says the stream carries{}",
                 wire.name(),
                 wire.reader()
             )
@@ -481,6 +483,7 @@ const TRANSLATION_ROWS: &[(Role, &str)] = &[
     (Role::Publish, "the broker's addresses"),
     (Role::Consume, "the broker's addresses"),
     (Role::Identity, "a secret read from a vault"),
+    (Role::Secret, "a secret read from a vault"),
     (Role::Upstream, "an upstream REST or GraphQL call"),
     (Role::Schedule, "a reference table or a mapping"),
     (Role::State, "a store: a SQL database"),
@@ -515,20 +518,16 @@ impl Capability {
 }
 
 const CAPABILITIES: &[Capability] = &[
-    Capability::new(Role::Publish, "pub trait Publish", "impl Sink", "`Publish`"),
-    Capability::new(Role::Upstream, "pub trait HttpRequest", "impl MatchedHttp", "`HttpRequest`"),
+    Capability::new(Role::Publish, "pub trait Publisher", "impl Sink", "`Publisher`"),
+    Capability::new(Role::Upstream, "pub trait HttpClient", "impl MatchedHttp", "`HttpClient`"),
     Capability::new(Role::Identity, "pub trait Identity", "impl FixedIdentity", "`Identity`"),
+    Capability::new(Role::Secret, "pub trait SecretStore", "impl Memory", "`SecretStore`"),
     Capability::new(Role::State, "pub trait StateStore", "impl Memory", "`StateStore`"),
     Capability::new(Role::Schedule, "pub trait StateStore", "impl Memory", "`StateStore`"),
-    Capability::new(Role::Blob, "pub trait BlobStore", "impl Memory", "`StateStore`"),
-    Capability::new(
-        Role::Document,
-        "pub trait DocumentStore",
-        "impl MemoryDocs",
-        "`DocumentStore`",
-    ),
-    Capability::new(Role::Table, "pub trait TableStore", "impl ScriptedTables", "`TableStore`"),
-    Capability::new(Role::Broadcast, "pub trait Broadcast", "impl Sink", "`Broadcast`"),
+    Capability::new(Role::Blob, "pub trait BlobStore", "impl Memory", "`BlobStore`"),
+    Capability::new(Role::Document, "pub trait DocumentDb", "impl MemoryDocs", "`DocumentDb`"),
+    Capability::new(Role::Table, "pub trait SqlDb", "impl ScriptedTables", "`SqlDb`"),
+    Capability::new(Role::Broadcast, "pub trait WebSockets", "impl Sink", "`WebSockets`"),
 ];
 
 // What the scaffold laid and the slice reaches, which decide the passages.

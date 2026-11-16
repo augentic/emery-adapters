@@ -49,10 +49,11 @@ impl Tree {
         lines.dedup();
         Some(format!(
             "a table read from the store under one key answers empty on a miss, so the table is \
-             never loaded: on `Ok(None)` the function fetches the table from its upstream, as the \
-             design spells the call, stores it under the same key with a TTL, and answers what it \
-             fetched, never an empty collection; repair each read named through `edit_files`, \
-             writing the fetch in the same function:\n{}",
+             never loaded: on `Ok(None)` the function fetches the table from its upstream \
+             (`HttpClient`) or database (`SqlDb`), as the design spells the call, stores it \
+             under the same portable `.`-separated key with a `Duration` TTL, and answers what \
+             it fetched, never an empty collection; repair each read named through \
+             `edit_files`, writing the fetch in the same function:\n{}",
             lines.join("\n")
         ))
     }
@@ -648,8 +649,8 @@ impl<'ast> Visit<'ast> for Misses<'_> {
 const READS: &[&[&str]] = &[
     &["StateStore", "get"],
     &["StateStoreExt", "get_json"],
-    &["DocumentStore", "get"],
-    &["DocumentStoreExt", "get_as"],
+    &["DocumentDb", "get"],
+    &["DocumentDbExt", "get_as"],
 ];
 // The accessors of the context the reads are made through.
 const STORES: [&str; 2] = ["state", "docs"];

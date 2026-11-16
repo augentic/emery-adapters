@@ -4,7 +4,7 @@
 //! scopes changes against the built crates, scaffolds each slice into its
 //! stem's member crate whose routers the root component merges, holds the
 //! tree to the layout's rules before accepting a report or verdict, and runs
-//! `cargo clippy`, `cargo test`, and the `wasm32-wasip2` check at each slice
+//! `cargo clippy`, `cargo test`, and the `wasm32-wasip3` check at each slice
 //! and wave.
 
 mod change;

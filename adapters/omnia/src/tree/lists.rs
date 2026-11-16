@@ -96,8 +96,9 @@ impl Tree {
         lines.sort();
         Some(format!(
             "a stem's `handlers()` is reached through the root list alone, and a stem the list \
-             never merges compiles clean and serves nothing: add `<stem>::handlers(),` to the \
-             `Handlers::from([..])` array of `router()` in `{}` through `edit_files`:\n{}",
+             never merges compiles clean and serves nothing: add `P: <stem>::Requires,` to the \
+             `where` list and `<stem>::handlers(),` to the `Handlers::from([..])` array of \
+             `router()` in `{}` through `edit_files`:\n{}",
             layout::ENTRY,
             lines.join("\n")
         ))
@@ -180,8 +181,8 @@ impl Tree {
             "a topic of the shared table is named by no module, so nothing publishes or \
              consumes it: a constant is added by the slice whose part publishes or consumes the \
              topic, as `topic::<NAME>` in the part's `.topic(..)` registration or its \
-             `context.publish().send(..)` call, so name each topic in the part that publishes \
-             or consumes it, or remove its constant and its doc comment through \
+             `context.publisher().publish(..)` call, so name each topic in the part that \
+             publishes or consumes it, or remove its constant and its doc comment through \
              `edit_files`:\n{}",
             lines.join("\n")
         ))
@@ -208,7 +209,7 @@ impl Tree {
             for module in own {
                 if let Some(number) = module.publishes() {
                     lines.push(format!(
-                        "{}:{number}: `Publish` in a stem no route or topic reaches",
+                        "{}:{number}: `Publisher` in a stem no route or topic reaches",
                         module.path
                     ));
                 }
@@ -247,7 +248,7 @@ impl Module {
     }
 
     fn publishes(&self) -> Option<usize> {
-        self.mentions.first("Publish")
+        self.mentions.first("Publisher")
     }
 
     fn exposes(&self, name: &str) -> Option<usize> {
@@ -263,7 +264,8 @@ impl Module {
     }
 
     // Every item of an entry beyond its lists: a `mod` declaration, a `use`,
-    // and the fold `handlers` are the layout's, and anything else a part's.
+    // `Requires` and its blanket `impl`, and the fold `handlers` are the
+    // layout's, and anything else a part's.
     fn own_items(&self) -> Vec<(usize, String)> {
         let Some(file) = self.file() else { return Vec::new() };
         file.items
@@ -271,6 +273,19 @@ impl Module {
             .filter(|item| match item {
                 syn::Item::Mod(item) => item.content.is_some(),
                 syn::Item::Fn(item) => item.sig.ident != "handlers",
+                syn::Item::Trait(item) => {
+                    !(syntax::is_pub(&item.vis)
+                        && item.ident == "Requires"
+                        && item.items.is_empty())
+                }
+                syn::Item::Impl(item) => {
+                    let is_requires = item.modifiers.polarity.is_none()
+                        && item
+                            .trait_
+                            .as_ref()
+                            .is_some_and(|(path, _)| syntax::path_ends(path, &["Requires"]));
+                    !(is_requires && item.items.is_empty())
+                }
                 _ => true,
             })
             .filter_map(syntax::item_head)

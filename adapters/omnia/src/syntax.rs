@@ -211,7 +211,7 @@ pub fn pub_consts(file: &syn::File) -> Vec<Const> {
         .collect()
 }
 
-const fn is_pub(vis: &Visibility) -> bool {
+pub const fn is_pub(vis: &Visibility) -> bool {
     matches!(vis, Visibility::Public(_))
 }
 
@@ -348,12 +348,20 @@ pub fn item_head(item: &Item) -> Option<(usize, String)> {
         Item::TraitAlias(item) => (item.trait_token.span, format!("trait {}", item.ident)),
         Item::Mod(item) => (item.mod_token.span, format!("mod {}", item.ident)),
         Item::Impl(item) => {
-            let name = match &*item.self_ty {
+            let self_name = match &*item.self_ty {
                 syn::Type::Path(path) => {
                     path.path.segments.last().map(|segment| segment.ident.to_string())
                 }
                 _ => None,
             };
+            let trait_name = item
+                .trait_
+                .as_ref()
+                .and_then(|(path, _)| path.segments.last().map(|s| s.ident.to_string()));
+            let is_blanket = self_name
+                .as_deref()
+                .is_some_and(|name| item.generics.type_params().any(|param| param.ident == name));
+            let name = if is_blanket { trait_name.or(self_name) } else { self_name.or(trait_name) };
             let head = name.map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
             (item.impl_token.span, head)
         }

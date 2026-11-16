@@ -463,9 +463,9 @@ impl Tree {
              delivery as JSON and refuses a payload of any other format as malformed; the \
              design says this slice's inbound stream carries {wire}, so register the consumer \
              through `.topic_with(topic::<NAME>, <handler>, decode)` over a `fn \
-             decode(delivery: &Delivery) -> std::result::Result<<Input>, DecodeError>` of the \
-             part that reads the payload through the format's `serde` reader{reader}, as the \
-             translation's consumed-message row spells it, through `edit_files`:\n{lines}",
+             decode(delivery: &Delivery) -> Result<<Input>>` of the part that reads the payload \
+             through the format's `serde` reader{reader}, as the translation's consumed-message \
+             row spells it, through `edit_files`:\n{lines}",
             wire = wire.name(),
             reader = wire.reader(),
             lines = lines.join("\n")

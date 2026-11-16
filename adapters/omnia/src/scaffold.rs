@@ -25,7 +25,7 @@ use self::lists::{Lists, Placement, Topics};
 pub use self::reference::{Gate, Inbound, Wire, blocks, cited, registration};
 use self::reference::{Idiom, Role, Rules};
 pub use self::settings::Settings;
-use self::stem::{Kind, Stem, lines_of};
+use self::stem::{Kind, Stem, entry_lines_of, lines_of};
 pub use self::types::DesignKey;
 use crate::change::{Change, TouchPoint};
 use crate::syntax::ExportedFn;
@@ -149,8 +149,14 @@ fn snapshot_prior_files(
     root: &Path, stems: &[Stem], touch_points: &[TouchPoint],
 ) -> Result<BTreeMap<String, PriorFile>, Error> {
     let own: BTreeSet<&str> = stems.iter().map(|stem| stem.dir.as_str()).collect();
+    let mut touched_dirs: BTreeSet<&str> = BTreeSet::new();
     let mut points_by_file: BTreeMap<&str, Vec<TouchPoint>> = BTreeMap::new();
     for point in touch_points {
+        if let Some(dir) =
+            point.file.strip_prefix("crates/").and_then(|rest| rest.split('/').next())
+        {
+            touched_dirs.insert(dir);
+        }
         points_by_file.entry(point.file.as_str()).or_default().push(point.clone());
     }
 
@@ -159,10 +165,15 @@ fn snapshot_prior_files(
         if !layout::is_stem_crate(&dir) || own.contains(dir.as_str()) {
             continue;
         }
+        let entry_path = format!("crates/{dir}/src/lib.rs");
+        let touched_crate = touched_dirs.contains(dir.as_str());
         for file in layout::files(&root.join("crates").join(&dir))? {
             let path = layout::relative(root, &file);
             let bytes = fs::read(&file).map_err(|err| server_error!("reading `{path}`: {err}"))?;
-            let touch_points = points_by_file.remove(path.as_str()).unwrap_or_default();
+            let mut touch_points = points_by_file.remove(path.as_str()).unwrap_or_default();
+            if touched_crate && path == entry_path {
+                touch_points.extend(TouchPoint::entry_requires(&path));
+            }
             prior.insert(path, PriorFile { bytes, touch_points });
         }
     }
@@ -299,8 +310,9 @@ impl Scaffold {
                 keeps.entry(&data.path).or_default().extend(lines_of(&data.text));
             }
             for line in stem.lines.iter().filter(|line| line.placement != Placement::Unanchored) {
+                let tokenize = if line.path == stem.entry.path { entry_lines_of } else { lines_of };
                 let tokens =
-                    self.plan.lists.get(&line.path).map_or_else(|| lines_of(&line.text), lines_of);
+                    self.plan.lists.get(&line.path).map_or_else(|| tokenize(&line.text), tokenize);
                 keeps.entry(&line.path).or_default().extend(tokens);
             }
         }

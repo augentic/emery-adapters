@@ -304,7 +304,7 @@ impl Fn {
         self
     }
 
-    // The bounds of a `where` clause, `P: Capabilities`, one per line
+    // The bounds of a `where` clause, `P: crate::Requires`, one per line
     // under `where`, the brace alone on the line after them.
     pub fn bounds<B: Into<String>>(mut self, bounds: impl IntoIterator<Item = B>) -> Self {
         self.bounds = bounds.into_iter().map(Into::into).collect();
@@ -628,11 +628,54 @@ impl Impl {
     }
 
     fn render(&self, out: &mut String) {
+        if self.body.is_empty() {
+            let _ = writeln!(out, "{} {{}}", self.head);
+            return;
+        }
         let _ = writeln!(out, "{} {{", self.head);
         for line in block(&self.body) {
             let _ = writeln!(out, "{line}");
         }
         out.push_str("}\n");
+    }
+}
+
+#[derive(Default)]
+pub struct Trait {
+    docs: Doc,
+    vis: Vis,
+    name: String,
+    bounds: String,
+}
+
+impl Trait {
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Self::default()
+        }
+    }
+
+    pub fn docs(mut self, docs: impl Into<Doc>) -> Self {
+        self.docs = docs.into();
+        self
+    }
+
+    pub const fn vis(mut self, vis: Vis) -> Self {
+        self.vis = vis;
+        self
+    }
+
+    pub fn bounds(mut self, bounds: impl Into<String>) -> Self {
+        self.bounds = bounds.into();
+        self
+    }
+
+    fn render(&self, out: &mut String) {
+        self.docs.render("///", out);
+        let bounds =
+            if self.bounds.is_empty() { String::new() } else { format!(": {}", self.bounds) };
+        let _ = writeln!(out, "{}trait {}{bounds} {{}}", self.vis.prefix(), self.name);
     }
 }
 
@@ -646,6 +689,7 @@ pub enum Item {
     Fn(Fn),
     Struct(Struct),
     Enum(Enum),
+    Trait(Trait),
     Impl(Impl),
 }
 
@@ -663,6 +707,7 @@ impl Item {
             Self::Fn(item) => item.render(out),
             Self::Struct(item) => item.render(out),
             Self::Enum(item) => item.render(out),
+            Self::Trait(item) => item.render(out),
             Self::Impl(item) => item.render(out),
         }
     }
@@ -701,6 +746,12 @@ impl From<Struct> for Item {
 impl From<Enum> for Item {
     fn from(item: Enum) -> Self {
         Self::Enum(item)
+    }
+}
+
+impl From<Trait> for Item {
+    fn from(item: Trait) -> Self {
+        Self::Trait(item)
     }
 }
 
