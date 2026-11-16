@@ -1,5 +1,7 @@
 //! Renders the scorecard: a row per attempt, its notes, the ladder, and the stability across runs.
 
+pub mod evolution;
+
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{self, Display, Formatter, Write as _};
@@ -13,29 +15,16 @@ use crate::run::Run;
 use crate::{Again, Backend, Rung, Settings};
 
 pub fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, name: &str) -> String {
-    let ladder: Vec<String> = settings.ladder.iter().map(Rung::to_string).collect();
-    let adapters: Vec<String> = settings
-        .wasm
-        .iter()
-        .map(|(adapter, path)| format!("adapter `{adapter}` `{}`", path.display()))
-        .collect();
     let built = settings.target.map_or_else(String::new, |target| {
-        let jobs = settings
-            .jobs
-            .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
-        let budget =
-            settings.budget.map_or_else(String::new, |budget| format!(", `--budget {budget}`"));
         format!(
             " · each landed plan built through `{}` into a repository the engine created under \
-             {jobs}{budget} at {} (`EVAL_BUILD_RUNG`)",
+             {} at {} (`EVAL_BUILD_RUNG`)",
             target.name(),
+            build_flags_summary(settings),
             settings.build_rung
         )
     });
-    let mut budget = String::new();
-    for (knob, value) in &settings.knobs {
-        let _ = write!(budget, " · `{knob}={value}`");
-    }
+    let knobs = knobs_summary(settings);
     let rebuilt = settings.again.as_ref().map_or_else(String::new, |again| match again {
         Again::Rebuild { card } => format!(
             " · REBUILD: each plan is `run-1`'s of `target/eval/{card}/`, built again fresh; the \
@@ -73,15 +62,15 @@ pub fn scorecard(settings: &Settings, reports: &[Report<'_>], started: &str, nam
     let mut card = format!(
         "# Eval {started}\n\nmodel `{}` (`{}`) · backend {} · emery `{}` · {} · {} runs per case \
          · ladder {} (`{timeout}`/`{inactivity}`, climbed on a `timeout` or `inactive` \
-         completion; the columns are the first rung's){budget}{built}{rebuilt} · runs \
+         completion; the columns are the first rung's){knobs}{built}{rebuilt} · runs \
          under `target/eval/{name}/`\n",
         settings.model,
         settings.backend.model().0,
         settings.backend.name(),
         settings.emery.display(),
-        adapters.join(" · "),
+        adapters_summary(settings),
         settings.runs,
-        ladder.join(" → "),
+        ladder_summary(settings),
     );
     for report in reports {
         let _ = write!(
@@ -1051,4 +1040,38 @@ impl Display for Jaccard {
         }
         write!(f, "{}/{} ({}%)", self.shared, self.union, self.shared * 100 / self.union)
     }
+}
+
+pub fn comma_joined(items: &BTreeSet<String>) -> String {
+    items.iter().map(String::as_str).collect::<Vec<_>>().join(", ")
+}
+
+fn adapters_summary(settings: &Settings) -> String {
+    settings
+        .wasm
+        .iter()
+        .map(|(adapter, path)| format!("adapter `{adapter}` `{}`", path.display()))
+        .collect::<Vec<_>>()
+        .join(" · ")
+}
+
+fn ladder_summary(settings: &Settings) -> String {
+    settings.ladder.iter().map(Rung::to_string).collect::<Vec<_>>().join(" → ")
+}
+
+fn knobs_summary(settings: &Settings) -> String {
+    let mut out = String::new();
+    for (knob, value) in &settings.knobs {
+        let _ = write!(out, " · `{knob}={value}`");
+    }
+    out
+}
+
+fn build_flags_summary(settings: &Settings) -> String {
+    let jobs = settings
+        .jobs
+        .map_or_else(|| "the engine's default".to_owned(), |jobs| format!("`--jobs {jobs}`"));
+    let budget =
+        settings.budget.map_or_else(String::new, |budget| format!(", `--budget {budget}`"));
+    format!("{jobs}{budget}")
 }

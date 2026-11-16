@@ -408,15 +408,15 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
                 let started = now();
                 let card_name = started.replace(':', "-");
                 evolve::run_live(evolve::LiveOptions {
-                    root,
-                    eval_dir: &eval_dir,
-                    filter: &filter,
+                    root: root.to_path_buf(),
+                    eval_dir,
+                    filter,
                     target,
                     budget,
                     steps,
                     resume,
-                    started: &started,
-                    card_name: &card_name,
+                    started,
+                    card_name,
                 })
             }
         };
@@ -882,11 +882,13 @@ mod tests {
         Build, Integrated, Landed, Rewound, SliceMetrics, Tree, budget_from, chain, empty_before,
         failure, history, schedule_from,
     };
+    use crate::card::evolution::evolution_section;
     use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
     use crate::evolve::{
-        AppliedChange, CountRange, CrateAction, OraclePartition, StepInput, StepRange, StepToml,
-        evolutions, rewind_repo_head, step_intent_config, step_source_config, step_tag,
+        AppliedChange, ChainRun, CountRange, CrateAction, EvolutionReport, EvolveResume,
+        OraclePartition, StepInput, StepRange, StepResult, StepToml, evolutions, rewind_repo_head,
+        step_intent_config, step_source_config, step_tag,
     };
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
@@ -894,13 +896,14 @@ mod tests {
     };
     use crate::grade::{absent, behaviours, identifier};
     use crate::locality::{
-        AmendGrade, GitShellCall, ScopeGrade, StepComparison, StepLocality, TouchKind, TouchPoint,
-        TreeSnapshot, scan_git_shell_calls,
+        AmendGrade, CrateLocality, CrateSize, GitShellCall, RevisionRef, RoundTripDelta,
+        ScopeGrade, StepComparison, StepLocality, TouchKind, TouchPoint, TreeSnapshot,
+        scan_git_shell_calls,
     };
     use crate::plan::{Edge, PlanShape, type_name};
     use crate::run::{
-        Landing, ShellUse, Tokens, Writes, accepted, cap_exhaustions, completions, surveyed,
-        unreached,
+        Completion, Landing, ShellUse, Tokens, Writes, accepted, cap_exhaustions, completions,
+        surveyed, unreached,
     };
     use crate::stage::{clone_root, git, repository};
 
@@ -3644,5 +3647,413 @@ mod tests {
         let empty_part = OraclePartition::default();
         assert!(empty_part.carried_clean());
         assert!(!empty_part.step_clean());
+    }
+
+    fn express_orders_evolution() -> crate::evolve::Evolution {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        evolutions(root, &BTreeSet::from(["express-orders-evolve".to_owned()]))
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap()
+    }
+
+    fn fixture_completion(
+        label: &str, outcome: &str, secs: u64, edits: usize, shells: usize,
+    ) -> Completion {
+        Completion {
+            label: label.to_owned(),
+            outcome: outcome.to_owned(),
+            duration: Duration::from_secs(secs),
+            tokens: Tokens {
+                input: 1000,
+                cached: 500,
+                output: 100,
+                reasoning: 20,
+            },
+            shell: ShellUse {
+                calls: shells,
+                time: Duration::from_secs(2),
+                bytes: 64,
+            },
+            writes: Writes {
+                calls: 0,
+                rewrites: 0,
+                empty: 0,
+                shrinking: 0,
+                edits,
+                refused: 0,
+            },
+        }
+    }
+
+    fn fixture_build(envelope: Value, completions: Vec<Completion>, wall_secs: u64) -> Build {
+        Build {
+            target: Target::Omnia,
+            wall: Duration::from_secs(wall_secs),
+            exit: Some(0),
+            envelope: Some(envelope),
+            budget: Some(12),
+            budget_source: Some("adapter".to_owned()),
+            schedule: Vec::new(),
+            failure: None,
+            completions,
+            history: Vec::new(),
+            tail: String::new(),
+            fidelity: None,
+            rewound: None,
+        }
+    }
+
+    const fn crate_size(loc: usize, items: usize, tests: usize) -> CrateSize {
+        CrateSize {
+            files: 2,
+            loc,
+            items,
+            tests,
+        }
+    }
+
+    fn clean_step_crates(step: usize) -> Vec<CrateLocality> {
+        let mut crates = vec![CrateLocality {
+            dir: "health".to_owned(),
+            expected: Some(CrateAction::Carried),
+            before_hash: Some("aaaaaaaa".to_owned()),
+            after_hash: Some("aaaaaaaa".to_owned()),
+            byte_identical: true,
+            diff_stat: Vec::new(),
+            touch_points: Vec::new(),
+            touched_items: Vec::new(),
+            violations: Vec::new(),
+        }];
+        if step == 2 {
+            crates.push(CrateLocality {
+                dir: "orders".to_owned(),
+                expected: Some(CrateAction::Touch),
+                before_hash: Some("11111111".to_owned()),
+                after_hash: Some("22222222".to_owned()),
+                byte_identical: false,
+                diff_stat: vec!["M\tcrates/orders/src/orders.rs".to_owned()],
+                touch_points: Vec::new(),
+                touched_items: vec!["crates/orders/src/orders.rs:1: `use` changed".to_owned()],
+                violations: Vec::new(),
+            });
+        }
+        crates
+    }
+
+    fn clean_step_locality(step: usize, orders_loc: usize) -> StepLocality {
+        let is_retire_returns = step == 5;
+        let is_rates_decision = step == 6;
+        let rebuilt = match step {
+            2 => BTreeSet::from(["customers".to_owned()]),
+            3 => BTreeSet::from(["returns".to_owned()]),
+            5 => BTreeSet::new(),
+            _ => BTreeSet::from(["orders".to_owned()]),
+        };
+        let round_trips = if step == 7 {
+            vec![
+                RoundTripDelta {
+                    against_step: 0,
+                    crate_dir: "orders".to_owned(),
+                    base: crate_size(400, 20, 18),
+                    current: crate_size(370, 18, 16),
+                },
+                RoundTripDelta {
+                    against_step: 4,
+                    crate_dir: "orders".to_owned(),
+                    base: crate_size(365, 18, 16),
+                    current: crate_size(370, 18, 16),
+                },
+            ]
+        } else {
+            Vec::new()
+        };
+        StepLocality {
+            step,
+            slug: format!("{step:02}-step"),
+            previous: Some(RevisionRef {
+                label: "refs/heads/emery/prev".to_owned(),
+                commit: "cprev000".to_owned(),
+            }),
+            current: RevisionRef {
+                label: format!("refs/heads/emery/{step:08x}"),
+                commit: format!("c{step:07x}"),
+            },
+            sizes: BTreeMap::from([("orders".to_owned(), crate_size(orders_loc, 18, 16))]),
+            crates: clean_step_crates(step),
+            lingering_removals: if is_retire_returns {
+                BTreeMap::from([("returns".to_owned(), Vec::new())])
+            } else {
+                BTreeMap::new()
+            },
+            retiring_turns: 0,
+            amend: Some(AmendGrade {
+                added: usize::from(step == 2 || step == 3),
+                changed: usize::from(step == 1 || step == 7),
+                retired: usize::from(step == 4 || step == 5),
+                stems: if is_rates_decision {
+                    BTreeSet::new()
+                } else {
+                    BTreeSet::from(["orders".to_owned()])
+                },
+                sections: if is_rates_decision {
+                    BTreeSet::from(["apis".to_owned()])
+                } else {
+                    BTreeSet::new()
+                },
+                parts_added: BTreeSet::new(),
+                parts_removed: BTreeSet::new(),
+                mismatches: Vec::new(),
+            }),
+            scope: Some(ScopeGrade {
+                whole_reason: None,
+                minimum: if is_rates_decision { BTreeSet::new() } else { rebuilt.clone() },
+                widened: if is_rates_decision { rebuilt.clone() } else { BTreeSet::new() },
+                rebuilt,
+                carried: BTreeSet::from(["health".to_owned()]),
+                retiring: if is_retire_returns {
+                    BTreeSet::from(["returns".to_owned()])
+                } else {
+                    BTreeSet::new()
+                },
+                mismatches: Vec::new(),
+            }),
+            round_trips,
+            git_calls: Vec::new(),
+        }
+    }
+
+    fn clean_amend_step(step: usize, orders_loc: usize) -> StepResult {
+        let build_turns = if step == 5 {
+            vec![fixture_completion("verify", "ok", 15, 0, 3)]
+        } else {
+            vec![
+                fixture_completion("build-SLICE-001", "ok", 35, 2, 2),
+                fixture_completion("verify", "ok", 15, 0, 3),
+            ]
+        };
+        StepResult {
+            step,
+            tag: step_tag(step),
+            title: format!("Step {step}"),
+            revision: Some(format!("{step:08x}abcdef")),
+            amend_exit: Some(0),
+            amend_wall: Duration::from_secs(12),
+            amend_completions: vec![fixture_completion("amend-draft", "ok", 12, 0, 0)],
+            plan: None,
+            build: Some(fixture_build(serde_json::json!({ "repaired": [] }), build_turns, 50)),
+            locality: Some(clean_step_locality(step, orders_loc)),
+            oracle: Some(OraclePartition {
+                carried_passed: 58,
+                carried_total: 58,
+                step_passed: 2,
+                step_total: 2,
+                note: None,
+            }),
+            resumed: false,
+        }
+    }
+
+    fn baseline_step_fixture() -> StepResult {
+        StepResult {
+            step: 0,
+            tag: "step-00".to_owned(),
+            title: "Baseline".to_owned(),
+            revision: Some("00000000abcdef".to_owned()),
+            amend_exit: Some(0),
+            amend_wall: Duration::from_secs(30),
+            amend_completions: vec![fixture_completion("spec-draft", "ok", 15, 0, 0)],
+            plan: None,
+            build: Some(fixture_build(
+                serde_json::json!({ "whole": { "reason": "no-parent" }, "repaired": [1] }),
+                vec![
+                    fixture_completion("build-SLICE-001", "ok", 40, 3, 2),
+                    fixture_completion("verify", "corrected", 20, 1, 4),
+                ],
+                60,
+            )),
+            locality: Some(StepLocality {
+                step: 0,
+                slug: "00-baseline".to_owned(),
+                previous: None,
+                current: RevisionRef {
+                    label: "refs/heads/emery/00000000".to_owned(),
+                    commit: "c0000000".to_owned(),
+                },
+                sizes: BTreeMap::from([(
+                    "orders".to_owned(),
+                    CrateSize {
+                        files: 2,
+                        loc: 400,
+                        items: 20,
+                        tests: 18,
+                    },
+                )]),
+                crates: Vec::new(),
+                lingering_removals: BTreeMap::new(),
+                retiring_turns: 0,
+                amend: None,
+                scope: None,
+                round_trips: Vec::new(),
+                git_calls: Vec::new(),
+            }),
+            oracle: Some(OraclePartition {
+                carried_passed: 0,
+                carried_total: 0,
+                step_passed: 57,
+                step_total: 57,
+                note: None,
+            }),
+            resumed: false,
+        }
+    }
+
+    #[test]
+    fn evolution_card_clean() {
+        let mut steps = vec![baseline_step_fixture()];
+        for (step, loc) in [405, 405, 405, 365, 365, 372, 370].into_iter().enumerate() {
+            steps.push(clean_amend_step(step + 1, loc));
+        }
+
+        let report = EvolutionReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            chains: vec![ChainRun { n: 1, steps }],
+            resumed: None,
+            step_range: None,
+        };
+        let mut md = String::new();
+        evolution_section(&mut md, &[report]).unwrap();
+        assert!(md.contains("\n## Evolution\n"), "{md}");
+        assert!(md.contains("### Chain 1 — pass (6/6)"), "{md}");
+        assert!(
+            md.contains("| `C1` | pass | 7/7 steps carried byte-identical, 0 touch violations |"),
+            "{md}"
+        );
+        assert!(md.contains("| `C2` | pass | 7/7 steps carried scenarios pass"), "{md}");
+        assert!(md.contains("| `C3` | pass | 8/8 builds pass own scenarios"), "{md}");
+        assert!(
+            md.contains(
+                "| `C4` | pass | `crates/orders` at `step-07`: LOC 370 vs `step-00` 400 (-7%, within ±10%: yes"
+            ) && md.contains("LOC 370 vs `step-04` (6-route spec) 365 (+1%, within ±10%: yes"),
+            "{md}"
+        );
+        assert!(
+            md.contains(
+                "| `C5` | pass | `step-06` rebuilt `[orders]` (minimum `[]`, widened `[orders]`, retiring `[]`) |"
+            ),
+            "{md}"
+        );
+        assert!(
+            md.contains(
+                "| `C6` | pass | `step-05` retiring `[returns]`, `crates/returns` lingering 0, retiring slice turns 0 |"
+            ),
+            "{md}"
+        );
+        assert!(md.contains("- **Correctness:**"), "{md}");
+        assert!(
+            md.contains(
+                "- **Locality:** 7/7 steps carried byte-identical; admitted touch edits (1):"
+            ),
+            "{md}"
+        );
+        assert!(md.contains("0 worker `git` shell calls."), "{md}");
+        assert!(md.contains("- **Scope:** 7/7 steps match `step.toml` expected scope"), "{md}");
+        assert!(md.contains("- **Round trip:** `crates/orders` `step-00` 400 LOC"), "{md}");
+        assert!(md.contains("- **Cost:**"), "{md}");
+        assert!(md.contains("- **Amend fidelity:** 7/7 steps match `step.toml`"), "{md}");
+        assert!(md.contains("#### Per-step cost"), "{md}");
+    }
+
+    #[test]
+    fn evolution_card_partial_and_resumed() {
+        let failed_step = StepResult {
+            step: 1,
+            tag: "step-01".to_owned(),
+            title: "Bulk threshold".to_owned(),
+            revision: Some("11111111".to_owned()),
+            amend_exit: Some(0),
+            amend_wall: Duration::from_secs(10),
+            amend_completions: Vec::new(),
+            plan: None,
+            build: None,
+            locality: None,
+            oracle: None,
+            resumed: false,
+        };
+        let partial_report = EvolutionReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            chains: vec![ChainRun {
+                n: 1,
+                steps: vec![failed_step],
+            }],
+            resumed: None,
+            step_range: Some(StepRange { start: 0, end: 4 }),
+        };
+        let mut partial_md = String::new();
+        evolution_section(&mut partial_md, &[partial_report]).unwrap();
+        assert!(partial_md.contains("### Chain 1 — FAIL (0/3)"), "{partial_md}");
+        assert!(partial_md.contains("| `C1` | FAIL |"), "{partial_md}");
+        assert!(
+            partial_md.contains("| `C4` | — | `step-07` outside `--steps` range |"),
+            "{partial_md}"
+        );
+        assert!(
+            partial_md.contains("| `C5` | — | `step-06` outside `--steps` range |"),
+            "{partial_md}"
+        );
+        assert!(
+            partial_md.contains("| `C6` | — | `step-05` outside `--steps` range |"),
+            "{partial_md}"
+        );
+
+        let mut resumed_steps: Vec<StepResult> = (0..7)
+            .map(|step| {
+                let mut entry = clean_amend_step(step.max(1), 400);
+                entry.step = step;
+                entry.tag = step_tag(step);
+                entry.resumed = true;
+                entry.locality = None;
+                entry.oracle = None;
+                entry
+            })
+            .collect();
+        resumed_steps.push(clean_amend_step(7, 370));
+        let resumed_report = EvolutionReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            chains: vec![ChainRun {
+                n: 1,
+                steps: resumed_steps,
+            }],
+            resumed: Some(EvolveResume {
+                card: "2026-11-16T00-00-00Z".to_owned(),
+                chain: 1,
+                at_step: 7,
+                drifted: false,
+            }),
+            step_range: None,
+        };
+        let mut resumed_md = String::new();
+        evolution_section(&mut resumed_md, &[resumed_report]).unwrap();
+        assert!(
+            resumed_md.contains("resumed from `2026-11-16T00-00-00Z` chain 1 at `step-07`"),
+            "{resumed_md}"
+        );
+        assert!(resumed_md.contains("### Chain 1 — partial (4/4 evaluated)"), "{resumed_md}");
+        assert!(
+            resumed_md.contains("| `step-06` | `00000006` | Step 6 | resumed | resumed | — | — | — | — | — | — | — |"),
+            "{resumed_md}"
+        );
+        assert!(
+            resumed_md.contains("| `C5` | — | `step-06` resumed before `--at-step 7` |"),
+            "{resumed_md}"
+        );
+        assert!(
+            resumed_md.contains("| `C6` | — | `step-05` resumed before `--at-step 7` |"),
+            "{resumed_md}"
+        );
     }
 }

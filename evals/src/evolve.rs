@@ -12,7 +12,8 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::build::{Build, BuildJob};
-use crate::card::short;
+use crate::card::evolution::evolution_scorecard;
+use crate::card::{comma_joined, short};
 use crate::case::{CASES, Case, check_tree};
 use crate::fidelity::Target;
 use crate::locality::{
@@ -985,6 +986,10 @@ pub struct StepResult {
 }
 
 impl StepResult {
+    pub const fn is_baseline(&self) -> bool {
+        self.step == 0
+    }
+
     pub fn passed(&self) -> bool {
         self.amend_exit == Some(0)
             && self.build.as_ref().is_some_and(Build::landed)
@@ -1001,6 +1006,16 @@ impl StepResult {
 
     pub fn wall(&self) -> Duration {
         self.amend_wall + self.build.as_ref().map_or(Duration::ZERO, |b| b.wall)
+    }
+
+    fn failed_stderr_file(&self) -> String {
+        if self.amend_exit == Some(0) {
+            format!("{}.build.stderr", self.tag)
+        } else if self.is_baseline() {
+            format!("{}.specify.stderr", self.tag)
+        } else {
+            format!("{}.amend.stderr", self.tag)
+        }
     }
 
     fn failed(
@@ -1029,6 +1044,26 @@ pub struct ChainRun {
     pub steps: Vec<StepResult>,
 }
 
+impl ChainRun {
+    pub fn step(&self, number: usize) -> Option<&StepResult> {
+        self.steps.iter().find(|step| step.step == number)
+    }
+
+    pub fn active_steps(&self) -> impl Iterator<Item = &StepResult> {
+        self.steps.iter().filter(|step| !step.resumed)
+    }
+
+    pub fn amend_steps(&self) -> impl Iterator<Item = &StepResult> {
+        self.steps.iter().filter(|step| !step.is_baseline() && !step.resumed)
+    }
+
+    pub fn stopped_evidence(&self) -> String {
+        self.steps
+            .last()
+            .map_or_else(|| "—".to_owned(), |last| format!("`{}`", last.failed_stderr_file()))
+    }
+}
+
 pub struct EvolutionReport {
     pub evolution: Evolution,
     pub target: Target,
@@ -1038,16 +1073,16 @@ pub struct EvolutionReport {
 }
 
 // Invocation parameters for `run_live`.
-pub struct LiveOptions<'a> {
-    pub root: &'a Path,
-    pub eval_dir: &'a Path,
-    pub filter: &'a BTreeSet<String>,
+pub struct LiveOptions {
+    pub root: PathBuf,
+    pub eval_dir: PathBuf,
+    pub filter: BTreeSet<String>,
     pub target: Option<Target>,
     pub budget: Option<NonZeroUsize>,
     pub steps: Option<StepRange>,
     pub resume: Option<EvolveResume>,
-    pub started: &'a str,
-    pub card_name: &'a str,
+    pub started: String,
+    pub card_name: String,
 }
 
 pub fn step_tag(step: usize) -> String {
@@ -1083,7 +1118,7 @@ pub fn step_intent_config(reference: &str, description: &str) -> String {
     )
 }
 
-pub fn run_live(options: LiveOptions<'_>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_live(options: LiveOptions) -> Result<(), Box<dyn std::error::Error>> {
     let LiveOptions {
         root,
         eval_dir,
@@ -1095,7 +1130,7 @@ pub fn run_live(options: LiveOptions<'_>) -> Result<(), Box<dyn std::error::Erro
         started,
         card_name,
     } = options;
-    let evolutions = evolutions(root, filter)?;
+    let evolutions = evolutions(&root, &filter)?;
     if evolutions.is_empty() {
         return Err(format!("no evolution case under `{CASES}` matches").into());
     }
@@ -1103,12 +1138,9 @@ pub fn run_live(options: LiveOptions<'_>) -> Result<(), Box<dyn std::error::Erro
         return Err("`--evolve --resume` names a single evolution case".into());
     }
 
-    let mut adapters = BTreeSet::new();
-    for evolution in &evolutions {
-        adapters.extend(evolution.adapters());
-    }
+    let adapters: BTreeSet<&str> = evolutions.iter().flat_map(Evolution::adapters).collect();
     let resolved_target = target_override.unwrap_or_else(|| evolutions[0].target);
-    let settings = Settings::from_env(root, &adapters, Some(resolved_target), budget)?;
+    let settings = Settings::from_env(&root, &adapters, Some(resolved_target), budget)?;
 
     let mut reports = Vec::with_capacity(evolutions.len());
     for evolution in evolutions {
@@ -1154,10 +1186,10 @@ pub fn run_live(options: LiveOptions<'_>) -> Result<(), Box<dyn std::error::Erro
         let mut chain_runs = Vec::with_capacity(chain_count);
         for n in 1..=chain_count {
             let chain = if let Some(res) = &resume {
-                ChainDriver::resumed(eval_dir, card_name, &evolution, &settings, target, res)?
+                ChainDriver::resumed(&eval_dir, &card_name, &evolution, &settings, target, res)?
                     .run_from(res.at_step, range)?
             } else {
-                ChainDriver::fresh(eval_dir, card_name, &evolution, &settings, target, n)?
+                ChainDriver::fresh(&eval_dir, &card_name, &evolution, &settings, target, n)?
                     .run_all(range)?
             };
             chain_runs.push(chain);
@@ -1172,7 +1204,7 @@ pub fn run_live(options: LiveOptions<'_>) -> Result<(), Box<dyn std::error::Erro
         });
     }
 
-    let summary = render_card_summary(&settings, &reports, started, card_name);
+    let summary = evolution_scorecard(&settings, &reports, &started, &card_name);
     let out = eval_dir.join(format!("{card_name}.md"));
     fs::write(&out, &summary)?;
     print!("{summary}");
@@ -1836,104 +1868,6 @@ pub fn rewind_repo_head(repo: &Path, commit: &str) -> io::Result<()> {
     Ok(())
 }
 
-fn render_card_summary(
-    settings: &Settings, reports: &[EvolutionReport], started: &str, card_name: &str,
-) -> String {
-    let mut out = format!(
-        "# Evolution {started}\n\nmodel `{}` · backend {} · emery `{}` · runs under \
-         `target/eval/{card_name}/`\n",
-        settings.model,
-        settings.backend.name(),
-        settings.emery.display(),
-    );
-    for report in reports {
-        let _ =
-            writeln!(out, "\n## {} (target `{}`)\n", report.evolution.name, report.target.name());
-        if let Some(range) = &report.step_range {
-            let _ = writeln!(out, "Steps `{range}`.\n");
-        }
-        if let Some(res) = &report.resumed {
-            let _ = writeln!(
-                out,
-                "Resumed from `{}` chain {} at step {:02}.\n",
-                res.card, res.chain, res.at_step
-            );
-        }
-        for chain in &report.chains {
-            let _ = writeln!(out, "### Chain {}\n", chain.n);
-            let _ = writeln!(
-                out,
-                "| step | revision | title | amend | scope | carried id | touch violations | oracle carried | oracle step | turns | wall |\n\
-                 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
-            );
-            for step in &chain.steps {
-                let rev_cell = step.revision.as_deref().map_or("—", short);
-                let amend_cell = if step.resumed {
-                    "resumed".to_owned()
-                } else if step.step == 0 {
-                    "—".to_owned()
-                } else {
-                    step.locality.as_ref().and_then(|l| l.amend.as_ref()).map_or_else(
-                        || format!("exit {:?}", step.amend_exit),
-                        |a| if a.passed() { "ok".to_owned() } else { "FAIL".to_owned() },
-                    )
-                };
-                let scope_cell = if step.resumed {
-                    "resumed".to_owned()
-                } else if step.step == 0 {
-                    "whole".to_owned()
-                } else {
-                    step.locality.as_ref().and_then(|l| l.scope.as_ref()).map_or_else(
-                        || "—".to_owned(),
-                        |s| if s.passed() { "ok".to_owned() } else { "FAIL".to_owned() },
-                    )
-                };
-                let carried_cell = step.locality.as_ref().map_or("—", |l| {
-                    if step.step == 0 {
-                        "—"
-                    } else if l.carried_byte_identical() {
-                        "yes"
-                    } else {
-                        "NO"
-                    }
-                });
-                let touch_cell = step
-                    .locality
-                    .as_ref()
-                    .map_or_else(|| "—".to_owned(), |l| l.touch_violations().len().to_string());
-                let (ora_carried, ora_step) = step.oracle.as_ref().map_or_else(
-                    || ("—".to_owned(), "—".to_owned()),
-                    |o| {
-                        let carried = if o.carried_clean() {
-                            format!("{}/{}", o.carried_passed, o.carried_total)
-                        } else {
-                            format!("{}/{} FAIL", o.carried_passed, o.carried_total)
-                        };
-                        let own = if o.step_total == 0 {
-                            "0/0".to_owned()
-                        } else if o.step_clean() {
-                            format!("{}/{}", o.step_passed, o.step_total)
-                        } else {
-                            format!("{}/{} FAIL", o.step_passed, o.step_total)
-                        };
-                        (carried, own)
-                    },
-                );
-                let _ = writeln!(
-                    out,
-                    "| `{}` | `{rev_cell}` | {} | {amend_cell} | {scope_cell} | {carried_cell} | {touch_cell} | \
-                     {ora_carried} | {ora_step} | {} | {}s |",
-                    step.tag,
-                    step.title,
-                    step.turns(),
-                    step.wall().as_secs(),
-                );
-            }
-        }
-    }
-    out
-}
-
 fn into_unique_set(items: Vec<String>, label: &str) -> Result<BTreeSet<String>, String> {
     let mut seen = BTreeSet::new();
     for item in items {
@@ -1946,10 +1880,6 @@ fn into_unique_set(items: Vec<String>, label: &str) -> Result<BTreeSet<String>, 
         seen.insert(item);
     }
     Ok(seen)
-}
-
-fn comma_joined(items: &BTreeSet<String>) -> String {
-    items.iter().map(String::as_str).collect::<Vec<_>>().join(", ")
 }
 
 fn check_relative_path(path: &str, label: &str) -> Result<(), String> {

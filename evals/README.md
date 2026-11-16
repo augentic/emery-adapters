@@ -23,6 +23,7 @@
 - [Building a plan again](#building-a-plan-again)
   - [Full rebuild (`--rebuild`)](#full-rebuild---rebuild)
   - [Wave-level resume (`--resume --at`)](#wave-level-resume---resume---at)
+- [Evolution chains (`--evolve`)](#evolution-chains---evolve)
 - [The small-model arm](#the-small-model-arm)
   - [Building `emery-dev` (`omnia-genai`)](#building-emery-dev-omnia-genai)
   - [Local Ollama setup (macOS fallback)](#local-ollama-setup-macos-fallback)
@@ -79,6 +80,16 @@ cargo run -p evals -- --resume 2026-10-21T06-28-53Z --at 3 --target omnia expres
 
 # Run the reference fixture oracle against an existing omnia build without model turns
 cargo run -p evals -- --oracle 2026-10-15T17-41-37Z train
+
+# Preview resolved evolution steps and overlays without spending model turns
+cargo run -p evals -- --facts --evolve express-orders-evolve
+
+# Run an evolution chain (step 00 specify + build, then each step amend + apply + build + oracle)
+cargo run -p evals -- --evolve --target omnia express-orders-evolve
+
+# Run a subset of evolution steps, or resume a card's chain at step K
+cargo run -p evals -- --evolve --target omnia --steps 00..04 express-orders-evolve
+cargo run -p evals -- --evolve --resume 2026-11-12T03-10-00Z --at-step 4 --target omnia express-orders-evolve
 ```
 
 ### Environment variables
@@ -254,6 +265,23 @@ How `--resume --at` isolates a single wave:
 - All slices merged in waves `1` through `<wave> - 1` (plus any no-op `start` slices in earlier waves, which the runner seals as empty commits) are treated by the engine as already `resumed`.
 - The model under test starts at `<wave>`, building on top of the exact Git tree produced by the source card's earlier waves.
 - `--at` must be `>= 2` (resuming at wave `1` is identical to `--rebuild`). If the local `omnia-template` pins have drifted from the seed repository in `<card>`, pass `--drifted` to allow the resume.
+
+---
+
+## Evolution chains (`--evolve`)
+
+An evolution case under `evals/cases/<name>/` (such as [`cases/express-orders-evolve/`](cases/express-orders-evolve/evolution.toml)) exercises multi-step change builds (`emery amend` → `emery apply` → `emery build`) over a base case's fixture and scenario oracle ([`cards/evolution.md`](cards/evolution.md)):
+
+- `evolution.toml`: Names the `base` case, default `target`, number of `chains` (overridden when `EVAL_RUNS` is set in the environment), and ordered `steps` (`01-<slug>` .. `0K-<slug>`).
+- `steps/0K-<slug>/step.toml`: Declares how the step is applied (`via = "patch"` overlaying `patch/` and removing `remove` paths under `scope = "whole"`, or `via = "intent"` running `emery amend` over an inline `description`), expected `[amend]` counts/stems/sections/parts, expected `[scope]` (`minimum`, `widened`, `rebuilt`, `retiring`), expected `[crates]` actions (`laid`, `rewrite`, `carried`, `touch`, `removed`), and cumulative `oracle/` scenario additions, replacements, `oracle.remove` deletions, and `oracle.upstream-headers` assertions.
+
+Invocation modes:
+
+- `--facts --evolve <case..>`: Applies every step overlay and oracle edit in sequence over a scratch copy under `target/eval/facts/<case>/` without spending any model turn, validating credentials and scenario schemas.
+- `--evolve [--target <name>] [--budget <N>] [--steps <A..B>] <case..>`: Stages `target/eval/<card>/<case>/chain-N/`, runs step `00` (`specify`, `apply`, whole `build`, baseline oracle), and then runs each step `01..0K` (`amend`, `show amendment`, `apply`, change `build`, cumulative oracle, and `git` tree locality grading). `--steps A..B` caps execution at step `B` (`--steps` and `--resume` always run a single chain).
+- `--evolve --resume <card> --at-step <K> [--chain <N>] [--drifted] [--steps <K..B>] <case..>`: Copies the repository and prior step logs from `<card>`'s `chain-<N>` (default `1`), rewinds `HEAD` and prunes branches past step `K - 1`, replays source and oracle overlays through `K - 1`, and runs from step `K` onward.
+
+Per step, the runner writes `step-0K.{specify|amend,apply,build}.{stdout,stderr}`, `step-0K.amendment.json`, `step-0K.{spec,design,plan}.json`, `step-0K.fidelity.md`, `step-0K.locality.md`, and `step-0K.oracle.log`, and renders `## Evolution` in `target/eval/<card>.md` (per-step table, checks `C1`–`C6`, the six measures bullets including worker `git` shell trace scanning and both `step-00` and `step-04` `crates/orders` round-trip LOC comparisons, and per-step cost).
 
 ---
 
