@@ -279,12 +279,13 @@ async fn emery_node() {
     .await;
 
     let project = scratch();
-    let written = serde_json::json!({ "files": [
-        { "path": "src/orders/index.ts", "content": "export function createOrder() {}\n" },
-        { "path": "src/index.ts", "content": "export * as orders from \"./orders/index.ts\";\n" },
-    ]})
-    .to_string();
-    let model = ScriptedModel::answering([REPORT, PASSED]).calling(0, [("write_files", written)]);
+    let model = ScriptedModel::answering([REPORT, PASSED]).calling(
+        0,
+        [write_files(&[
+            ("src/orders/index.ts", "export function createOrder() {}\n"),
+            ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
+        ])],
+    );
 
     let model = support::build(test_programs::TARGET_EMERY_NODE, &project, &[], model).await;
 
@@ -333,15 +334,7 @@ async fn emery_omnia() {
     omnia_union_rules_follow_template();
 
     let project = scratch();
-    let edits = serde_json::json!({ "edits": [
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_HANDLER_MARKER, "replace": OMNIA_HANDLER_FILLED },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
-        { "path": "crates/orders/tests/orders.rs", "find": OMNIA_TEST_MARKER, "replace": OMNIA_TEST_FILLED },
-    ]})
-    .to_string();
-    let model =
-        ScriptedModel::answering([OMNIA_REPORT, PASSED]).calling(0, [("edit_files", edits)]);
+    let model = ScriptedModel::answering([OMNIA_REPORT, PASSED]).calling(0, [omnia_fill_orders()]);
 
     let model = support::build(test_programs::TARGET_EMERY_OMNIA, &project, &[], model).await;
 
@@ -363,11 +356,7 @@ async fn emery_omnia() {
             "the tree holds `{path}`, scaffolded through the lend"
         );
     }
-    let text = |path: &str| {
-        String::from_utf8(project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`")))
-            .expect("UTF-8")
-    };
-    let module = text("crates/orders/src/orders.rs");
+    let module = read_text(&project, "crates/orders/src/orders.rs");
     assert!(
         module.contains(OMNIA_HANDLER_FILLED) && !module.contains(OMNIA_HANDLER_MARKER),
         "the handler the guest scaffolded holds the body the turn filled: {module}"
@@ -383,12 +372,12 @@ async fn emery_omnia() {
             "the typed route the driver lowered reached the skeleton as `{line}`: {module}"
         );
     }
-    let tests = text("crates/orders/tests/orders.rs");
+    let tests = read_text(&project, "crates/orders/tests/orders.rs");
     assert!(
         tests.contains(OMNIA_TEST_FILLED) && !tests.contains("#[ignore"),
         "the test the guest scaffolded is filled and run: {tests}"
     );
-    let root = text("src/lib.rs");
+    let root = read_text(&project, "src/lib.rs");
     assert!(
         root.contains("P: Send + Sync + 'static,\n    P: orders::Requires,\n")
             && root.contains(
@@ -397,13 +386,10 @@ async fn emery_omnia() {
             ),
         "the seeded root router holds the stem's Requires bound and handlers entry: {root}"
     );
-    let seeded = |path: &str| {
-        omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.as_bytes()
-    };
     for path in ["crates/common/src/lib.rs", ".gitignore"] {
         assert_eq!(
-            project.read(path).as_deref(),
-            Some(seeded(path)),
+            read_text(&project, path),
+            omnia_seed(path),
             "`{path}` reached the host's tree through the init, as the template spells it"
         );
     }
@@ -420,23 +406,38 @@ async fn emery_omnia() {
 #[tokio::test]
 async fn emery_omnia_serial() {
     let project = scratch();
-    let first_edits = serde_json::json!({ "edits": [
-        { "path": "crates/orders/src/orders.rs", "find": "REQ-001 orders.create: the handler", "replace": OMNIA_HANDLER_FILLED.trim_end() },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
-        { "path": "crates/orders/tests/orders.rs", "find": "REQ-001 An order is created: arrange, act, assert", "replace": OMNIA_TEST_FILLED.trim_end() },
-    ]})
-    .to_string();
-    let second_edits = serde_json::json!({ "edits": [
-        { "path": "crates/orders/src/orders.rs", "find": "REQ-002 orders.read: the handler", "replace": "    let _ = (&id, context.state().get(\"orders\").await?);\n    Ok(Json(ReadOutput {}))" },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
-        { "path": "crates/orders/tests/orders.rs", "find": "REQ-002 An order is read: arrange, act, assert", "replace": "async fn an_order_is_read() {\n    assert_eq!(2 + 2, 4);\n}" },
-    ]})
-    .to_string();
+    let first_edits = edit_files(&[
+        (
+            "crates/orders/src/orders.rs",
+            "REQ-001 orders.create: the handler",
+            OMNIA_HANDLER_FILLED.trim_end(),
+        ),
+        ("crates/orders/src/orders.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+        ("crates/orders/src/orders.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+        (
+            "crates/orders/tests/orders.rs",
+            "REQ-001 An order is created: arrange, act, assert",
+            OMNIA_TEST_FILLED.trim_end(),
+        ),
+    ]);
+    let second_edits = edit_files(&[
+        (
+            "crates/orders/src/orders.rs",
+            "REQ-002 orders.read: the handler",
+            "    let _ = (&id, context.state().get(\"orders\").await?);\n    Ok(Json(ReadOutput \
+             {}))",
+        ),
+        ("crates/orders/src/orders.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+        (
+            "crates/orders/tests/orders.rs",
+            "REQ-002 An order is read: arrange, act, assert",
+            "async fn an_order_is_read() {\n    assert_eq!(2 + 2, 4);\n}",
+        ),
+    ]);
     let second_report = r#"{"covered": ["REQ-002"], "written": ["crates/orders/src/orders.rs", "crates/orders/tests/orders.rs"]}"#;
     let model = ScriptedModel::answering([OMNIA_REPORT, second_report, PASSED])
-        .calling(0, [("edit_files", first_edits)])
-        .calling(1, [("edit_files", second_edits)]);
+        .calling(0, [first_edits])
+        .calling(1, [second_edits]);
 
     let model =
         support::build(test_programs::TARGET_EMERY_OMNIA, &project, &["serial"], model).await;
@@ -453,11 +454,7 @@ async fn emery_omnia_serial() {
         "the brief names the held module as extended: {}",
         seen[1].messages[0]
     );
-    let text = |path: &str| {
-        String::from_utf8(project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`")))
-            .expect("UTF-8")
-    };
-    let module = text("crates/orders/src/orders.rs");
+    let module = read_text(&project, "crates/orders/src/orders.rs");
     for carried in [
         "pub struct Order {",
         "Handlers::new().route(ORDERS, post(create)).route(ORDERS_ID, get(read))",
@@ -466,7 +463,7 @@ async fn emery_omnia_serial() {
     ] {
         assert!(module.contains(carried), "the extended module carries `{carried}`: {module}");
     }
-    let tests = text("crates/orders/tests/orders.rs");
+    let tests = read_text(&project, "crates/orders/tests/orders.rs");
     for carried in ["async fn an_order_is_created()", "async fn an_order_is_read()"] {
         assert!(tests.contains(carried), "the extended test file carries `{carried}`: {tests}");
     }
@@ -495,12 +492,13 @@ fn assert_change_lifted(brief: &str) {
 #[tokio::test]
 async fn emery_node_scope() {
     let project = scratch();
-    let written = serde_json::json!({ "files": [
-        { "path": "src/orders/index.ts", "content": "export function createOrder() {}\n" },
-        { "path": "src/index.ts", "content": "export * as orders from \"./orders/index.ts\";\n" },
-    ]})
-    .to_string();
-    let model = ScriptedModel::answering([REPORT]).calling(0, [("write_files", written)]);
+    let model = ScriptedModel::answering([REPORT]).calling(
+        0,
+        [write_files(&[
+            ("src/orders/index.ts", "export function createOrder() {}\n"),
+            ("src/index.ts", "export * as orders from \"./orders/index.ts\";\n"),
+        ])],
+    );
 
     let model = support::build(
         test_programs::TARGET_EMERY_NODE,
@@ -519,14 +517,7 @@ async fn emery_node_scope() {
 async fn emery_omnia_scope() {
     let project = scratch();
     plant_omnia_built_tree(&project);
-    let edits = serde_json::json!({ "edits": [
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_HANDLER_MARKER, "replace": OMNIA_HANDLER_FILLED },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_BOUND, "replace": OMNIA_BOUND_NARROWED },
-        { "path": "crates/orders/src/orders.rs", "find": OMNIA_SDK_USE, "replace": OMNIA_SDK_USE_NARROWED },
-        { "path": "crates/orders/tests/orders.rs", "find": OMNIA_TEST_MARKER, "replace": OMNIA_TEST_FILLED },
-    ]})
-    .to_string();
-    let model = ScriptedModel::answering([OMNIA_REPORT]).calling(0, [("edit_files", edits)]);
+    let model = ScriptedModel::answering([OMNIA_REPORT]).calling(0, [omnia_fill_orders()]);
 
     let model =
         support::build(test_programs::TARGET_EMERY_OMNIA, &project, &["scope", "PART-001"], model)
@@ -545,13 +536,46 @@ async fn emery_omnia_scope() {
     );
 }
 
+fn read_text(project: &Scratch, path: &str) -> String {
+    let bytes = project.read(path).unwrap_or_else(|| panic!("the tree holds `{path}`"));
+    String::from_utf8(bytes).expect("UTF-8")
+}
+
+fn omnia_seed(path: &str) -> String {
+    omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.to_owned()
+}
+
+fn write_files(files: &[(&str, &str)]) -> (String, String) {
+    let entries: Vec<_> = files
+        .iter()
+        .map(|(path, content)| serde_json::json!({ "path": path, "content": content }))
+        .collect();
+    ("write_files".to_owned(), serde_json::json!({ "files": entries }).to_string())
+}
+
+fn edit_files(edits: &[(&str, &str, &str)]) -> (String, String) {
+    let entries: Vec<_> = edits
+        .iter()
+        .map(|(path, find, replace)| {
+            serde_json::json!({ "path": path, "find": find, "replace": replace })
+        })
+        .collect();
+    ("edit_files".to_owned(), serde_json::json!({ "edits": entries }).to_string())
+}
+
+fn omnia_fill_orders() -> (String, String) {
+    edit_files(&[
+        ("crates/orders/src/orders.rs", OMNIA_HANDLER_MARKER, OMNIA_HANDLER_FILLED),
+        ("crates/orders/src/orders.rs", OMNIA_BOUND, OMNIA_BOUND_NARROWED),
+        ("crates/orders/src/orders.rs", OMNIA_SDK_USE, OMNIA_SDK_USE_NARROWED),
+        ("crates/orders/tests/orders.rs", OMNIA_TEST_MARKER, OMNIA_TEST_FILLED),
+    ])
+}
+
 fn plant_omnia_built_tree(project: &Scratch) {
-    let seed = |path: &str| {
-        omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body
-    };
     project.write(
         "Cargo.toml",
-        seed("Cargo.toml").replace(
+        omnia_seed("Cargo.toml").replace(
             "omnia-sdk.workspace = true\n",
             "omnia-sdk.workspace = true\ncustomers = { path = \"crates/customers\" }\norders = { \
              path = \"crates/orders\" }\n",
@@ -559,7 +583,7 @@ fn plant_omnia_built_tree(project: &Scratch) {
     );
     project.write(
         "src/lib.rs",
-        seed("src/lib.rs")
+        omnia_seed("src/lib.rs")
             .replace(
                 "P: Send + Sync + 'static,\n",
                 "P: Send + Sync + 'static,\n    P: customers::Requires,\n    P: \
@@ -571,32 +595,9 @@ fn plant_omnia_built_tree(project: &Scratch) {
                  customers::handlers(),\n        orders::handlers(),\n",
             ),
     );
-    let stem_manifest = |stem: &str| {
-        format!(
-            "[package]\nname = \"{stem}\"\ndescription = \"The `{stem}` \
-             stem\"\npublish.workspace = true\nedition.workspace = true\nrust-version.workspace = \
-             true\nversion.workspace = true\n\n[lints]\nworkspace = true\n\n# Target-gated so the \
-             guest's wasm32 dependency graph never sees the doubles.\n[target.'cfg(not(target_arch \
-             = \"wasm32\"))'.dev-dependencies]\nomnia-test = {{ workspace = true, features = \
-             [\"guest\"] }}\ntokio.workspace = true\n\n# One line per crate the stem's files use, \
-             each added at the end.\n[dependencies]\naxum.workspace = true\nomnia-sdk.workspace = \
-             true\nserde.workspace = true\nserde_json.workspace = true\n"
-        )
-    };
-    let stem_entry = |stem: &str| {
-        format!(
-            "//! # {stem}\n//!\n//! The `{stem}` stem.\n\npub mod {stem};\n\nuse \
-             omnia_sdk::api::Handlers;\n\n/// The capabilities the stem's handlers reach, \
-             implemented by every provider that has them.\npub trait Requires: Send + Sync + \
-             'static {{}}\n\nimpl<P> Requires for P where P: Send + Sync + 'static {{}}\n\n/// \
-             The stem's handlers, merged onto the root routers.\npub fn handlers<P: Requires>() \
-             -> Handlers<P> {{\n    Handlers::from([{stem}::handlers()])\n}}\n"
-        )
-    };
-    project.write("crates/customers/Cargo.toml", stem_manifest("customers"));
-    project.write("crates/customers/src/lib.rs", stem_entry("customers"));
-    project.write(
-        "crates/customers/src/customers.rs",
+    plant_omnia_stem(
+        project,
+        "customers",
         "//! Customers.\n\nuse axum::Json;\nuse axum::routing::get;\nuse omnia_sdk::Result;\nuse \
          omnia_sdk::api::{Context, Handlers};\n\npub(crate) const CUSTOMERS: &str = \
          \"/customers\";\n\npub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
@@ -604,11 +605,34 @@ fn plant_omnia_built_tree(project: &Scratch) {
          customers.\npub(crate) async fn list<P>(_context: Context<P>) -> Result<Json<()>> {\n    \
          Ok(Json(()))\n}\n",
     );
-    project.write("crates/orders/Cargo.toml", stem_manifest("orders"));
-    project.write("crates/orders/src/lib.rs", stem_entry("orders"));
-    project.write(
-        "crates/orders/src/orders.rs",
+    plant_omnia_stem(
+        project,
+        "orders",
         "//! Prior orders.\n\npub(crate) const ORDERS: &str = \"/orders\";\n\n/// Validates an \
          order id.\npub fn validate_order(id: &str) -> bool {\n    !id.is_empty()\n}\n",
     );
+}
+
+fn plant_omnia_stem(project: &Scratch, stem: &str, module: &str) {
+    let manifest = format!(
+        "[package]\nname = \"{stem}\"\ndescription = \"The `{stem}` \
+         stem\"\npublish.workspace = true\nedition.workspace = true\nrust-version.workspace = \
+         true\nversion.workspace = true\n\n[lints]\nworkspace = true\n\n# Target-gated so the \
+         guest's wasm32 dependency graph never sees the doubles.\n[target.'cfg(not(target_arch \
+         = \"wasm32\"))'.dev-dependencies]\nomnia-test = {{ workspace = true, features = \
+         [\"guest\"] }}\ntokio.workspace = true\n\n# One line per crate the stem's files use, \
+         each added at the end.\n[dependencies]\naxum.workspace = true\nomnia-sdk.workspace = \
+         true\nserde.workspace = true\nserde_json.workspace = true\n"
+    );
+    let entry = format!(
+        "//! # {stem}\n//!\n//! The `{stem}` stem.\n\npub mod {stem};\n\nuse \
+         omnia_sdk::api::Handlers;\n\n/// The capabilities the stem's handlers reach, \
+         implemented by every provider that has them.\npub trait Requires: Send + Sync + \
+         'static {{}}\n\nimpl<P> Requires for P where P: Send + Sync + 'static {{}}\n\n/// \
+         The stem's handlers, merged onto the root routers.\npub fn handlers<P: Requires>() \
+         -> Handlers<P> {{\n    Handlers::from([{stem}::handlers()])\n}}\n"
+    );
+    project.write(&format!("crates/{stem}/Cargo.toml"), manifest);
+    project.write(&format!("crates/{stem}/src/lib.rs"), entry);
+    project.write(&format!("crates/{stem}/src/{stem}.rs"), module);
 }

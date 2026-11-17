@@ -3,6 +3,7 @@
 #![cfg(not(target_arch = "wasm32"))]
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::marker::PhantomData;
 use std::os::unix::fs::symlink;
 use std::path::Path;
@@ -79,10 +80,6 @@ const OMNIA_TABLE_LINE: &str =
 const OMNIA_ROOT_ANCHOR: &str = "where\n    P: Send + Sync + 'static,\n{\n    \
                                  Handlers::from([\n        // one `<stem>::handlers(),` per \
                                  stem, each added at the end\n    ])\n    .with_state(provider)\n";
-const OMNIA_ROOT_LINE: &str = "where\n    P: Send + Sync + 'static,\n    P: orders::Requires,\n{\n    \
-                               Handlers::from([\n        // one `<stem>::handlers(),` per stem, \
-                               each added at the end\n        orders::handlers(),\n    ])\n    \
-                               .with_state(provider)\n";
 const OMNIA_PATH_CRATE_ANCHOR: &str = "omnia-sdk.workspace = true\n";
 const OMNIA_PATH_CRATE_LINE: &str = "orders = { path = \"crates/orders\" }\n";
 const OMNIA_FAILED: &str = r#"{"passed": false, "failures": ["check 2 (cargo test --workspace): crates/orders/tests/reading.rs — `an_order_with_no_items_is_refused` fails: expected `bad_request`, got Ok"]}"#;
@@ -615,9 +612,8 @@ fn routed(method: &str, path: &str) -> Trigger {
 }
 
 // The edit that fills the function the adapter scaffolded for the default slice.
-const fn fill_function() -> (&'static str, &'static str, &'static str) {
-    ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED)
-}
+const FILL_FUNCTION: (&str, &str, &str) =
+    ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED);
 
 // One `edit_files` call declaring a second module a turn writes under `stem`
 // in the entry the scaffold wrote with the slice's one `pub mod` line, `part`'s.
@@ -723,19 +719,62 @@ fn files_under(root: &Path) -> BTreeSet<String> {
     files
 }
 
+// The seed's root manifest with `stems`' path entries after its anchor.
+fn omnia_manifest_with(stems: &[&str]) -> String {
+    let mut entries = String::new();
+    for stem in stems {
+        let _ = writeln!(entries, "{stem} = {{ path = \"crates/{stem}\" }}");
+    }
+    omnia_seed("Cargo.toml")
+        .replace(OMNIA_PATH_CRATE_ANCHOR, &format!("{OMNIA_PATH_CRATE_ANCHOR}{entries}"))
+}
+
 // The seed's root manifest with the `orders` stem's line after its anchor,
 // the last line of the seed.
 fn omnia_manifest_with_orders() -> String {
-    omnia_seed("Cargo.toml").replace(
-        OMNIA_PATH_CRATE_ANCHOR,
-        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
+    omnia_manifest_with(&["orders"])
+}
+
+// The seed's root entry with `stems`' `Requires` bounds and `handlers()`
+// entries in order.
+fn omnia_root_with(stems: &[&str]) -> String {
+    let mut requires = String::new();
+    let mut handlers = String::new();
+    for stem in stems {
+        let ident = stem.replace('-', "_");
+        let _ = writeln!(requires, "    P: {ident}::Requires,");
+        let _ = writeln!(handlers, "        {ident}::handlers(),");
+    }
+    omnia_seed("src/lib.rs").replace(
+        OMNIA_ROOT_ANCHOR,
+        &format!(
+            "where\n    P: Send + Sync + 'static,\n{requires}{{\n    Handlers::from([\n        // \
+             one `<stem>::handlers(),` per stem, each added at the end\n{handlers}    ])\n    \
+             .with_state(provider)\n"
+        ),
     )
 }
 
 // The seed's root entry with the `orders` stem's handlers as the one entry
 // of the router's array, under the comment that heads it.
 fn omnia_root_with_orders() -> String {
-    omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE)
+    omnia_root_with(&["orders"])
+}
+
+fn widen_entry_requires(entry: &str, capability: &str) -> String {
+    entry
+        .replace(
+            "use omnia_sdk::api::Handlers;\n",
+            &format!("use omnia_sdk::{capability};\nuse omnia_sdk::api::Handlers;\n"),
+        )
+        .replace(
+            "Requires: Send + Sync + 'static {}",
+            &format!("Requires: {capability} + Send + Sync + 'static {{}}"),
+        )
+        .replace(
+            "where P: Send + Sync + 'static {}",
+            &format!("where P: {capability} + Send + Sync + 'static {{}}"),
+        )
 }
 
 // The three root files are scaffolded by the initialisation, before the
@@ -1066,7 +1105,7 @@ async fn omnia_init_held() {
         r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "src/lib.rs"]}"#;
     let root = "// held\nfn router() {\n    Handlers::from([orders::handlers()])\n}\n";
     let model = ScriptedModel::answering([report])
-        .calling(0, [edit_files(&[fill_function(), ("src/lib.rs", "// held\n", root)])]);
+        .calling(0, [edit_files(&[FILL_FUNCTION, ("src/lib.rs", "// held\n", root)])]);
     let report = OMNIA.build(&project, &model).await.expect("build over the held tree");
     model.assert_exhausted();
     assert_eq!(
@@ -1275,7 +1314,7 @@ async fn omnia_guarded_drop() {
     let cut = [("crates/orders/src/lib.rs", "//! # orders\n\npub mod reading;\n")];
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([report])
-        .calling(0, [write_files(&overwritten), write_files(&cut), edit_files(&[fill_function()])]);
+        .calling(0, [write_files(&overwritten), write_files(&cut), edit_files(&[FILL_FUNCTION])]);
 
     let report = OMNIA.build(&project, &model).await.expect("the edited tree is accepted");
     model.assert_exhausted();
@@ -1415,20 +1454,11 @@ async fn omnia_scaffold_keyed() {
 async fn omnia_guarded_keep() {
     let project = omnia_tree().await;
     let filled = OMNIA_FUNCTION_MODULE.replace(OMNIA_FUNCTION_MARKER, OMNIA_FUNCTION_FILLED);
-    let extended = omnia_function_entry()
-        .replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n")
-        .replace(
-            "use omnia_sdk::api::Handlers;\n",
-            "use omnia_sdk::StateStore;\nuse omnia_sdk::api::Handlers;\n",
-        )
-        .replace(
-            "Requires: Send + Sync + 'static {}",
-            "Requires: StateStore + Send + Sync + 'static {}",
-        )
-        .replace(
-            "where P: Send + Sync + 'static {}",
-            "where P: StateStore + Send + Sync + 'static {}",
-        );
+    let extended = widen_entry_requires(
+        &omnia_function_entry()
+            .replace("pub mod reading;\n", "pub mod reading;\npub mod shared;\n"),
+        "StateStore",
+    );
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([report]).calling(
         0,
@@ -4223,7 +4253,7 @@ async fn omnia_default_decoder() {
     let registration = "    Handlers::new().topic(topic::ORDER_PLACED, on_placed)\n}\n";
     let decoded = "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, \
                    decode)\n}\n\nfn decode(delivery: &Delivery) -> Result<OnPlacedInput> {\n    \
-                   quick_xml::de::from_reader(delivery.payload.as_ref())\n        \
+                   quick_xml::de::from_reader(&delivery.payload[..])\n        \
                    .map_err(|error| omnia_sdk::bad_request!(error))\n}\n";
     let edits = |project: &Scratch| {
         project.write(
@@ -4258,8 +4288,7 @@ async fn omnia_default_decoder() {
             (
                 "crates/orders/src/reading.rs",
                 "use omnia_sdk::api::{Context, Handlers};\n",
-                "use omnia_sdk::api::messaging::Delivery;\nuse omnia_sdk::api::{Context, \
-                 Handlers};\n",
+                "use omnia_sdk::api::{Context, Handlers, messaging::Delivery};\n",
             ),
             (
                 "crates/orders/Cargo.toml",
@@ -4280,7 +4309,6 @@ async fn omnia_default_decoder() {
         "crates/orders/src/reading.rs:{}: `Handlers::new().topic(topic::ORDER_PLACED, on_placed)` \
          decodes the delivery as JSON, and the design says the inbound stream carries XML",
         line_of(&module, "    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, decode)")
-            - 1
     );
     for carried in [
         "`.topic(topic::<NAME>, <handler>)` registers the SDK's decoder, which reads each \
@@ -4332,7 +4360,7 @@ async fn omnia_unconsumed_stream() {
          omnia_sdk::api::{{Context, Handlers}};\nuse omnia_sdk::{{Result, StateStore}};\nuse \
          serde::Deserialize;\n\npub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> \
          {{\n{registration}}}\n\nfn decode(delivery: &Delivery) -> Result<OnPlacedInput> {{\n    \
-         quick_xml::de::from_reader(delivery.payload.as_ref())\n        .map_err(|error| \
+         quick_xml::de::from_reader(&delivery.payload[..])\n        .map_err(|error| \
          omnia_sdk::bad_request!(error))\n}}\n"
     );
     let table_doc = "//! the topic by construction.\n";
@@ -4345,7 +4373,7 @@ async fn omnia_unconsumed_stream() {
     let mut last = slice();
     last.design = design.to_owned();
     let model = ScriptedModel::answering([function_only, registered])
-        .calling(0, [edit_files(&[fill_function()])])
+        .calling(0, [edit_files(&[FILL_FUNCTION])])
         .calling(
             1,
             [edit_files(&[
@@ -4410,7 +4438,7 @@ async fn omnia_unconsumed_stream() {
     first.design = design.to_owned();
     first.count = 2;
     let model =
-        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[FILL_FUNCTION])]);
 
     OMNIA.build_slice(&project, &model, &first).await.expect("the first slice passes");
     model.assert_exhausted();
@@ -4418,7 +4446,7 @@ async fn omnia_unconsumed_stream() {
     // a design listing no stream asks for no registration
     let project = omnia_tree().await;
     let model =
-        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[FILL_FUNCTION])]);
 
     OMNIA.build_slice(&project, &model, &slice()).await.expect("the function alone passes");
     model.assert_exhausted();
@@ -4450,7 +4478,7 @@ async fn omnia_inbound_brief() {
                    use serde::Deserialize;\n\npub(crate) fn handlers<P: crate::Requires>() -> \
                    Handlers<P> {\n    Handlers::new().topic_with(topic::ORDER_PLACED, on_placed, \
                    decode)\n}\n\nfn decode(delivery: &Delivery) -> Result<OnPlacedInput> {\n    \
-                   quick_xml::de::from_reader(delivery.payload.as_ref())\n        \
+                   quick_xml::de::from_reader(&delivery.payload[..])\n        \
                    .map_err(|error| omnia_sdk::bad_request!(error))\n}\n";
     let table_doc = "//! the topic by construction.\n";
     let function_only = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
@@ -4508,7 +4536,7 @@ async fn omnia_inbound_brief() {
     first.design = xml.to_owned();
     first.count = 2;
     let model =
-        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[FILL_FUNCTION])]);
 
     OMNIA.build_slice(&project, &model, &first).await.expect("the first slice passes");
     model.assert_exhausted();
@@ -4559,7 +4587,7 @@ async fn omnia_inbound_held() {
     let mut held = slice();
     held.design = json.to_owned();
     let model =
-        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[fill_function()])]);
+        ScriptedModel::answering([function_only]).calling(0, [edit_files(&[FILL_FUNCTION])]);
 
     OMNIA.build_slice(&project, &model, &held).await.expect("the consumed stream passes");
     model.assert_exhausted();
@@ -4687,7 +4715,7 @@ async fn omnia_marker_left() {
     let first = r#"{"covered": ["REQ-001", "REQ-002"], "written": []}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
     let model =
-        ScriptedModel::answering([first, repaired]).calling(1, [edit_files(&[fill_function()])]);
+        ScriptedModel::answering([first, repaired]).calling(1, [edit_files(&[FILL_FUNCTION])]);
 
     let report =
         OMNIA.build_slice(&project, &model, &slice).await.expect("the filled tree is accepted");
@@ -4898,7 +4926,7 @@ async fn omnia_stray_files() {
             0,
             [
                 write_files(&written),
-                edit_files(&[fill_function()]),
+                edit_files(&[FILL_FUNCTION]),
                 declare_module("orders", "reading", "pricing"),
             ],
         )
@@ -5016,7 +5044,7 @@ async fn omnia_root_manifest() {
     let report =
         r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "Cargo.toml"]}"#;
     let model = ScriptedModel::answering([report, report])
-        .calling(0, [edit_files(&[fill_function(), ("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED)])])
+        .calling(0, [edit_files(&[FILL_FUNCTION, ("Cargo.toml", OMNIA_PIN, OMNIA_PIN_EDITED)])])
         .calling(1, [edit_files(&[("Cargo.toml", OMNIA_PIN_EDITED, OMNIA_PIN)])]);
 
     let report = OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
@@ -5098,10 +5126,7 @@ async fn omnia_dangling_crate() {
     project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
     project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n");
     let start_path = "start = { path = \"crates/start\" }\n";
-    let manifest = omnia_seed("Cargo.toml").replace(
-        OMNIA_PATH_CRATE_ANCHOR,
-        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}{start_path}"),
-    );
+    let manifest = omnia_manifest_with(&["orders", "start"]);
     let number =
         manifest.lines().position(|line| line == start_path.trim_end()).expect("the line") + 1;
     project.write("Cargo.toml", &manifest);
@@ -5280,7 +5305,7 @@ async fn omnia_build_process() {
     let first = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs", "crates/orders/src/runner.rs"]}"#;
     let repaired = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/lib.rs", "crates/orders/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([first, repaired])
-        .calling(0, [write_files(&written), edit_files(&[fill_function(), listed])])
+        .calling(0, [write_files(&written), edit_files(&[FILL_FUNCTION, listed])])
         .calling(
             1,
             [
@@ -5350,7 +5375,7 @@ async fn omnia_build_process() {
                 [
                     write_files(&written),
                     edit_files(&[
-                        fill_function(),
+                        FILL_FUNCTION,
                         (
                             "Cargo.toml",
                             OMNIA_PATH_CRATE_ANCHOR,
@@ -5418,10 +5443,7 @@ async fn omnia_stem_manifest() {
     let unlinted = "version.workspace = true\nlints.workspace = true\n";
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/Cargo.toml", "crates/orders/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([report, report])
-        .calling(
-            0,
-            [edit_files(&[fill_function(), ("crates/orders/Cargo.toml", linted, unlinted)])],
-        )
+        .calling(0, [edit_files(&[FILL_FUNCTION, ("crates/orders/Cargo.toml", linted, unlinted)])])
         .calling(1, [edit_files(&[("crates/orders/Cargo.toml", unlinted, linted)])]);
 
     OMNIA.build(&project, &model).await.expect("the repaired tree is accepted");
@@ -7057,24 +7079,8 @@ impl CustomersTree {
         );
         project.write("crates/customers/src/lib.rs", OMNIA_ENTRY.replace("orders", "customers"));
         project.write("crates/customers/src/reading.rs", module);
-        project.write(
-            "Cargo.toml",
-            omnia_seed("Cargo.toml").replace(
-                OMNIA_PATH_CRATE_ANCHOR,
-                &format!(
-                    "{OMNIA_PATH_CRATE_ANCHOR}customers = {{ path = \"crates/customers\" }}\n"
-                ),
-            ),
-        );
-        project.write(
-            "src/lib.rs",
-            omnia_seed("src/lib.rs").replace(
-                OMNIA_ROOT_ANCHOR,
-                "where\n    P: Send + Sync + 'static,\n    P: customers::Requires,\n{\n    \
-                 Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
-                 the end\n        customers::handlers(),\n    ])\n    .with_state(provider)\n",
-            ),
-        );
+        project.write("Cargo.toml", omnia_manifest_with(&["customers"]));
+        project.write("src/lib.rs", omnia_root_with(&["customers"]));
 
         let mut slice = slice_for("orders-reading", &["orders.check", "customers.verify"]);
         slice.change = Some(SliceChange {
@@ -7164,11 +7170,8 @@ async fn omnia_change_rewrite() {
     );
     project.write("crates/orders/src/legacy.rs", "pub fn dead() {}\n");
     project.write("crates/orders/tests/legacy.rs", "#[test]\nfn old() {}\n");
-    let root_manifest = omnia_seed("Cargo.toml").replace(
-        OMNIA_PATH_CRATE_ANCHOR,
-        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-    );
-    let root_entry = omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE);
+    let root_manifest = omnia_manifest_with_orders();
+    let root_entry = omnia_root_with_orders();
     project.write("Cargo.toml", &root_manifest);
     project.write("src/lib.rs", &root_entry);
 
@@ -7224,10 +7227,7 @@ async fn omnia_change_vanished() {
     let returns = ReturnsTree::plant(&project);
 
     let slice = retiring_returns_slice();
-    let root_without_returns = omnia_seed("Cargo.toml").replace(
-        OMNIA_PATH_CRATE_ANCHOR,
-        &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-    );
+    let root_without_returns = omnia_manifest_with_orders();
     let model = ScriptedModel::answering([
         r#"{"covered": [], "written": ["Cargo.toml", "crates/orders/src/reading.rs"]}"#,
     ])
@@ -7302,26 +7302,8 @@ impl ReturnsTree {
         project.write("crates/orders/Cargo.toml", &manifest);
         project.write("crates/orders/src/lib.rs", OMNIA_ENTRY);
         project.write("crates/orders/src/reading.rs", format!("//! Orders.\n\n{mentions}\n"));
-        project.write(
-            "Cargo.toml",
-            omnia_seed("Cargo.toml").replace(
-                OMNIA_PATH_CRATE_ANCHOR,
-                &format!(
-                    "{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}returns = {{ path = \
-                     \"crates/returns\" }}\n"
-                ),
-            ),
-        );
-        project.write(
-            "src/lib.rs",
-            omnia_seed("src/lib.rs").replace(
-                OMNIA_ROOT_ANCHOR,
-                "where\n    P: Send + Sync + 'static,\n    P: orders::Requires,\n    P: \
-                 returns::Requires,\n{\n    Handlers::from([\n        // one `<stem>::handlers(),` \
-                 per stem, each added at the end\n        orders::handlers(),\n        \
-                 returns::handlers(),\n    ])\n    .with_state(provider)\n",
-            ),
-        );
+        project.write("Cargo.toml", omnia_manifest_with(&["orders", "returns"]));
+        project.write("src/lib.rs", omnia_root_with(&["orders", "returns"]));
 
         Self {
             dependency,
@@ -7349,17 +7331,7 @@ async fn omnia_change_touch_points() {
 
     let verified = "pub fn verify() {\n    let _ = check();\n}";
     let audited = "pub fn audit() {\n    verify();\n}";
-    let widened_entry = OMNIA_ENTRY
-        .replace("orders", "customers")
-        .replace(
-            "use omnia_sdk::api::Handlers;\n",
-            "use omnia_sdk::Config;\nuse omnia_sdk::api::Handlers;\n",
-        )
-        .replace(
-            "Requires: Send + Sync + 'static {}",
-            "Requires: Config + Send + Sync + 'static {}",
-        )
-        .replace("where P: Send + Sync + 'static {}", "where P: Config + Send + Sync + 'static {}");
+    let widened_entry = widen_entry_requires(&OMNIA_ENTRY.replace("orders", "customers"), "Config");
     let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs", "crates/customers/src/lib.rs", "crates/customers/src/reading.rs"]}"#;
     let model = ScriptedModel::answering([report, report])
         .calling(
@@ -7451,15 +7423,8 @@ async fn omnia_change_dangling_mention() {
     let verified = omnia_tree().await;
     let returns = ReturnsTree::plant(&verified);
     std::fs::remove_dir_all(verified.path().join("crates/returns")).expect("removing `returns`");
-    verified.write(
-        "Cargo.toml",
-        omnia_seed("Cargo.toml").replace(
-            OMNIA_PATH_CRATE_ANCHOR,
-            &format!("{OMNIA_PATH_CRATE_ANCHOR}{OMNIA_PATH_CRATE_LINE}"),
-        ),
-    );
-    verified
-        .write("src/lib.rs", omnia_seed("src/lib.rs").replace(OMNIA_ROOT_ANCHOR, OMNIA_ROOT_LINE));
+    verified.write("Cargo.toml", omnia_manifest_with_orders());
+    verified.write("src/lib.rs", omnia_root_with_orders());
     let model = ScriptedModel::answering([PASSED, PASSED]).calling(
         1,
         [edit_files(&[

@@ -892,7 +892,7 @@ mod tests {
     };
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
-        declared_tests, named_by, reexported, routes, scenarios_of, tap_counts, unrun,
+        declared_tests, named_by, reexported, routes, scenarios_of, tap_counts,
     };
     use crate::grade::{absent, behaviours, identifier};
     use crate::locality::{
@@ -1424,9 +1424,9 @@ mod tests {
         assert_eq!(factor(300), "3.00×");
     }
 
-    fn check(name: &'static str, exit: Option<i32>) -> HostCheck {
+    fn check(name: &str, exit: Option<i32>) -> HostCheck {
         HostCheck {
-            name,
+            name: name.to_owned(),
             exit,
             output: String::new(),
             note: String::new(),
@@ -1501,8 +1501,8 @@ mod tests {
         assert_eq!(fidelity.host_cell(), "npx tsc ✗ · tests 12/14");
 
         fidelity.checks[0].exit = Some(1);
-        fidelity.checks[1] = unrun("npx tsc", "the install failed");
-        fidelity.checks[2] = unrun("node --test", "the install failed");
+        fidelity.checks[1] = HostCheck::unrun("npx tsc", "the install failed");
+        fidelity.checks[2] = HostCheck::unrun("node --test", "the install failed");
         assert_eq!(fidelity.host_cell(), "npm install ✗ · npx tsc unrun · node --test unrun");
 
         let mut fidelity = Fidelity {
@@ -1529,7 +1529,7 @@ mod tests {
         assert_eq!(fidelity.scenarios_cell(), "0/0 (0%) · 0 outside · 0 unreached · 0 probes");
 
         fidelity.checks[1].exit = Some(101);
-        fidelity.checks[2] = unrun("cargo build", "the tests failed");
+        fidelity.checks[2] = HostCheck::unrun("cargo build", "the tests failed");
         fidelity.failed = 1;
         assert!(!fidelity.clean());
         assert_eq!(fidelity.host_cell(), "tests 7/8 · cargo build unrun");
@@ -1548,7 +1548,7 @@ mod tests {
         assert_eq!(cargo_test_counts(output), (3, 1));
         assert_eq!(cargo_test_counts("not run: the lint failed"), (0, 0));
         let runner = HostCheck {
-            name: "cargo test",
+            name: "cargo test".to_owned(),
             exit: Some(101),
             output: output.to_owned(),
             note: String::new(),
@@ -3591,6 +3591,16 @@ mod tests {
         .unwrap();
         assert!(loc1.carried_byte_identical());
         assert!(loc1.touch_violations().is_empty(), "{:?}", loc1.touch_violations());
+        let orders_loc = loc1.crates.iter().find(|c| c.dir == "orders").unwrap();
+        assert_eq!(
+            orders_loc.touched_items,
+            [
+                "crates/orders/src/lib.rs:3: `use` changed",
+                "crates/orders/src/lib.rs:5: `trait Requires` changed",
+                "crates/orders/src/lib.rs:7: `impl Requires` changed",
+                "crates/orders/src/orders.rs:3: `fn place` changed",
+            ]
+        );
         assert!(loc1.round_trips[0].loc_within_ten_percent());
 
         // step 2: edit `fn untouched` in `orders` (violation!) and remove `health` + `health::handlers()` while leaving `P: health::Requires,` in `src/lib.rs`
@@ -3602,8 +3612,8 @@ mod tests {
         fs::write(
             repo.join("src/lib.rs"),
             "pub fn router<P>()\nwhere\n    P: orders::Requires,\n    P: customers::Requires,\n    \
-             P: health::Requires,\n{\n    let _ = [\n        orders::handlers(),\n        \
-             customers::handlers(),\n    ];\n}\n",
+             P: sub_health::Requires,\n    P: health::Requires,\n{\n    let _ = [\n        \
+             orders::handlers(),\n        customers::handlers(),\n    ];\n}\n",
         )
         .unwrap();
         fs::remove_dir_all(repo.join("crates/health")).unwrap();
@@ -3643,6 +3653,13 @@ mod tests {
             loc2.touch_violations()
         );
         assert!(!loc2.removed_clean());
+        assert_eq!(
+            loc2.lingering_removals["health"],
+            [
+                "Cargo.toml:6: `health = { path = \"crates/health\" }`",
+                "src/lib.rs:6: `P: health::Requires,`",
+            ]
+        );
         assert_eq!(loc2.retiring_turns, 1);
         assert_eq!(
             loc2.git_calls,

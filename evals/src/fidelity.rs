@@ -124,15 +124,15 @@ impl Target {
     fn checks(self, export: &Path) -> Vec<HostCheck> {
         match self {
             Self::Node => {
-                let install = host_check(export, "npm install", &["--no-audit", "--no-fund"]);
+                let install = HostCheck::run(export, "npm install", &["--no-audit", "--no-fund"]);
                 let installed = install.passed();
                 let compile = if installed {
-                    host_check(export, "npx tsc", &["--noEmit"])
+                    HostCheck::run(export, "npx tsc", &["--noEmit"])
                 } else {
-                    unrun("npx tsc", "the install failed")
+                    HostCheck::unrun("npx tsc", "the install failed")
                 };
                 let tests = if installed {
-                    host_check(
+                    HostCheck::run(
                         export,
                         "node --test",
                         &[
@@ -143,28 +143,28 @@ impl Target {
                         ],
                     )
                 } else {
-                    unrun("node --test", "the install failed")
+                    HostCheck::unrun("node --test", "the install failed")
                 };
                 vec![install, compile, tests]
             }
             Self::Omnia => {
-                let lint = host_check(
+                let lint = HostCheck::run(
                     export,
                     "cargo clippy",
                     &["--workspace", "--all-targets", "--", "-D", "warnings"],
                 );
                 let linted = lint.passed();
                 let tests = if linted {
-                    host_check(export, "cargo test", &["--workspace"])
+                    HostCheck::run(export, "cargo test", &["--workspace"])
                 } else {
-                    unrun("cargo test", "the lint failed")
+                    HostCheck::unrun("cargo test", "the lint failed")
                 };
                 let guest = if tests.passed() {
-                    host_check(export, "cargo build", &["--target", "wasm32-wasip3"])
+                    HostCheck::run(export, "cargo build", &["--target", "wasm32-wasip3"])
                 } else if linted {
-                    unrun("cargo build", "the tests failed")
+                    HostCheck::unrun("cargo build", "the tests failed")
                 } else {
-                    unrun("cargo build", "the lint failed")
+                    HostCheck::unrun("cargo build", "the lint failed")
                 };
                 vec![lint, tests, guest]
             }
@@ -422,7 +422,7 @@ fn code_lines(text: &str) -> String {
 
 // Whether `text` reaches into the crate `name`: `name::` spelled at the
 // head of a path, `use name::..` or `name::module::item`.
-fn names_crate(text: &str, name: &str) -> bool {
+pub fn names_crate(text: &str, name: &str) -> bool {
     let path = format!("{name}::");
     let ident = |ch: char| ch.is_alphanumeric() || ch == '_';
     let mut from = 0;
@@ -878,13 +878,61 @@ pub struct Route {
 // One command the host ran in the exported tree: its exit, or none where an
 // earlier check's failure left it unrun, what it printed, and the tail of it.
 pub struct HostCheck {
-    pub name: &'static str,
+    pub name: String,
     pub exit: Option<i32>,
     pub output: String,
     pub note: String,
 }
 
 impl HostCheck {
+    // One command of the host's toolchain run in `at`, its stdout and stderr
+    // read together for the note. Cargo builds into the tree's own `target/`
+    // whatever the environment names, since an exported tree carries its
+    // commit's timestamps and a target directory shared with an earlier export
+    // would answer that export's artefacts as fresh.
+    #[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
+    pub fn run(at: &Path, command: &str, args: &[&str]) -> Self {
+        let mut words = command.split(' ');
+        let program = words.next().unwrap_or(command);
+        let output = std::process::Command::new(program)
+            .args(words)
+            .args(args)
+            .current_dir(at)
+            .env("CARGO_TARGET_DIR", at.join("target"))
+            .env_remove("CURSOR_API_KEY")
+            .output();
+        match output {
+            Ok(output) => {
+                let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
+                text.push_str(&String::from_utf8_lossy(&output.stderr));
+                let mut tail: Vec<&str> =
+                    text.lines().filter(|line| !line.trim().is_empty()).rev().take(12).collect();
+                tail.reverse();
+                Self {
+                    name: command.to_owned(),
+                    exit: output.status.code(),
+                    note: tail.join("\n"),
+                    output: text,
+                }
+            }
+            Err(error) => Self {
+                name: command.to_owned(),
+                exit: None,
+                output: String::new(),
+                note: format!("not run: {error}"),
+            },
+        }
+    }
+
+    pub fn unrun(command: &str, why: &str) -> Self {
+        Self {
+            name: command.to_owned(),
+            exit: None,
+            output: String::new(),
+            note: format!("not run: {why}"),
+        }
+    }
+
     fn passed(&self) -> bool {
         self.exit == Some(0)
     }
@@ -1012,54 +1060,6 @@ fn states_route(ids: &[String], requirements: &[Value]) -> bool {
         requirement["id"].as_str().is_some_and(|id| ids.iter().any(|x| x == id))
             && requirement["trigger"]["http"]["method"].is_string()
     })
-}
-
-// One command of the host's toolchain run in `at`, its stdout and stderr
-// read together for the note. Cargo builds into the tree's own `target/`
-// whatever the environment names, since an exported tree carries its
-// commit's timestamps and a target directory shared with an earlier export
-// would answer that export's artefacts as fresh.
-#[expect(clippy::disallowed_types, reason = "the eval runs the host's toolchain over the tree")]
-pub fn host_check(at: &Path, command: &'static str, args: &[&str]) -> HostCheck {
-    let mut words = command.split(' ');
-    let program = words.next().unwrap_or(command);
-    let output = std::process::Command::new(program)
-        .args(words)
-        .args(args)
-        .current_dir(at)
-        .env("CARGO_TARGET_DIR", at.join("target"))
-        .env_remove("CURSOR_API_KEY")
-        .output();
-    match output {
-        Ok(output) => {
-            let mut text = String::from_utf8_lossy(&output.stdout).into_owned();
-            text.push_str(&String::from_utf8_lossy(&output.stderr));
-            let mut tail: Vec<&str> =
-                text.lines().filter(|line| !line.trim().is_empty()).rev().take(12).collect();
-            tail.reverse();
-            HostCheck {
-                name: command,
-                exit: output.status.code(),
-                note: tail.join("\n"),
-                output: text,
-            }
-        }
-        Err(error) => HostCheck {
-            name: command,
-            exit: None,
-            output: String::new(),
-            note: format!("not run: {error}"),
-        },
-    }
-}
-
-pub fn unrun(command: &'static str, why: &str) -> HostCheck {
-    HostCheck {
-        name: command,
-        exit: None,
-        output: String::new(),
-        note: format!("not run: {why}"),
-    }
 }
 
 // The `# pass N` and `# fail N` lines of a TAP summary.

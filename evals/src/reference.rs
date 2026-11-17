@@ -9,7 +9,7 @@ use std::{fs, io};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::fidelity::{HostCheck, files_under, host_check};
+use crate::fidelity::{HostCheck, files_under};
 
 // The reference a case names, located under the repository root.
 pub struct Reference {
@@ -80,7 +80,7 @@ impl Reference {
         };
         let (oracle, log) = match staged {
             Ok(fixtures) => {
-                let check = host_check(
+                let check = HostCheck::run(
                     export,
                     "cargo test",
                     &["--test", HARNESS, "--", "--nocapture", "--test-threads=1"],
@@ -210,7 +210,7 @@ impl Reference {
                 return Ok(Err(format!("scenario `{name}` {why}")));
             }
         }
-        let manifest = match Manifest::read(export, &SCENARIO_DEPENDENCIES)? {
+        let manifest = match Manifest::read(export, &scenario_dependencies())? {
             Ok(manifest) => manifest,
             Err(why) => return Ok(Err(why)),
         };
@@ -289,13 +289,16 @@ impl Comparison {
             .measures
             .iter()
             .filter(|measure| {
-                matches!(measure.name, "crates" | "Rust lines (non-blank)" | "dependencies")
+                matches!(
+                    measure.name.as_str(),
+                    "crates" | "Rust lines (non-blank)" | "dependencies"
+                )
             })
             .map(|measure| {
                 let name = if measure.name == "Rust lines (non-blank)" {
                     "Rust lines"
                 } else {
-                    measure.name
+                    measure.name.as_str()
                 };
                 format!("{name} {} vs {}", measure.built, measure.reference)
             })
@@ -591,44 +594,67 @@ impl Manifest {
 // A crate a harness reads: its name, the version taken where the workspace
 // pins none, and the features it needs.
 struct Dependency {
-    name: &'static str,
-    version: &'static str,
-    features: &'static [&'static str],
+    name: String,
+    version: String,
+    features: Vec<String>,
 }
 
 impl Dependency {
-    const fn plain(name: &'static str, version: &'static str) -> Self {
+    fn plain(name: &str, version: &str) -> Self {
         Self {
-            name,
-            version,
-            features: &[],
+            name: name.to_owned(),
+            version: version.to_owned(),
+            features: Vec::new(),
         }
+    }
+
+    fn with_features<F: Into<String>>(mut self, features: impl IntoIterator<Item = F>) -> Self {
+        self.features = features.into_iter().map(Into::into).collect();
+        self
+    }
+
+    fn toml_entry(&self, table: &str, workspace: &BTreeSet<&str>) -> String {
+        let mut entry = if workspace.contains(self.name.as_str()) {
+            "workspace = true".to_owned()
+        } else {
+            format!("version = \"{}\"", self.version)
+        };
+        if !self.features.is_empty() {
+            let features: Vec<String> =
+                self.features.iter().map(|feature| format!("\"{feature}\"")).collect();
+            let _ = write!(entry, "\nfeatures = [{}]", features.join(", "));
+        }
+        format!("[{table}.{}]\n{entry}\n\n", self.name)
     }
 }
 
 // What every harness reads.
-const SHARED_DEPENDENCIES: [Dependency; 6] = [
-    Dependency::plain("bytes", "1"),
-    Dependency::plain("chrono", "0.4"),
-    Dependency::plain("chrono-tz", "0.10"),
-    Dependency::plain("http", "1"),
-    Dependency::plain("serde_json", "1"),
-    Dependency::plain("tracing", "0.1"),
-];
+fn shared_dependencies() -> Vec<Dependency> {
+    vec![
+        Dependency::plain("bytes", "1"),
+        Dependency::plain("chrono", "0.4"),
+        Dependency::plain("chrono-tz", "0.10"),
+        Dependency::plain("http", "1"),
+        Dependency::plain("serde_json", "1"),
+        Dependency::plain("tracing", "0.1"),
+    ]
+}
 
 // What the scenario harness reads besides: the router's body type when the
 // root package has no `axum` dev-dependency, and the in-memory database its
 // SQL double runs the guest's statements against, the declared column types
 // read back through `column_decltype`, and `now()` registered through
 // `functions`.
-const SCENARIO_DEPENDENCIES: [Dependency; 2] = [
-    Dependency::plain("axum", "0.8"),
-    Dependency {
-        name: "rusqlite",
-        version: "0.41",
-        features: &["bundled", "column_decltype", "functions"],
-    },
-];
+fn scenario_dependencies() -> Vec<Dependency> {
+    vec![
+        Dependency::plain("axum", "0.8"),
+        Dependency::plain("rusqlite", "0.41").with_features([
+            "bundled",
+            "column_decltype",
+            "functions",
+        ]),
+    ]
+}
 
 // The TOML the harness's dev-dependencies are appended to the built tree's
 // root manifest as, one table per crate the root package depends on under
@@ -653,22 +679,13 @@ fn dev_dependency_additions(
         .and_then(|workspace| workspace.get("dependencies"))
         .and_then(toml::Value::as_table)
         .map_or_default(|table| table.keys().map(String::as_str).collect());
+    let shared = shared_dependencies();
     let mut additions = String::new();
-    for dependency in SHARED_DEPENDENCIES.iter().chain(extra) {
-        if present.contains(dependency.name) {
+    for dependency in shared.iter().chain(extra) {
+        if present.contains(&dependency.name) {
             continue;
         }
-        let mut entry = if workspace.contains(dependency.name) {
-            "workspace = true".to_owned()
-        } else {
-            format!("version = \"{}\"", dependency.version)
-        };
-        if !dependency.features.is_empty() {
-            let features: Vec<String> =
-                dependency.features.iter().map(|feature| format!("\"{feature}\"")).collect();
-            let _ = write!(entry, "\nfeatures = [{}]", features.join(", "));
-        }
-        let _ = write!(additions, "[{NATIVE}.{}]\n{entry}\n\n", dependency.name);
+        additions.push_str(&dependency.toml_entry(NATIVE, &workspace));
     }
     Ok(additions)
 }
@@ -936,7 +953,7 @@ fn config_seed(keys: &BTreeSet<String>) -> BTreeMap<String, String> {
         if !seed.contains_key(key)
             && let Some(value) = seed_for(key)
         {
-            seed.insert(key.clone(), value.to_owned());
+            seed.insert(key.clone(), value);
         }
     }
     seed
@@ -945,7 +962,7 @@ fn config_seed(keys: &BTreeSet<String>) -> BTreeMap<String, String> {
 // The value a configuration key is seeded by its spelling: the first
 // pattern its upper-cased name holds decides, a key no pattern reads left
 // unset so the guest's own reading of a missing key shows.
-fn seed_for(key: &str) -> Option<&'static str> {
+fn seed_for(key: &str) -> Option<String> {
     const PATTERNS: [(&[&str], &str); 13] = [
         (&["MAX_MESSAGE_DELAY", "MAX_DELAY"], "60"),
         (&["MIN_MESSAGE_DELAY", "MIN_DELAY"], "-30"),
@@ -966,12 +983,12 @@ fn seed_for(key: &str) -> Option<&'static str> {
     ];
     let upper = key.to_uppercase();
     if upper == "ENV" || upper == "ENVIRONMENT" {
-        return Some("dev");
+        return Some("dev".to_owned());
     }
     PATTERNS
         .iter()
         .find(|(patterns, _)| patterns.iter().any(|pattern| upper.contains(pattern)))
-        .map(|(_, value)| *value)
+        .map(|(_, value)| (*value).to_owned())
 }
 
 // The topics the built guest may consume a fixture's message under, the
@@ -1007,7 +1024,7 @@ fn inbound_candidates(topics: &BTreeSet<String>, config: &BTreeMap<String, Strin
 // One measure on both sides: its count on each, and the names one side
 // alone spells where the measure is of names.
 struct Measure {
-    name: &'static str,
+    name: String,
     built: usize,
     reference: usize,
     only_built: Vec<String>,
@@ -1015,9 +1032,9 @@ struct Measure {
 }
 
 impl Measure {
-    const fn count(name: &'static str, built: usize, reference: usize) -> Self {
+    fn count(name: &str, built: usize, reference: usize) -> Self {
         Self {
-            name,
+            name: name.to_owned(),
             built,
             reference,
             only_built: Vec::new(),
@@ -1025,9 +1042,9 @@ impl Measure {
         }
     }
 
-    fn names(name: &'static str, built: &BTreeSet<String>, reference: &BTreeSet<String>) -> Self {
+    fn names(name: &str, built: &BTreeSet<String>, reference: &BTreeSet<String>) -> Self {
         Self {
-            name,
+            name: name.to_owned(),
             built: built.len(),
             reference: reference.len(),
             only_built: built.difference(reference).cloned().collect(),
@@ -1356,10 +1373,6 @@ fn oracle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("oracle")
 }
 
-fn delivery(topic: &str, payload: &[u8]) -> Delivery {
-    Delivery::new(topic, payload)
-}
-
 fn provider(config: &[(String, String)], http: MatchedHttp) -> Provider {
     Provider::default()
         .config(MapConfig::default().with(config.iter().cloned()))
@@ -1409,7 +1422,7 @@ async fn run() {
         let probed = topic.clone();
         let outcome = tokio::task::spawn_local(async move {
             let router = __CRATE__::router(provider);
-            router.handle(delivery(&probed, &[])).await
+            router.handle(Delivery::new(&probed, &[])).await
         })
         .await;
         if !matches!(&outcome, Ok(Err(err)) if err.code() == "unhandled-topic") {
@@ -1530,12 +1543,11 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
     let http = provider.http.clone();
     let logged = Logged::default();
     let topic = inbound.to_owned();
-    let payload = xml.into_bytes();
     let outcome = {
         let _default = tracing::subscriber::set_default(logged.clone());
         tokio::task::spawn_local(async move {
             let router = __CRATE__::router(provider);
-            router.handle(delivery(&topic, &payload)).await
+            router.handle(Delivery::new(&topic, xml.as_bytes())).await
         })
         .await
     };
@@ -1599,20 +1611,24 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
                 ));
             }
             for (_, message) in &sent {
-                let event: Option<Value> = serde_json::from_slice(&message.payload).ok();
-                let id = event.as_ref().and_then(|event| text_at(event, &["remoteData", "externalId"]));
-                let message_key = message
+                let Some(id) = serde_json::from_slice::<Value>(&message.payload)
+                    .ok()
+                    .and_then(|event| text_at(&event, &["remoteData", "externalId"]))
+                else {
+                    continue;
+                };
+                match message
                     .key
                     .as_deref()
-                    .or_else(|| message.headers.get("key").map(String::as_str));
-                match (message_key, id) {
-                    (None, Some(id)) => {
+                    .or_else(|| message.headers.get("key").map(String::as_str))
+                {
+                    None => {
                         reasons.insert(format!("no `key` on the message for `{id}`"));
                     }
-                    (Some(key), Some(id)) if key != id => {
+                    Some(key) if key != id => {
                         reasons.insert(format!("`key` `{key}` on the message for `{id}`"));
                     }
-                    _ => {}
+                    Some(_) => {}
                 }
             }
         }
@@ -1847,7 +1863,7 @@ use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
 use http::{Method, Request, Response};
 use omnia_sdk::sql::{Field, Row, Statement, Value as SqlValue};
-use omnia_sdk::{Error as SdkError, Result as SdkResult, SqlDb, server_error};
+use omnia_sdk::{Error, Result, SqlDb, server_error};
 use omnia_test::guest::{
     FixedIdentity, MapConfig, MatchedHttp, Memory, MemoryDocs, ScriptedLoader, ScriptedModel,
     ScriptedVcs, Sink, send,
@@ -1949,14 +1965,14 @@ impl Sqlite {
         }
     }
 
-    fn connection(&self) -> SdkResult<MutexGuard<'_, Connection>> {
+    fn connection(&self) -> Result<MutexGuard<'_, Connection>> {
         self.conn
             .as_ref()
             .map(|conn| conn.lock().expect("connection"))
             .ok_or_else(|| server_error!("the SQL database is unavailable"))
     }
 
-    fn failed(&self, sql: &str, error: &rusqlite::Error) -> SdkError {
+    fn failed(&self, sql: &str, error: &rusqlite::Error) -> Error {
         let text = format!("{error} in `{sql}`");
         self.errors.lock().expect("errors").push(text.clone());
         server_error!("sql: {text}")
@@ -1967,12 +1983,12 @@ impl Sqlite {
     }
 
     // A statement of the scenario's own, run as written: the rows it changed.
-    fn change(&self, sql: &str) -> SdkResult<usize> {
+    fn change(&self, sql: &str) -> Result<usize> {
         let conn = self.connection()?;
         conn.execute(sql, []).map_err(|error| server_error!("{error} in `{sql}`"))
     }
 
-    fn select(&self, query: &str, params: &[SqlValue]) -> SdkResult<Vec<Row>> {
+    fn select(&self, query: &str, params: &[SqlValue]) -> Result<Vec<Row>> {
         let sql = translate(query);
         let conn = self.connection()?;
         let result: rusqlite::Result<Vec<Row>> = (|| {
@@ -1998,25 +2014,25 @@ impl Sqlite {
         result.map_err(|error| self.failed(&sql, &error))
     }
 
-    fn exec_stmt(&self, query: &str, params: &[SqlValue]) -> SdkResult<u64> {
+    fn execute_on(&self, conn: &Connection, query: &str, params: &[SqlValue]) -> Result<u64> {
         let sql = translate(query);
-        let conn = self.connection()?;
         conn.execute(&sql, params_from_iter(params.iter().map(to_sql)))
             .map(|changed| u64::try_from(changed).unwrap_or(u64::MAX))
             .map_err(|error| self.failed(&sql, &error))
     }
 
-    fn exec_batch(&self, statements: &[Statement]) -> SdkResult<Vec<u64>> {
+    fn execute_one(&self, query: &str, params: &[SqlValue]) -> Result<u64> {
+        let conn = self.connection()?;
+        self.execute_on(&conn, query, params)
+    }
+
+    fn execute_batch(&self, statements: &[Statement]) -> Result<Vec<u64>> {
         let mut conn = self.connection()?;
         let tx = conn.transaction().map_err(|error| self.failed("BEGIN", &error))?;
-        let mut counts = Vec::with_capacity(statements.len());
-        for statement in statements {
-            let sql = translate(&statement.sql);
-            let changed = tx
-                .execute(&sql, params_from_iter(statement.params.iter().map(to_sql)))
-                .map_err(|error| self.failed(&sql, &error))?;
-            counts.push(u64::try_from(changed).unwrap_or(u64::MAX));
-        }
+        let counts = statements
+            .iter()
+            .map(|statement| self.execute_on(&tx, &statement.sql, &statement.params))
+            .collect::<Result<Vec<_>>>()?;
         tx.commit().map_err(|error| self.failed("COMMIT", &error))?;
         Ok(counts)
     }
@@ -2027,20 +2043,16 @@ impl SqlDb for Sqlite {
 
     fn query(
         &self, sql: &str, params: &[SqlValue],
-    ) -> impl Future<Output = SdkResult<Vec<Row>>> + Send {
+    ) -> impl Future<Output = Result<Vec<Row>>> + Send {
         ready(self.select(sql, params))
     }
 
-    fn execute(
-        &self, sql: &str, params: &[SqlValue],
-    ) -> impl Future<Output = SdkResult<u64>> + Send {
-        ready(self.exec_stmt(sql, params))
+    fn execute(&self, sql: &str, params: &[SqlValue]) -> impl Future<Output = Result<u64>> + Send {
+        ready(self.execute_one(sql, params))
     }
 
-    fn batch(
-        &self, statements: &[Statement],
-    ) -> impl Future<Output = SdkResult<Vec<u64>>> + Send {
-        ready(self.exec_batch(statements))
+    fn batch(&self, statements: &[Statement]) -> impl Future<Output = Result<Vec<u64>>> + Send {
+        ready(self.execute_batch(statements))
     }
 
     fn named(&self, _name: &str) -> Self {
@@ -2544,7 +2556,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
     };
     let provider = settings.provider(&scenario["seed"]);
     let http = provider.http.clone();
-    let sql_db = provider.sql.clone();
+    let database = provider.sql.clone();
     let logged = Logged::default();
     let router = __CRATE__::router(provider);
     let mut captures: BTreeMap<String, String> = BTreeMap::new();
@@ -2556,7 +2568,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
         // a statement of the scenario's own, over the store behind the guest
         if let Some(sql) = step["sql"].as_str() {
             let sql = substitute(sql, &captures);
-            match sql_db.change(&sql) {
+            match database.change(&sql) {
                 Ok(0) => reasons.push(format!("{label}: `{sql}` changed no row")),
                 Ok(_) => {}
                 Err(error) => reasons.push(format!("{label}: {}", quoted(error.description()))),
@@ -2654,7 +2666,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
 
     // what the store and the guest said as it failed
     if !reasons.is_empty() {
-        if let Some(error) = sql_db.last_error() {
+        if let Some(error) = database.last_error() {
             reasons.push(format!("sql: {}", quoted(&error)));
         }
         if let Some(last) = logged.last() {
@@ -2994,7 +3006,7 @@ test reference_fixtures ... ok
         );
 
         let check = HostCheck {
-            name: "cargo test",
+            name: "cargo test".to_owned(),
             exit: Some(101),
             output: "error[E0433]: failed to resolve\n".to_owned(),
             note: "error[E0433]: failed to resolve".to_owned(),
@@ -3146,7 +3158,7 @@ serde_json.workspace = true
         assert!(dev_dependency_additions(&appended, &[]).unwrap().is_empty(), "added once");
 
         // the scenario harness adds axum (where absent) and its database with the features it reads
-        let scenario = dev_dependency_additions(&manifest, &SCENARIO_DEPENDENCIES).unwrap();
+        let scenario = dev_dependency_additions(&manifest, &scenario_dependencies()).unwrap();
         assert!(
             scenario.contains(".dev-dependencies.axum]\nversion = \"0.8\"\n")
                 && scenario.contains(

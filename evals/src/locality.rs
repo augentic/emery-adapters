@@ -15,6 +15,7 @@ use syn::{Item, ItemUse, Macro, MetaList, UseTree};
 use crate::build::strings;
 use crate::card::short;
 use crate::evolve::{CrateAction, ExpectedAmend, ExpectedScope};
+use crate::fidelity::names_crate;
 use crate::stage::{git, git_file};
 
 const EXCLUDED_CRATES: [&str; 1] = ["common"];
@@ -44,22 +45,18 @@ pub struct TouchPoint {
 }
 
 impl TouchPoint {
-    fn admits_item(points: &[Self], admits_requires: bool, head: &ItemHead) -> bool {
-        match head {
-            ItemHead::Use => !points.is_empty() || admits_requires,
-            ItemHead::Named(name) => {
-                (admits_requires && matches!(name.as_str(), "trait Requires" | "impl Requires"))
-                    || points
-                        .iter()
-                        .any(|point| matches!(&point.kind, TouchKind::Item(item) if item == name))
-            }
+    fn item(&self) -> Option<&str> {
+        match &self.kind {
+            TouchKind::Item(name) => Some(name),
+            TouchKind::Use | TouchKind::Dependency(_) => None,
         }
     }
 
-    fn admits_dependency(points: &[Self], package: &str) -> bool {
-        points
-            .iter()
-            .any(|point| matches!(&point.kind, TouchKind::Dependency(name) if name == package))
+    fn dependency(&self) -> Option<&str> {
+        match &self.kind {
+            TouchKind::Dependency(package) => Some(package),
+            TouchKind::Use | TouchKind::Item(_) => None,
+        }
     }
 }
 
@@ -85,6 +82,29 @@ pub struct CrateSnapshot {
     pub tree_hash: String,
     pub size: CrateSize,
     files: BTreeMap<String, Vec<u8>>,
+}
+
+impl CrateSnapshot {
+    fn diff_outside_rebuilt(&self, after: &Self, touch_points: &[TouchPoint]) -> CrateDiff {
+        let paths: BTreeSet<&String> = self.files.keys().chain(after.files.keys()).collect();
+        let mut diff = CrateDiff::default();
+        for path in paths {
+            match (self.files.get(path), after.files.get(path)) {
+                (Some(prev), Some(curr)) if prev == curr => {}
+                (None, Some(_)) => {
+                    diff.violations.push(format!("{path}: added outside rebuilt crates"));
+                }
+                (Some(_), None) => {
+                    diff.violations.push(format!("{path}: removed outside rebuilt crates"));
+                }
+                (None, None) => {}
+                (Some(prev), Some(curr)) => {
+                    FileScope::new(&self.dir, path, touch_points).diff(prev, curr, &mut diff);
+                }
+            }
+        }
+        diff
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -207,9 +227,9 @@ impl TreeSnapshot {
 
     // Whether `dir` appears in root `Cargo.toml`, root `src/lib.rs`, or any
     // remaining stem manifest's `[dependencies]`.
-    pub fn list_mentions(&self, dir: &str) -> Vec<String> {
-        let package = dir;
-        let ident = dir.replace('-', "_");
+    fn list_mentions(&self, dir: &str, package: Option<&str>) -> Vec<String> {
+        let package = package.unwrap_or(dir);
+        let ident = package.replace('-', "_");
         let mut mentions = Vec::new();
         if let Some(manifest) = &self.root_cargo_toml {
             let needle = format!("crates/{dir}\"");
@@ -220,9 +240,9 @@ impl TreeSnapshot {
             }
         }
         if let Some(router) = &self.root_lib_rs {
-            let needle = format!("{ident}::");
             for (idx, line) in router.lines().enumerate() {
-                if !line.trim_start().starts_with("//") && line.contains(&needle) {
+                let code = line.split_once("//").map_or(line, |(code, _)| code);
+                if names_crate(code, &ident) {
                     mentions.push(format!("src/lib.rs:{}: `{}`", idx + 1, line.trim()));
                 }
             }
@@ -916,21 +936,24 @@ fn compare_crate(
             expected,
             Some(CrateAction::Laid | CrateAction::Rewrite | CrateAction::Removed)
         );
-    let (touched_items, mut violations) = if check_outside && !byte_identical {
+    let mut diff = if check_outside && !byte_identical {
         if let (Some(prev), Some(curr)) = (prev, curr) {
-            diff_non_rebuilt_crate(prev, curr, &touch_points)
+            prev.diff_outside_rebuilt(curr, &touch_points)
         } else {
-            (Vec::new(), vec![format!("`crates/{dir}` appeared or vanished unexpectedly")])
+            CrateDiff {
+                admitted: Vec::new(),
+                violations: vec![format!("`crates/{dir}` appeared or vanished unexpectedly")],
+            }
         }
     } else {
-        (Vec::new(), Vec::new())
+        CrateDiff::default()
     };
 
     let mut removed_linger = None;
     match expected {
         Some(CrateAction::Carried) if !byte_identical => {
-            if violations.is_empty() && touch_points.is_empty() {
-                violations.push(format!(
+            if diff.violations.is_empty() && touch_points.is_empty() {
+                diff.violations.push(format!(
                     "`crates/{dir}` expected `carried` byte-identical, but tree hash moved"
                 ));
             }
@@ -940,14 +963,14 @@ fn compare_crate(
             if curr.is_some() {
                 linger.push(format!("`crates/{dir}/` still exists in tree"));
             }
-            linger.extend(after.list_mentions(dir));
+            linger.extend(after.list_mentions(dir, prev.map(|krate| krate.package.as_str())));
             if !linger.is_empty() {
-                violations.extend(linger.iter().cloned());
+                diff.violations.extend(linger.iter().cloned());
             }
             removed_linger = Some(linger);
         }
         Some(CrateAction::Laid) if curr.is_none() => {
-            violations.push(format!("`crates/{dir}/` expected `laid`, but absent"));
+            diff.violations.push(format!("`crates/{dir}/` expected `laid`, but absent"));
         }
         _ => {}
     }
@@ -961,8 +984,8 @@ fn compare_crate(
             byte_identical,
             diff_stat,
             touch_points,
-            touched_items,
-            violations,
+            touched_items: diff.admitted,
+            violations: diff.violations,
         },
         removed_linger,
     ))
@@ -1105,142 +1128,142 @@ fn part_name_map(plan: Option<&Value>, prior_plan: Option<&Value>) -> BTreeMap<S
     names
 }
 
-fn diff_non_rebuilt_crate(
-    before: &CrateSnapshot, after: &CrateSnapshot, touch_points: &[TouchPoint],
-) -> (Vec<String>, Vec<String>) {
-    let paths: BTreeSet<&String> = before.files.keys().chain(after.files.keys()).collect();
-    let entry_path = format!("crates/{}/src/lib.rs", before.dir);
-    let touched_crate = !touch_points.is_empty();
-    let mut admitted = Vec::new();
-    let mut violations = Vec::new();
-    for path in paths {
-        let prev = before.files.get(path);
-        let curr = after.files.get(path);
-        match (prev, curr) {
-            (Some(prev), Some(curr)) if prev == curr => {}
-            (None, Some(_)) => {
-                violations.push(format!("{path}: added outside rebuilt crates"));
+#[derive(Default)]
+struct CrateDiff {
+    admitted: Vec<String>,
+    violations: Vec<String>,
+}
+
+// One file of a non-rebuilt crate and the edits its crate's touch points admit.
+struct FileScope {
+    path: String,
+    touch_points: Vec<TouchPoint>,
+    admits_requires: bool,
+}
+
+impl FileScope {
+    fn new(crate_dir: &str, path: &str, crate_touch_points: &[TouchPoint]) -> Self {
+        let touch_points: Vec<TouchPoint> =
+            crate_touch_points.iter().filter(|point| point.file == path).cloned().collect();
+        let admits_requires =
+            !crate_touch_points.is_empty() && path == format!("crates/{crate_dir}/src/lib.rs");
+        Self {
+            path: path.to_owned(),
+            touch_points,
+            admits_requires,
+        }
+    }
+
+    fn admits_item(&self, head: &ItemHead) -> bool {
+        match head {
+            ItemHead::Use => !self.touch_points.is_empty() || self.admits_requires,
+            ItemHead::Named(name) => {
+                (self.admits_requires
+                    && matches!(name.as_str(), "trait Requires" | "impl Requires"))
+                    || self.touch_points.iter().any(|point| point.item() == Some(name))
             }
-            (Some(_), None) => {
-                violations.push(format!("{path}: removed outside rebuilt crates"));
+        }
+    }
+
+    fn admits_dependency(&self, package: &str) -> bool {
+        self.touch_points.iter().any(|point| point.dependency() == Some(package))
+    }
+
+    fn diff(&self, before: &[u8], after: &[u8], out: &mut CrateDiff) {
+        let before = String::from_utf8_lossy(before);
+        let after = String::from_utf8_lossy(after);
+        if is_rust_path(&self.path) {
+            self.diff_rust_items(&before, &after, out);
+        } else if self.path.ends_with("/Cargo.toml") {
+            self.diff_manifest_dependencies(&before, &after, out);
+        } else {
+            out.violations.push(format!("{}: changed, and it is no touch point", self.path));
+        }
+    }
+
+    fn diff_rust_items(&self, before: &str, after: &str, out: &mut CrateDiff) {
+        let (Ok(before_file), Ok(after_file)) = (syn::parse_file(before), syn::parse_file(after))
+        else {
+            out.violations.push(format!("{}: changed and failed to parse as Rust", self.path));
+            return;
+        };
+        let mut prior: Vec<&Item> = before_file.items.iter().collect();
+        let mut after_only = Vec::new();
+        for item in &after_file.items {
+            if let Some(at) = prior.iter().position(|old| *old == item) {
+                prior.remove(at);
+            } else {
+                after_only.push(DeclaredItem::of(item));
             }
-            (None, None) => {}
-            (Some(prev), Some(curr)) => {
-                let file_points: Vec<TouchPoint> =
-                    touch_points.iter().filter(|tp| tp.file == *path).cloned().collect();
-                let admits_requires = touched_crate && *path == entry_path;
-                let before_text = String::from_utf8_lossy(prev);
-                let after_text = String::from_utf8_lossy(curr);
-                if is_rust_path(path) {
-                    let (ok, bad) = diff_rust_items(
-                        path,
-                        &before_text,
-                        &after_text,
-                        &file_points,
-                        admits_requires,
-                    );
-                    admitted.extend(ok);
-                    violations.extend(bad);
-                } else if path.ends_with("/Cargo.toml") {
-                    let (ok, bad) =
-                        diff_manifest_deps(path, &before_text, &after_text, &file_points);
-                    admitted.extend(ok);
-                    violations.extend(bad);
+        }
+        let before_only: Vec<DeclaredItem> = prior.into_iter().map(DeclaredItem::of).collect();
+
+        if before_file.attrs != after_file.attrs {
+            out.violations.push(format!("{}:1: inner attributes changed", self.path));
+        }
+        for item in &after_only {
+            let what = if before_only.iter().any(|old| old.head == item.head) {
+                "changed"
+            } else {
+                "added"
+            };
+            if self.admits_item(&item.head) {
+                out.admitted.push(format!("{}:{}: `{}` {what}", self.path, item.line, item.head));
+            } else {
+                out.violations.push(format!(
+                    "{}:{}: `{}` {what}, and it is no touch point",
+                    self.path, item.line, item.head
+                ));
+            }
+        }
+        for item in &before_only {
+            if after_only.iter().any(|new| new.head == item.head) {
+                continue;
+            }
+            if self.admits_item(&item.head) {
+                out.admitted.push(format!("{}:{}: `{}` removed", self.path, item.line, item.head));
+            } else {
+                out.violations.push(format!(
+                    "{}:{}: `{}` removed, and it is no touch point",
+                    self.path, item.line, item.head
+                ));
+            }
+        }
+    }
+
+    fn diff_manifest_dependencies(&self, before: &str, after: &str, out: &mut CrateDiff) {
+        if lines_outside_dependencies(before) != lines_outside_dependencies(after) {
+            out.violations.push(format!("{}: lines outside `[dependencies]` changed", self.path));
+            return;
+        }
+        let before_deps = dependency_entries(before);
+        let after_deps = dependency_entries(after);
+        for dep in &after_deps {
+            if !before_deps.iter().any(|old| old.entry == dep.entry) {
+                if self.admits_dependency(&dep.package) {
+                    out.admitted.push(format!("{}:{}: `{}` added", self.path, dep.line, dep.entry));
                 } else {
-                    violations.push(format!("{path}: changed, and it is no touch point"));
+                    out.violations.push(format!(
+                        "{}:{}: `{}` added, and it is no touch point",
+                        self.path, dep.line, dep.entry
+                    ));
+                }
+            }
+        }
+        for dep in &before_deps {
+            if !after_deps.iter().any(|new| new.entry == dep.entry) {
+                if self.admits_dependency(&dep.package) {
+                    out.admitted
+                        .push(format!("{}:{}: `{}` removed", self.path, dep.line, dep.entry));
+                } else {
+                    out.violations.push(format!(
+                        "{}:{}: `{}` removed, and it is no touch point",
+                        self.path, dep.line, dep.entry
+                    ));
                 }
             }
         }
     }
-    (admitted, violations)
-}
-
-fn diff_rust_items(
-    path: &str, before: &str, after: &str, points: &[TouchPoint], admits_requires: bool,
-) -> (Vec<String>, Vec<String>) {
-    let (Ok(before_file), Ok(after_file)) = (syn::parse_file(before), syn::parse_file(after))
-    else {
-        return (Vec::new(), vec![format!("{path}: changed and failed to parse as Rust")]);
-    };
-    let mut prior: Vec<&Item> = before_file.items.iter().collect();
-    let mut after_only = Vec::new();
-    for item in &after_file.items {
-        if let Some(at) = prior.iter().position(|old| *old == item) {
-            prior.remove(at);
-        } else {
-            after_only.push(declared_item(item));
-        }
-    }
-    let before_only: Vec<DeclaredItem> = prior.into_iter().map(declared_item).collect();
-
-    let mut admitted = Vec::new();
-    let mut violations = Vec::new();
-    if before_file.attrs != after_file.attrs {
-        violations.push(format!("{path}:1: inner attributes changed"));
-    }
-    for item in &after_only {
-        let what =
-            if before_only.iter().any(|old| old.head == item.head) { "changed" } else { "added" };
-        if TouchPoint::admits_item(points, admits_requires, &item.head) {
-            admitted.push(format!("{path}:{}: `{}` {what}", item.line, item.head));
-        } else {
-            violations.push(format!(
-                "{path}:{}: `{}` {what}, and it is no touch point",
-                item.line, item.head
-            ));
-        }
-    }
-    for item in &before_only {
-        if after_only.iter().any(|new| new.head == item.head) {
-            continue;
-        }
-        if TouchPoint::admits_item(points, admits_requires, &item.head) {
-            admitted.push(format!("{path}:{}: `{}` removed", item.line, item.head));
-        } else {
-            violations.push(format!(
-                "{path}:{}: `{}` removed, and it is no touch point",
-                item.line, item.head
-            ));
-        }
-    }
-    (admitted, violations)
-}
-
-fn diff_manifest_deps(
-    path: &str, before: &str, after: &str, points: &[TouchPoint],
-) -> (Vec<String>, Vec<String>) {
-    if lines_outside_dependencies(before) != lines_outside_dependencies(after) {
-        return (Vec::new(), vec![format!("{path}: lines outside `[dependencies]` changed")]);
-    }
-    let before_deps = dependency_entries(before);
-    let after_deps = dependency_entries(after);
-    let mut admitted = Vec::new();
-    let mut violations = Vec::new();
-    for dep in &after_deps {
-        if !before_deps.iter().any(|old| old.entry == dep.entry) {
-            if TouchPoint::admits_dependency(points, &dep.package) {
-                admitted.push(format!("{path}:{}: `{}` added", dep.line, dep.entry));
-            } else {
-                violations.push(format!(
-                    "{path}:{}: `{}` added, and it is no touch point",
-                    dep.line, dep.entry
-                ));
-            }
-        }
-    }
-    for dep in &before_deps {
-        if !after_deps.iter().any(|new| new.entry == dep.entry) {
-            if TouchPoint::admits_dependency(points, &dep.package) {
-                admitted.push(format!("{path}:{}: `{}` removed", dep.line, dep.entry));
-            } else {
-                violations.push(format!(
-                    "{path}:{}: `{}` removed, and it is no touch point",
-                    dep.line, dep.entry
-                ));
-            }
-        }
-    }
-    (admitted, violations)
 }
 
 fn is_rust_path(path: &str) -> bool {
@@ -1463,32 +1486,34 @@ struct DeclaredItem {
     head: ItemHead,
 }
 
-fn span_line(span: Span) -> usize {
-    span.start().line
-}
-
-fn declared_item(item: &Item) -> DeclaredItem {
-    match item {
-        Item::Use(item) => DeclaredItem {
-            line: span_line(item.use_token.span),
-            head: ItemHead::Use,
-        },
-        Item::ExternCrate(item) => DeclaredItem {
-            line: span_line(item.extern_token.span),
-            head: ItemHead::Named(format!("extern crate {}", item.ident)),
-        },
-        Item::ForeignMod(item) => DeclaredItem {
-            line: span_line(item.abi.extern_token.span),
-            head: ItemHead::Named("extern".to_owned()),
-        },
-        _ => {
-            let (line, name) = item_head(item).unwrap_or_else(|| (1, "item".to_owned()));
-            DeclaredItem {
-                line,
-                head: ItemHead::Named(name),
+impl DeclaredItem {
+    fn of(item: &Item) -> Self {
+        match item {
+            Item::Use(item) => Self {
+                line: span_line(item.use_token.span),
+                head: ItemHead::Use,
+            },
+            Item::ExternCrate(item) => Self {
+                line: span_line(item.extern_token.span),
+                head: ItemHead::Named(format!("extern crate {}", item.ident)),
+            },
+            Item::ForeignMod(item) => Self {
+                line: span_line(item.abi.extern_token.span),
+                head: ItemHead::Named("extern".to_owned()),
+            },
+            _ => {
+                let (line, name) = item_head(item).unwrap_or_else(|| (1, "item".to_owned()));
+                Self {
+                    line,
+                    head: ItemHead::Named(name),
+                }
             }
         }
     }
+}
+
+fn span_line(span: Span) -> usize {
+    span.start().line
 }
 
 fn item_head(item: &Item) -> Option<(usize, String)> {
@@ -1504,20 +1529,8 @@ fn item_head(item: &Item) -> Option<(usize, String)> {
         Item::TraitAlias(item) => (item.trait_token.span, format!("trait {}", item.ident)),
         Item::Mod(item) => (item.mod_token.span, format!("mod {}", item.ident)),
         Item::Impl(item) => {
-            let self_name = match &*item.self_ty {
-                syn::Type::Path(path) => {
-                    path.path.segments.last().map(|segment| segment.ident.to_string())
-                }
-                _ => None,
-            };
-            let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
-                path.segments.last().map(|segment| segment.ident.to_string())
-            });
-            let is_blanket = self_name
-                .as_deref()
-                .is_some_and(|name| item.generics.type_params().any(|param| param.ident == name));
-            let name = if is_blanket { trait_name.or(self_name) } else { self_name.or(trait_name) };
-            let head = name.map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
+            let head = impl_target_name(item)
+                .map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
             (item.impl_token.span, head)
         }
         Item::Macro(item) => {
@@ -1527,6 +1540,21 @@ fn item_head(item: &Item) -> Option<(usize, String)> {
         _ => return None,
     };
     Some((span_line(span), head))
+}
+
+fn impl_target_name(item: &syn::ItemImpl) -> Option<String> {
+    let self_name = match &*item.self_ty {
+        syn::Type::Path(path) => path.path.segments.last().map(|segment| segment.ident.to_string()),
+        _ => None,
+    };
+    let trait_name = item
+        .trait_
+        .as_ref()
+        .and_then(|(path, _)| path.segments.last().map(|segment| segment.ident.to_string()));
+    let is_blanket = self_name
+        .as_deref()
+        .is_some_and(|name| item.generics.type_params().any(|param| param.ident == name));
+    if is_blanket { trait_name.or(self_name) } else { self_name.or(trait_name) }
 }
 
 fn items_mentioning(file: &syn::File, matches_crate: impl Fn(&str) -> bool) -> Vec<DeclaredItem> {
@@ -1547,7 +1575,7 @@ fn items_mentioning(file: &syn::File, matches_crate: impl Fn(&str) -> bool) -> V
                 || imported.iter().any(|symbol| mentions.idents.contains(symbol))
         };
         if mentions_target {
-            found.push(declared_item(item));
+            found.push(DeclaredItem::of(item));
         }
     }
     found
