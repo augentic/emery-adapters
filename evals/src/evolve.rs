@@ -935,14 +935,20 @@ pub struct EvolveResume {
 pub struct OraclePartition {
     pub carried_passed: usize,
     pub carried_total: usize,
+    pub regressed: BTreeSet<String>,
+    pub prior_known: bool,
     pub step_passed: usize,
     pub step_total: usize,
     pub note: Option<String>,
 }
 
 impl OraclePartition {
-    pub fn from_comparison(comparison: &Comparison, step_scenarios: &BTreeSet<String>) -> Self {
+    pub fn from_comparison(
+        comparison: &Comparison, step_scenarios: &BTreeSet<String>,
+        prior_passed: Option<&BTreeSet<String>>,
+    ) -> Self {
         let mut out = Self {
+            prior_known: prior_passed.is_some(),
             note: comparison.note().map(str::to_owned),
             ..Self::default()
         };
@@ -956,13 +962,27 @@ impl OraclePartition {
             } else {
                 out.carried_total += 1;
                 out.carried_passed += usize::from(outcome.passed());
+                if prior_passed.is_some_and(|prev| prev.contains(&outcome.fixture))
+                    && !outcome.passed()
+                {
+                    out.regressed.insert(outcome.fixture.clone());
+                }
             }
         }
         out
     }
 
-    pub const fn carried_clean(&self) -> bool {
-        self.note.is_none() && self.carried_passed == self.carried_total
+    pub const fn baseline_ran(&self) -> bool {
+        self.note.is_none() && self.step_total > 0
+    }
+
+    pub fn carried_clean(&self) -> bool {
+        self.note.is_none()
+            && if self.prior_known {
+                self.regressed.is_empty()
+            } else {
+                self.carried_passed == self.carried_total
+            }
     }
 
     pub const fn step_clean(&self) -> bool {
@@ -1223,6 +1243,7 @@ struct ChainDriver<'a> {
     source: StagedSource,
     oracle: StagedOracle,
     snapshots: BTreeMap<usize, TreeSnapshot>,
+    prior_passed: Option<BTreeSet<String>>,
     results: Vec<StepResult>,
 }
 
@@ -1244,6 +1265,7 @@ impl<'a> ChainDriver<'a> {
             source,
             oracle,
             snapshots: BTreeMap::new(),
+            prior_passed: None,
             results: Vec::new(),
         })
     }
@@ -1302,6 +1324,9 @@ impl<'a> ChainDriver<'a> {
             snapshots.insert(k, snap);
             results.push(load_recorded_step(&chain_dir, evolution, target, k, &rev));
         }
+        let prior_passed = fs::read_to_string(chain_dir.join(format!("{prev_tag}.oracle.log")))
+            .ok()
+            .and_then(|log| Comparison::passed_in_log(&log));
 
         eprintln!(
             "eval: `{}` resuming chain {} from `{}` `{prev_tag}` (`{}` @ `{}`)",
@@ -1321,6 +1346,7 @@ impl<'a> ChainDriver<'a> {
             source,
             oracle,
             snapshots,
+            prior_passed,
             results,
         })
     }
@@ -1445,11 +1471,10 @@ impl<'a> ChainDriver<'a> {
         };
 
         let baseline_step_set = self.oracle.scenario_paths()?;
-        let oracle = built
-            .fidelity
-            .as_ref()
-            .and_then(|f| f.reference.as_ref())
-            .map(|comp| OraclePartition::from_comparison(comp, &baseline_step_set));
+        let comp = built.fidelity.as_ref().and_then(|f| f.reference.as_ref());
+        let oracle =
+            comp.map(|comp| OraclePartition::from_comparison(comp, &baseline_step_set, None));
+        self.prior_passed = comp.and_then(Comparison::passed_scenarios);
 
         Ok(StepResult {
             step: 0,
@@ -1539,11 +1564,11 @@ impl<'a> ChainDriver<'a> {
 
         let step_scenarios: BTreeSet<String> =
             oracle_changes.added.iter().chain(oracle_changes.replaced.iter()).cloned().collect();
-        let oracle = built
-            .fidelity
-            .as_ref()
-            .and_then(|f| f.reference.as_ref())
-            .map(|comp| OraclePartition::from_comparison(comp, &step_scenarios));
+        let comp = built.fidelity.as_ref().and_then(|f| f.reference.as_ref());
+        let oracle = comp.map(|comp| {
+            OraclePartition::from_comparison(comp, &step_scenarios, self.prior_passed.as_ref())
+        });
+        self.prior_passed = comp.and_then(Comparison::passed_scenarios);
 
         Ok(StepResult {
             step: step.number,

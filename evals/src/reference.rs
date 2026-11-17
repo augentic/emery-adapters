@@ -283,6 +283,14 @@ impl Comparison {
         self.oracle.note.as_deref()
     }
 
+    pub fn passed_scenarios(&self) -> Option<BTreeSet<String>> {
+        self.oracle.passed_scenarios()
+    }
+
+    pub fn passed_in_log(log: &str) -> Option<BTreeSet<String>> {
+        Oracle::parse(log).passed_scenarios()
+    }
+
     // The one line the card's build findings carry.
     pub fn finding(&self) -> String {
         let measures: Vec<String> = self
@@ -1152,6 +1160,16 @@ impl Oracle {
 
     fn passed(&self) -> usize {
         self.outcomes.iter().filter(|outcome| outcome.reasons.is_empty()).count()
+    }
+
+    fn passed_scenarios(&self) -> Option<BTreeSet<String>> {
+        (self.note.is_none() && !self.outcomes.is_empty()).then(|| {
+            self.outcomes
+                .iter()
+                .filter(|outcome| outcome.passed())
+                .map(|outcome| outcome.fixture.clone())
+                .collect()
+        })
     }
 
     // The passes over the total per group, in the groups' order.

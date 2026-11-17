@@ -49,8 +49,8 @@ cargo run -p evals -- --evolve --resume <card> --at-step <K> --target omnia expr
 | Check | Requirement |
 | --- | --- |
 | `C1` | Carried crates are byte-identical on `7` of `7` steps (with `0` touch-point violations outside rebuilt crates). |
-| `C2` | Every carried oracle scenario passes after every build (no regression from rewriting). |
-| `C3` | Every step's own oracle scenarios pass after its build. |
+| `C2` | No carried oracle scenario that passed in the preceding step regresses on `7` of `7` steps (`0` regressions from rewriting or carrying). |
+| `C3` | Every change step (`01`–`07`) passes all of its own added or updated oracle scenarios (`7` of `7` steps; `step-00` baseline recorded under Correctness). |
 | `C4` | `crates/orders` non-blank LOC at `step-07` is within `±10%` of `step-00` (recorded alongside `step-07` vs `step-04`). |
 | `C5` | `step-06` rebuilds exactly `{orders}` (`minimum []`, `widened [orders]`, `retiring []`). |
 | `C6` | `step-05`: `crates/returns` and its root/stem list lines are gone after verify, with `0` model turns spent on the retiring slice. |

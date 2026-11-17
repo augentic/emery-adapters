@@ -3889,6 +3889,8 @@ mod tests {
             oracle: Some(OraclePartition {
                 carried_passed: 58,
                 carried_total: 58,
+                regressed: BTreeSet::new(),
+                prior_known: true,
                 step_passed: 2,
                 step_total: 2,
                 note: None,
@@ -3943,6 +3945,8 @@ mod tests {
             oracle: Some(OraclePartition {
                 carried_passed: 0,
                 carried_total: 0,
+                regressed: BTreeSet::new(),
+                prior_known: false,
                 step_passed: 57,
                 step_total: 57,
                 note: None,
@@ -3974,7 +3978,7 @@ mod tests {
             "{md}"
         );
         assert!(md.contains("| `C2` | pass | 7/7 steps carried scenarios pass"), "{md}");
-        assert!(md.contains("| `C3` | pass | 8/8 builds pass own scenarios"), "{md}");
+        assert!(md.contains("| `C3` | pass | 7/7 steps pass own scenarios"), "{md}");
         assert!(
             md.contains(
                 "| `C4` | pass | `crates/orders` at `step-07`: LOC 370 vs `step-00` 400 (-7%, within ±10%: yes"
@@ -4096,6 +4100,97 @@ mod tests {
         assert!(
             resumed_md.contains("| `C6` | — | `step-05` resumed before `--at-step 7` |"),
             "{resumed_md}"
+        );
+    }
+
+    #[test]
+    fn evolution_card_baseline_miss_and_regression() {
+        let log = "oracle-kind scenarios\n\
+                   oracle customers/create | 1 step to 201 | pass\n\
+                   oracle customers/set-tier-invalid | 2 steps to 400 | fail: status 422\n\
+                   oracle orders/get | 3 steps to 200 | pass\n";
+        assert_eq!(
+            crate::reference::Comparison::passed_in_log(log),
+            Some(BTreeSet::from(["customers/create".to_owned(), "orders/get".to_owned()]))
+        );
+
+        let make_baseline = || {
+            let mut baseline = baseline_step_fixture();
+            baseline.oracle = Some(OraclePartition {
+                carried_passed: 0,
+                carried_total: 0,
+                regressed: BTreeSet::new(),
+                prior_known: false,
+                step_passed: 53,
+                step_total: 57,
+                note: None,
+            });
+            baseline
+        };
+
+        // Unregressed baseline misses carried across steps pass C2 and C3.
+        let mut non_regressing = vec![make_baseline()];
+        for (idx, loc) in [405, 405, 405, 365, 365, 372, 370].into_iter().enumerate() {
+            let mut step = clean_amend_step(idx + 1, loc);
+            step.oracle = Some(OraclePartition {
+                carried_passed: 51,
+                carried_total: 55,
+                regressed: BTreeSet::new(),
+                prior_known: true,
+                step_passed: 3,
+                step_total: 3,
+                note: None,
+            });
+            non_regressing.push(step);
+        }
+        let report = EvolutionReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            chains: vec![ChainRun {
+                n: 1,
+                steps: non_regressing,
+            }],
+            resumed: None,
+            step_range: None,
+        };
+        let mut md = String::new();
+        evolution_section(&mut md, &[report]).unwrap();
+        assert!(md.contains("### Chain 1 — pass (6/6)"), "{md}");
+        assert!(md.contains("| `step-00` | `00000000` | Baseline | specify | whole (no-parent) | — | — | — | 53/57 |"), "{md}");
+        assert!(md.contains("| `C2` | pass | 7/7 steps carried scenarios pass (51/55"), "{md}");
+        assert!(md.contains("| `C3` | pass | 7/7 steps pass own scenarios (3/3"), "{md}");
+
+        // A scenario that passed in the preceding step and fails now fails C2.
+        let mut regressed_step = clean_amend_step(1, 405);
+        regressed_step.oracle = Some(OraclePartition {
+            carried_passed: 50,
+            carried_total: 55,
+            regressed: BTreeSet::from(["orders/get".to_owned()]),
+            prior_known: true,
+            step_passed: 3,
+            step_total: 3,
+            note: None,
+        });
+        let regressed_report = EvolutionReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            chains: vec![ChainRun {
+                n: 1,
+                steps: vec![make_baseline(), regressed_step],
+            }],
+            resumed: None,
+            step_range: Some(StepRange { start: 0, end: 1 }),
+        };
+        let mut reg_md = String::new();
+        evolution_section(&mut reg_md, &[regressed_report]).unwrap();
+        assert!(reg_md.contains("50/55 (-1 FAIL)"), "{reg_md}");
+        assert!(
+            reg_md.contains("| `C2` | FAIL | 0/1 clean; `step-01` 50/55 (-1: orders/get) |"),
+            "{reg_md}"
+        );
+        assert!(
+            reg_md.contains("| `C3` | pass | 1/1 steps pass own scenarios (3/3) |"),
+            "{reg_md}"
         );
     }
 }

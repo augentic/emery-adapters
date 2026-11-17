@@ -233,10 +233,6 @@ impl StepWindow {
         self.first_executed == 0 && self.last_executed == self.total_steps
     }
 
-    const fn executed_range(self) -> RangeInclusive<usize> {
-        RangeInclusive::new(self.first_executed, self.last_executed)
-    }
-
     fn amend_range(self) -> Option<RangeInclusive<usize>> {
         let first = self.first_amend();
         (first <= self.last_executed).then_some(first..=self.last_executed)
@@ -579,10 +575,23 @@ fn oracle_cells(step: &StepResult) -> (String, String) {
     let Some(oracle) = &step.oracle else {
         return ("—".to_owned(), "—".to_owned());
     };
-    let carried = if step.is_baseline() {
-        "—".to_owned()
-    } else if oracle.carried_clean() {
+    if step.is_baseline() {
+        let own = if oracle.baseline_ran() {
+            format!("{}/{}", oracle.step_passed, oracle.step_total)
+        } else {
+            format!("{}/{} FAIL", oracle.step_passed, oracle.step_total)
+        };
+        return ("—".to_owned(), own);
+    }
+    let carried = if oracle.carried_clean() {
         format!("{}/{}", oracle.carried_passed, oracle.carried_total)
+    } else if !oracle.regressed.is_empty() {
+        format!(
+            "{}/{} (-{} FAIL)",
+            oracle.carried_passed,
+            oracle.carried_total,
+            oracle.regressed.len()
+        )
     } else {
         format!("{}/{} FAIL", oracle.carried_passed, oracle.carried_total)
     };
@@ -658,23 +667,33 @@ fn check_c2(chain: &ChainRun, window: StepWindow) -> Check {
         return Check::skipped(CheckId::C2, "no amend steps in `--steps 00`");
     };
     check_oracle_range(chain, CheckId::C2, range, "steps carried scenarios pass", |oracle| {
-        (oracle.carried_clean(), oracle.carried_passed, oracle.carried_total)
+        let detail = if oracle.regressed.is_empty() {
+            format!("{}/{}", oracle.carried_passed, oracle.carried_total)
+        } else {
+            format!(
+                "{}/{} (-{}: {})",
+                oracle.carried_passed,
+                oracle.carried_total,
+                oracle.regressed.len(),
+                comma_joined(&oracle.regressed),
+            )
+        };
+        (oracle.carried_clean(), detail)
     })
 }
 
 fn check_c3(chain: &ChainRun, window: StepWindow) -> Check {
-    check_oracle_range(
-        chain,
-        CheckId::C3,
-        window.executed_range(),
-        "builds pass own scenarios",
-        |oracle| (oracle.step_clean(), oracle.step_passed, oracle.step_total),
-    )
+    let Some(range) = window.amend_range() else {
+        return Check::skipped(CheckId::C3, "no amend steps in `--steps 00`");
+    };
+    check_oracle_range(chain, CheckId::C3, range, "steps pass own scenarios", |oracle| {
+        (oracle.step_clean(), format!("{}/{}", oracle.step_passed, oracle.step_total))
+    })
 }
 
 fn check_oracle_range(
     chain: &ChainRun, id: CheckId, range: RangeInclusive<usize>, noun: &str,
-    select: impl Fn(&OraclePartition) -> (bool, usize, usize),
+    select: impl Fn(&OraclePartition) -> (bool, String),
 ) -> Check {
     let first = *range.start();
     let last = *range.end();
@@ -689,11 +708,11 @@ fn check_oracle_range(
             break;
         };
         if let Some(oracle) = &step.oracle {
-            let (clean, passed, total) = select(oracle);
+            let (clean, detail) = select(oracle);
             if clean {
-                counts.push(format!("{passed}/{total}"));
+                counts.push(detail);
             } else {
-                issues.push(format!("`{tag}` {passed}/{total}"));
+                issues.push(format!("`{tag}` {detail}"));
                 issue_files.push(format!("`{tag}.oracle.log`"));
             }
         } else {
