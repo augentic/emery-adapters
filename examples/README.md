@@ -19,14 +19,14 @@ Run all commands from the `emery-adapters` repository root (which `emery` mounts
 
 Requires a sibling `../emery` checkout, [`cursor-sdk-bridge`](https://github.com/cursor/sdk-bridge) on `PATH`, and `CURSOR_API_KEY` in `.env` or the environment (see [Your first specification and build](https://github.com/augentic/emery/blob/main/docs/tutorials/quickstart.md#prerequisites)).
 
-Build the workspace's `wasm32-wasip2` components and copy them into `~/.emery/adapters`:
+Build the workspace's `wasm32-wasip3` components and copy them into `~/.emery/adapters`:
 
 ```bash
-cargo build --workspace --target wasm32-wasip2 --release
+cargo build --workspace --target wasm32-wasip3 --release
 
 version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version *= *"\(.*\)"/\1/p' Cargo.toml)"
 mkdir -p ~/.emery/adapters
-for wasm in target/wasm32-wasip2/release/emery_*.wasm; do
+for wasm in target/wasm32-wasip3/release/emery_*.wasm; do
   cp "$wasm" ~/.emery/adapters/"$(basename "$wasm" .wasm)@${version}.wasm"
 done
 

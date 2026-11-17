@@ -44,12 +44,15 @@ pub struct TouchPoint {
 }
 
 impl TouchPoint {
-    fn admits_item(points: &[Self], head: &ItemHead) -> bool {
+    fn admits_item(points: &[Self], admits_requires: bool, head: &ItemHead) -> bool {
         match head {
-            ItemHead::Use => !points.is_empty(),
-            ItemHead::Named(name) => points
-                .iter()
-                .any(|point| matches!(&point.kind, TouchKind::Item(item) if item == name)),
+            ItemHead::Use => !points.is_empty() || admits_requires,
+            ItemHead::Named(name) => {
+                (admits_requires && matches!(name.as_str(), "trait Requires" | "impl Requires"))
+                    || points
+                        .iter()
+                        .any(|point| matches!(&point.kind, TouchKind::Item(item) if item == name))
+            }
         }
     }
 
@@ -217,7 +220,7 @@ impl TreeSnapshot {
             }
         }
         if let Some(router) = &self.root_lib_rs {
-            let needle = format!("{ident}::handlers");
+            let needle = format!("{ident}::");
             for (idx, line) in router.lines().enumerate() {
                 if !line.trim_start().starts_with("//") && line.contains(&needle) {
                     mentions.push(format!("src/lib.rs:{}: `{}`", idx + 1, line.trim()));
@@ -1106,6 +1109,8 @@ fn diff_non_rebuilt_crate(
     before: &CrateSnapshot, after: &CrateSnapshot, touch_points: &[TouchPoint],
 ) -> (Vec<String>, Vec<String>) {
     let paths: BTreeSet<&String> = before.files.keys().chain(after.files.keys()).collect();
+    let entry_path = format!("crates/{}/src/lib.rs", before.dir);
+    let touched_crate = !touch_points.is_empty();
     let mut admitted = Vec::new();
     let mut violations = Vec::new();
     for path in paths {
@@ -1123,10 +1128,17 @@ fn diff_non_rebuilt_crate(
             (Some(prev), Some(curr)) => {
                 let file_points: Vec<TouchPoint> =
                     touch_points.iter().filter(|tp| tp.file == *path).cloned().collect();
+                let admits_requires = touched_crate && *path == entry_path;
                 let before_text = String::from_utf8_lossy(prev);
                 let after_text = String::from_utf8_lossy(curr);
                 if is_rust_path(path) {
-                    let (ok, bad) = diff_rust_items(path, &before_text, &after_text, &file_points);
+                    let (ok, bad) = diff_rust_items(
+                        path,
+                        &before_text,
+                        &after_text,
+                        &file_points,
+                        admits_requires,
+                    );
                     admitted.extend(ok);
                     violations.extend(bad);
                 } else if path.ends_with("/Cargo.toml") {
@@ -1144,7 +1156,7 @@ fn diff_non_rebuilt_crate(
 }
 
 fn diff_rust_items(
-    path: &str, before: &str, after: &str, points: &[TouchPoint],
+    path: &str, before: &str, after: &str, points: &[TouchPoint], admits_requires: bool,
 ) -> (Vec<String>, Vec<String>) {
     let (Ok(before_file), Ok(after_file)) = (syn::parse_file(before), syn::parse_file(after))
     else {
@@ -1169,7 +1181,7 @@ fn diff_rust_items(
     for item in &after_only {
         let what =
             if before_only.iter().any(|old| old.head == item.head) { "changed" } else { "added" };
-        if TouchPoint::admits_item(points, &item.head) {
+        if TouchPoint::admits_item(points, admits_requires, &item.head) {
             admitted.push(format!("{path}:{}: `{}` {what}", item.line, item.head));
         } else {
             violations.push(format!(
@@ -1182,7 +1194,7 @@ fn diff_rust_items(
         if after_only.iter().any(|new| new.head == item.head) {
             continue;
         }
-        if TouchPoint::admits_item(points, &item.head) {
+        if TouchPoint::admits_item(points, admits_requires, &item.head) {
             admitted.push(format!("{path}:{}: `{}` removed", item.line, item.head));
         } else {
             violations.push(format!(
@@ -1492,12 +1504,19 @@ fn item_head(item: &Item) -> Option<(usize, String)> {
         Item::TraitAlias(item) => (item.trait_token.span, format!("trait {}", item.ident)),
         Item::Mod(item) => (item.mod_token.span, format!("mod {}", item.ident)),
         Item::Impl(item) => {
-            let name = match &*item.self_ty {
+            let self_name = match &*item.self_ty {
                 syn::Type::Path(path) => {
                     path.path.segments.last().map(|segment| segment.ident.to_string())
                 }
                 _ => None,
             };
+            let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
+                path.segments.last().map(|segment| segment.ident.to_string())
+            });
+            let is_blanket = self_name
+                .as_deref()
+                .is_some_and(|name| item.generics.type_params().any(|param| param.ident == name));
+            let name = if is_blanket { trait_name.or(self_name) } else { self_name.or(trait_name) };
             let head = name.map_or_else(|| "impl".to_owned(), |name| format!("impl {name}"));
             (item.impl_token.span, head)
         }

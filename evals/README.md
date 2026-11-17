@@ -54,7 +54,7 @@ Build the `emery` binary and the Wasm adapters under test, then run `cargo run -
 
 ```bash
 cargo build --manifest-path ../emery/Cargo.toml --release
-cargo build -p emery-typescript -p emery-python --target wasm32-wasip2 --release
+cargo build -p emery-typescript -p emery-python --target wasm32-wasip3 --release
 set -a; source .env; set +a
 
 # Run specific cases (or omit arguments to run all available cases)
@@ -97,8 +97,8 @@ cargo run -p evals -- --evolve --resume 2026-11-12T03-10-00Z --at-step 4 --targe
 | Variable | Default | Description |
 | --- | --- | --- |
 | `EMERY_BIN` | `../emery/target/release/emery` | Path to the `emery` binary. If the filename stem is `emery-dev` (compiled with `--features genai`), the runner automatically switches to `omnia-genai` environment variables (`GENAI_*`) and records the `genai` backend in the scorecard header. |
-| `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | Path to each source adapter Wasm component used by the selected cases. |
-| `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip2/release/emery_<kind>.wasm` | Path to the target adapter Wasm component used when `--build` is set. |
+| `EMERY_TYPESCRIPT_WASM`, `EMERY_PYTHON_WASM`, `EMERY_DOCUMENTATION_WASM`, `EMERY_INTENT_WASM` | `target/wasm32-wasip3/release/emery_<kind>.wasm` | Path to each source adapter Wasm component used by the selected cases. |
+| `EMERY_NODE_WASM`, `EMERY_OMNIA_WASM` | `target/wasm32-wasip3/release/emery_<kind>.wasm` | Path to the target adapter Wasm component used when `--build` is set. |
 | `EVAL_RUNS` | `3` | Number of `emery specify` runs per case (3 runs distinguish stable output from single-run variance). |
 | `EVAL_JOBS` | unset | Passed to `emery build` as `--jobs <N>` to cap concurrent slice builds per wave. |
 | `EVAL_BUDGET` | unset | Passed to `emery build` as `--budget <N>` to cap requirements per build slice (overridden by CLI `--budget <N>`; falls back to the target adapter's `metadata().budget` default of `12`). |
@@ -153,17 +153,17 @@ Every build and verify turn runs inside the kernel sandbox configured by `emery`
 | Target (`--target`) | Host prerequisite | Granted network egress | Granted `~/` read paths and env vars |
 | --- | --- | --- | --- |
 | `node` (default) | Node.js `>= 22.18` and `npm` on `PATH` | `registry.npmjs.org` | Reads `~/.nvm/versions/node`, `~/.volta` (`VOLTA_HOME=~/.volta`), and `~/.local/share/fnm`. |
-| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip2` target installed | `index.crates.io`, `static.crates.io`, `github.com` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
+| `omnia` | Stable Rust toolchain with `clippy` and `wasm32-wasip3` target installed | `index.crates.io`, `static.crates.io`, `github.com` | Reads `~/.rustup` (`RUSTUP_HOME=~/.rustup`) and `~/.cargo/bin`. |
 
 Build the target Wasm component before running `--build`:
 
 ```bash
 # Build and evaluate through emery:node
-cargo build -p emery-node --target wasm32-wasip2 --release
+cargo build -p emery-node --target wasm32-wasip3 --release
 EVAL_RUNS=1 cargo run -p evals -- --build express-orders nestjs-pair
 
 # Build and evaluate through emery:omnia
-cargo build -p emery-omnia --target wasm32-wasip2 --release
+cargo build -p emery-omnia --target wasm32-wasip3 --release
 EVAL_RUNS=1 cargo run -p evals -- --build --target omnia express-orders
 ```
 
@@ -174,7 +174,7 @@ Because `covered` requirement IDs and verification verdicts are self-reported by
 1. **CLI envelope and Git commit history:** Reads `run-N.build.stdout`, backend `completion` and `responded` trace lines (counting `write_files` calls, rewrites, empty writes, shrinking writes, `edit_files` calls, refused calls, and verify shell durations), and `git log --first-parent` on `.emery/vcs/repos/run-N` (or `.emery/vcs/integration` if the build failed mid-run).
 2. **Independent host toolchain checks:**
    - For `node`: Runs `npm install`, `npx tsc --noEmit`, and `node --test --test-force-exit --test-timeout=5000 --test-reporter=tap 'test/**/*.test.ts'`.
-   - For `omnia`: Runs `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --target wasm32-wasip2`.
+   - For `omnia`: Runs `cargo clippy --workspace --all-targets -- -D warnings`, `cargo test --workspace`, and `cargo build --target wasm32-wasip3`.
 3. **Layout and wiring audit:**
    - **Scenario coverage:** Matches requirement acceptance scenario names against declared test names (`test(...)` / `it(...)` in TypeScript, `#[test]` / `#[tokio::test]` in Rust).
    - **Out-of-layout files:** Lists tracked files outside the target adapter's expected directory layout (`spec/` is always permitted).
@@ -210,7 +210,7 @@ Drives the reference guest's recorded replay and static fixtures (`crates/*/data
 
 1. **Test injection:** Generates `tests/reference_oracle.rs` inside the exported workspace using `omnia_test::guest` doubles.
 2. **Execution:** Feeds each fixture's inbound XML message to the guest's `router(provider)`, scripts the recorded upstream HTTP responses (including shared cache-aside lookup tables such as stops and routes), seeds configuration keys, and re-anchors relative timestamps in `Pacific/Auckland`.
-3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, Kafka `key` header, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture. The harness's own output (including a compile failure) is written to `run-N.oracle.log` beside the run.
+3. **Verification:** Checks that the generated guest publishes the expected outbound events (matching `eventType`, `remoteData.externalId`, message `key`, and `locationData` coordinates, speed, and accuracy) or rejects invalid inputs as recorded. Any mismatch, panic, or logged `WARN`/`ERROR` event is reported per fixture. The harness's own output (including a compile failure) is written to `run-N.oracle.log` beside the run.
 
 ### Black-box scenario oracle (`oracle.toml`)
 
@@ -221,7 +221,7 @@ A reference directory holding an `oracle.toml` records the source service's beha
 - `seed/tables/<table>.json`: rows inserted into `<table>` before every scenario (a catalogue). `seed/http.json`: the default upstream answer per path (`{ "/rates": { "quotes": [..] } }`).
 - `scenarios/<group>/<name>.json`: one scenario each, `{ "seed": {..}, "steps": [..] }`. A step is either `{ "request": { "method", "path", "headers"?, "body"? }, "capture"?: { "<name>": "<dotted body path>" }, "expect": { "status", "headers"?, "body"? } }` or `{ "sql": "UPDATE .." }` run directly against the store (to make a cached read stale). Every `{name}` in a later step is a capture's value; `{uuid}`, `{timestamp}` (RFC 3339), and `{any}` are placeholders; a `"headers": { "authorization": null }` sends no bearer. An expected body is a subset: the fields it lists must be present and equal, arrays the same length item by item. `seed.http` lists the upstream requests the scenario expects as `{ "method", "path", "query", "status"?, "body"? }` (the body from `seed/http.json` when the entry gives none; a 4xx/5xx status with none answers `null`), and `"seed": { "tables": "unavailable" }` makes every store call fail (the degraded readiness probe). An entry with two query parameters is registered in both orders, since the guest may spell them either way.
 
-The runner validates every scenario (steps, captures, placeholders) before staging, writes them with the schema, seeds, and configuration into `oracle/oracle.json` in the exported tree, appends the harness's dev-dependencies (`rusqlite` with `bundled`, `column_decltype`, `functions` among them), and injects `tests/reference_oracle.rs`, which drives each scenario through `router(provider)` over `omnia_test::guest` doubles and a `TableStore` the harness owns: an in-memory SQLite database per scenario, run under the Postgres contract the guest wrote against (`$N` parameters bound by number, `expr::type` as `CAST`, `ILIKE` as `LIKE`, `now()` registered, every column typed by its declaration). The configuration seeded is the `[config]` table whole, plus every setting key the built tree declares that the table lacks, matched by its longest `_`-suffix in the table (`ORDERS_GST_RATE` from `GST_RATE`), else by a generic pattern (`*_URL` to the upstream base, `*_TOKEN` to the bearer, `*_TTL_SECONDS` to `60`); a key neither reads is left unset so the guest's own handling of it shows.
+The runner validates every scenario (steps, captures, placeholders) before staging, writes them with the schema, seeds, and configuration into `oracle/oracle.json` in the exported tree, appends the harness's dev-dependencies (`rusqlite` with `bundled`, `column_decltype`, `functions` among them), and injects `tests/reference_oracle.rs`, which drives each scenario through `router(provider)` over `omnia_test::guest` doubles and a `SqlDb` the harness owns: an in-memory SQLite database per scenario, run under the Postgres contract the guest wrote against (`$N` parameters bound by number, `expr::type` as `CAST`, `ILIKE` as `LIKE`, `now()` registered, every column typed by its declaration). The configuration seeded is the `[config]` table whole, plus every setting key the built tree declares that the table lacks, matched by its longest `_`-suffix in the table (`ORDERS_GST_RATE` from `GST_RATE`), else by a generic pattern (`*_URL` to the upstream base, `*_TOKEN` to the bearer, `*_TTL_SECONDS` to `60`); a key neither reads is left unset so the guest's own handling of it shows.
 
 Each scenario is reported as `pass` or `fail` with its first failing step: the status answered against the one expected (with the body the guest answered), an absent or differing header or body field, a request the guest made to the upstream that no step seeds, a panic, and the last failed statement (with its SQL error) and the last `WARN`/`ERROR` event the guest logged. Every scenario runs over a fresh store, so one guest fault blocks only the scenarios that pass through it. The fields asserted are strict: the source's camelCase names, `Location` and `x-total-count` headers, and the `error` code and `state` of an error body; an error's `message` is never asserted.
 
@@ -372,14 +372,14 @@ Never implement an experimental prompt or survey change behind a Cargo feature f
 
 ```bash
 mkdir -p target/eval/arms/{control,subjects}
-cargo build -p emery-documentation --target wasm32-wasip2 --release
-cp target/wasm32-wasip2/release/emery_documentation.wasm target/eval/arms/control/
+cargo build -p emery-documentation --target wasm32-wasip3 --release
+cp target/wasm32-wasip3/release/emery_documentation.wasm target/eval/arms/control/
 
 git worktree add --detach ../emery-adapters-arm HEAD
 # Make experimental edits in ../emery-adapters-arm, then build:
-cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p emery-documentation --target wasm32-wasip2 --release \
+cargo build --manifest-path ../emery-adapters-arm/Cargo.toml -p emery-documentation --target wasm32-wasip3 --release \
   --target-dir /tmp/emery-adapters-arm-target
-cp /tmp/emery-adapters-arm-target/wasm32-wasip2/release/emery_documentation.wasm target/eval/arms/subjects/
+cp /tmp/emery-adapters-arm-target/wasm32-wasip3/release/emery_documentation.wasm target/eval/arms/subjects/
 
 EMERY_DOCUMENTATION_WASM=target/eval/arms/subjects/emery_documentation.wasm cargo run -p evals -- orders-doc cross-cut
 git worktree remove --force ../emery-adapters-arm

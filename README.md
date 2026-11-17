@@ -28,7 +28,7 @@ All adapters in this workspace share a single semantic version defined in `[work
 
 ## What an adapter is
 
-Every adapter is a Rust crate under `adapters/<kind>` that compiles to a standalone `wasm32-wasip2` WebAssembly System Interface (WASI) component implementing the `emery:adapter` WebAssembly Interface Types (WIT) contract. Adapters are stateless and never manage revision storage or Git history directly.
+Every adapter is a Rust crate under `adapters/<kind>` that compiles to a standalone `wasm32-wasip3` WebAssembly System Interface (WASI) component implementing the `emery:adapter` WebAssembly Interface Types (WIT) contract. Adapters are stateless and never manage revision storage or Git history directly.
 
 ### Source adapters
 
@@ -43,12 +43,12 @@ A source adapter implements the `source-adapter` world (`metadata` and `extract`
 
 ### Target adapters
 
-A target adapter implements the `target-adapter` world (`metadata` and `run` over `init`, `build`, and `verify`). During `emery build`, the engine initializes the target layout once, builds each slice in an isolated Git worktree, merges slices using the adapter's merge rules, and verifies each integrated wave.
+A target adapter implements the `target-adapter` world (`metadata` and `run` over `init`, `scope`, `build`, and `verify`). During `emery build`, the engine initializes the target layout once, builds each slice in an isolated Git worktree, merges slices using the adapter's merge rules, and verifies each integrated wave.
 
 | Crate | Target output | Layout and verification |
 | --- | --- | --- |
 | `adapters/node` | Strict TypeScript on Node.js (`>= 22.18`) | Initializes root `package.json`, `tsconfig.json`, and `.gitignore`. Builds one workspace package per slice under `src/<stem>/` with `node:test` suites under `test/`. Verifies waves with `npm install`, `npx tsc --noEmit`, and `npm test`. |
-| `adapters/omnia` | [Omnia](https://github.com/augentic/omnia) WASI HTTP & messaging guest in Rust | Initializes the [`omnia-template`](https://github.com/augentic/omnia-exemplar) workspace. Scaffolds one member crate per stem under `crates/<stem>/` with `axum` routes, messaging consumers, and `#[tokio::test]` suites. Verifies waves with `cargo clippy`, `cargo test`, and `cargo build --target wasm32-wasip2`. |
+| `adapters/omnia` | [Omnia](https://github.com/augentic/omnia) WASI HTTP & messaging guest in Rust | Initializes the [`omnia-template`](https://github.com/augentic/omnia-exemplar) workspace. Scaffolds one member crate per stem under `crates/<stem>/` with `axum` routes, messaging consumers, and `#[tokio::test]` suites. Verifies waves with `cargo clippy`, `cargo test`, and `cargo build --target wasm32-wasip3`. |
 
 ## Rust test loop
 
@@ -73,11 +73,11 @@ Each directory under `examples/` contains an `emery.toml` configuration and samp
 
 ```bash
 # 1. Build all Wasm adapter components in release mode
-cargo build --workspace --target wasm32-wasip2 --release
+cargo build --workspace --target wasm32-wasip3 --release
 
 # 2. Copy the built component into the local adapter cache
 mkdir -p ~/.emery/adapters
-cp target/wasm32-wasip2/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.12.0.wasm
+cp target/wasm32-wasip3/release/emery_documentation.wasm ~/.emery/adapters/emery_documentation@0.12.0.wasm
 
 # 3. Extract and stage a specification, then inspect it
 emery specify --config examples/documentation/emery.toml
@@ -102,8 +102,8 @@ cargo run -p evals -- --build --target omnia express-orders  # specify, apply, a
 3. Rebuild the Wasm component and copy it to `~/.emery/adapters` to test live:
 
 ```bash
-cargo build -p emery-<kind> --target wasm32-wasip2 --release
-cp target/wasm32-wasip2/release/emery_<kind>.wasm ~/.emery/adapters/emery_<kind>@0.12.0.wasm
+cargo build -p emery-<kind> --target wasm32-wasip3 --release
+cp target/wasm32-wasip3/release/emery_<kind>.wasm ~/.emery/adapters/emery_<kind>@0.12.0.wasm
 emery specify --config examples/<kind>/emery.toml
 ```
 
@@ -113,7 +113,7 @@ emery specify --config examples/<kind>/emery.toml
 | --- | --- |
 | `make` reports `mise` is not on `PATH` | Install [mise](https://mise.jdx.dev/getting-started.html). The root `Makefile` delegates tasks to `mise.toml` and does not install `mise` automatically. |
 | `make fmt` fails | Install the nightly Rust formatter: `rustup toolchain install nightly --component rustfmt`. |
-| The first `make test` takes a long time | `crates/test-programs/build.rs` compiles all Wasm components for `wasm32-wasip2` on first run; subsequent runs are incremental. |
+| The first `make test` takes a long time | `crates/test-programs/build.rs` compiles all Wasm components for `wasm32-wasip3` on first run; subsequent runs are incremental. |
 | Cargo patch resolution errors | Committed `[patch.crates-io]` entries fetch `augentic/emery` from Git. Uncomment the local `path = "../emery/..."` lines only when co-developing with a sibling `../emery` checkout. |
 
 Report bugs or questions in [GitHub Issues](https://github.com/augentic/emery-adapters/issues).

@@ -33,10 +33,10 @@ const OMNIA_HANDLER_MARKER: &str =
 const OMNIA_HANDLER_FILLED: &str = "    let CreateInput {} = input;\n    let _ = \
                                     context.state().get(\"orders\").await?;\n    \
                                     Ok(Json(CreateOutput {}))\n";
-const OMNIA_BOUND: &str = "where\n    P: Capabilities,\n";
+const OMNIA_BOUND: &str = "where\n    P: crate::Requires,\n";
 const OMNIA_BOUND_NARROWED: &str = "where\n    P: StateStore,\n";
-const OMNIA_SDK_USE: &str = "use omnia_sdk::{Capabilities, Result};\n";
-const OMNIA_SDK_USE_NARROWED: &str = "use omnia_sdk::{Capabilities, Result, StateStore};\n";
+const OMNIA_SDK_USE: &str = "use omnia_sdk::Result;\n";
+const OMNIA_SDK_USE_NARROWED: &str = "use omnia_sdk::{Result, StateStore};\n";
 const OMNIA_TEST_MARKER: &str = "#[ignore = \"REQ-001 An order is created: unfilled\"]\nasync fn \
                                  an_order_is_created() {\n    let request = \
                                  Request::post(\"/orders\")\n        .header(CONTENT_TYPE, \
@@ -388,13 +388,14 @@ async fn emery_omnia() {
         tests.contains(OMNIA_TEST_FILLED) && !tests.contains("#[ignore"),
         "the test the guest scaffolded is filled and run: {tests}"
     );
+    let root = text("src/lib.rs");
     assert!(
-        text("src/lib.rs").contains(
-            "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added at \
-             the end\n        orders::handlers(),\n    ])\n    \
-             .with_state(Client::new(provider))\n"
-        ),
-        "the seeded root router holds the stem's entry the guest added under its comment"
+        root.contains("P: Send + Sync + 'static,\n    P: orders::Requires,\n")
+            && root.contains(
+                "    Handlers::from([\n        // one `<stem>::handlers(),` per stem, each added \
+                 at the end\n        orders::handlers(),\n    ])\n    .with_state(provider)\n"
+            ),
+        "the seeded root router holds the stem's Requires bound and handlers entry: {root}"
     );
     let seeded = |path: &str| {
         omnia_template::entry(path).unwrap_or_else(|| panic!("`{path}` is a seed")).body.as_bytes()
@@ -558,11 +559,17 @@ fn plant_omnia_built_tree(project: &Scratch) {
     );
     project.write(
         "src/lib.rs",
-        seed("src/lib.rs").replace(
-            "// one `<stem>::handlers(),` per stem, each added at the end\n",
-            "// one `<stem>::handlers(),` per stem, each added at the end\n        \
-             customers::handlers(),\n        orders::handlers(),\n",
-        ),
+        seed("src/lib.rs")
+            .replace(
+                "P: Send + Sync + 'static,\n",
+                "P: Send + Sync + 'static,\n    P: customers::Requires,\n    P: \
+                 orders::Requires,\n",
+            )
+            .replace(
+                "// one `<stem>::handlers(),` per stem, each added at the end\n",
+                "// one `<stem>::handlers(),` per stem, each added at the end\n        \
+                 customers::handlers(),\n        orders::handlers(),\n",
+            ),
     );
     let stem_manifest = |stem: &str| {
         format!(
@@ -579,21 +586,23 @@ fn plant_omnia_built_tree(project: &Scratch) {
     let stem_entry = |stem: &str| {
         format!(
             "//! # {stem}\n//!\n//! The `{stem}` stem.\n\npub mod {stem};\n\nuse \
-             omnia_sdk::Capabilities;\nuse omnia_sdk::api::Handlers;\n\n/// The stem's handlers, \
-             merged onto the root routers.\npub fn handlers<P: Capabilities>() -> Handlers<P> {{\n    \
-             Handlers::from([{stem}::handlers()])\n}}\n"
+             omnia_sdk::api::Handlers;\n\n/// The capabilities the stem's handlers reach, \
+             implemented by every provider that has them.\npub trait Requires: Send + Sync + \
+             'static {{}}\n\nimpl<P> Requires for P where P: Send + Sync + 'static {{}}\n\n/// \
+             The stem's handlers, merged onto the root routers.\npub fn handlers<P: Requires>() \
+             -> Handlers<P> {{\n    Handlers::from([{stem}::handlers()])\n}}\n"
         )
     };
     project.write("crates/customers/Cargo.toml", stem_manifest("customers"));
     project.write("crates/customers/src/lib.rs", stem_entry("customers"));
     project.write(
         "crates/customers/src/customers.rs",
-        "//! Customers.\n\nuse axum::Json;\nuse axum::routing::get;\nuse \
-         omnia_sdk::api::{Context, Handlers};\nuse omnia_sdk::{Capabilities, \
-         Result};\n\npub(crate) const CUSTOMERS: &str = \"/customers\";\n\npub(crate) fn \
-         handlers<P: Capabilities>() -> Handlers<P> {\n    Handlers::new().route(CUSTOMERS, \
-         get(list))\n}\n\n// REQ-002 customers.list: Lists customers.\npub(crate) async fn \
-         list<P>(_context: Context<P>) -> Result<Json<()>> {\n    Ok(Json(()))\n}\n",
+        "//! Customers.\n\nuse axum::Json;\nuse axum::routing::get;\nuse omnia_sdk::Result;\nuse \
+         omnia_sdk::api::{Context, Handlers};\n\npub(crate) const CUSTOMERS: &str = \
+         \"/customers\";\n\npub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
+         Handlers::new().route(CUSTOMERS, get(list))\n}\n\n// REQ-002 customers.list: Lists \
+         customers.\npub(crate) async fn list<P>(_context: Context<P>) -> Result<Json<()>> {\n    \
+         Ok(Json(()))\n}\n",
     );
     project.write("crates/orders/Cargo.toml", stem_manifest("orders"));
     project.write("crates/orders/src/lib.rs", stem_entry("orders"));

@@ -201,7 +201,7 @@ impl Settings {
             // the crate is `emery-<kind>`; cargo spells the hyphen as an underscore
             let artifact = format!("emery_{component}");
             let name = format!("{}_WASM", artifact.to_uppercase());
-            let path = given(&name, format!("target/wasm32-wasip2/release/{artifact}.wasm"));
+            let path = given(&name, format!("target/wasm32-wasip3/release/{artifact}.wasm"));
             if !path.is_file() {
                 return Err(format!("{name}: no file at `{}`", path.display()));
             }
@@ -1680,9 +1680,10 @@ mod tests {
             &[
                 (
                     "src/lib.rs",
-                    "pub fn router<P: Capabilities>(provider: P) -> Router<P> {\n    \
+                    "pub fn router<P>(provider: P) -> Router<P>\nwhere\n    P: Send + Sync + \
+                     'static,\n    P: order_items::Requires,\n    P: health::Requires,\n{\n    \
                      Handlers::from([order_items::handlers(), health::handlers()])\n        \
-                     .with_state(Client::new(provider))\n}\n",
+                     .with_state(provider)\n}\n",
                 ),
                 (
                     "crates/common/src/topic.rs",
@@ -1694,7 +1695,9 @@ mod tests {
                 (
                     "crates/order-items/src/lib.rs",
                     "pub mod fulfilment;\npub mod placing;\npub mod reading;\n\n\
-                     pub fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     pub trait Requires: Send + Sync + 'static {}\n\n\
+                     impl<P> Requires for P where P: Send + Sync + 'static {}\n\n\
+                     pub fn handlers<P: Requires>() -> Handlers<P> {\n    \
                      Handlers::from([reading::handlers(), fulfilment::handlers()])\n}\n",
                 ),
                 ("crates/key-vault/Cargo.toml", "[package]\nname = \"key-vault\"\n"),
@@ -1786,7 +1789,7 @@ mod tests {
                     "crates/orders/src/reading.rs",
                     "pub(crate) const ORDER: &str = \"/orders/{id}\";\n\
                      pub(crate) const ORDERS: &str = \"/orders\";\n\n\
-                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     pub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
                      Handlers::new()\n        .route(ORDER, get(get_order))\n        \
                      .route(ORDER, delete(cancel_order))\n        \
                      .route(ORDERS, get(list_orders))\n}\n",
@@ -1795,7 +1798,7 @@ mod tests {
                     "crates/orders/src/placing.rs",
                     "pub(crate) const ORDERS: &str = \"/orders\";\n\
                      pub(crate) const ORDER_NOTES: &str = \"/orders/{id}/notes\";\n\n\
-                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     pub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
                      Handlers::new()\n        .route(ORDERS, post(place_order))\n        \
                      .route(ORDER_NOTES, notes())\n        \
                      .topic(topic::ORDER_PLACED, on_placed)\n        \
@@ -1804,12 +1807,12 @@ mod tests {
                 (
                     "crates/architecture/src/architecture.rs",
                     "pub(crate) const LAYERING: &str = \"/architecture/layering\";\n\n\
-                     pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                     pub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
                      Handlers::new().route(LAYERING, get(describe))\n}\n",
                 ),
                 (
                     "crates/health/src/health.rs",
-                    "pub(crate) fn handlers<P: Capabilities>() -> Handlers<P> {\n    \
+                    "pub(crate) fn handlers<P: crate::Requires>() -> Handlers<P> {\n    \
                      Handlers::new().route(\"/health/ready\", get(ready))\n}\n",
                 ),
             ],
@@ -3444,7 +3447,10 @@ mod tests {
                 ),
                 (
                     "src/lib.rs",
-                    "pub fn router() {\n    let _ = [\n        orders::handlers(),\n        customers::handlers(),\n        health::handlers(),\n    ];\n}\n",
+                    "pub fn router<P>()\nwhere\n    P: orders::Requires,\n    P: \
+                     customers::Requires,\n    P: health::Requires,\n{\n    let _ = [\n        \
+                     orders::handlers(),\n        customers::handlers(),\n        \
+                     health::handlers(),\n    ];\n}\n",
                 ),
                 ("crates/common/src/topic.rs", "pub const T: &str = \"t\";\n"),
                 (
@@ -3460,7 +3466,12 @@ mod tests {
                     "crates/orders/Cargo.toml",
                     "[package]\nname = \"orders\"\n[dependencies]\ncustomers = { path = \"../customers\" }\n",
                 ),
-                ("crates/orders/src/lib.rs", "pub mod orders;\n"),
+                (
+                    "crates/orders/src/lib.rs",
+                    "pub mod orders;\n\nuse omnia_sdk::StateStore;\n\npub trait Requires: \
+                     StateStore + Send + Sync + 'static {}\n\nimpl<P> Requires for P where P: \
+                     StateStore + Send + Sync + 'static {}\n",
+                ),
                 (
                     "crates/orders/src/orders.rs",
                     "use customers::customers::authenticate;\n\npub fn place() -> bool { authenticate() }\n\npub fn untouched() -> i32 { 42 }\n#[tokio::test]\nasync fn places_order() {}\n",
@@ -3503,10 +3514,17 @@ mod tests {
             ]
         );
 
-        // step 1: rewrite `customers`, edit admitted touch point `fn place` in `orders`, keep `health` identical
+        // step 1: rewrite `customers`, edit admitted touch point `fn place` in `orders` and widen `Requires` in `orders/src/lib.rs`, keep `health` identical
         fs::write(
             repo.join("crates/customers/src/customers.rs"),
             "pub fn authenticate(tok: &str) -> bool { !tok.is_empty() }\n#[test]\nfn auth_works() {}\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("crates/orders/src/lib.rs"),
+            "pub mod orders;\n\nuse omnia_sdk::{Config, StateStore};\n\npub trait Requires: \
+             Config + StateStore + Send + Sync + 'static {}\n\nimpl<P> Requires for P where P: \
+             Config + StateStore + Send + Sync + 'static {}\n",
         )
         .unwrap();
         fs::write(
@@ -3575,10 +3593,17 @@ mod tests {
         assert!(loc1.touch_violations().is_empty(), "{:?}", loc1.touch_violations());
         assert!(loc1.round_trips[0].loc_within_ten_percent());
 
-        // step 2: edit `fn untouched` in `orders` (violation!) and remove `health` while leaving `src/lib.rs` mention
+        // step 2: edit `fn untouched` in `orders` (violation!) and remove `health` + `health::handlers()` while leaving `P: health::Requires,` in `src/lib.rs`
         fs::write(
             repo.join("crates/orders/src/orders.rs"),
             "use customers::customers::authenticate;\n\npub fn place() -> bool { authenticate(\"ok\") }\n\npub fn untouched() -> i32 { 99 }\n#[tokio::test]\nasync fn places_order() {}\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.join("src/lib.rs"),
+            "pub fn router<P>()\nwhere\n    P: orders::Requires,\n    P: customers::Requires,\n    \
+             P: health::Requires,\n{\n    let _ = [\n        orders::handlers(),\n        \
+             customers::handlers(),\n    ];\n}\n",
         )
         .unwrap();
         fs::remove_dir_all(repo.join("crates/health")).unwrap();
@@ -3628,7 +3653,7 @@ mod tests {
         );
         assert_eq!(
             scan_git_shell_calls(
-                "DEBUG complete{n=1 label=\"verify\"}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo build --target wasm32-wasip2\"\n"
+                "DEBUG complete{n=1 label=\"verify\"}: omnia_cursor::model::observe: tool call tool=shell subject=\"cargo build --target wasm32-wasip3\"\n"
             ),
             [] as [GitShellCall; 0]
         );

@@ -160,7 +160,7 @@ impl Target {
                     unrun("cargo test", "the lint failed")
                 };
                 let guest = if tests.passed() {
-                    host_check(export, "cargo build", &["--target", "wasm32-wasip2"])
+                    host_check(export, "cargo build", &["--target", "wasm32-wasip3"])
                 } else if linted {
                     unrun("cargo build", "the tests failed")
                 } else {

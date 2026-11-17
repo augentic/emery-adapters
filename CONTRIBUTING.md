@@ -29,20 +29,20 @@ This guide covers contributor setup, repository layout, prompt authoring rules, 
 Unless you are fixing a small, well-defined bug, please open a GitHub issue to discuss larger changes before starting work. Every commit must include a [Developer's Certificate of Origin](#developers-certificate-of-origin) sign-off (`git commit -s`).
 
 1. **Clone the repository:** Clone `augentic/emery-adapters`. The engine dependencies (`emery-sdk` and `emery-prose`) resolve via `[patch.crates-io]` in the root `Cargo.toml` (see [Engine pin and sibling co-development](#engine-pin-and-sibling-co-development)). You only need a sibling `../emery` checkout when co-developing against uncommitted engine changes or when running live examples and evaluations.
-2. **Install toolchains and `mise`:** `rustup` automatically selects the pinned stable toolchain and `wasm32-wasip2` target from `rust-toolchain.toml`. Also install a nightly rustfmt toolchain (`rustup toolchain install nightly --component rustfmt`) and [mise](https://mise.jdx.dev). The root `Makefile` delegates all tasks to [`mise.toml`](mise.toml), which installs Cargo tools (`cargo-nextest`, `cargo-hack`, `cargo-deny`, `cargo-vet`) on first use. Publishing also requires `wkg`.
+2. **Install toolchains and `mise`:** `rustup` automatically selects the pinned stable toolchain and `wasm32-wasip3` target from `rust-toolchain.toml`. Also install a nightly rustfmt toolchain (`rustup toolchain install nightly --component rustfmt`) and [mise](https://mise.jdx.dev). The root `Makefile` delegates all tasks to [`mise.toml`](mise.toml), which installs Cargo tools (`cargo-nextest`, `cargo-hack`, `cargo-deny`, `cargo-vet`) on first use. Publishing also requires `wkg`.
 3. **Run the CI suite:** Run `make ci` from the repository root before opening a pull request. Use `make check` for local advisories (`audit`, `fmt` in-place, `lint`, `outdated`, and `deps`).
 
 To browse the adapter SDK API locally, build the Rust documentation:
 
 ```bash
 cargo doc -p emery-sdk --open
-cargo doc -p emery-sdk --target wasm32-wasip2 --open   # includes wasm32 guest export macros and bindings
+cargo doc -p emery-sdk --target wasm32-wasip3 --open   # includes wasm32 guest export macros and bindings
 ```
 
 ### Troubleshooting first runs
 
 - **`make fmt` fails:** The formatting task runs `cargo +nightly fmt`. Install nightly rustfmt with `rustup toolchain install nightly --component rustfmt`.
-- **The first `make test` is slow:** `crates/test-programs/build.rs` compiles every adapter component and guest test program for `wasm32-wasip2` into `OUT_DIR` before running the native test suites. Subsequent runs are incremental.
+- **The first `make test` is slow:** `crates/test-programs/build.rs` compiles every adapter component and guest test program for `wasm32-wasip3` into `OUT_DIR` before running the native test suites. Subsequent runs are incremental.
 - **Patch resolution errors after editing `Cargo.toml`:** The committed `[patch.crates-io]` entries fetch `augentic/emery` from Git, while the commented `path = "../emery/..."` lines require a sibling `../emery` checkout. Never commit active `path` patches, because CI runs without a sibling checkout.
 
 ---
@@ -125,19 +125,19 @@ make ci
 make check
 
 # Lint the wasm32 guest code alone (matches the first step of make lint-wasm)
-cargo clippy -p emery-documentation -p emery-intent -p emery-typescript -p emery-python -p emery-node -p emery-omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip2 -- -D warnings
+cargo clippy -p emery-documentation -p emery-intent -p emery-typescript -p emery-python -p emery-node -p emery-omnia -p test-programs --lib --bins --examples --all-features --target wasm32-wasip3 -- -D warnings
 
-# Build a single Wasm adapter component (outputs target/wasm32-wasip2/release/emery_<kind>.wasm)
-cargo build -p emery-<kind> --target wasm32-wasip2 --release
+# Build a single Wasm adapter component (outputs target/wasm32-wasip3/release/emery_<kind>.wasm)
+cargo build -p emery-<kind> --target wasm32-wasip3 --release
 
 # Build all Wasm adapter components
-cargo build --workspace --target wasm32-wasip2 --release
+cargo build --workspace --target wasm32-wasip3 --release
 ```
 
 Why `make lint` runs two passes:
 
 - **`lint-host`:** Runs `cargo clippy --workspace --all-targets --all-features` and `cargo hack --each-feature` on the host target.
-- **`lint-wasm`:** Because the Wasm guest entry points (`export_source!`, `export_target!`, and `crates/test-programs/programs/`) are gated on `#[cfg(target_arch = "wasm32")]`, `lint-wasm` compiles all packages in `WASM32_PACKAGES` (`mise.toml`) for `wasm32-wasip2` and enforces the guest deny-list in [`clippy.toml`](clippy.toml).
+- **`lint-wasm`:** Because the Wasm guest entry points (`export_source!`, `export_target!`, and `crates/test-programs/programs/`) are gated on `#[cfg(target_arch = "wasm32")]`, `lint-wasm` compiles all packages in `WASM32_PACKAGES` (`mise.toml`) for `wasm32-wasip3` and enforces the guest deny-list in [`clippy.toml`](clippy.toml).
 
 ---
 
@@ -167,7 +167,7 @@ To publish or retry a single adapter manually from a local machine:
 
 ```bash
 gh auth token | docker login ghcr.io -u <github-user> --password-stdin
-cargo build --workspace --target wasm32-wasip2 --release
+cargo build --workspace --target wasm32-wasip3 --release
 make publish <name>
 ```
 

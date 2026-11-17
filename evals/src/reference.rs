@@ -616,15 +616,19 @@ const SHARED_DEPENDENCIES: [Dependency; 6] = [
     Dependency::plain("tracing", "0.1"),
 ];
 
-// What the scenario harness reads besides: the in-memory database its
-// table store runs the guest's statements against, the declared column
-// types read back through `column_decltype`, and `now()` registered
-// through `functions`.
-const SCENARIO_DEPENDENCIES: [Dependency; 1] = [Dependency {
-    name: "rusqlite",
-    version: "0.41",
-    features: &["bundled", "column_decltype", "functions"],
-}];
+// What the scenario harness reads besides: the router's body type when the
+// root package has no `axum` dev-dependency, and the in-memory database its
+// SQL double runs the guest's statements against, the declared column types
+// read back through `column_decltype`, and `now()` registered through
+// `functions`.
+const SCENARIO_DEPENDENCIES: [Dependency; 2] = [
+    Dependency::plain("axum", "0.8"),
+    Dependency {
+        name: "rusqlite",
+        version: "0.41",
+        features: &["bundled", "column_decltype", "functions"],
+    },
+];
 
 // The TOML the harness's dev-dependencies are appended to the built tree's
 // root manifest as, one table per crate the root package depends on under
@@ -1265,7 +1269,7 @@ use bytes::Bytes;
 use chrono::{Duration, Timelike, Utc};
 use chrono_tz::Pacific::Auckland;
 use http::{Method, Response};
-use omnia_sdk::api::messaging::{Delivery, DeliveryError};
+use omnia_sdk::api::messaging::Delivery;
 use omnia_test::guest::{FixedIdentity, MapConfig, MatchedHttp, Provider};
 use serde_json::Value;
 use tracing::field::{Field, Visit};
@@ -1352,12 +1356,8 @@ fn oracle_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("oracle")
 }
 
-fn delivery(topic: String, payload: Vec<u8>) -> Delivery {
-    Delivery {
-        topic: Some(topic),
-        payload,
-        ..Delivery::default()
-    }
+fn delivery(topic: &str, payload: &[u8]) -> Delivery {
+    Delivery::new(topic, payload)
 }
 
 fn provider(config: &[(String, String)], http: MatchedHttp) -> Provider {
@@ -1409,10 +1409,10 @@ async fn run() {
         let probed = topic.clone();
         let outcome = tokio::task::spawn_local(async move {
             let router = __CRATE__::router(provider);
-            router.handle(delivery(probed, Vec::new())).await
+            router.handle(delivery(&probed, &[])).await
         })
         .await;
-        if !matches!(outcome, Ok(Err(DeliveryError::UnhandledTopic(_)))) {
+        if !matches!(&outcome, Ok(Err(err)) if err.code() == "unhandled-topic") {
             inbound = Some(topic.clone());
             break;
         }
@@ -1526,7 +1526,7 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
         http = matched_http_into(http, request);
     }
     let provider = provider(config, http);
-    let sink = provider.publish.clone();
+    let sink = provider.publisher.clone();
     let http = provider.http.clone();
     let logged = Logged::default();
     let topic = inbound.to_owned();
@@ -1535,7 +1535,7 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
         let _default = tracing::subscriber::set_default(logged.clone());
         tokio::task::spawn_local(async move {
             let router = __CRATE__::router(provider);
-            router.handle(delivery(topic, payload)).await
+            router.handle(delivery(&topic, &payload)).await
         })
         .await
     };
@@ -1555,7 +1555,7 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
         Ok(result) => result,
         Err(join) => {
             reasons.insert(format!("panicked: {}", panic_text(join).replace('\n', " ")));
-            Err(DeliveryError::Rejected("panicked".to_owned()))
+            Err(omnia_sdk::server_error!("panicked"))
         }
     };
     match &expected {
@@ -1601,12 +1601,16 @@ async fn drive(inbound: &str, config: &[(String, String)], fixture: &Value, shar
             for (_, message) in &sent {
                 let event: Option<Value> = serde_json::from_slice(&message.payload).ok();
                 let id = event.as_ref().and_then(|event| text_at(event, &["remoteData", "externalId"]));
-                match (message.headers.get("key"), id) {
+                let message_key = message
+                    .key
+                    .as_deref()
+                    .or_else(|| message.headers.get("key").map(String::as_str));
+                match (message_key, id) {
                     (None, Some(id)) => {
-                        reasons.insert(format!("no `key` header on the message for `{id}`"));
+                        reasons.insert(format!("no `key` on the message for `{id}`"));
                     }
-                    (Some(key), Some(id)) if *key != id => {
-                        reasons.insert(format!("`key` header `{key}` on the message for `{id}`"));
+                    (Some(key), Some(id)) if key != id => {
+                        reasons.insert(format!("`key` `{key}` on the message for `{id}`"));
                     }
                     _ => {}
                 }
@@ -1838,13 +1842,12 @@ use std::future::{Future, ready};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use axum::body::Body;
+use bytes::Bytes;
 use chrono::{DateTime, SecondsFormat, Utc};
-use omnia_sdk::TableStore;
-use omnia_sdk::anyhow::{Result as AnyResult, anyhow};
-use omnia_sdk::axum::body::Body;
-use omnia_sdk::bytes::Bytes;
-use omnia_sdk::http::{Method, Request, Response};
-use omnia_sdk::sql::{DataType, Field, Row};
+use http::{Method, Request, Response};
+use omnia_sdk::sql::{Field, Row, Statement, Value as SqlValue};
+use omnia_sdk::{Error as SdkError, Result as SdkResult, SqlDb, server_error};
 use omnia_test::guest::{
     FixedIdentity, MapConfig, MatchedHttp, Memory, MemoryDocs, ScriptedLoader, ScriptedModel,
     ScriptedVcs, Sink, send,
@@ -1863,26 +1866,26 @@ const BASE_URL: &str = "http://api.test";
 // The longest a quoted body or event is kept at in a reason.
 const QUOTED_CHARS: usize = 240;
 
-// Every capability double the guest reaches, the table store a real
+// Every capability double the guest reaches, the SQL database a real
 // in-memory database.
 #[derive(Clone, Debug, omnia_sdk::Provider)]
 struct Oracle {
     #[provider(Config)]
     config: MapConfig,
-    #[provider(HttpRequest)]
+    #[provider(HttpClient)]
     http: MatchedHttp,
     #[provider(Identity)]
     identity: FixedIdentity,
-    #[provider(Publish)]
-    publish: Sink,
-    #[provider(Broadcast)]
-    broadcast: Sink,
-    #[provider(StateStore, BlobStore, Vault)]
+    #[provider(Publisher)]
+    publisher: Sink,
+    #[provider(WebSockets)]
+    websockets: Sink,
+    #[provider(StateStore, BlobStore, SecretStore)]
     storage: Memory,
-    #[provider(DocumentStore)]
+    #[provider(DocumentDb)]
     docs: MemoryDocs,
-    #[provider(TableStore)]
-    tables: Sqlite,
+    #[provider(SqlDb)]
+    sql: Sqlite,
     #[provider(Model)]
     model: ScriptedModel,
     #[provider(Plugins)]
@@ -1946,17 +1949,17 @@ impl Sqlite {
         }
     }
 
-    fn connection(&self) -> AnyResult<MutexGuard<'_, Connection>> {
+    fn connection(&self) -> SdkResult<MutexGuard<'_, Connection>> {
         self.conn
             .as_ref()
             .map(|conn| conn.lock().expect("connection"))
-            .ok_or_else(|| anyhow!("the table store is unavailable"))
+            .ok_or_else(|| server_error!("the SQL database is unavailable"))
     }
 
-    fn failed(&self, sql: &str, error: &rusqlite::Error) -> omnia_sdk::anyhow::Error {
+    fn failed(&self, sql: &str, error: &rusqlite::Error) -> SdkError {
         let text = format!("{error} in `{sql}`");
         self.errors.lock().expect("errors").push(text.clone());
-        anyhow!("sql: {text}")
+        server_error!("sql: {text}")
     }
 
     fn last_error(&self) -> Option<String> {
@@ -1964,12 +1967,12 @@ impl Sqlite {
     }
 
     // A statement of the scenario's own, run as written: the rows it changed.
-    fn change(&self, sql: &str) -> AnyResult<usize> {
+    fn change(&self, sql: &str) -> SdkResult<usize> {
         let conn = self.connection()?;
-        conn.execute(sql, []).map_err(|error| anyhow!("{error} in `{sql}`"))
+        conn.execute(sql, []).map_err(|error| server_error!("{error} in `{sql}`"))
     }
 
-    fn select(&self, query: &str, params: &[DataType]) -> AnyResult<Vec<Row>> {
+    fn select(&self, query: &str, params: &[SqlValue]) -> SdkResult<Vec<Row>> {
         let sql = translate(query);
         let conn = self.connection()?;
         let result: rusqlite::Result<Vec<Row>> = (|| {
@@ -1988,34 +1991,60 @@ impl Sqlite {
                         value: typed(row.get_ref(at)?, declared.as_deref()),
                     });
                 }
-                let index = out.len().to_string();
-                out.push(Row { index, fields });
+                out.push(Row { fields });
             }
             Ok(out)
         })();
         result.map_err(|error| self.failed(&sql, &error))
     }
 
-    fn execute(&self, query: &str, params: &[DataType]) -> AnyResult<u32> {
+    fn exec_stmt(&self, query: &str, params: &[SqlValue]) -> SdkResult<u64> {
         let sql = translate(query);
         let conn = self.connection()?;
         conn.execute(&sql, params_from_iter(params.iter().map(to_sql)))
-            .map(|changed| u32::try_from(changed).unwrap_or(u32::MAX))
+            .map(|changed| u64::try_from(changed).unwrap_or(u64::MAX))
             .map_err(|error| self.failed(&sql, &error))
+    }
+
+    fn exec_batch(&self, statements: &[Statement]) -> SdkResult<Vec<u64>> {
+        let mut conn = self.connection()?;
+        let tx = conn.transaction().map_err(|error| self.failed("BEGIN", &error))?;
+        let mut counts = Vec::with_capacity(statements.len());
+        for statement in statements {
+            let sql = translate(&statement.sql);
+            let changed = tx
+                .execute(&sql, params_from_iter(statement.params.iter().map(to_sql)))
+                .map_err(|error| self.failed(&sql, &error))?;
+            counts.push(u64::try_from(changed).unwrap_or(u64::MAX));
+        }
+        tx.commit().map_err(|error| self.failed("COMMIT", &error))?;
+        Ok(counts)
     }
 }
 
-impl TableStore for Sqlite {
+impl SqlDb for Sqlite {
+    type Named = Self;
+
     fn query(
-        &self, _conn_name: &str, query: &str, params: &[DataType],
-    ) -> impl Future<Output = AnyResult<Vec<Row>>> + Send {
-        ready(self.select(query, params))
+        &self, sql: &str, params: &[SqlValue],
+    ) -> impl Future<Output = SdkResult<Vec<Row>>> + Send {
+        ready(self.select(sql, params))
     }
 
-    fn exec(
-        &self, _conn_name: &str, query: &str, params: &[DataType],
-    ) -> impl Future<Output = AnyResult<u32>> + Send {
-        ready(self.execute(query, params))
+    fn execute(
+        &self, sql: &str, params: &[SqlValue],
+    ) -> impl Future<Output = SdkResult<u64>> + Send {
+        ready(self.exec_stmt(sql, params))
+    }
+
+    fn batch(
+        &self, statements: &[Statement],
+    ) -> impl Future<Output = SdkResult<Vec<u64>>> + Send {
+        ready(self.exec_batch(statements))
+    }
+
+    fn named(&self, _name: &str) -> Self {
+        self.clone()
     }
 }
 
@@ -2165,20 +2194,20 @@ fn rewrite_word(sql: &str, from: &str, to: &str) -> String {
     out
 }
 
-fn to_sql(value: &DataType) -> Sql {
+fn to_sql(value: &SqlValue) -> Sql {
     match value {
-        DataType::Boolean(Some(b)) => Sql::Integer(i64::from(*b)),
-        DataType::Int32(Some(i)) => Sql::Integer(i64::from(*i)),
-        DataType::Int64(Some(i)) => Sql::Integer(*i),
-        DataType::Uint32(Some(u)) => Sql::Integer(i64::from(*u)),
-        DataType::Uint64(Some(u)) => Sql::Integer(i64::try_from(*u).unwrap_or(i64::MAX)),
-        DataType::Float(Some(f)) => Sql::Real(f64::from(*f)),
-        DataType::Double(Some(f)) => Sql::Real(*f),
-        DataType::Str(Some(s))
-        | DataType::Date(Some(s))
-        | DataType::Time(Some(s))
-        | DataType::Timestamp(Some(s)) => Sql::Text(s.clone()),
-        DataType::Binary(Some(b)) => Sql::Blob(b.clone()),
+        SqlValue::Boolean(Some(b)) => Sql::Integer(i64::from(*b)),
+        SqlValue::Int32(Some(i)) => Sql::Integer(i64::from(*i)),
+        SqlValue::Int64(Some(i)) => Sql::Integer(*i),
+        SqlValue::Uint32(Some(u)) => Sql::Integer(i64::from(*u)),
+        SqlValue::Uint64(Some(u)) => Sql::Integer(i64::try_from(*u).unwrap_or(i64::MAX)),
+        SqlValue::Float(Some(f)) => Sql::Real(f64::from(*f)),
+        SqlValue::Double(Some(f)) => Sql::Real(*f),
+        SqlValue::Str(Some(s))
+        | SqlValue::Date(Some(s))
+        | SqlValue::Time(Some(s))
+        | SqlValue::Timestamp(Some(s)) => Sql::Text(s.clone()),
+        SqlValue::Binary(Some(b)) => Sql::Blob(b.to_vec()),
         _ => Sql::Null,
     }
 }
@@ -2198,11 +2227,11 @@ fn json_sql(value: &Value) -> Sql {
 
 // A column's value as the type its declaration names; an expression,
 // declared nothing, as the value is stored.
-fn typed(value: ValueRef<'_>, declared: Option<&str>) -> DataType {
+fn typed(value: ValueRef<'_>, declared: Option<&str>) -> SqlValue {
     let declared = declared.map(str::to_ascii_uppercase).unwrap_or_default();
     let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).into_owned();
     if declared.contains("BOOL") {
-        return DataType::Boolean(match value {
+        return SqlValue::Boolean(match value {
             ValueRef::Integer(i) => Some(i != 0),
             ValueRef::Real(f) => Some(f != 0.0),
             ValueRef::Text(t) => Some(matches!(
@@ -2213,7 +2242,7 @@ fn typed(value: ValueRef<'_>, declared: Option<&str>) -> DataType {
         });
     }
     if declared.contains("INT") {
-        return DataType::Int64(match value {
+        return SqlValue::Int64(match value {
             ValueRef::Integer(i) => Some(i),
             ValueRef::Real(f) => Some(f as i64),
             ValueRef::Text(t) => text(t).parse().ok(),
@@ -2221,7 +2250,7 @@ fn typed(value: ValueRef<'_>, declared: Option<&str>) -> DataType {
         });
     }
     if ["DOUBLE", "REAL", "FLOAT", "NUMERIC", "DECIMAL"].iter().any(|kind| declared.contains(kind)) {
-        return DataType::Double(match value {
+        return SqlValue::Double(match value {
             ValueRef::Integer(i) => Some(i as f64),
             ValueRef::Real(f) => Some(f),
             ValueRef::Text(t) => text(t).parse().ok(),
@@ -2229,23 +2258,23 @@ fn typed(value: ValueRef<'_>, declared: Option<&str>) -> DataType {
         });
     }
     if declared.contains("TIMESTAMP") {
-        return DataType::Timestamp(stored_text(value));
+        return SqlValue::Timestamp(stored_text(value));
     }
     if declared.contains("DATE") {
-        return DataType::Date(stored_text(value));
+        return SqlValue::Date(stored_text(value));
     }
     if declared.contains("TIME") {
-        return DataType::Time(stored_text(value));
+        return SqlValue::Time(stored_text(value));
     }
     if !declared.is_empty() {
-        return DataType::Str(stored_text(value));
+        return SqlValue::Str(stored_text(value));
     }
     match value {
-        ValueRef::Null => DataType::Str(None),
-        ValueRef::Integer(i) => DataType::Int64(Some(i)),
-        ValueRef::Real(f) => DataType::Double(Some(f)),
-        ValueRef::Text(t) => DataType::Str(Some(text(t))),
-        ValueRef::Blob(b) => DataType::Binary(Some(b.to_vec())),
+        ValueRef::Null => SqlValue::Str(None),
+        ValueRef::Integer(i) => SqlValue::Int64(Some(i)),
+        ValueRef::Real(f) => SqlValue::Double(Some(f)),
+        ValueRef::Text(t) => SqlValue::Str(Some(text(t))),
+        ValueRef::Blob(b) => SqlValue::Binary(Some(Bytes::copy_from_slice(b))),
     }
 }
 
@@ -2388,7 +2417,7 @@ impl Settings {
     // The provider one scenario runs over: a fresh store seeded, the
     // upstream answers the scenario seeds, and the configuration.
     fn provider(&self, seed: &Value) -> Oracle {
-        let tables = if seed["tables"].as_str() == Some("unavailable") {
+        let sql = if seed["tables"].as_str() == Some("unavailable") {
             Sqlite::unavailable()
         } else {
             Sqlite::open(&self.schema, &self.tables)
@@ -2397,11 +2426,11 @@ impl Settings {
             config: MapConfig::default().with(self.config.iter().cloned()),
             http: self.upstream(&seed["http"]),
             identity: FixedIdentity::new(&self.token),
-            publish: Sink::default(),
-            broadcast: Sink::default(),
+            publisher: Sink::default(),
+            websockets: Sink::default(),
             storage: Memory::default(),
             docs: MemoryDocs::default(),
-            tables,
+            sql,
             model: ScriptedModel::default(),
             plugins: ScriptedLoader::default(),
             vcs: ScriptedVcs::default(),
@@ -2515,7 +2544,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
     };
     let provider = settings.provider(&scenario["seed"]);
     let http = provider.http.clone();
-    let tables = provider.tables.clone();
+    let sql_db = provider.sql.clone();
     let logged = Logged::default();
     let router = __CRATE__::router(provider);
     let mut captures: BTreeMap<String, String> = BTreeMap::new();
@@ -2527,10 +2556,10 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
         // a statement of the scenario's own, over the store behind the guest
         if let Some(sql) = step["sql"].as_str() {
             let sql = substitute(sql, &captures);
-            match tables.change(&sql) {
+            match sql_db.change(&sql) {
                 Ok(0) => reasons.push(format!("{label}: `{sql}` changed no row")),
                 Ok(_) => {}
-                Err(error) => reasons.push(format!("{label}: {}", quoted(&error.to_string()))),
+                Err(error) => reasons.push(format!("{label}: {}", quoted(error.description()))),
             }
             if reasons.is_empty() {
                 continue;
@@ -2625,7 +2654,7 @@ async fn drive(settings: &Settings, scenario: &Value) -> Driven {
 
     // what the store and the guest said as it failed
     if !reasons.is_empty() {
-        if let Some(error) = tables.last_error() {
+        if let Some(error) = sql_db.last_error() {
             reasons.push(format!("sql: {}", quoted(&error)));
         }
         if let Some(last) = logged.last() {
@@ -3116,13 +3145,14 @@ serde_json.workspace = true
         assert_eq!(package_dependency_names(&appended).len(), 8);
         assert!(dev_dependency_additions(&appended, &[]).unwrap().is_empty(), "added once");
 
-        // the scenario harness adds its database with the features it reads
+        // the scenario harness adds axum (where absent) and its database with the features it reads
         let scenario = dev_dependency_additions(&manifest, &SCENARIO_DEPENDENCIES).unwrap();
         assert!(
-            scenario.contains(
-                ".dev-dependencies.rusqlite]\nversion = \"0.41\"\nfeatures = [\"bundled\", \
-                 \"column_decltype\", \"functions\"]\n"
-            ),
+            scenario.contains(".dev-dependencies.axum]\nversion = \"0.8\"\n")
+                && scenario.contains(
+                    ".dev-dependencies.rusqlite]\nversion = \"0.41\"\nfeatures = [\"bundled\", \
+                     \"column_decltype\", \"functions\"]\n"
+                ),
             "{scenario}"
         );
 
@@ -3274,5 +3304,18 @@ tokio = \"1\"
             "{text}"
         );
         assert!(text.contains("| Rust lines (non-blank) | 900 | 1200 |  |  |"), "{text}");
+    }
+
+    #[test]
+    fn harness_sources_parse() {
+        for (name, source) in [
+            ("HARNESS_SOURCE", HARNESS_SOURCE),
+            ("SCENARIO_HARNESS_SOURCE", SCENARIO_HARNESS_SOURCE),
+        ] {
+            let rendered = source.replace("__CRATE__", "guest");
+            syn::parse_file(&rendered).unwrap_or_else(|err| {
+                panic!("{name} failed to parse at {}: {err}", err.span().start().line)
+            });
+        }
     }
 }
