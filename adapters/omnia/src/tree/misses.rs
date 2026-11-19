@@ -1,6 +1,6 @@
 //! Checks for empty cache misses on constant store keys, single-field `data`
 //! response wrappers, refusals answered `Ok(())`, skips answered as refusals,
-//! and format settings.
+//! format settings, and non-portable SQL `ANY(..)` literals.
 
 use syn::visit::{self, Visit};
 use syn::{
@@ -165,6 +165,35 @@ impl Tree {
             lines.join("\n")
         ))
     }
+
+    pub fn unportable_sql(&self) -> Option<String> {
+        let mut lines: Vec<String> = self
+            .modules
+            .iter()
+            .filter(|module| !module.is_common())
+            .flat_map(|module| {
+                module.unportable_sql().into_iter().map(move |(number, snippet)| {
+                    format!(
+                        "{}:{number}: SQL literal uses PostgreSQL `ANY(..)` (`{snippet}`)",
+                        module.path
+                    )
+                })
+            })
+            .collect();
+        if lines.is_empty() {
+            return None;
+        }
+        lines.sort();
+        lines.dedup();
+        Some(format!(
+            "a `SqlDb` query binds scalar `$1, $2, ..` `omnia_sdk::sql::Value` parameters (`Value` \
+             has no array variant) and runs against portable SQL, so PostgreSQL's `= ANY($1)` \
+             fails at run time (`no such function: ANY`): guard an empty slice before querying \
+             and build a dynamic `IN ($1, $2, ..)` placeholder list with one scalar `Value` per \
+             element through `edit_files`:\n{}",
+            lines.join("\n")
+        ))
+    }
 }
 
 impl Module {
@@ -186,6 +215,18 @@ impl Module {
             .into_iter()
             .filter(|setting| setting.key.split('_').any(|segment| segment == "FORMAT"))
             .map(|setting| (setting.line, setting.key))
+            .collect()
+    }
+
+    fn unportable_sql(&self) -> Vec<(usize, String)> {
+        let Some(file) = self.file() else { return Vec::new() };
+        syntax::spanned_literals(file)
+            .into_iter()
+            .filter(|(_, value)| sql_uses_any(value))
+            .map(|(line, value)| {
+                let single = value.lines().map(str::trim).collect::<Vec<_>>().join(" ");
+                (line, single)
+            })
             .collect()
     }
 
@@ -794,4 +835,35 @@ fn pat_names(pat: &Pat, name: &str) -> bool {
     let mut names = Names { name, found: false };
     names.visit_pat(pat);
     names.found
+}
+
+// Whether a string literal spells PostgreSQL's `= ANY(..)` or `ANY($..)`,
+// case-insensitively and across optional whitespace, while leaving ordinary
+// prose such as `"not in any (configured) zone"` alone.
+fn sql_uses_any(literal: &str) -> bool {
+    let bytes = literal.as_bytes();
+    for index in 0..bytes.len() {
+        let Some(word) = literal.get(index..index + 3) else { break };
+        if !word.eq_ignore_ascii_case("any") {
+            continue;
+        }
+        let boundary_before = literal[..index]
+            .chars()
+            .next_back()
+            .is_none_or(|ch| !ch.is_ascii_alphanumeric() && ch != '_');
+        if !boundary_before {
+            continue;
+        }
+        let after = literal[index + 3..].trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+        let Some(inside) = after.strip_prefix('(') else {
+            continue;
+        };
+        let inside = inside.trim_start_matches(|ch: char| ch.is_ascii_whitespace());
+        let after_eq =
+            literal[..index].trim_end_matches(|ch: char| ch.is_ascii_whitespace()).ends_with('=');
+        if inside.starts_with('$') || after_eq {
+            return true;
+        }
+    }
+    false
 }

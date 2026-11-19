@@ -82,6 +82,8 @@ The rules are:
   A check that fails for a crate the pins lack is repaired in the stem's manifest, where the crate carries its version, never in the root's.
   An entry of the root manifest's list naming a crate the tree lacks, `start = { path = "crates/start" }` with no `crates/start/Cargo.toml`, is a finding at its line.
   The repair drops it through `edit_files`.
+- **No file stands outside the layout.** Only the template's files, `Cargo.lock`, and each stem crate's `Cargo.toml`, `src/`, `tests/`, and `data/` belong in the tree.
+  Any scratch file a check or repair wrote (`tmp/..`), note, or extra file under `crates/common/` is removed through `delete`.
 - **No removed crate is named.** Where a crate the tree lacks is still named by a stem manifest's path dependency or by a `use` or item of any module, each line is a finding.
   The repair drops the dependency line and the mentions through `edit_files`.
 - **Every stem is merged.** Every stem's `handlers()` is listed by a `<stem>::handlers(),` entry of the `Handlers::from([..])` array in `src/lib.rs`, with `P: <stem>::Requires,` in `router()`'s `where` list.
@@ -130,6 +132,8 @@ The rules are:
   `Ok(())` stays only where a valid message is filtered out by a rule. A test that expected the swallow is repaired to expect the error.
 - **No setting names a format.** A settings field, or a `const NAME: &str = "NAME"`, whose name spells `format` reads a parser's syntax from the deployment.
   The repair holds the syntax in a constant of the module, `"%d/%m/%Y"` for a criterion's `DD/MM/YYYY`, through `edit_files`, and the module parses with it.
+- **No SQL literal uses PostgreSQL `ANY(..)`.** `omnia_sdk::sql::Value` binds scalar `$1, $2, ..` parameters alone and runs against portable SQL, so `= ANY($1)` fails at run time.
+  The repair guards an empty slice before querying and builds a dynamic `IN ($1, $2, ..)` placeholder list with one scalar `Value` per element, through `edit_files`.
 - **Every filled handler is bounded on what it reaches.** A handler whose body is filled and whose `P` is still bounded `P: crate::Requires` (or `P: Requires`) hides which capabilities it uses.
   The finding lists the traits the body reaches through the context's accessors, `StateStore` for `context.state()`, `Config` for `context.config()`.
   The repair replaces the broad bound with those traits (`where P: StateStore + Config`, or drops the `where` clause when it reaches none, adding the bounds of any helper the body hands `context.provider()` to) and lists any new traits on `Requires` and its blanket `impl` in `crates/<stem>/src/lib.rs`, through `edit_files`.

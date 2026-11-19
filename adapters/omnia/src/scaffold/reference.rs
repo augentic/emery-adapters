@@ -415,8 +415,6 @@ const STREAM_WORDS: &[&str] = &[
     "brokers",
     "consumer",
     "consumers",
-    "deliveries",
-    "delivery",
     "message",
     "messages",
     "messaging",
@@ -432,14 +430,20 @@ const STREAM_WORDS: &[&str] = &[
     "topics",
 ];
 
-// The words a sentence spells of a message leaving, so a format named
-// alone in the inbound stream's bullet is not read from its export clause.
+// The words a sentence spells of a message leaving or an HTTP call, so a
+// format named in an export or upstream clause is no inbound stream's
+// wire, and an upstream HTTP bullet is no inbound stream.
 const OUTBOUND_WORDS: &[&str] = &[
     "emits",
     "emitted",
     "export",
     "exported",
     "exports",
+    "fetch",
+    "fetched",
+    "fetches",
+    "http",
+    "https",
     "outbound",
     "outgoing",
     "producer",
@@ -448,10 +452,17 @@ const OUTBOUND_WORDS: &[&str] = &[
     "published",
     "publishes",
     "publishing",
+    "request",
+    "requests",
     "response",
     "responses",
+    "rest",
     "sends",
     "sent",
+    "upstream",
+    "upstreams",
+    "url",
+    "urls",
     "writes",
     "written",
 ];
@@ -865,10 +876,12 @@ fn part_ids(slice: &Slice) -> BTreeSet<String> {
 // leaving.
 fn wire_in(paragraph: &str) -> Option<Wire> {
     let mut sentences = sentences(paragraph).peekable();
-    let inbound = sentences.peek().is_some_and(|lead| spells(lead, INBOUND_WORDS));
+    let inbound = sentences
+        .peek()
+        .is_some_and(|lead| spells(lead, INBOUND_WORDS) && !spells(lead, OUTBOUND_WORDS));
     sentences.find_map(|sentence| {
         let wire = wire_of(sentence)?;
-        (spells(sentence, INBOUND_WORDS) || (inbound && !spells(sentence, OUTBOUND_WORDS)))
+        ((spells(sentence, INBOUND_WORDS) || inbound) && !spells(sentence, OUTBOUND_WORDS))
             .then_some(wire)
     })
 }

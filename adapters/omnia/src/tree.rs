@@ -93,6 +93,7 @@ impl Tree {
 
     pub fn check_verify(&self) -> Result<Vec<String>, Error> {
         let mut findings = self.static_drift()?;
+        findings.extend(self.outside_layout()?);
         findings.extend(self.dangling_mentions(&BTreeSet::new())?);
         findings.extend(self.check_common()?);
         Ok(findings)
@@ -116,6 +117,7 @@ impl Tree {
         findings.extend(self.response_wrappers());
         findings.extend(self.swallowed_rejections());
         findings.extend(self.format_settings());
+        findings.extend(self.unportable_sql());
         findings.extend(self.broad_bounds());
         findings.extend(self.old_settings());
         Ok(findings)
@@ -227,6 +229,29 @@ impl Tree {
             "a slice lands in its own stems' crates and the lines it adds to the lists, and \
              nothing beside them: a file written elsewhere in the tree is a stray the engine \
              would seal; remove each through `delete`:\n{}",
+            lines.join("\n")
+        )))
+    }
+
+    // A file left outside the seeded template, `Cargo.lock`, `spec/`, and each
+    // stem crate's `Cargo.toml`, `src/`, `tests/`, and `data/` — scratch a
+    // check or repair left under `tmp/`, a note, or an extra file under
+    // `crates/common/` — would be sealed into the wave's commit; `crates/start/`
+    // is `simulated_process`'s.
+    fn outside_layout(&self) -> Result<Option<String>, Error> {
+        let lines: Vec<String> = layout::listing(&self.root)?
+            .into_iter()
+            .filter(|path| !within_layout(path))
+            .map(|path| format!("{path}: outside the layout"))
+            .collect();
+        if lines.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "the integrated tree holds only the template's files, `Cargo.lock`, and each stem \
+             crate's `Cargo.toml`, `src/`, `tests/`, and `data/`: any other file — scratch left \
+             by a check or a repair (`tmp/..`), a note, or an extra file under `crates/common/` \
+             — would be sealed into the wave's commit; remove each through `delete`:\n{}",
             lines.join("\n")
         )))
     }
@@ -832,6 +857,25 @@ impl<'ast> Visit<'ast> for Placeholders {
         }
         visit::visit_local(self, node);
     }
+}
+
+fn within_layout(path: &str) -> bool {
+    if path == "Cargo.lock" || path.starts_with("spec/") || omnia_template::entry(path).is_some() {
+        return true;
+    }
+    let Some((dir, file)) = path.strip_prefix("crates/").and_then(|rest| rest.split_once('/'))
+    else {
+        return false;
+    };
+    if layout::is_start_stem(dir) {
+        return true;
+    }
+    layout::is_stem_crate(dir)
+        && !file.is_empty()
+        && (file == "Cargo.toml"
+            || file.starts_with("src/")
+            || file.starts_with("tests/")
+            || file.starts_with("data/"))
 }
 
 fn diff_lines(expected: &[&str], actual: &[&str]) -> Vec<String> {

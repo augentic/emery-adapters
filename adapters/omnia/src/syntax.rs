@@ -1160,3 +1160,46 @@ pub fn string_literals(file: &syn::File) -> Vec<String> {
     literals.visit_file(file);
     literals.found
 }
+
+// Every string literal `file` spells outside attributes, at its opening line,
+// including inside macro token streams.
+pub fn spanned_literals(file: &syn::File) -> Vec<(usize, String)> {
+    #[derive(Default)]
+    struct Literals {
+        found: Vec<(usize, String)>,
+    }
+
+    impl Literals {
+        fn tokens(&mut self, stream: TokenStream) {
+            for token in stream {
+                match token {
+                    TokenTree::Literal(literal) => {
+                        let at = line(literal.span());
+                        if let Lit::Str(lit) = Lit::new(literal) {
+                            self.found.push((at, lit.value()));
+                        }
+                    }
+                    TokenTree::Group(group) => self.tokens(group.stream()),
+                    TokenTree::Ident(_) | TokenTree::Punct(_) => {}
+                }
+            }
+        }
+    }
+
+    impl<'ast> Visit<'ast> for Literals {
+        fn visit_attribute(&mut self, _: &'ast Attribute) {}
+
+        fn visit_lit_str(&mut self, node: &'ast LitStr) {
+            self.found.push((line(node.span()), node.value()));
+        }
+
+        fn visit_macro(&mut self, node: &'ast Macro) {
+            self.tokens(node.tokens.clone());
+            visit::visit_macro(self, node);
+        }
+    }
+
+    let mut literals = Literals::default();
+    literals.visit_file(file);
+    literals.found
+}

@@ -360,7 +360,7 @@ The rules are the layout's. The [handlers](references/handlers.md), [testing](re
 - A crate your stem's manifest names that no file of the stem spells. A constant of the topic table nothing names. A stem that publishes and nothing reaches.
 - A stem's `handlers()` that the root's array does not list. A module under your stem's `src/` that no `pub mod` line of its `lib.rs` declares, or a handler, a type, or a constant standing in the entry itself.
 - A store read under a constant key that answers its miss as an empty collection or a default. A `Deserialize` struct wrapping a response in one `data` field.
-- A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format.
+- A refusal answered `Ok(())` from inside a catch. A setting whose name spells a format. A SQL literal spelling PostgreSQL's `= ANY(..)` or `ANY($..)` instead of a dynamic `IN ($1, $2, ..)` list over scalar `Value`s.
 - A filled handler still bounded `P: crate::Requires` (or `P: Requires`); the finding lists the traits its body reaches, to narrow on the handler and list on `Requires` in `crates/<stem>/src/lib.rs`. A required setting read through `Config::get` or `ConfigExt::require` under a `pub(crate) const` key or a key spelled at the read, in place of a field of the part's `Settings` struct.
 - On a change build, an item or manifest line outside your slice's reached crates changed that is no listed touch point, or an item or manifest dependency still names a crate the change removed.
 

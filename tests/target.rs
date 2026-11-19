@@ -7653,3 +7653,181 @@ async fn omnia_scope() {
         );
     }
 }
+
+// An outbound HTTP upstream bullet in `## APIs and integrations` (even one
+// spelling `delivery-rates` or `consumer` beside `Upstream`, `HTTP`, `fetch`,
+// or `URL`) is no inbound broker stream: at the part's last slice, neither
+// the brief nor `unconsumed_streams` asks the stem to register a topic.
+#[tokio::test]
+async fn omnia_upstream_not_inbound() {
+    let project = omnia_tree().await;
+    let mut last = slice();
+    last.design = "# Design\n\n## APIs and integrations\n\n**Inbound HTTP (Express)** — JSON \
+                   request and response bodies unless noted; `GET /health/ready` (REQ-001).\n\n\
+                   **Upstream delivery-rates (HTTP `fetch`)** — Base URL from `SHIPPING_API_URL` \
+                   (default `https://rates.courier.example/v2`). `GET /rates` quotes courier \
+                   deliveries; failures surface as 502 (REQ-001). XML envelopes are not used.\n\n\
+                   **Upstream consumer-directory (HTTPS)** — Requests go to `DIRECTORY_URL` \
+                   (REQ-001).\n"
+        .to_owned();
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report]).calling(0, [edit_files(&[FILL_FUNCTION])]);
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &last).await.expect("upstream HTTP asks no topic");
+    model.assert_exhausted();
+
+    assert_eq!(accepted.covered, ["REQ-001"]);
+    let brief = &model.seen()[0].messages[0];
+    for absent in
+        ["inbound stream for this part", "The design says the inbound stream's payload is"]
+    {
+        assert!(!brief.contains(absent), "upstream HTTP triggers no `{absent}`: {brief}");
+    }
+}
+
+// A verify turn that leaves scratch files (`tmp/*`), root notes, or extra
+// files outside `crates/<stem>/{Cargo.toml,src/**,tests/**,data/**}` is
+// refused naming each path, while `Cargo.lock`, sealed `spec/` files, a stem's
+// `data/*.json`, and template files pass; deleting the strays is accepted.
+#[tokio::test]
+async fn omnia_verify_strays() {
+    let project = omnia_tree().await;
+    project.write("Cargo.lock", "# generated\n");
+    project.write("spec/spec.json", "{}\n");
+    project.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
+    project.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    project.write("crates/orders/src/reading.rs", "//! Reads orders.\n");
+    project.write("crates/orders/data/zones.json", "[]\n");
+    project.write("src/lib.rs", omnia_root_with_orders());
+    project.write("Cargo.toml", omnia_manifest_with_orders());
+    project.write("tmp/before", "");
+    project.write("tmp/scratch", "scratch\n");
+    project.write("crates/common/src/extra.rs", "//! Misplaced.\n");
+    project.write("crates/orders/NOTES.md", "# Notes\n");
+
+    let strays =
+        ["crates/common/src/extra.rs", "crates/orders/NOTES.md", "tmp/before", "tmp/scratch"];
+    let model = ScriptedModel::answering([PASSED, PASSED]).calling(1, [delete_files(&strays)]);
+
+    let verdict = OMNIA.verify(&project, &model).await.expect("the cleaned tree is accepted");
+    model.assert_exhausted();
+
+    assert!(verdict.passed);
+    let correction = correction(&model);
+    for line in [
+        "the integrated tree holds only the template's files, `Cargo.lock`, and each stem crate's",
+        "crates/common/src/extra.rs: outside the layout",
+        "crates/orders/NOTES.md: outside the layout",
+        "tmp/before: outside the layout",
+        "tmp/scratch: outside the layout",
+    ] {
+        assert!(correction.contains(line), "the correction carries `{line}`: {correction}");
+    }
+    for kept in ["Cargo.lock", "spec/spec.json", "crates/orders/data/zones.json"] {
+        assert!(
+            !correction.contains(&format!("{kept}: outside")),
+            "`{kept}` is within the layout: {correction}"
+        );
+        assert!(project.read(kept).is_some(), "`{kept}` stands");
+    }
+    for removed in strays {
+        assert!(project.read(removed).is_none(), "`{removed}` is removed");
+    }
+}
+
+// PostgreSQL `= ANY($1)` / `ANY($..)` SQL string literals in stem modules
+// (including inside `format!(..)`) are refused at both build and verify with
+// portable scalar `IN ($1, $2, ..)` placeholders named, while doc comments
+// and ordinary English `"not in any (configured) zone"` strings pass.
+#[tokio::test]
+async fn omnia_unportable_sql() {
+    let bad_const =
+        "const CATALOGUE_BY_SKU: &str = \"SELECT sku FROM catalogue WHERE sku = ANY($1)\";\n";
+    let good_fn = "fn catalogue_sql(count: usize) -> String {\n    let slots: Vec<String> = \
+                   (1..=count).map(|at| format!(\"${}\", at)).collect();\n    format!(\"SELECT sku \
+                   FROM catalogue WHERE sku IN ({})\", slots.join(\", \"))\n}\n";
+    let bad_macro =
+        "    let _ = format!(\"SELECT id FROM {} WHERE id <> any ($2)\", \"orders\");\n";
+    let good_macro = "    let _ = format!(\"SELECT id FROM {} WHERE id <> $2\", \"orders\");\n";
+
+    // build: rejected at both the const literal and the format! literal, while
+    // doc comments and ordinary prose pass; replacing with IN(..) is accepted
+    let project = omnia_tree().await;
+    let initial_body = format!(
+        "    let _ = \"not in any (configured) zone\";\n    let _ = \
+         CATALOGUE_BY_SKU;\n{bad_macro}    Ok(())\n"
+    );
+    let doc_comment = "/// Queries catalogue rows (`WHERE sku = ANY($1)` in the source).\n";
+    let anchor = "use omnia_sdk::Result;\n";
+    let with_const = format!("{anchor}\n{doc_comment}{bad_const}");
+    let with_in = format!("{anchor}\n{doc_comment}{good_fn}");
+    let used_in = "    let _ = CATALOGUE_BY_SKU;\n";
+    let call_in = "    let _ = catalogue_sql(1);\n";
+    let report = r#"{"covered": ["REQ-001"], "written": ["crates/orders/src/reading.rs"]}"#;
+    let model = ScriptedModel::answering([report, report])
+        .calling(
+            0,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", anchor, &with_const),
+                ("crates/orders/src/reading.rs", OMNIA_FUNCTION_MARKER, &initial_body),
+            ])],
+        )
+        .calling(
+            1,
+            [edit_files(&[
+                ("crates/orders/src/reading.rs", &with_const, &with_in),
+                ("crates/orders/src/reading.rs", used_in, call_in),
+                ("crates/orders/src/reading.rs", bad_macro, good_macro),
+            ])],
+        );
+
+    let accepted =
+        OMNIA.build_slice(&project, &model, &slice()).await.expect("portable SQL passes build");
+    model.assert_exhausted();
+    assert_eq!(accepted.covered, ["REQ-001"]);
+
+    let build_fix = correction(&model);
+    for line in [
+        "build a dynamic `IN ($1, $2, ..)` placeholder list with one scalar `Value` per element",
+        "SQL literal uses PostgreSQL `ANY(..)` (`SELECT sku FROM catalogue WHERE sku = ANY($1)`)",
+        "SQL literal uses PostgreSQL `ANY(..)` (`SELECT id FROM {} WHERE id <> any ($2)`)",
+    ] {
+        assert!(build_fix.contains(line), "the build correction carries `{line}`: {build_fix}");
+    }
+    assert!(
+        !build_fix.contains("configured"),
+        "ordinary prose with `any (` is no finding: {build_fix}"
+    );
+    assert_eq!(
+        build_fix.matches("SQL literal uses PostgreSQL `ANY(..)`").count(),
+        2,
+        "the doc comment quoting `= ANY($1)` is ignored: {build_fix}"
+    );
+
+    // verify: also holds stem modules against `= ANY($1)`
+    let verified = omnia_tree().await;
+    let module = format!(
+        "//! Reads orders.\n\n{doc_comment}{bad_const}\n/// Reads the query.\n#[must_use]\npub fn \
+         sql() -> &'static str {{\n    CATALOGUE_BY_SKU\n}}\n"
+    );
+    let repaired_module = module.replace("WHERE sku = ANY($1)", "WHERE sku IN ($1, $2)");
+    verified.write("crates/orders/Cargo.toml", OMNIA_MANIFEST);
+    verified.write("crates/orders/src/lib.rs", "//! The `orders` stem.\n\npub mod reading;\n");
+    verified.write("crates/orders/src/reading.rs", &module);
+    verified.write("src/lib.rs", omnia_root_with_orders());
+    verified.write("Cargo.toml", omnia_manifest_with_orders());
+    let at = line_of(&module, "const CATALOGUE_BY_SKU");
+    let model = ScriptedModel::answering([PASSED, PASSED])
+        .calling(1, [edit_files(&[("crates/orders/src/reading.rs", &module, &repaired_module)])]);
+
+    let verdict = OMNIA.verify(&verified, &model).await.expect("portable SQL passes verify");
+    model.assert_exhausted();
+    assert!(verdict.passed);
+    let verify_fix = correction(&model);
+    let expected = format!(
+        "crates/orders/src/reading.rs:{at}: SQL literal uses PostgreSQL `ANY(..)` (`SELECT sku \
+         FROM catalogue WHERE sku = ANY($1)`)"
+    );
+    assert!(verify_fix.contains(&expected), "verify reports `{expected}`: {verify_fix}");
+}
