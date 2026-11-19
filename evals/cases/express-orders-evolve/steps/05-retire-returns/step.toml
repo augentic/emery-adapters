@@ -11,7 +11,7 @@ remove = [
 [amend]
 added = 0
 changed = 0
-retired = [2, 4]
+retired = [2, 8]
 stems = ["returns"]
 parts-removed = ["returns"]
 

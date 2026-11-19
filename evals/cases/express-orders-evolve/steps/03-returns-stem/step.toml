@@ -2,7 +2,7 @@ title = "New stem: returns"
 via = "patch"
 
 [amend]
-added = [2, 4]
+added = [2, 8]
 changed = 0
 retired = 0
 stems = ["returns"]

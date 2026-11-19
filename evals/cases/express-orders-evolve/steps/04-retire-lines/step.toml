@@ -4,7 +4,7 @@ via = "patch"
 [amend]
 added = 0
 changed = 0
-retired = [1, 2]
+retired = [1, 4]
 stems = ["orders"]
 
 [scope]

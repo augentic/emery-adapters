@@ -13,7 +13,7 @@ pub use self::scope::scope;
 pub use self::touch::TouchPoint;
 use self::touch::TouchPoints;
 use crate::layout;
-use crate::scaffold::{DesignKey, trigger};
+use crate::scaffold::trigger;
 use crate::syntax::ExportedFn;
 use crate::tree::Tree;
 
@@ -24,6 +24,26 @@ enum StemChange {
     Reached { first: bool },
     Kept,
     Vanished,
+}
+
+impl StemChange {
+    const fn classify(exists_in_tree: bool, built_before: bool, reached: bool) -> Self {
+        if !exists_in_tree || built_before {
+            Self::Reached { first: false }
+        } else if reached {
+            Self::Reached { first: true }
+        } else {
+            Self::Kept
+        }
+    }
+
+    const fn is_rewritten(self) -> bool {
+        matches!(self, Self::Reached { first: true })
+    }
+
+    const fn is_touched(self) -> bool {
+        matches!(self, Self::Reached { .. } | Self::Vanished)
+    }
 }
 
 #[derive(Default)]
@@ -43,25 +63,23 @@ impl Change {
             return Self::default();
         };
         let existing: BTreeSet<String> = tree.stem_crates().map(str::to_owned).collect();
-        let stems = slice_stems(slice, change);
-        let reached = reached_stems(slice, change, &stems);
-        let built_before = built_before_stems(tree, change, &stems);
+        let slice_stems = slice_stems(slice, change);
+        let reached = reached_stems(slice, change, &slice_stems);
+        let built_before = built_before_stems(tree, change, &slice_stems);
 
-        let mut classified = BTreeMap::new();
-        for stem in &stems {
+        let mut stems = BTreeMap::new();
+        for stem in &slice_stems {
             let dir = layout::crate_dir(stem);
-            let status = if !existing.contains(dir) || built_before.contains(stem) {
-                StemChange::Reached { first: false }
-            } else if reached.contains(stem) {
-                StemChange::Reached { first: true }
-            } else {
-                StemChange::Kept
-            };
-            classified.insert(stem.clone(), status);
+            let status = StemChange::classify(
+                existing.contains(dir),
+                built_before.contains(stem),
+                reached.contains(stem),
+            );
+            stems.insert(stem.clone(), status);
         }
         for vanished in &change.vanished {
             if !layout::is_start_stem(vanished) {
-                classified.insert(vanished.clone(), StemChange::Vanished);
+                stems.insert(vanished.clone(), StemChange::Vanished);
             }
         }
 
@@ -70,22 +88,20 @@ impl Change {
             .iter()
             .filter(|requirement| {
                 trigger::stem(requirement)
-                    .is_some_and(|stem| classified.get(&stem) == Some(&StemChange::Kept))
+                    .is_some_and(|stem| stems.get(&stem) == Some(&StemChange::Kept))
             })
             .map(|requirement| requirement.id.clone())
             .collect();
 
-        let touched: Vec<String> = classified
+        let touched: Vec<String> = stems
             .iter()
-            .filter(|(_, status)| {
-                matches!(status, StemChange::Reached { .. } | StemChange::Vanished)
-            })
+            .filter(|(_, status)| status.is_touched())
             .map(|(stem, _)| stem.clone())
             .collect();
         let touch_points = TouchPoints::read(tree, &touched);
 
         Self {
-            stems: classified,
+            stems,
             kept_requirements,
             touch_points,
             prior_exports: Vec::new(),
@@ -111,7 +127,7 @@ impl Change {
     }
 
     pub fn is_rewritten(&self, stem: &str) -> bool {
-        self.stems.get(stem) == Some(&StemChange::Reached { first: true })
+        self.stems.get(stem).copied().is_some_and(StemChange::is_rewritten)
     }
 
     pub fn quiet_report(self) -> Report {
@@ -152,7 +168,7 @@ fn slice_stems(slice: &Slice, change: &SliceChange) -> Vec<String> {
         }
     }
     for design_type in &slice.types {
-        if let Some(stem) = DesignKey::parse(&design_type.key).stem
+        if let Some(stem) = design_type.stem()
             && !layout::is_start_stem(stem)
         {
             push_unique(&mut stems, stem.to_owned());
@@ -168,13 +184,12 @@ fn slice_stems(slice: &Slice, change: &SliceChange) -> Vec<String> {
     stems
 }
 
-// Which of `stems` the change reaches: an added or changed requirement, a
-// departure, a changed owned or used type, or every stem of the slice when
-// the part was widened into scope by a design section change alone.
+// A slice carrying no delta of its own was pulled into scope by a design
+// section or a sibling slice, so every stem it touches is reached.
 fn reached_stems(slice: &Slice, change: &SliceChange, stems: &[String]) -> BTreeSet<String> {
     let mut reached = BTreeSet::new();
     for (requirement, standing) in slice.requirements.iter().zip(&change.standing) {
-        if matches!(standing, Standing::Added | Standing::Changed)
+        if is_changed(*standing)
             && let Some(stem) = trigger::stem(requirement)
         {
             reached.insert(stem);
@@ -185,35 +200,39 @@ fn reached_stems(slice: &Slice, change: &SliceChange, stems: &[String]) -> BTree
             reached.insert(stem);
         }
     }
-    let fallback = || stems.first().cloned();
-    for design_type in &slice.types {
-        if change.types.iter().any(|changed| changed.key == design_type.key)
-            && let Some(stem) =
-                DesignKey::parse(&design_type.key).stem.map(str::to_owned).or_else(fallback)
-        {
-            reached.insert(stem);
-        }
-    }
     for changed in &change.types {
-        if let Some(stem) = DesignKey::parse(&changed.key).stem.map(str::to_owned).or_else(fallback)
+        let stem = changed.stem().map(str::to_owned).or_else(|| stems.first().cloned());
+        if let Some(stem) = stem
             && stems.contains(&stem)
         {
             reached.insert(stem);
         }
     }
-    if reached.is_empty() && !slice.is_retiring() {
+    if !carries_delta(change) && !slice.is_retiring() {
         reached.extend(stems.iter().cloned());
     }
     reached
 }
 
-// The stems of `stems` that an earlier slice of this build already rebuilt,
-// identified by a `built_before` requirement id appearing in the stem's crate.
+const fn is_changed(standing: Standing) -> bool {
+    matches!(standing, Standing::Added | Standing::Changed)
+}
+
+// Includes untriggered `start` changes, which lay no stem of their own and
+// must not widen a carried stem sharing the slice.
+fn carries_delta(change: &SliceChange) -> bool {
+    change.standing.iter().copied().any(is_changed)
+        || !change.departed.is_empty()
+        || !change.types.is_empty()
+}
+
+// Earlier slices of the same part may be no-op `start` slices, so only stems
+// whose crate already mentions a `built_before` id were rebuilt in this run.
 fn built_before_stems(tree: &Tree, change: &SliceChange, stems: &[String]) -> BTreeSet<String> {
     if change.built_before.is_empty() {
         return BTreeSet::new();
     }
-    let matched: BTreeSet<String> = stems
+    stems
         .iter()
         .filter(|stem| {
             let dir = layout::crate_dir(stem);
@@ -222,6 +241,5 @@ fn built_before_stems(tree: &Tree, change: &SliceChange, stems: &[String]) -> BT
             })
         })
         .cloned()
-        .collect();
-    if matched.is_empty() { stems.iter().cloned().collect() } else { matched }
+        .collect()
 }

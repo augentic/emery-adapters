@@ -2,7 +2,7 @@ title = "Delete a customer"
 via = "patch"
 
 [amend]
-added = [1, 2]
+added = [1, 4]
 changed = 0
 retired = 0
 stems = ["customers"]

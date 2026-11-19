@@ -7910,3 +7910,148 @@ async fn omnia_unportable_sql() {
     );
     assert!(verify_fix.contains(&expected), "verify reports `{expected}`: {verify_fix}");
 }
+
+// An untriggered `start` addition alongside an unchanged `GET /health/live`
+// and an earlier no-op `start` slice leaves `health` kept with zero turns.
+#[tokio::test]
+async fn omnia_change_start_kept() {
+    let project = omnia_tree().await;
+    let health = StartHealthTree::plant(&project);
+    let slice = health.added_untriggered_slice();
+    let model = ScriptedModel::default();
+
+    let report =
+        OMNIA.build_slice(&project, &model, &slice).await.expect("kept health on start slice");
+    model.assert_exhausted();
+
+    assert!(model.seen().is_empty(), "kept health opens zero turns");
+    assert_eq!(report.covered, ["REQ-002"], "unchanged health requirement is covered");
+    assert!(report.written.is_empty(), "nothing is written: {:?}", report.written);
+    assert_eq!(
+        text(&project, "crates/health/src/start.rs"),
+        health.prior_module,
+        "`crates/health/src/start.rs` stands untouched"
+    );
+    assert_eq!(
+        text(&project, "crates/health/tests/start.rs"),
+        health.prior_tests,
+        "`crates/health/tests/start.rs` stands untouched"
+    );
+}
+
+// A changed `GET /health/live` after an earlier no-op `start` slice whose
+// `built_before` id is absent from `crates/health` rewrites `health` fresh.
+#[tokio::test]
+async fn omnia_change_start_rewrite() {
+    let project = omnia_tree().await;
+    let health = StartHealthTree::plant(&project);
+    project.write("crates/health/src/legacy.rs", "pub fn dead() {}\n");
+    let slice = health.changed_health_slice();
+    let model = ScriptedModel::answering([r#"{"covered": [], "written": []}"#]);
+
+    OMNIA.build_slice(&project, &model, &slice).await.expect("changed health rewritten fresh");
+    model.assert_exhausted();
+
+    assert!(
+        !project.path().join("crates/health/src/legacy.rs").exists(),
+        "prior crate files are removed on fresh rewrite"
+    );
+    let rewritten_module = text(&project, "crates/health/src/start.rs");
+    assert!(
+        !rewritten_module.contains("existing_live")
+            && rewritten_module.contains("todo!(\"REQ-002 start.health-live: the handler\")"),
+        "`crates/health/src/start.rs` is scaffolded fresh rather than extended: {rewritten_module}"
+    );
+    let rewritten_tests = text(&project, "crates/health/tests/start.rs");
+    assert!(
+        !rewritten_tests.contains("fn live_probe")
+            && rewritten_tests.contains("REQ-002 Live health probe: unfilled"),
+        "`crates/health/tests/start.rs` is scaffolded fresh rather than extended: {rewritten_tests}"
+    );
+    let brief = &model.seen()[0].messages[0];
+    assert!(
+        brief.contains(
+            "Rewritten for this change: `crates/health/` is written from the slice, the prior \
+             crate is not in the tree."
+        ) && !brief.contains("held, extended"),
+        "the brief marks `crates/health/` rewritten rather than extended: {brief}"
+    );
+    assert!(
+        brief.contains("health::start::existing_live"),
+        "the brief records the prior exported signature before removing `crates/health/`: {brief}"
+    );
+}
+
+// A built `crates/health` crate serving `GET /health/live` under `PART-001`,
+// paired with the part's second slice after an untriggered `REQ-001` slice.
+struct StartHealthTree {
+    prior_module: String,
+    prior_tests: String,
+    slice: Slice,
+}
+
+impl StartHealthTree {
+    fn plant(project: &Scratch) -> Self {
+        let prior_module = "//! Prior health.\n\n/// Reports whether the service is live.\n#[must_use]\npub fn existing_live() -> bool {\n    true\n}\n".to_owned();
+        let prior_tests = "#[test]\nfn live_probe() {}\n".to_owned();
+
+        project.write("crates/health/Cargo.toml", OMNIA_MANIFEST.replace("orders", "health"));
+        project.write(
+            "crates/health/src/lib.rs",
+            OMNIA_ENTRY.replace("orders", "health").replace("reading", "start"),
+        );
+        project.write("crates/health/src/start.rs", &prior_module);
+        project.write("crates/health/tests/start.rs", &prior_tests);
+        project.write("Cargo.toml", omnia_manifest_with(&["health"]));
+        project.write("src/lib.rs", omnia_root_with(&["health"]));
+
+        let mut slice = slice_for("start", &["start.health-live", "start.omit-powered-by"]);
+        slice.id = "SLICE-002".to_owned();
+        slice.index = 2;
+        slice.count = 2;
+        slice.requirements[0].id = "REQ-002".to_owned();
+        slice.requirements[0].statement = vec!["Answers that the process is live.".to_owned()];
+        slice.requirements[0].trigger = Some(routed("GET", "/health/live"));
+        slice.requirements[0].scenarios = vec![Scenario {
+            name: "Live health probe".to_owned(),
+            given: vec!["the service is running".to_owned()],
+            when: "GET /health/live is called".to_owned(),
+            then: "200 is answered".to_owned(),
+            and: Vec::new(),
+        }];
+        slice.requirements[1].id = "REQ-003".to_owned();
+        slice.requirements[1].statement = vec!["Omit the framework header.".to_owned()];
+        slice.plan = "## Part: start\n\nID: PART-001\nRequirements: [REQ-001, REQ-002, REQ-003]\n"
+            .to_owned();
+
+        Self {
+            prior_module,
+            prior_tests,
+            slice,
+        }
+    }
+
+    fn added_untriggered_slice(&self) -> Slice {
+        self.slice_with(vec![Standing::Unchanged, Standing::Added], Vec::new())
+    }
+
+    fn changed_health_slice(&self) -> Slice {
+        self.slice_with(
+            vec![Standing::Changed, Standing::Unchanged],
+            vec![self.slice.requirements[0].clone()],
+        )
+    }
+
+    fn slice_with(&self, standing: Vec<Standing>, prior: Vec<Requirement>) -> Slice {
+        let mut slice = self.slice.clone();
+        slice.change = Some(SliceChange {
+            built: "rev-001".to_owned(),
+            commit: "abc1234".to_owned(),
+            standing,
+            prior,
+            built_before: vec!["REQ-001".to_owned()],
+            ..SliceChange::default()
+        });
+        slice
+    }
+}
