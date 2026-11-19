@@ -1287,27 +1287,29 @@ impl<'a> ChainDriver<'a> {
 
         let chain_dir =
             eval_dir.join(card_name).join(&evolution.name).join(format!("chain-{}", resume.chain));
+        let before_step = resume.at_step - 1;
+        let prev_tag = step_tag(before_step);
+        let prior_revisions: Vec<String> = (0..resume.at_step)
+            .map(|k| read_recorded_revision(&source_dir, k))
+            .collect::<io::Result<_>>()?;
+        let Some(prev_revision) = prior_revisions.last() else {
+            return Err(io::Error::other("`--at-step` must be at least 1"));
+        };
+
         if chain_dir.exists() {
             fs::remove_dir_all(&chain_dir)?;
         }
         fs::create_dir_all(&chain_dir)?;
 
-        let before_step = resume.at_step - 1;
-        let prev_tag = step_tag(before_step);
-        let prev_revision = read_recorded_revision(&source_dir, before_step)?;
-
-        copy_prior_chain_state(&source_dir, &chain_dir, resume.at_step)?;
+        copy_prior_chain_state(&source_dir, &chain_dir, resume.at_step, prev_revision)?;
         let repo = repository(&chain_dir, 1);
-        let prev_commit = rewind_chain_repo(
-            eval_dir,
-            card_name,
-            &source_dir,
-            &repo,
-            evolution,
-            target,
-            resume,
-            &prev_revision,
-        )?;
+        let prev_commit = git(&repo, &["rev-parse", &format!("refs/heads/emery/{prev_revision}")])?;
+        if target == Target::Omnia {
+            let scratch = eval_dir.join(card_name).join(format!("{}.seed", evolution.name));
+            check_chain_seed(&repo, &prev_commit, &scratch, &evolution.name, resume)?;
+        }
+        let kept_revisions: BTreeSet<String> = prior_revisions.iter().cloned().collect();
+        restore_chain_repo(&repo, &prev_commit, &kept_revisions)?;
 
         let (source, mut oracle) =
             seed_sources_and_oracle(&chain_dir, evolution, settings, target)?;
@@ -1318,11 +1320,10 @@ impl<'a> ChainDriver<'a> {
 
         let mut results = Vec::with_capacity(evolution.steps.len() + 1);
         let mut snapshots = BTreeMap::new();
-        for k in 0..resume.at_step {
-            let rev = read_recorded_revision(&chain_dir, k)?;
+        for (k, rev) in prior_revisions.iter().enumerate() {
             let snap = TreeSnapshot::read(&repo, &format!("refs/heads/emery/{rev}"))?;
             snapshots.insert(k, snap);
-            results.push(load_recorded_step(&chain_dir, evolution, target, k, &rev));
+            results.push(load_recorded_step(&chain_dir, evolution, target, k, rev));
         }
         let prior_passed = fs::read_to_string(chain_dir.join(format!("{prev_tag}.oracle.log")))
             .ok()
@@ -1333,7 +1334,7 @@ impl<'a> ChainDriver<'a> {
             evolution.name,
             resume.chain,
             resume.card,
-            short(&prev_revision),
+            short(prev_revision),
             short(&prev_commit),
         );
 
@@ -1744,10 +1745,9 @@ fn stage_chain_project(
     seed_sources_and_oracle(chain_dir, evolution, settings, target)
 }
 
-fn copy_prior_chain_state(source_dir: &Path, chain_dir: &Path, at_step: usize) -> io::Result<()> {
-    // Copy `.emery/vcs/repos/run-1` and prior step logs; omit `.emery/storage`
-    // so no stale staged item or `current-revision` pointer from a later step
-    // survives and `store::current` reads `HEAD` directly.
+fn copy_prior_chain_state(
+    source_dir: &Path, chain_dir: &Path, at_step: usize, prev_revision: &str,
+) -> io::Result<()> {
     let src_emery = source_dir.join(".emery");
     if !src_emery.join("vcs/repos/run-1").is_dir() {
         return Err(io::Error::new(
@@ -1756,6 +1756,7 @@ fn copy_prior_chain_state(source_dir: &Path, chain_dir: &Path, at_step: usize) -
         ));
     }
     copy_tree_whole(&src_emery.join("vcs/repos/run-1"), &chain_dir.join(".emery/vcs/repos/run-1"))?;
+    seed_chain_storage(source_dir, chain_dir, prev_revision)?;
     for entry in fs::read_dir(source_dir)? {
         let entry = entry?;
         let file_name = entry.file_name();
@@ -1770,48 +1771,51 @@ fn copy_prior_chain_state(source_dir: &Path, chain_dir: &Path, at_step: usize) -
     Ok(())
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "repository rewind checks template drift against card paths and prunes later branches"
-)]
-fn rewind_chain_repo(
-    eval_dir: &Path, card_name: &str, source_dir: &Path, repo: &Path, evolution: &Evolution,
-    target: Target, resume: &EvolveResume, prev_revision: &str,
-) -> io::Result<String> {
-    let prev_label = format!("emery/{prev_revision}");
-    let prev_commit = git(repo, &["rev-parse", &format!("refs/heads/{prev_label}")])?;
-    if target == Target::Omnia {
-        let scratch = eval_dir.join(card_name).join(format!("{}.seed", evolution.name));
-        match seed_drift(repo, &prev_commit, &scratch)? {
-            None => eprintln!(
-                "eval: `{}` seed at `{}` holds the component's template",
-                evolution.name,
-                short(&prev_commit)
-            ),
-            Some(drift) if !resume.drifted => {
-                return Err(io::Error::other(format!(
-                    "`{}` seeds step {:02} of `{}` with a tree laid from an earlier template than \
-                     the staged component carries:\n{drift}\nadmit with `--drifted` or re-run \
-                     from step 00",
-                    resume.card, resume.at_step, evolution.name
-                )));
-            }
-            Some(drift) => eprintln!(
-                "eval: `{}` resumes a seed admitted by `--drifted`:\n{drift}",
-                evolution.name
-            ),
-        }
+// Copies `.emery/storage` when present, clears any staged candidate or amendment
+// slot and blobs, and sets `current-revision` to `prev_revision`.
+pub fn seed_chain_storage(
+    source_dir: &Path, chain_dir: &Path, prev_revision: &str,
+) -> io::Result<()> {
+    let storage = chain_dir.join(".emery/storage");
+    let source_storage = source_dir.join(".emery/storage");
+    if source_storage.is_dir() {
+        copy_tree_whole(&source_storage, &storage)?;
     }
+    let staged_slot = storage.join("keyvalue/default/staged");
+    if staged_slot.is_file() {
+        fs::remove_file(&staged_slot)?;
+    }
+    let staged_blobs = storage.join("blobstore/staged");
+    if staged_blobs.exists() {
+        fs::remove_dir_all(&staged_blobs)?;
+    }
+    fs::create_dir_all(&staged_blobs)?;
+    let default_bucket = storage.join("keyvalue/default");
+    fs::create_dir_all(&default_bucket)?;
+    fs::write(default_bucket.join("current-revision"), prev_revision.as_bytes())
+}
 
-    for k in resume.at_step..=evolution.steps.len() {
-        if let Ok(later_rev) = read_recorded_revision(source_dir, k)
-            && later_rev != prev_revision
-        {
-            let _ = git(repo, &["branch", "-D", &format!("emery/{later_rev}")]);
+fn check_chain_seed(
+    repo: &Path, prev_commit: &str, scratch: &Path, evolution_name: &str, resume: &EvolveResume,
+) -> io::Result<()> {
+    match seed_drift(repo, prev_commit, scratch)? {
+        None => eprintln!(
+            "eval: `{evolution_name}` seed at `{}` holds the component's template",
+            short(prev_commit)
+        ),
+        Some(drift) if !resume.drifted => {
+            return Err(io::Error::other(format!(
+                "`{}` seeds step {:02} of `{evolution_name}` with a tree laid from an earlier \
+                 template than the staged component carries:\n{drift}\nadmit with `--drifted` \
+                 or re-run from step 00",
+                resume.card, resume.at_step
+            )));
+        }
+        Some(drift) => {
+            eprintln!("eval: `{evolution_name}` resumes a seed admitted by `--drifted`:\n{drift}");
         }
     }
-    rewind_repo_head(repo, &prev_commit)?;
-    Ok(prev_commit)
+    Ok(())
 }
 
 fn read_revision_docs(
@@ -1886,10 +1890,31 @@ fn parse_step_artifact_num(file_name: &str) -> Option<usize> {
     digits.parse().ok()
 }
 
-// Resets `repo`'s `HEAD` (symbolic branch or detached) and working tree to `commit`
-// so `store::current` reads `commit` as `HEAD` without touching `.emery/storage`.
-pub fn rewind_repo_head(repo: &Path, commit: &str) -> io::Result<()> {
-    git(repo, &["reset", "--quiet", "--hard", commit])?;
+// Restores `repo` to match an uninterrupted chain after `prev_commit`:
+// `HEAD` stands at the root `Revision` commit along `prev_commit`'s
+// first-parent chain, stale worktrees are pruned, and `emery/*` branches
+// outside `kept_revisions` are removed.
+pub fn restore_chain_repo(
+    repo: &Path, prev_commit: &str, kept_revisions: &BTreeSet<String>,
+) -> io::Result<()> {
+    git(repo, &["worktree", "prune"])?;
+    let roots = git(repo, &["rev-list", "--first-parent", "--max-parents=0", prev_commit])?;
+    let root_commit = roots
+        .lines()
+        .next()
+        .map(str::trim)
+        .filter(|sha| !sha.is_empty())
+        .unwrap_or(prev_commit)
+        .to_owned();
+    git(repo, &["reset", "--quiet", "--hard", &root_commit])?;
+    let refs = git(repo, &["for-each-ref", "--format=%(refname:short)", "refs/heads/emery/"])?;
+    for branch in refs.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        if let Some(rev) = branch.strip_prefix("emery/")
+            && !kept_revisions.contains(rev)
+        {
+            git(repo, &["branch", "-D", branch])?;
+        }
+    }
     Ok(())
 }
 

@@ -2,10 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use emery_sdk::push_unique;
 use emery_sdk::target::{Change, PartReach, SectionChange};
+use emery_sdk::words;
 
-use crate::scaffold::{Settings, blocks, cited};
+use crate::scaffold::{DesignKey, Settings, blocks, cited};
 use crate::tree::Tree;
 use crate::{layout, syntax};
 
@@ -31,6 +31,7 @@ pub fn scope(change: &Change, tree: &Tree) -> Vec<String> {
     let retired: BTreeSet<String> =
         change.retired.iter().map(|departure| departure.requirement.id.clone()).collect();
     let built = BuiltTree::read(tree, &change.parts);
+    let accounted_domain = DomainTerms::accounted_for_by(change, built.crate_dirs());
 
     for section in &change.sections {
         let rule = SectionScope::of(&section.kind);
@@ -46,17 +47,12 @@ pub fn scope(change: &Change, tree: &Tree) -> Vec<String> {
                         }
                     }
                 }
-                ParagraphEdit::Uncited(mentions) => match rule {
-                    SectionScope::Mentions => {
-                        let matched = built.parts_mentioning(&mentions);
-                        if matched.is_empty() {
-                            return all_parts(&change.parts);
-                        }
-                        reached.extend(matched);
+                ParagraphEdit::Uncited(uncited) => {
+                    match built.scope_uncited(rule, &uncited, &accounted_domain) {
+                        ScopeMatch::Parts(matched) => reached.extend(matched),
+                        ScopeMatch::AllParts => return all_parts(&change.parts),
                     }
-                    SectionScope::AllParts => return all_parts(&change.parts),
-                    SectionScope::Ignored => {}
-                },
+                }
             }
         }
     }
@@ -76,6 +72,7 @@ fn all_parts(parts: &[PartReach]) -> Vec<String> {
 enum SectionScope {
     Ignored,
     Mentions,
+    DomainModel,
     AllParts,
 }
 
@@ -84,31 +81,79 @@ impl SectionScope {
         match kind {
             "overview" | "ui-layout" => Self::Ignored,
             "apis" | "technical-logic" | "observability" => Self::Mentions,
+            "domain-model" => Self::DomainModel,
             _ => Self::AllParts,
         }
     }
 }
 
+enum ScopeMatch {
+    Parts(BTreeSet<String>),
+    AllParts,
+}
+
 struct BuiltTree {
+    crate_dirs: BTreeSet<String>,
     crates: Vec<BuiltCrate>,
 }
 
 impl BuiltTree {
     fn read(tree: &Tree, parts: &[PartReach]) -> Self {
         let dirs: Vec<String> = tree.stem_crates().map(str::to_owned).collect();
-        let existing: BTreeSet<String> = dirs.iter().cloned().collect();
+        let crate_dirs: BTreeSet<String> = dirs.iter().cloned().collect();
         let crates =
-            dirs.into_iter().map(|dir| BuiltCrate::read(tree, &dir, &existing, parts)).collect();
-        Self { crates }
+            dirs.into_iter().map(|dir| BuiltCrate::read(tree, &dir, &crate_dirs, parts)).collect();
+        Self { crate_dirs, crates }
     }
 
-    fn parts_mentioning(&self, prose: &ProseMentions) -> BTreeSet<String> {
-        if prose.is_empty() {
+    const fn crate_dirs(&self) -> &BTreeSet<String> {
+        &self.crate_dirs
+    }
+
+    fn scope_uncited(
+        &self, rule: SectionScope, edit: &UncitedEdit, accounted_domain: &DomainTerms,
+    ) -> ScopeMatch {
+        match rule {
+            SectionScope::Mentions => {
+                let matched = self.parts_with_setting_or_path(&edit.full);
+                if matched.is_empty() { ScopeMatch::AllParts } else { ScopeMatch::Parts(matched) }
+            }
+            SectionScope::DomainModel => self.scope_domain_model(edit, accounted_domain),
+            SectionScope::AllParts => ScopeMatch::AllParts,
+            SectionScope::Ignored => ScopeMatch::Parts(BTreeSet::new()),
+        }
+    }
+
+    fn scope_domain_model(&self, edit: &UncitedEdit, accounted_domain: &DomainTerms) -> ScopeMatch {
+        if edit.delta.domain.intersects(accounted_domain) {
+            return ScopeMatch::Parts(self.parts_with_setting_or_path(&edit.delta));
+        }
+        let matched = self.parts_with_domain(&edit.delta);
+        if !matched.is_empty() {
+            return ScopeMatch::Parts(matched);
+        }
+        let matched = self.parts_with_domain(&edit.full);
+        if matched.is_empty() { ScopeMatch::AllParts } else { ScopeMatch::Parts(matched) }
+    }
+
+    fn parts_with_setting_or_path(&self, prose: &ProseMentions) -> BTreeSet<String> {
+        if !prose.has_setting_or_path() {
             return BTreeSet::new();
         }
         self.crates
             .iter()
-            .filter(|built| built.mentions(prose))
+            .filter(|built| built.mentions_setting_or_path(prose))
+            .flat_map(|built| built.parts.iter().cloned())
+            .collect()
+    }
+
+    fn parts_with_domain(&self, prose: &ProseMentions) -> BTreeSet<String> {
+        if !prose.has_any_mention() {
+            return BTreeSet::new();
+        }
+        self.crates
+            .iter()
+            .filter(|built| built.mentions_domain(prose))
             .flat_map(|built| built.parts.iter().cloned())
             .collect()
     }
@@ -117,17 +162,22 @@ impl BuiltTree {
 struct BuiltCrate {
     parts: Vec<String>,
     settings: BTreeSet<String>,
-    paths: Vec<UrlPath>,
+    paths: BTreeSet<UrlPath>,
+    domain: DomainTerms,
 }
 
 impl BuiltCrate {
     // Associates a stem crate at the built head with its settings, `/`-paths,
-    // and the plan parts whose requirements its comments cite, falling back to
-    // the part's stem name.
-    fn read(tree: &Tree, dir: &str, existing: &BTreeSet<String>, plan_parts: &[PartReach]) -> Self {
+    // declared domain types, and the plan parts whose requirements its comments
+    // cite, falling back to the part's stem name.
+    fn read(
+        tree: &Tree, dir: &str, crate_dirs: &BTreeSet<String>, plan_parts: &[PartReach],
+    ) -> Self {
         let mut requirements = BTreeSet::new();
         let mut settings = BTreeSet::new();
-        let mut paths = Vec::new();
+        let mut paths = BTreeSet::new();
+        let mut domain = DomainTerms::default();
+        domain.insert_identifier(layout::stem_of(dir));
 
         for module in tree.stem_files(dir) {
             requirements.extend(cited(&module.text));
@@ -137,38 +187,56 @@ impl BuiltCrate {
                 }
             }
             if let Some(file) = module.file() {
+                for declared_type in syntax::Declared::of(file).types {
+                    if !is_scaffold_helper_type(&declared_type) {
+                        domain.insert_identifier(&declared_type);
+                    }
+                }
                 for declared in syntax::setting_keys(file) {
                     if Settings::is_key(&declared.key) {
                         settings.insert(declared.key);
                     }
                 }
                 for literal in syntax::string_literals(file) {
-                    settings.extend(setting_tokens(&literal).map(str::to_owned));
+                    settings.extend(setting_tokens(&literal));
                     if let Some(path) = UrlPath::from_literal(&literal) {
-                        push_unique(&mut paths, path);
+                        paths.insert(path);
                     }
                 }
             }
         }
 
         Self {
-            parts: owning_parts(dir, &requirements, existing, plan_parts),
+            parts: owning_parts(dir, &requirements, crate_dirs, plan_parts),
             settings,
             paths,
+            domain,
         }
     }
 
-    fn mentions(&self, prose: &ProseMentions) -> bool {
+    fn mentions_setting_or_path(&self, prose: &ProseMentions) -> bool {
         prose.settings.iter().any(|key| self.settings.contains(key))
             || prose
                 .paths
                 .iter()
                 .any(|prefix| self.paths.iter().any(|held| held.starts_with(prefix)))
     }
+
+    fn mentions_domain(&self, prose: &ProseMentions) -> bool {
+        self.mentions_setting_or_path(prose) || self.domain.intersects(&prose.domain)
+    }
+}
+
+fn is_scaffold_helper_type(name: &str) -> bool {
+    name == "Requires"
+        || name.ends_with("Input")
+        || name.ends_with("Output")
+        || name.ends_with("Settings")
+        || name.ends_with("Error")
 }
 
 fn owning_parts(
-    dir: &str, requirements: &BTreeSet<String>, existing: &BTreeSet<String>, parts: &[PartReach],
+    dir: &str, requirements: &BTreeSet<String>, crate_dirs: &BTreeSet<String>, parts: &[PartReach],
 ) -> Vec<String> {
     let by_requirement: Vec<String> = parts
         .iter()
@@ -192,7 +260,7 @@ fn owning_parts(
     parts
         .iter()
         .filter(|part| {
-            !existing.contains(layout::crate_dir(&part.name))
+            !crate_dirs.contains(layout::crate_dir(&part.name))
                 && part.name.strip_prefix(stem).is_some_and(|rest| rest.starts_with('-'))
         })
         .map(|part| part.id.clone())
@@ -201,36 +269,171 @@ fn owning_parts(
 
 enum ParagraphEdit {
     Cited(Vec<String>),
-    Uncited(ProseMentions),
+    Uncited(UncitedEdit),
 }
 
+struct UncitedEdit {
+    full: ProseMentions,
+    delta: ProseMentions,
+}
+
+impl UncitedEdit {
+    fn single(paragraph: &str) -> Self {
+        let mentions = ProseMentions::from_paragraph(paragraph);
+        Self {
+            delta: mentions.clone(),
+            full: mentions,
+        }
+    }
+
+    fn modified(before: &str, after: &str) -> Self {
+        let before = ProseMentions::from_paragraph(before);
+        let after = ProseMentions::from_paragraph(after);
+        let delta = before.symmetric_difference(&after);
+        let full = before.into_union(after);
+        Self { full, delta }
+    }
+}
+
+#[derive(Clone)]
 struct ProseMentions {
     settings: BTreeSet<String>,
-    paths: Vec<UrlPath>,
+    paths: BTreeSet<UrlPath>,
+    domain: DomainTerms,
 }
 
 impl ProseMentions {
-    fn from_paragraphs<I, S>(paragraphs: I) -> Self
-    where
-        I: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
-        let mut settings = BTreeSet::new();
-        let mut paths = Vec::new();
-        for paragraph in paragraphs {
-            let text = paragraph.as_ref();
-            settings.extend(setting_tokens(text).map(str::to_owned));
-            for token in text.split_whitespace() {
-                if let Some(path) = UrlPath::from_design_token(token) {
-                    push_unique(&mut paths, path);
-                }
+    fn from_paragraph(text: &str) -> Self {
+        Self {
+            settings: setting_tokens(text).collect(),
+            paths: UrlPath::in_prose(text),
+            domain: DomainTerms::from_prose(text),
+        }
+    }
+
+    fn symmetric_difference(&self, other: &Self) -> Self {
+        Self {
+            settings: self.settings.symmetric_difference(&other.settings).cloned().collect(),
+            paths: self.paths.symmetric_difference(&other.paths).cloned().collect(),
+            domain: self.domain.symmetric_difference(&other.domain),
+        }
+    }
+
+    fn into_union(mut self, other: Self) -> Self {
+        self.settings.extend(other.settings);
+        self.paths.extend(other.paths);
+        self.domain.extend(other.domain);
+        self
+    }
+
+    fn has_setting_or_path(&self) -> bool {
+        !self.settings.is_empty() || !self.paths.is_empty()
+    }
+
+    fn has_any_mention(&self) -> bool {
+        self.has_setting_or_path() || !self.domain.is_empty()
+    }
+}
+
+#[derive(Clone, Default)]
+struct DomainTerms(BTreeSet<String>);
+
+impl DomainTerms {
+    const MIN_LEN: usize = 3;
+    const MIN_PLURAL_LEN: usize = 4;
+
+    // Terms already accounted for by added/changed/removed `Type:` blocks,
+    // newly added stems, or retired stems, so narrative `domain-model` edits
+    // introducing them do not widen carried crates they merely link to.
+    fn accounted_for_by(change: &Change, crate_dirs: &BTreeSet<String>) -> Self {
+        let mut terms = Self::default();
+        for type_change in &change.types {
+            let key = DesignKey::parse(&type_change.key);
+            terms.insert_identifier(key.name);
+            if let Some(stem) = key.stem {
+                terms.insert_identifier(stem);
             }
         }
-        Self { settings, paths }
+        for part in &change.parts {
+            if !part.reasons.is_empty() && !crate_dirs.contains(layout::crate_dir(&part.name)) {
+                terms.insert_identifier(&part.name);
+                terms.insert_identifier(layout::stem_of(layout::crate_dir(&part.name)));
+            }
+        }
+        for departure in &change.retired {
+            let stem = departure.requirement.stem();
+            let kept_untouched = change.parts.iter().any(|part| {
+                part.reasons.is_empty() && layout::stem_of(layout::crate_dir(&part.name)) == stem
+            });
+            if !kept_untouched {
+                terms.insert_identifier(stem);
+            }
+        }
+        terms
+    }
+
+    fn from_prose(text: &str) -> Self {
+        let seq: Vec<String> = text
+            .split(|ch: char| !ch.is_ascii_alphanumeric())
+            .filter(|word| !word.is_empty())
+            .map(str::to_ascii_lowercase)
+            .collect();
+        let mut terms: BTreeSet<String> =
+            seq.iter().filter(|word| word.len() >= Self::MIN_LEN).cloned().collect();
+        terms.extend(
+            seq.windows(2)
+                .filter(|pair| pair[0].len() >= Self::MIN_LEN || pair[1].len() >= Self::MIN_LEN)
+                .map(|pair| format!("{}_{}", pair[0], pair[1])),
+        );
+        Self(terms)
+    }
+
+    fn symmetric_difference(&self, other: &Self) -> Self {
+        Self(self.0.symmetric_difference(&other.0).cloned().collect())
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.0.extend(other.0);
+    }
+
+    fn insert_identifier(&mut self, raw: &str) {
+        let segments = words(raw);
+        let Some((last, head)) = segments.split_last() else {
+            return;
+        };
+        for tail in Self::number_forms(last) {
+            let plain = format!("{}{tail}", head.concat());
+            if plain.len() >= Self::MIN_LEN {
+                self.0.insert(plain);
+            }
+            let snake = if head.is_empty() { tail } else { format!("{}_{tail}", head.join("_")) };
+            if snake.len() >= Self::MIN_LEN {
+                self.0.insert(snake);
+            }
+        }
+    }
+
+    fn number_forms(word: &str) -> Vec<String> {
+        let mut forms = vec![word.to_owned()];
+        if word.len() >= Self::MIN_PLURAL_LEN
+            && word.ends_with('s')
+            && !word.ends_with("ss")
+            && !word.ends_with("us")
+            && !word.ends_with("is")
+        {
+            forms.push(word[..word.len() - 1].to_owned());
+        } else if word.len() >= Self::MIN_LEN && !word.ends_with('s') {
+            forms.push(format!("{word}s"));
+        }
+        forms
     }
 
     fn is_empty(&self) -> bool {
-        self.settings.is_empty() && self.paths.is_empty()
+        self.0.is_empty()
+    }
+
+    fn intersects(&self, other: &Self) -> bool {
+        !self.is_empty() && !other.is_empty() && self.0.iter().any(|term| other.0.contains(term))
     }
 }
 
@@ -309,16 +512,12 @@ impl SectionDiff {
         }
 
         if uncited_removed.len() == uncited_added.len() {
-            for pair in uncited_removed.into_iter().zip(uncited_added) {
-                self.edits
-                    .push(ParagraphEdit::Uncited(ProseMentions::from_paragraphs(
-                        <[String; 2]>::from(pair),
-                    )));
+            for (before, after) in uncited_removed.into_iter().zip(uncited_added) {
+                self.edits.push(ParagraphEdit::Uncited(UncitedEdit::modified(&before, &after)));
             }
         } else {
             for paragraph in uncited_removed.into_iter().chain(uncited_added) {
-                self.edits
-                    .push(ParagraphEdit::Uncited(ProseMentions::from_paragraphs([paragraph])));
+                self.edits.push(ParagraphEdit::Uncited(UncitedEdit::single(&paragraph)));
             }
         }
     }
@@ -350,12 +549,13 @@ fn lcs_table(before: &[String], after: &[String]) -> Vec<Vec<usize>> {
     table
 }
 
-fn setting_tokens(text: &str) -> impl Iterator<Item = &str> {
+fn setting_tokens(text: &str) -> impl Iterator<Item = String> + '_ {
     text.split(|ch: char| !ch.is_ascii_alphanumeric() && ch != '_')
         .filter(|word| Settings::is_key(word))
+        .map(str::to_owned)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Segment {
     Literal(String),
     Param,
@@ -371,12 +571,16 @@ impl Segment {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct UrlPath {
     segments: Vec<Segment>,
 }
 
 impl UrlPath {
+    fn in_prose(text: &str) -> BTreeSet<Self> {
+        text.split_whitespace().filter_map(Self::from_design_token).collect()
+    }
+
     fn from_design_token(token: &str) -> Option<Self> {
         let trimmed = token
             .trim_matches(|ch: char| {

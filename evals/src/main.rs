@@ -887,8 +887,8 @@ mod tests {
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
     use crate::evolve::{
         AppliedChange, ChainRun, CountRange, CrateAction, EvolutionReport, EvolveResume,
-        OraclePartition, StepInput, StepRange, StepResult, StepToml, evolutions, rewind_repo_head,
-        step_intent_config, step_source_config, step_tag,
+        OraclePartition, StepInput, StepRange, StepResult, StepToml, evolutions,
+        restore_chain_repo, seed_chain_storage, step_intent_config, step_source_config, step_tag,
     };
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
@@ -3680,9 +3680,31 @@ mod tests {
         assert!(md.contains("1 `git` shell invocation(s)"), "{md}");
 
         let rev1_sha = git(&repo, &["rev-parse", "refs/heads/emery/rev1"]).unwrap();
-        rewind_repo_head(&repo, &rev1_sha).unwrap();
-        assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), rev1_sha);
-        assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]).unwrap(), rev1_sha);
+        let kept = BTreeSet::from(["rev0".to_owned(), "rev1".to_owned()]);
+        restore_chain_repo(&repo, &rev1_sha, &kept).unwrap();
+        assert_eq!(git(&repo, &["rev-parse", "HEAD"]).unwrap(), snap0.commit);
+        assert_eq!(git(&repo, &["rev-parse", "refs/heads/main"]).unwrap(), snap0.commit);
+        assert_eq!(git(&repo, &["rev-parse", "refs/heads/emery/rev1"]).unwrap(), rev1_sha);
+        git(&repo, &["rev-parse", "--verify", "refs/heads/emery/rev2"]).unwrap_err();
+
+        let src_chain = repo.join("src-chain");
+        let dst_chain = repo.join("dst-chain");
+        fs::create_dir_all(src_chain.join(".emery/storage/keyvalue/default")).unwrap();
+        fs::create_dir_all(src_chain.join(".emery/storage/blobstore/staged/rev2")).unwrap();
+        fs::write(src_chain.join(".emery/storage/keyvalue/default/current-revision"), b"rev2")
+            .unwrap();
+        fs::write(src_chain.join(".emery/storage/keyvalue/default/staged"), b"{\"id\":\"rev3\"}")
+            .unwrap();
+        fs::write(src_chain.join(".emery/storage/blobstore/staged/rev2/spec.json"), b"{}").unwrap();
+        seed_chain_storage(&src_chain, &dst_chain, "rev1").unwrap();
+        assert_eq!(
+            fs::read_to_string(dst_chain.join(".emery/storage/keyvalue/default/current-revision"))
+                .unwrap(),
+            "rev1"
+        );
+        assert!(!dst_chain.join(".emery/storage/keyvalue/default/staged").exists());
+        assert!(!dst_chain.join(".emery/storage/blobstore/staged/rev2").exists());
+        assert!(dst_chain.join(".emery/storage/blobstore/staged").is_dir());
 
         fs::remove_dir_all(&repo).unwrap();
 

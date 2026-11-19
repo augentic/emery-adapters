@@ -173,7 +173,7 @@ bad_gateway!("..")    // code "bad_gateway"
 
 - The code is the `error` discriminant the wire body carries, so where the specification names a reason code the handler spells it, `Error::bad_request("segment_unknown", ..)`; the macro is the same error under the default code.
 - Every capability call answers `omnia_sdk::Result<T>` directly (and `anyhow::Error` converts through `From<anyhow::Error>`), so `?` propagates it inside a `Result<_>` handler.
-- A status the four do not cover, a `409`, is the part's own error type: an enum over its cases with a `Host(#[from] omnia_sdk::Error)` variant, implementing `IntoResponse`, as [handlers](handlers.md) shows under "A status of its own".
+- `Error` has **no** `409` variant (`Error::bad_request("conflict", ..)` still answers `400`) and serialises only `{"error": <code>, "message": <description>}`, while `bad_gateway!` and `HttpClientExt::fetch_json` hardcode `"error": "bad_gateway"` with no extra fields. Any status outside the four (`409` for state or concurrency conflicts) or any error carrying extra wire fields (`"state"`, `"upstream"`, `"issues"`) is the part's own `IntoResponse` error enum (wrapping `Host(#[from] omnia_sdk::Error)`, and `Gate(#[from] GateError)` where gated, with `thiserror` and `anyhow` in `[dependencies]`), returned from both the part's helper functions and its handlers as [handlers](handlers.md) shows under "A status of its own".
 
 ## The capabilities — `omnia_sdk`
 

@@ -199,12 +199,18 @@ impl Scaffold {
              `pub fn` of the first stem that needs it, called at the top of each handler it \
              guards; a later stem depends on that crate (`<stem> = { path = \"../<stem>\" }` under \
              its `[dependencies]`) and calls it rather than writing its own. An error answers \
-             the wire code the design's mapping spells, `Error::bad_request(\"<code>\", ..)` \
-             over the macro, which spells the default; a status the host's `Error` lacks (`401`) \
-             is the part's own error type, as the handlers reference shows under \"A status of \
-             its own\". A refusal the specification codes is checked by the handler over \
-             optional fields, since axum's own rejection answers `422`, or a plain `400`, for a \
-             field that is missing or malformed.\n\n",
+             the wire code and fields the design's mapping spells: `Error::bad_request(\"<code>\", ..)` \
+             over the macro, which spells the default, when the status is `400`, `404`, `500`, \
+             or `502` with no extra wire fields, and the part's own `IntoResponse` error enum \
+             (wrapping `omnia_sdk::Error`, and `GateError` when gated, under `#[from]`) for any \
+             status the host's `Error` lacks (`401`, `409`; `Error::bad_request(\"conflict\", ..)` \
+             still emits `400`) or any error carrying extra JSON fields (`state`, `upstream`, \
+             `issues`; `bad_gateway!` and `fetch_json` hardcode `\"error\": \"bad_gateway\"` \
+             with no extra fields), as the handlers reference shows under \"A status of its \
+             own\". Validate every request-body field and bound — including optional fields such \
+             as a note's maximum length — over `Option<T>` input fields up front before any \
+             store or upstream call, since axum's own rejection answers `422`, or a plain `400`, \
+             for a field that is missing or malformed.\n\n",
         );
         if !self.plan.rules.paragraphs.is_empty() {
             text.push_str("The design says of them:\n\n");

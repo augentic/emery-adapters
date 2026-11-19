@@ -111,6 +111,7 @@ It becomes the type its doc's signature spells, as the [handlers](references/han
 Fill the handler as the [handlers](references/handlers.md) reference spells it.
 
 - Fill `<Name>Input`, where the route's requirements state a body, with the body's fields; a path parameter is already a `Path` extractor on the handler. A `POST` whose requirements state no body was laid with no input struct and its tests send none: leave it bodiless, since a `Json` extractor refuses a bodiless request with `415`, unless a scenario's wire carries a body, and then add the struct, the extractor, and the body to its tests together.
+- Validate every request-body schema rule and field bound — including optional fields (such as an optional note's maximum length) and nested object or array item constraints — up front over `Option` fields with `Error::bad_request("<code>", ..)` before any `StateStore`, `SqlDb`, or upstream `HttpClient` call. Keep checks the design places inside an upstream client (an unquotable delivery zone inside a shipping/rates client, an empty quote list, or a non-2xx upstream response) mapped to `502` (`"upstream-unavailable"`) rather than `400`.
 - Fill `<Name>Output` with the response's fields.
 - Replace the block the brief quotes, the `let _ = (&context, ..);` line and the `todo!`, with the body.
 - A handler's `Ok(Json(output))` is answered `200` as JSON. Where the return type is the `(StatusCode, Json<Output>)` pair, answer the status the outcome earns.
@@ -120,8 +121,8 @@ Fill the handler as the [handlers](references/handlers.md) reference spells it.
 - A setting is a field of your part's `<Part>Settings` struct. Load it with `<Part>Settings::load(context.config()).await?` where the body needs it.
   Narrow each field from `String` to the type its value parses as.
 - A topic you publish is a constant of `common::topic`: `context.publisher().publish(topic::NAME, &Message::json(&value)?).await?` (`omnia_sdk::messaging::Message`).
-- Every failure is a classified `omnia_sdk::Error`, propagated with `?`: a fetch that errors, a status that is not success, a body that does not parse.
-  Never catch one and answer `Ok(())` or an empty collection.
+- Every failure is a classified error, propagated with `?`: a fetch that errors, a status that is not success, a body that does not parse.
+  `omnia_sdk::Error` covers only `400`, `404`, `500`, and `502` with `{"error": "<code>", "message": ".."}` — it has **no** `409` constructor (`Error::bad_request("conflict", ..)` still emits `400`!), and `HttpClientExt::fetch_json` / `bad_gateway!` hardcodes `"error": "bad_gateway"` with no extra fields. Where the design maps conflicts to `409` or errors to extra wire fields (`"state"`, `"upstream"`, `"issues"`), answer through the part's own `IntoResponse` error enum (wrapping `omnia_sdk::Error`, and `GateError` when gated, under `#[from]`) as [A status of its own](references/handlers.md) shows, never editing an imported `GateError` in another crate. Never catch a failure and answer `Ok(())` or an empty collection.
 - One handler serves every requirement its marker names. Two requirements at one method and path are one route.
 - A requirement's route is its `Route:` line. The adapter scaffolded the constant, the `.route(..)`, and the handler from it.
   A method and a path a statement or a scenario spells in prose is no route. Add none for it.
@@ -168,8 +169,8 @@ A requirement carrying neither a route nor a message is a `pub fn` with a marker
 
 - Give it the signature the behaviour needs. Change its parameters and its return type as the behaviour demands.
   The block the brief quotes is the function from its signature to its closing brace; its comment and doc lines above stand.
-- Return `omnia_sdk::Result<T>`. Build an error with `bad_request!`, `not_found!`, `bad_gateway!`, or `server_error!`.
-- Never a custom error enum. Never an `Option<T>` that swallows the reason.
+- Return `omnia_sdk::Result<T>` when every failure is `400`, `404`, `500`, or `502` with no extra wire fields, spelling the design's wire code (`Error::bad_request("<code>", ..)`, `Error::not_found("<code>", ..)`, `Error::bad_gateway("<code>", ..)`).
+- Where a requirement or the design's error mapping answers a status `omnia_sdk::Error` lacks — such as `409 Conflict` (`Error::bad_request("conflict", ..)` still emits `400`!) — or extra JSON fields (`"state"`, `"upstream"`, `"issues"`), declare and return the part's `IntoResponse` error enum (with `Host(#[from] omnia_sdk::Error)`, as [A status of its own](references/handlers.md) shows) so handlers propagate the exact HTTP status and fields with `?`. Never return an `Option<T>` that swallows the reason.
 - Add no route to give it a surface.
 
 ```json

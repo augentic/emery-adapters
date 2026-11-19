@@ -11,7 +11,7 @@ use std::path::Path;
 use emery_sdk::target::{
     BuildContext, Change, Departure, DesignType, Grant, InitContext, Outcome, PartReach, Report,
     Requirement, Scenario, ScopeContext, SectionChange, Slice, SliceChange, Standing,
-    TargetAdapter, Task, Verdict, VerifyContext,
+    TargetAdapter, Task, TypeChange, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
 use omnia_sdk::model::ToolCall;
@@ -1710,8 +1710,9 @@ async fn omnia_start_rules() {
          the first stem that needs it, called at the top of each handler it guards; a later \
          stem depends on that crate (`<stem> = { path = \"../<stem>\" }` under its \
          `[dependencies]`) and calls it rather than writing its own.",
-        "`Error::bad_request(\"<code>\", ..)` over the macro, which spells the default; a \
-         status the host's `Error` lacks (`401`) is the part's own error type",
+        "`Error::bad_request(\"<code>\", ..)` over the macro, which spells the default, when the \
+         status is `400`, `404`, `500`, or `502` with no extra wire fields, and the part's own \
+         `IntoResponse` error enum",
         "since axum's own rejection answers `422`, or a plain `400`, for a field that is missing \
          or malformed.\n\nThe design says of them:\n\n> Every route authenticates the request by \
          its bearer before it reads the body.\n\n> An error answers `invalid-request` as 400, \
@@ -7457,25 +7458,31 @@ struct ScopeCase {
 }
 
 impl ScopeCase {
-    fn modified(kind: &str, before: &str, after: &str, expected: &[&str]) -> Self {
+    fn modified(
+        kind: impl Into<String>, before: impl Into<String>, after: impl Into<String>,
+        expected: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         Self {
             section: SectionChange {
-                kind: kind.to_owned(),
-                before: Some(before.to_owned()),
-                after: Some(after.to_owned()),
+                kind: kind.into(),
+                before: Some(before.into()),
+                after: Some(after.into()),
             },
-            expected: expected.iter().map(|id| (*id).to_owned()).collect(),
+            expected: expected.into_iter().map(Into::into).collect(),
         }
     }
 
-    fn added(kind: &str, after: &str, expected: &[&str]) -> Self {
+    fn added(
+        kind: impl Into<String>, after: impl Into<String>,
+        expected: impl IntoIterator<Item = impl Into<String>>,
+    ) -> Self {
         Self {
             section: SectionChange {
-                kind: kind.to_owned(),
+                kind: kind.into(),
                 before: None,
-                after: Some(after.to_owned()),
+                after: Some(after.into()),
             },
-            expected: expected.iter().map(|id| (*id).to_owned()).collect(),
+            expected: expected.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -7484,7 +7491,8 @@ fn plant_scope_tree(project: &Scratch) -> Change {
     project.write(
         "crates/orders/src/orders.rs",
         "//! Orders.\n\nuse omnia_sdk::Settings;\n\npub(crate) const API_ORDERS: &str = \
-         \"/api/orders\";\n\n#[derive(Debug, Settings)]\n#[setting(prefix = \
+         \"/api/orders\";\n\npub struct DeliveryZone {\n    pub zone: String,\n}\n\n\
+         #[derive(Debug, Settings)]\n#[setting(prefix = \
          \"SHIPPING_\")]\npub(crate) struct OrdersSettings {\n    api_key: String,\n    api_url: \
          String,\n}\n\n// REQ-001 orders.place: Places an order.\npub fn quote_url(base: &str, \
          zone: &str) -> String {\n    format!(\"{base}/rates?zone={zone}\")\n}\n",
@@ -7536,57 +7544,100 @@ fn scope_cases() -> Vec<ScopeCase> {
              CRM sync retries twice (REQ-002).",
             "Inbound HTTP: POST /api/orders (REQ-001); GET /health/live (REQ-003).\n\nCustomer \
              CRM sync retries three times (REQ-002).",
-            &["PART-002"],
+            ["PART-002"],
         ),
         ScopeCase::modified(
             "apis",
             "Courier rates calls HTTP.",
             "Courier rates sends `SHIPPING_API_KEY` in `x-api-key`.",
-            &["PART-001"],
+            ["PART-001"],
         ),
         ScopeCase::modified(
             "observability",
             "Logs sync failures.",
             "Redacts `CRM_TOKEN` from sync error fields.",
-            &["PART-002"],
+            ["PART-002"],
         ),
         ScopeCase::modified(
             "apis",
             "Quotes upstream `https://rates.courier.example/rates?zone={zone}`.",
             "Quotes upstream `https://rates.courier.example/rates?zone={zone}` with 2s timeout.",
-            &["PART-001"],
+            ["PART-001"],
         ),
         ScopeCase::modified(
             "technical-logic",
             "Customer lookup at `/api/customers/:id`.",
             "Customer lookup at `/api/customers/:id` trims whitespace.",
-            &["PART-002"],
+            ["PART-002"],
         ),
         ScopeCase::modified(
             "technical-logic",
             "Bearer authentication gates `/api`.",
             "Bearer authentication gates `/api` and rejects blank tokens.",
-            &["PART-001", "PART-002"],
+            ["PART-001", "PART-002"],
         ),
         ScopeCase::modified(
             "technical-logic",
             "Timestamps are ISO-8601.",
             "Timestamps use millisecond precision.",
-            &["PART-001", "PART-002", "PART-003"],
+            ["PART-001", "PART-002", "PART-003"],
         ),
         ScopeCase::added(
             "observability",
             "Exports counters under `OTEL_SERVICE_NAMESPACE` at `/metrics`.",
-            &["PART-001", "PART-002", "PART-003"],
+            ["PART-001", "PART-002", "PART-003"],
+        ),
+        ScopeCase::modified(
+            "domain-model",
+            "Customer records store contact details.",
+            "Customer records normalise email addresses to lowercase.",
+            ["PART-002"],
+        ),
+        ScopeCase::modified(
+            "domain-model",
+            "DeliveryZone ranges are exclusive.",
+            "DeliveryZone ranges are inclusive.",
+            ["PART-001"],
+        ),
+        ScopeCase::modified(
+            "domain-model",
+            "Entity identifiers are opaque strings.",
+            "Entity identifiers are UUIDv7.",
+            ["PART-001", "PART-002", "PART-003"],
         ),
     ]
+}
+
+fn returns_domain_model_change(
+    base: &Change, before: impl Into<String>, after: impl Into<String>,
+) -> Change {
+    let mut change = base.clone();
+    change.parts.push(PartReach {
+        id: "PART-004".to_owned(),
+        name: "returns".to_owned(),
+        requirements: vec!["REQ-004".to_owned()],
+        reasons: vec!["requirements".to_owned(), "types".to_owned(), "plan".to_owned()],
+    });
+    change.types.push(TypeChange {
+        key: "OrderReturn".to_owned(),
+        before: None,
+        after: Some("interface OrderReturn { id: string; orderId: string; }".to_owned()),
+    });
+    change.sections = vec![SectionChange {
+        kind: "domain-model".to_owned(),
+        before: Some(before.into()),
+        after: Some(after.into()),
+    }];
+    change
 }
 
 // Omnia scopes changed design prose against the built tree: a changed paragraph
 // citing `REQ-` ids reaches those ids' parts; an uncited paragraph in `apis`,
 // `technical-logic`, or `observability` reaches parts whose crates mention one
-// of its `SCREAMING_SNAKE` keys or `/`-paths, falling back to every part when
-// nothing matches; `overview` and `ui-layout` reach nothing.
+// of its `SCREAMING_SNAKE` keys or `/`-paths, and an uncited paragraph in
+// `domain-model` ignores summary prose accounted for by added stems or changed
+// types and otherwise matches stem and declared type names, falling back to
+// every part when nothing matches; `overview` and `ui-layout` reach nothing.
 #[tokio::test]
 async fn omnia_scope() {
     let project = omnia_tree().await;
@@ -7608,6 +7659,34 @@ async fn omnia_scope() {
         },
     ];
     assert_eq!(OMNIA.scoped(&project, &overview).await.expect("overview scope"), ["PART-003"]);
+
+    // adding a new stem (`returns`) and updating `domain-model` summary prose
+    // or adding an `OrderReturn` paragraph leaves `customers` and `orders` carried
+    let returns_added = returns_domain_model_change(
+        &base,
+        "Core persisted and API shapes are customers, orders, lines, addresses, transitions, \
+         catalogue rows, shipping quotes, and paginated list results. Order state is a small \
+         enumerated lifecycle; delivery postcodes map through a static zone table used when \
+         quoting shipping.",
+        "Core persisted and API shapes are customers, orders, lines, addresses, transitions, \
+         catalogue rows, shipping quotes, paginated list results, and order returns linked to \
+         orders. Order state is a small enumerated lifecycle; delivery postcodes map through a \
+         static zone table used when quoting shipping.",
+    );
+    assert_eq!(
+        OMNIA.scoped(&project, &returns_added).await.expect("returns domain-model summary"),
+        ["PART-004"]
+    );
+    let returns_paragraph = returns_domain_model_change(
+        &base,
+        "Core shapes are customers and orders.",
+        "Core shapes are customers and orders.\n\nOrderReturn records reference an Order by \
+         orderId.",
+    );
+    assert_eq!(
+        OMNIA.scoped(&project, &returns_paragraph).await.expect("returns domain-model paragraph"),
+        ["PART-004"]
+    );
 
     // a changed paragraph citing `REQ-` ids reaches those ids' parts, while a
     // withdrawn retired paragraph in the same hunk never masks an uncited addition
