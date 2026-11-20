@@ -14,7 +14,7 @@ use emery_sdk::target::{
     TargetAdapter, Task, TypeChange, Verdict, VerifyContext,
 };
 use emery_sdk::{Doc, Error, Route, Trigger, body};
-use omnia_sdk::model::ToolCall;
+use omnia_sdk::model::{ToolCall, WorkerGrant};
 use omnia_test::SeenWorker;
 use omnia_test::guest::ScriptedModel;
 use omnia_test::host::{Scratch, scratch};
@@ -1042,6 +1042,28 @@ async fn omnia() {
         pins.iter().map(|(_, version)| *version).collect();
     assert_eq!(versions.len(), 1, "every omnia pin in the seed is one version: {pins:?}");
     assert!(manifest.contains(OMNIA_PIN), "the scenarios edit the pin the seed holds");
+    assert_omnia_grants();
+}
+
+fn assert_omnia_grants() {
+    let grants = emery_omnia::Adapter::metadata().grants;
+    assert_eq!(Grant::findings(&grants), Vec::<String>::new());
+    assert_eq!(
+        Grant::union(&grants),
+        Some(WorkerGrant {
+            egress: vec![
+                "index.crates.io".to_owned(),
+                "static.crates.io".to_owned(),
+                "github.com".to_owned(),
+            ],
+            read: vec!["~/.rustup".to_owned(), "~/.cargo/bin".to_owned()],
+            env: vec![
+                ("RUSTUP_HOME".to_owned(), "~/.rustup".to_owned()),
+                ("DEVELOPER_DIR".to_owned(), "/Library/Developer/CommandLineTools".to_owned()),
+            ],
+        }),
+        "the united worker grant the adapter's turns carry"
+    );
 }
 
 fn text(project: &Scratch, path: &str) -> String {
@@ -7513,24 +7535,9 @@ fn plant_scope_tree(project: &Scratch) -> Change {
         built: "rev-001".to_owned(),
         commit: "abc1234".to_owned(),
         parts: vec![
-            PartReach {
-                id: "PART-001".to_owned(),
-                name: "orders".to_owned(),
-                requirements: vec!["REQ-001".to_owned()],
-                reasons: Vec::new(),
-            },
-            PartReach {
-                id: "PART-002".to_owned(),
-                name: "customers".to_owned(),
-                requirements: vec!["REQ-002".to_owned()],
-                reasons: Vec::new(),
-            },
-            PartReach {
-                id: "PART-003".to_owned(),
-                name: "health".to_owned(),
-                requirements: vec!["REQ-003".to_owned()],
-                reasons: Vec::new(),
-            },
+            part_reach("PART-001", "orders", ["REQ-001"]),
+            part_reach("PART-002", "customers", ["REQ-002"]),
+            part_reach("PART-003", "health", ["REQ-003"]),
         ],
         ..Change::default()
     }
@@ -7730,6 +7737,221 @@ async fn omnia_scope() {
             case.section.kind,
             case.section.after
         );
+    }
+
+    assert_multi_stem_scope().await;
+}
+
+async fn assert_multi_stem_scope() {
+    let project = omnia_tree().await;
+    let base = plant_multi_stem_scope_tree(&project);
+    assert_clause_and_shared_start_scope(&project, &base).await;
+    assert_retired_stem_and_start_scope(&project, &base).await;
+}
+
+async fn assert_clause_and_shared_start_scope(project: &Scratch, base: &Change) {
+    // clause edit inside a multi-stem paragraph with a non-ASCII heading
+    let mut clause_edit = base.clone();
+    clause_edit.retired = ["REQ-047", "REQ-048", "REQ-049"]
+        .into_iter()
+        .map(|id| retired_departure(id, "orders.put-id-lines"))
+        .collect();
+    clause_edit.sections = vec![section_edit(
+        "apis",
+        "**Inbound — HTTP (Express)** — JSON request and response bodies unless noted. Global \
+         middleware protects `/api` with Bearer validation (REQ-008, REQ-009). Contract routes: \
+         `GET /health/live` (REQ-005); `GET /health/ready` (REQ-006, REQ-007); `GET \
+         /api/customers/:customer_id`, `POST /api/customers` (REQ-018–REQ-026); `GET /api/orders`, \
+         `POST /api/orders`, `PUT /api/orders/:order_id/lines` (REQ-029–REQ-033, REQ-047–REQ-049), \
+         `POST /api/orders/:order_id/pay` (REQ-051–REQ-056).",
+        "**Inbound — HTTP (Express)** — JSON request and response bodies unless noted. Global \
+         middleware protects `/api` with Bearer validation (REQ-008, REQ-009). Contract routes: \
+         `GET /health/live` (REQ-005); `GET /health/ready` (REQ-006, REQ-007); `GET \
+         /api/customers/:customer_id`, `POST /api/customers` (REQ-018–REQ-026); `GET /api/orders`, \
+         `POST /api/orders` (REQ-029–REQ-033), `POST /api/orders/:order_id/pay` (REQ-051–REQ-056).",
+    )];
+    assert_eq!(
+        OMNIA.scoped(project, &clause_edit).await.expect("multi-stem clause scope"),
+        ["PART-003"]
+    );
+
+    // shared untriggered start citation with an orders setting
+    let mut shared_start = base.clone();
+    shared_start.sections = vec![
+        section_edit(
+            "apis",
+            "**Upstream delivery-rates (HTTP `fetch`)** — Base URL from `SHIPPING_API_URL` \
+             (default `https://rates.courier.example/v2`). `GET \
+             ${SHIPPING_API_URL}/rates?zone={zone}&weight={weightGrams}` with header \
+             `Authorization: Bearer {SHIPPING_API_KEY}` (`SHIPPING_API_KEY` default empty), \
+             surfacing upstream failures as 502 `upstream-unavailable` (REQ-016, REQ-043).",
+            "**Upstream delivery-rates (HTTPS `fetch`)** — Base URL from `SHIPPING_API_URL` \
+             (default `https://rates.courier.example/v2`). `GET \
+             ${SHIPPING_API_URL}/rates?zone={zone}&weight={weightGrams}` with header `x-api-key: \
+             {SHIPPING_API_KEY}` (`SHIPPING_API_KEY` default empty), surfacing upstream failures \
+             as 502 `upstream-unavailable` (REQ-016, REQ-043).",
+        ),
+        section_edit(
+            "technical-logic",
+            "**Outbound rates client** — Bearer `SHIPPING_API_KEY`, surfacing `UpstreamError` for \
+             502 mapping (REQ-016).",
+            "**Outbound rates client** — `x-api-key` `SHIPPING_API_KEY`, surfacing \
+             `UpstreamError` for 502 mapping (REQ-016).",
+        ),
+    ];
+    assert_eq!(
+        OMNIA.scoped(project, &shared_start).await.expect("shared start citation scope"),
+        ["PART-003"]
+    );
+}
+
+async fn assert_retired_stem_and_start_scope(project: &Scratch, base: &Change) {
+    // retired stem with dropped citation and startup prose edit
+    let mut retired_stem = base.clone();
+    retired_stem.parts.retain(|part| part.id != "PART-004");
+    retired_stem.retired = ["REQ-065", "REQ-066", "REQ-067", "REQ-068", "REQ-071"]
+        .into_iter()
+        .map(|id| retired_departure(id, "returns.create"))
+        .collect();
+    retired_stem.types.push(TypeChange {
+        key: "OrderReturn".to_owned(),
+        before: Some("interface OrderReturn { id: string; orderId: string; }".to_owned()),
+        after: None,
+    });
+    retired_stem.sections = vec![
+        section_edit(
+            "apis",
+            "**Cache (Redis)** — Order cache after store read uses 60 seconds (REQ-029, \
+             REQ-068).\n\n**Returns (HTTP)** — Contract routes `GET /api/returns/:return_id` \
+             (REQ-065, REQ-066) and `POST /api/returns` (REQ-067 through REQ-071).\n\n**Returns \
+             (store)** — `SELECT * FROM returns WHERE id = $1` and `INSERT INTO returns` persist \
+             returns. Return creation loads `SELECT * FROM orders WHERE id = $1` on a cache \
+             miss.\n\n**Returns (cache)** — During return creation the service reads `GET \
+             orders-api:order:{orderId}` and sets TTL 60 seconds.",
+            "**Cache (Redis)** — Order cache after store read uses 60 seconds (REQ-029).",
+        ),
+        section_edit(
+            "technical-logic",
+            "**Startup and shutdown** — At load, construct store pool from `DATABASE_URL`, wire \
+             customer, order, and return services, and listen on `PORT` (REQ-064).",
+            "**Startup and shutdown** — At load, construct store pool from `DATABASE_URL`, wire \
+             customer and order services, and listen on `PORT` (REQ-064).",
+        ),
+    ];
+    assert_eq!(
+        OMNIA.scoped(project, &retired_stem).await.expect("retired stem scope"),
+        Vec::<String>::new()
+    );
+
+    // untriggered start gate setting vs built health crate citation
+    let mut gate_edit = base.clone();
+    gate_edit.sections = vec![section_edit(
+        "apis",
+        "**Authentication tokens** — Header validation reads `API_TOKENS` with `Bearer ` \
+         (REQ-008).",
+        "**Authentication tokens** — Header validation reads `API_TOKENS` with `Token ` \
+         (REQ-008).",
+    )];
+    assert_eq!(
+        OMNIA.scoped(project, &gate_edit).await.expect("untriggered start gate scope"),
+        ["PART-002", "PART-003"]
+    );
+
+    let mut health_edit = base.clone();
+    health_edit.sections = vec![section_edit(
+        "technical-logic",
+        "Live handler responds `{ status: \"ok\" }` (REQ-005).",
+        "Live handler responds `{ status: \"alive\" }` (REQ-005).",
+    )];
+    assert_eq!(
+        OMNIA.scoped(project, &health_edit).await.expect("health start crate scope"),
+        ["PART-001"]
+    );
+}
+
+fn section_edit(
+    kind: impl Into<String>, before: impl Into<String>, after: impl Into<String>,
+) -> SectionChange {
+    SectionChange {
+        kind: kind.into(),
+        before: Some(before.into()),
+        after: Some(after.into()),
+    }
+}
+
+fn retired_departure(id: impl Into<String>, subject: impl Into<String>) -> Departure {
+    Departure {
+        requirement: Requirement {
+            id: id.into(),
+            subject: subject.into(),
+            statement: vec!["Withdrawn.".to_owned()],
+            scenarios: Vec::new(),
+            trigger: None,
+        },
+        moved_to: None,
+    }
+}
+
+fn part_reach(
+    id: impl Into<String>, name: impl Into<String>,
+    requirements: impl IntoIterator<Item = impl Into<String>>,
+) -> PartReach {
+    PartReach {
+        id: id.into(),
+        name: name.into(),
+        requirements: requirements.into_iter().map(Into::into).collect(),
+        reasons: Vec::new(),
+    }
+}
+
+fn plant_multi_stem_scope_tree(project: &Scratch) -> Change {
+    project.write(
+        "crates/health/src/start.rs",
+        "//! Health.\n\npub(crate) const HEALTH_LIVE: &str = \"/health/live\";\npub(crate) const \
+         HEALTH_READY: &str = \"/health/ready\";\n\n// REQ-005 start.live: Live.\n// REQ-006 \
+         start.ready: Ready.\n// REQ-007 start.ready-db: DB ready.\npub fn live() {}\n",
+    );
+    project.write(
+        "crates/customers/src/customers.rs",
+        "//! Customers.\n\nuse omnia_sdk::Settings;\n\npub(crate) const API_CUSTOMERS_ID: &str = \
+         \"/api/customers/{id}\";\n\n#[derive(Debug, Settings)]\npub(crate) struct GateSettings \
+         {\n    api_tokens: String,\n}\n\npub struct Customer {\n    pub id: String,\n}\n\n// \
+         REQ-018 customers.get-id: Reads customer.\n// REQ-020 customers.post: Creates \
+         customer.\npub fn check() {}\n",
+    );
+    project.write(
+        "crates/orders/src/orders.rs",
+        "//! Orders.\n\nuse omnia_sdk::Settings;\n\npub(crate) const API_ORDERS: &str = \
+         \"/api/orders\";\n\n#[derive(Debug, Settings)]\n#[setting(prefix = \
+         \"SHIPPING_\")]\npub(crate) struct OrdersSettings {\n    api_key: String,\n    api_url: \
+         String,\n}\n\npub struct Order {\n    pub id: String,\n}\n\n// REQ-029 orders.list: Lists \
+         orders.\n// REQ-043 orders.rates: Quotes rates.\npub fn quote_url(base: &str) -> String \
+         {\n    let _ = \"API_TOKENS\";\n    format!(\"{base}/rates\")\n}\n",
+    );
+    project.write(
+        "crates/returns/src/returns.rs",
+        "//! Returns.\n\npub(crate) const API_RETURNS_ID: &str = \"/api/returns/{id}\";\n\npub \
+         struct OrderReturn {\n    pub id: String,\n}\n\n// REQ-065 returns.get-id: Reads \
+         return.\n// REQ-067 returns.post: Creates return.\npub fn get_return() {}\n",
+    );
+    Change {
+        built: "rev-003".to_owned(),
+        commit: "def5678".to_owned(),
+        parts: vec![
+            part_reach(
+                "PART-001",
+                "start",
+                ["REQ-005", "REQ-006", "REQ-007", "REQ-008", "REQ-009", "REQ-016", "REQ-064"],
+            ),
+            part_reach("PART-002", "customers", ["REQ-018", "REQ-020", "REQ-026"]),
+            part_reach(
+                "PART-003",
+                "orders",
+                ["REQ-029", "REQ-033", "REQ-043", "REQ-044", "REQ-051", "REQ-056"],
+            ),
+            part_reach("PART-004", "returns", ["REQ-065", "REQ-066", "REQ-067", "REQ-071"]),
+        ],
+        ..Change::default()
     }
 }
 

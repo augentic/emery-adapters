@@ -39,6 +39,10 @@ impl TargetAdapter for Adapter {
             env: vec![("RUSTUP_HOME".into(), "~/.rustup".into())],
             ..Grant::default()
         };
+        let cc = Grant {
+            env: vec![("DEVELOPER_DIR".into(), "/Library/Developer/CommandLineTools".into())],
+            ..Grant::default()
+        };
         Metadata {
             rules: vec![
                 MergeRule::ours("Cargo.lock"),
@@ -48,7 +52,7 @@ impl TargetAdapter for Adapter {
                 MergeRule::union("crates/*/Cargo.toml"),
                 MergeRule::union("crates/*/src/lib.rs"),
             ],
-            grants: vec![cargo, rustup],
+            grants: vec![cargo, rustup, cc],
             budget: NonZeroU32::new(12),
         }
     }
