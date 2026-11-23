@@ -1,8 +1,10 @@
-//! Renders the evolution scorecard and `## Evolution` section: step rows, checks `C1`–`C6`,
-//! the six diagnostic measures, and per-step cost.
+//! Renders the evolution scorecard (`## Evolution`) and the amend-only repeat
+//! scorecard (`## Amend reliability`).
 
+use std::collections::BTreeMap;
 use std::fmt::{self, Display, Formatter, Write as _};
 use std::iter::Sum;
+use std::num::NonZeroUsize;
 use std::ops::{AddAssign, RangeInclusive};
 use std::time::Duration;
 
@@ -10,28 +12,22 @@ use super::{
     adapters_summary, build_flags_summary, comma_joined, knobs_summary, ladder_summary, short,
 };
 use crate::Settings;
-use crate::evolve::{ChainRun, EvolutionReport, OraclePartition, StepResult, step_tag};
+use crate::evolve::{
+    AmendAttempt, AmendReliabilityReport, AmendStepReport, AttemptOutcome, BaselineOutcome,
+    ChainRun, EvolutionReport, OraclePartition, SealOutcome, StepResult, step_tag,
+};
 use crate::locality::{AmendGrade, RoundTripDelta, ScopeGrade, StepLocality};
-use crate::run::Tokens;
+use crate::run::{NarrowedSource, Tokens};
 
 pub fn evolution_scorecard(
     settings: &Settings, reports: &[EvolutionReport], started: &str, name: &str,
 ) -> String {
-    let (timeout, inactivity) = settings.backend.rung();
-    let mut card = format!(
-        "# Eval {started}\n\nmodel `{}` (`{}`) · backend {} · emery `{}` · {} · ladder {} \
-         (`{timeout}`/`{inactivity}`){} · build under {} at {} \
-         (`EVAL_BUILD_RUNG`) · runs under `target/eval/{name}/`\n",
-        settings.model,
-        settings.backend.model().0,
-        settings.backend.name(),
-        settings.emery.display(),
-        adapters_summary(settings),
-        ladder_summary(settings),
-        knobs_summary(settings),
+    let mode_detail = format!(
+        "build under {} at {} (`EVAL_BUILD_RUNG`)",
         build_flags_summary(settings),
-        settings.build_rung,
+        settings.build_rung
     );
+    let mut card = scorecard_header(settings, started, &mode_detail, name);
     let _ = evolution_section(&mut card, reports);
     card
 }
@@ -41,6 +37,44 @@ pub fn evolution_section(f: &mut impl fmt::Write, reports: &[EvolutionReport]) -
         return Ok(());
     }
     writeln!(f, "\n## Evolution")?;
+    for report in reports {
+        write!(f, "{report}")?;
+    }
+    Ok(())
+}
+
+pub fn amend_reliability_scorecard(
+    settings: &Settings, reports: &[AmendReliabilityReport], repeat: NonZeroUsize, started: &str,
+    name: &str,
+) -> String {
+    let mode_detail = format!("amend-only (`--repeat {repeat}`)");
+    let mut card = scorecard_header(settings, started, &mode_detail, name);
+    let _ = amend_reliability_section(&mut card, reports);
+    card
+}
+
+fn scorecard_header(settings: &Settings, started: &str, mode_detail: &str, name: &str) -> String {
+    let (timeout, inactivity) = settings.backend.rung();
+    format!(
+        "# Eval {started}\n\nmodel `{}` (`{}`) · backend {} · emery `{}` · {} · ladder {} \
+         (`{timeout}`/`{inactivity}`){} · {mode_detail} · runs under `target/eval/{name}/`\n",
+        settings.model,
+        settings.backend.model().0,
+        settings.backend.name(),
+        settings.emery.display(),
+        adapters_summary(settings),
+        ladder_summary(settings),
+        knobs_summary(settings),
+    )
+}
+
+pub fn amend_reliability_section(
+    f: &mut impl fmt::Write, reports: &[AmendReliabilityReport],
+) -> fmt::Result {
+    if reports.is_empty() {
+        return Ok(());
+    }
+    writeln!(f, "\n## Amend reliability")?;
     for report in reports {
         write!(f, "{report}")?;
     }
@@ -1087,4 +1121,365 @@ fn write_cost_table(f: &mut Formatter<'_>, chain: &ChainRun) -> fmt::Result {
 
 fn admitted_touches(locality: &StepLocality) -> impl Iterator<Item = &str> {
     locality.crates.iter().flat_map(|krate| krate.touched_items.iter().map(String::as_str))
+}
+
+impl Display for AmendReliabilityReport {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let planned_steps = self.step_range.map_or(self.evolution.steps.len(), |r| r.end);
+        write!(
+            f,
+            "\nCase `{}` · base `{}` · target `{}` · {} steps · repeat {}",
+            self.evolution.name,
+            self.evolution.base.name,
+            self.target.name(),
+            self.evolution.steps.len(),
+            self.repeat,
+        )?;
+        if let Some(range) = &self.step_range {
+            write!(f, " · steps `{range}`")?;
+        }
+        writeln!(f)?;
+
+        write_amend_baseline_line(f, self)?;
+        write_amend_totals_line(f, self, planned_steps)?;
+        if self.steps.is_empty() {
+            return Ok(());
+        }
+
+        write_amend_summary_table(f, &self.steps)?;
+        for step in &self.steps {
+            write_amend_step_block(f, step)?;
+        }
+        Ok(())
+    }
+}
+
+fn write_amend_baseline_line(
+    f: &mut Formatter<'_>, report: &AmendReliabilityReport,
+) -> fmt::Result {
+    let base = &report.baseline;
+    match &base.outcome {
+        BaselineOutcome::Sealed(rev) => writeln!(
+            f,
+            "\nBaseline `step-00`: specify ok in {}s ({} completions), sealed `{}`",
+            base.wall.as_secs(),
+            base.completions.len(),
+            short(rev),
+        ),
+        BaselineOutcome::Failed { exit: Some(code) } => writeln!(
+            f,
+            "\nBaseline `step-00`: specify exit {code} FAIL in {}s ({} completions) — chain \
+             stopped at `step-00` (`step-00.specify.stderr`)",
+            base.wall.as_secs(),
+            base.completions.len(),
+        ),
+        BaselineOutcome::Failed { exit: None } => writeln!(
+            f,
+            "\nBaseline `step-00`: specify killed FAIL in {}s — chain stopped at `step-00` \
+             (`step-00.specify.stderr`)",
+            base.wall.as_secs(),
+        ),
+    }
+}
+
+fn write_amend_totals_line(
+    f: &mut Formatter<'_>, report: &AmendReliabilityReport, planned_steps: usize,
+) -> fmt::Result {
+    let total_attempts: usize = report.steps.iter().map(|s| s.attempts.len()).sum();
+    let total_exits: usize = report.steps.iter().map(AmendStepReport::exits_ok).sum();
+    let total_matches: usize = report.steps.iter().map(AmendStepReport::grade_matches).sum();
+    let status = if !report.baseline.is_sealed() {
+        "chain stopped at `step-00`".to_owned()
+    } else if let Some(stopped) = report.steps.iter().find(|s| s.outcome.is_stopped()) {
+        format!("chain stopped at `{}`", stopped.tag)
+    } else {
+        "chain completed".to_owned()
+    };
+    writeln!(
+        f,
+        "Totals: {total_attempts} attempts across {}/{planned_steps} steps · \
+         {total_exits}/{total_attempts} exits ok · {total_matches}/{total_attempts} grade matches \
+         · {status}",
+        report.steps.len(),
+    )
+}
+
+fn write_amend_summary_table(f: &mut Formatter<'_>, steps: &[AmendStepReport]) -> fmt::Result {
+    writeln!(
+        f,
+        "\n| step | title | sealed | attempts | exits ok | grade matches | grouping claims | standing in play | dropped claims | corrected | mean wall |\n\
+         | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    )?;
+    for step in steps {
+        let count = step.attempts.len();
+        let claims_cell = match ValueSpan::of(
+            step.attempts.iter().filter_map(|a| a.grouping_load.map(|l| l.claims)),
+        ) {
+            Some(span) if span.max == 0 && step.grouping_turns() == 0 => "0 (no turn)".to_owned(),
+            Some(span) => span.to_string(),
+            None => "—".to_owned(),
+        };
+        let standing_cell = ValueSpan::cell(
+            step.attempts.iter().filter_map(|a| a.grouping_load.map(|l| l.standing)),
+        );
+        let dropped_cell =
+            ValueSpan::cell(step.attempts.iter().filter_map(AmendAttempt::dropped_claims));
+        writeln!(
+            f,
+            "| `{}` | {} | {} | {count} | {}/{count} | {}/{count} | {claims_cell} | {standing_cell} | {dropped_cell} | {} | {}s |",
+            step.tag,
+            step.title,
+            sealed_cell(&step.outcome),
+            step.exits_ok(),
+            step.grade_matches(),
+            step.corrected_rounds(),
+            step.mean_wall().as_secs(),
+        )?;
+    }
+    Ok(())
+}
+
+fn sealed_cell(outcome: &SealOutcome) -> String {
+    match outcome {
+        SealOutcome::Sealed { revision, retries: 0 } => format!("`{}`", short(revision)),
+        SealOutcome::Sealed { revision, retries } => {
+            format!("`{}` (retry {retries})", short(revision))
+        }
+        SealOutcome::Stopped { retries: 0 } => "STOPPED".to_owned(),
+        SealOutcome::Stopped { retries } => format!("STOPPED (0/{retries} retries)"),
+    }
+}
+
+fn write_amend_step_block(f: &mut Formatter<'_>, step: &AmendStepReport) -> fmt::Result {
+    let count = step.attempts.len();
+    let heading_state = match &step.outcome {
+        SealOutcome::Sealed { revision, retries: 0 } => format!("sealed `{}`", short(revision)),
+        SealOutcome::Sealed { revision, retries } => {
+            format!("sealed `{}` on uncounted retry {retries}", short(revision))
+        }
+        SealOutcome::Stopped { .. } => "STOPPED".to_owned(),
+    };
+    writeln!(f, "\n### `{}` {} — {heading_state}\n", step.tag, step.title)?;
+    writeln!(
+        f,
+        "- attempts: {count} · exits ok: {}/{count} · grade matches: {}/{count} · grouping turns: \
+         {}/{count} · mean wall: {}s",
+        step.exits_ok(),
+        step.grade_matches(),
+        step.grouping_turns(),
+        step.mean_wall().as_secs(),
+    )?;
+    writeln!(f, "- grouping load: {}", grouping_load_summary(&step.attempts))?;
+    writeln!(f, "- dropped claims: {}", dropped_claims_summary(&step.attempts))?;
+    writeln!(f, "- corrected rounds: {}", corrected_rounds_summary(step))?;
+
+    write_attempt_table(f, step)?;
+    write_step_diagnostics(f, step)
+}
+
+fn grouping_load_summary(attempts: &[AmendAttempt]) -> String {
+    let loads: Vec<_> = attempts.iter().filter_map(|a| a.grouping_load).collect();
+    let Some(claims) = ValueSpan::of(loads.iter().map(|l| l.claims)) else {
+        return "—".to_owned();
+    };
+    let standing = ValueSpan::cell(loads.iter().map(|l| l.standing));
+    let settled = ValueSpan::cell(loads.iter().map(|l| l.settled));
+    format!("claims {claims}, standing in play {standing} (settled {settled})")
+}
+
+fn dropped_claims_summary(attempts: &[AmendAttempt]) -> String {
+    let Some(total_span) = ValueSpan::of(attempts.iter().filter_map(AmendAttempt::dropped_claims))
+    else {
+        return "none".to_owned();
+    };
+    let mut by_source: BTreeMap<String, SourceNarrowingSpan> = BTreeMap::new();
+    for entry in attempts.iter().flat_map(|a| &a.narrowed) {
+        by_source
+            .entry(entry.source.clone())
+            .and_modify(|span| span.record(entry))
+            .or_insert_with(|| SourceNarrowingSpan::from_entry(entry));
+    }
+    let details: Vec<String> =
+        by_source.into_iter().map(|(source, span)| format!("`{source}`: {span}")).collect();
+    format!("{total_span} ({})", details.join("; "))
+}
+
+fn corrected_rounds_summary(step: &AmendStepReport) -> String {
+    let total = step.corrected_rounds();
+    if total == 0 {
+        return "0".to_owned();
+    }
+    let by_target = format_rejections(&step.rejections_by_target());
+    format!("{total} ({by_target})")
+}
+
+fn format_rejections(map: &BTreeMap<String, usize>) -> String {
+    if map.is_empty() {
+        return "none".to_owned();
+    }
+    map.iter().map(|(target, count)| format!("`{target}`: {count}")).collect::<Vec<_>>().join(", ")
+}
+
+fn write_attempt_table(f: &mut Formatter<'_>, step: &AmendStepReport) -> fmt::Result {
+    if step.attempts.is_empty() {
+        return Ok(());
+    }
+    writeln!(
+        f,
+        "\n| attempt | exit | grade | grouping | dropped | corrected | completions | wall | artifact |\n\
+         | --- | --- | --- | --- | --- | --- | --- | --- | --- |"
+    )?;
+    for attempt in &step.attempts {
+        let exit_cell = match (&attempt.outcome, attempt.died_in()) {
+            (AttemptOutcome::Staged(_) | AttemptOutcome::Unstaged, _) => "0".to_owned(),
+            (AttemptOutcome::Failed { exit: Some(code) }, Some(label)) => {
+                format!("{code} in `{label}`")
+            }
+            (AttemptOutcome::Failed { exit: Some(code) }, None) => code.to_string(),
+            (AttemptOutcome::Failed { exit: None }, _) => "killed".to_owned(),
+        };
+        let grade_cell = match &attempt.outcome {
+            AttemptOutcome::Staged(grade) => summarize_amend(grade),
+            AttemptOutcome::Unstaged => "unstaged FAIL".to_owned(),
+            AttemptOutcome::Failed { .. } => "—".to_owned(),
+        };
+        let grouping_cell = attempt.grouping_load.map_or_else(
+            || "—".to_owned(),
+            |load| {
+                let turn = attempt.grouping_outcome().unwrap_or("no turn");
+                format!("{} claims, {} standing ({turn})", load.claims, load.standing)
+            },
+        );
+        let dropped_cell =
+            attempt.dropped_claims().map_or_else(|| "—".to_owned(), |dropped| dropped.to_string());
+        writeln!(
+            f,
+            "| {} | {exit_cell} | {grade_cell} | {grouping_cell} | {dropped_cell} | {} | {} | {}s | `{}` |",
+            attempt.number,
+            format_rejections(&attempt.rejections),
+            attempt.completions.len(),
+            attempt.wall.as_secs(),
+            attempt.artifact_file(&step.tag),
+        )?;
+    }
+    Ok(())
+}
+
+fn write_step_diagnostics(f: &mut Formatter<'_>, step: &AmendStepReport) -> fmt::Result {
+    for attempt in &step.attempts {
+        let n = attempt.number;
+        let artifact = attempt.artifact_file(&step.tag);
+        match &attempt.outcome {
+            AttemptOutcome::Staged(grade) if grade.passed() => {}
+            AttemptOutcome::Staged(grade) => writeln!(
+                f,
+                "- attempt {n} mismatch (`{artifact}`): {}",
+                grade.mismatches.join("; ")
+            )?,
+            AttemptOutcome::Unstaged => writeln!(
+                f,
+                "- attempt {n} unstaged (`{artifact}`): staged no amendment, expected {}",
+                step.expected
+            )?,
+            AttemptOutcome::Failed { exit } => {
+                let why = match (*exit, attempt.died_in()) {
+                    (Some(code), Some(label)) => format!("exit {code} in `{label}`"),
+                    (Some(code), None) => format!("exit {code}"),
+                    (None, _) => "killed".to_owned(),
+                };
+                writeln!(f, "- attempt {n} failed (`{artifact}`): {why}")?;
+            }
+        }
+    }
+    match &step.outcome {
+        SealOutcome::Sealed { retries: 0, .. } => {}
+        SealOutcome::Sealed { revision, retries } => writeln!(
+            f,
+            "- seal retry: sealed `{}` on uncounted retry {retries} \
+             (`{}.amend-retry-{retries}.stderr`)",
+            short(revision),
+            step.tag,
+        )?,
+        SealOutcome::Stopped { retries: 0 } => {
+            writeln!(f, "- chain stopped at `{}`", step.tag)?;
+        }
+        SealOutcome::Stopped { retries } => writeln!(
+            f,
+            "- seal retry: 0/{retries} uncounted retries matched (`{}.amend-retry-1.stderr` .. \
+             `{}.amend-retry-{retries}.stderr`) — chain stopped at `{}`",
+            step.tag, step.tag, step.tag,
+        )?,
+    }
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ValueSpan {
+    min: usize,
+    max: usize,
+}
+
+impl ValueSpan {
+    const fn single(value: usize) -> Self {
+        Self {
+            min: value,
+            max: value,
+        }
+    }
+
+    fn of(values: impl IntoIterator<Item = usize>) -> Option<Self> {
+        let mut iter = values.into_iter();
+        let mut span = Self::single(iter.next()?);
+        for val in iter {
+            span.extend(val);
+        }
+        Some(span)
+    }
+
+    fn cell(values: impl IntoIterator<Item = usize>) -> String {
+        Self::of(values).map_or_else(|| "—".to_owned(), |span| span.to_string())
+    }
+
+    fn extend(&mut self, value: usize) {
+        self.min = self.min.min(value);
+        self.max = self.max.max(value);
+    }
+}
+
+impl Display for ValueSpan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        if self.min == self.max {
+            write!(f, "{}", self.min)
+        } else {
+            write!(f, "{}..={}", self.min, self.max)
+        }
+    }
+}
+
+struct SourceNarrowingSpan {
+    changed: ValueSpan,
+    gone: ValueSpan,
+    kept: ValueSpan,
+}
+
+impl SourceNarrowingSpan {
+    const fn from_entry(entry: &NarrowedSource) -> Self {
+        Self {
+            changed: ValueSpan::single(entry.changed),
+            gone: ValueSpan::single(entry.gone),
+            kept: ValueSpan::single(entry.kept),
+        }
+    }
+
+    fn record(&mut self, entry: &NarrowedSource) {
+        self.changed.extend(entry.changed);
+        self.gone.extend(entry.gone);
+        self.kept.extend(entry.kept);
+    }
+}
+
+impl Display for SourceNarrowingSpan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "changed {}, gone {}, kept {}", self.changed, self.gone, self.kept)
+    }
 }

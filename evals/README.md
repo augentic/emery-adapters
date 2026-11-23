@@ -90,6 +90,9 @@ cargo run -p evals -- --evolve --target omnia express-orders-evolve
 # Run a subset of evolution steps, or resume a card's chain at step K
 cargo run -p evals -- --evolve --target omnia --steps 00..04 express-orders-evolve
 cargo run -p evals -- --evolve --resume 2026-11-12T03-10-00Z --at-step 4 --target omnia express-orders-evolve
+
+# Run an amend-only repeat chain (step 00 specify + apply, then N amend attempts per step, no builds)
+cargo run -p evals -- --evolve --amend-only --repeat 5 --target omnia express-orders-evolve
 ```
 
 ### Environment variables
@@ -280,6 +283,7 @@ Invocation modes:
 - `--facts --evolve <case..>`: Applies every step overlay and oracle edit in sequence over a scratch copy under `target/eval/facts/<case>/` without spending any model turn, validating credentials and scenario schemas.
 - `--evolve [--target <name>] [--budget <N>] [--steps <A..B>] <case..>`: Stages `target/eval/<card>/<case>/chain-N/`, runs step `00` (`specify`, `apply`, whole `build`, baseline oracle), and then runs each step `01..0K` (`amend`, `show amendment`, `apply`, change `build`, cumulative oracle, and `git` tree locality grading). `--steps A..B` caps execution at step `B` (`--steps` and `--resume` always run a single chain).
 - `--evolve --resume <card> --at-step <K> [--chain <N>] [--drifted] [--steps <K..B>] <case..>`: Copies the repository and prior step logs from `<card>`'s `chain-<N>` (default `1`), rewinds `HEAD` and prunes branches past step `K - 1`, replays source and oracle overlays through `K - 1`, and runs from step `K` onward.
+- `--evolve --amend-only [--repeat <N>] [--target <name>] [--steps <00..B>] <case..>`: Runs a single chain (`chain-1`) without any target build or oracle execution: step `00` runs `emery specify` then `emery apply`, and each subsequent step applies its overlay and runs `emery amend` `N` times (default `3`), recording `step-0K.amend-<i>.{stdout,stderr}` and `step-0K.amendment-<i>.json`. When the last staged attempt matches `step.toml` `[amend]`, `emery apply` seals it; otherwise up to three uncounted attempts (`step-0K.amend-retry-<r>.*`) run until one matches, stopping the chain if none does. Writes `## Amend reliability` to `target/eval/<card>.md` (attempts, exits ok, grade matches, grouping claims and standing-in-play ranges, dropped claims, corrected rounds, and mean wall).
 
 Per step, the runner writes `step-0K.{specify|amend,apply,build}.{stdout,stderr}`, `step-0K.amendment.json`, `step-0K.{spec,design,plan}.json`, `step-0K.fidelity.md`, `step-0K.locality.md`, and `step-0K.oracle.log`, and renders `## Evolution` in `target/eval/<card>.md` (per-step table, checks `C1`–`C6`, the six measures bullets including worker `git` shell trace scanning and both `step-00` and `step-04` `crates/orders` round-trip LOC comparisons, and per-step cost).
 

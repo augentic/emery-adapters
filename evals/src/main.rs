@@ -404,6 +404,20 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(mode) = evolve {
         return match mode {
             EvolveMode::Facts => evolve::run_facts(root, &eval_dir, &filter),
+            EvolveMode::AmendOnly { repeat, steps } => {
+                let started = now();
+                let card_name = started.replace(':', "-");
+                evolve::run_amend_only(evolve::AmendOnlyOptions {
+                    root: root.to_path_buf(),
+                    eval_dir,
+                    filter,
+                    target,
+                    repeat,
+                    steps,
+                    started,
+                    card_name,
+                })
+            }
             EvolveMode::Live { steps, resume } => {
                 let started = now();
                 let card_name = started.replace(':', "-");
@@ -517,14 +531,21 @@ fn eval() -> Result<(), Box<dyn std::error::Error>> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum EvolveMode {
     Facts,
+    AmendOnly { repeat: NonZeroUsize, steps: Option<evolve::StepRange> },
     Live { steps: Option<evolve::StepRange>, resume: Option<evolve::EvolveResume> },
 }
 
+impl EvolveMode {
+    const DEFAULT_AMEND_REPEAT: NonZeroUsize =
+        NonZeroUsize::new(3).expect("default amend repeat 3 is non-zero");
+}
+
 // What the command line asks for: the cases or adapters named, and the
-// mode (`--facts`, `--evolve` with `--steps A..B` or `--resume <card>
-// --at-step <K>`, `--build`, `--rebuild <card>`, `--resume <card> --at
-// <wave>` with `--drifted` to admit a seed the template has moved under,
-// `--oracle <card>`) with the target a build goes through.
+// mode (`--facts`, `--evolve` with `--steps A..B`, `--amend-only` /
+// `--repeat <N>`, or `--resume <card> --at-step <K>`, `--build`,
+// `--rebuild <card>`, `--resume <card> --at <wave>` with `--drifted` to
+// admit a seed the template has moved under, `--oracle <card>`) with the
+// target a build goes through.
 struct Args {
     filter: BTreeSet<String>,
     facts_only: bool,
@@ -541,12 +562,14 @@ struct Args {
 #[derive(Default)]
 struct RawFlags {
     filter: BTreeSet<String>,
+    amend_only: bool,
     rebuild: Option<String>,
     resume: Option<String>,
     at: Option<usize>,
     at_step: Option<usize>,
     chain: Option<usize>,
     steps: Option<evolve::StepRange>,
+    repeat: Option<NonZeroUsize>,
     oracle: Option<String>,
     target: Option<Target>,
     budget: Option<NonZeroUsize>,
@@ -557,6 +580,7 @@ impl RawFlags {
         let mut raw = Self::default();
         while let Some(arg) = argv.next() {
             match arg.as_str() {
+                "--amend-only" => raw.amend_only = true,
                 "--rebuild" => raw.rebuild = Some(argv.next().ok_or("`--rebuild` names a card")?),
                 "--resume" => raw.resume = Some(argv.next().ok_or("`--resume` names a card")?),
                 "--at" => {
@@ -575,6 +599,11 @@ impl RawFlags {
                 "--steps" => {
                     let range = argv.next().ok_or("`--steps` names a step range `A..B`")?;
                     raw.steps = Some(evolve::StepRange::parse(&range)?);
+                }
+                "--repeat" => {
+                    let count = argv.next().ok_or("`--repeat` names a repeat count")?;
+                    raw.repeat =
+                        Some(count.parse().map_err(|err| format!("`--repeat {count}`: {err}"))?);
                 }
                 "--oracle" => raw.oracle = Some(argv.next().ok_or("`--oracle` names a card")?),
                 "--target" => {
@@ -604,8 +633,17 @@ impl Args {
         if evolve {
             return Self::resolve_evolve(raw, facts_only, build_flag);
         }
-        if raw.at_step.is_some() || raw.steps.is_some() || raw.chain.is_some() {
-            return Err("`--steps`, `--at-step`, and `--chain` require `--evolve`".into());
+        if raw.amend_only
+            || raw.repeat.is_some()
+            || raw.at_step.is_some()
+            || raw.steps.is_some()
+            || raw.chain.is_some()
+        {
+            return Err(
+                "`--amend-only`, `--repeat`, `--steps`, `--at-step`, and `--chain` require \
+                 `--evolve`"
+                    .into(),
+            );
         }
         let RawFlags {
             mut filter,
@@ -705,12 +743,14 @@ impl Args {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let RawFlags {
             mut filter,
+            amend_only,
             rebuild,
             resume,
             at: at_wave,
             at_step,
             chain,
             steps,
+            repeat,
             oracle,
             target,
             budget,
@@ -721,47 +761,23 @@ impl Args {
                     .into(),
             );
         }
+        if repeat.is_some() && !amend_only {
+            return Err("`--repeat` requires `--amend-only`".into());
+        }
         let drifted = filter.remove("--drifted");
-        let evolve_resume = match (resume, at_step) {
-            (Some(card), Some(step)) => {
-                if step == 0 {
-                    return Err(
-                        "`--at-step` names a step >= 1; step 00 is a fresh `--evolve` run".into()
-                    );
-                }
-                let chain_num = chain.unwrap_or(1);
-                if chain_num == 0 {
-                    return Err("`--chain` must be >= 1".into());
-                }
-                Some(evolve::EvolveResume {
-                    card,
-                    chain: chain_num,
-                    at_step: step,
-                    drifted,
-                })
-            }
-            (Some(_), None) => {
-                return Err("`--evolve --resume` requires `--at-step <K>`".into());
-            }
-            (None, Some(_)) => {
-                return Err("`--at-step` requires `--resume <card>`".into());
-            }
-            (None, None) => {
-                if drifted {
-                    return Err(
-                        "`--drifted` requires `--resume <card> --at-step <K>` under `--evolve`"
-                            .into(),
-                    );
-                }
-                if chain.is_some() {
-                    return Err(
-                        "`--chain` requires `--resume <card> --at-step <K>` under `--evolve`"
-                            .into(),
-                    );
-                }
-                None
-            }
-        };
+        if amend_only {
+            let resume_flags = resume.is_some() || at_step.is_some() || chain.is_some() || drifted;
+            return Self::resolve_amend_only(
+                filter,
+                facts_only,
+                resume_flags,
+                steps,
+                repeat,
+                target,
+                budget,
+            );
+        }
+        let evolve_resume = Self::resolve_evolve_resume(resume, at_step, chain, drifted)?;
         if filter.is_empty() {
             return Err("`--evolve` names an evolution case".into());
         }
@@ -790,6 +806,83 @@ impl Args {
             oracle: None,
             target,
             budget,
+        })
+    }
+
+    fn resolve_evolve_resume(
+        resume: Option<String>, at_step: Option<usize>, chain: Option<usize>, drifted: bool,
+    ) -> Result<Option<evolve::EvolveResume>, Box<dyn std::error::Error>> {
+        match (resume, at_step) {
+            (Some(card), Some(step)) => {
+                if step == 0 {
+                    return Err(
+                        "`--at-step` names a step >= 1; step 00 is a fresh `--evolve` run".into()
+                    );
+                }
+                let chain_num = chain.unwrap_or(1);
+                if chain_num == 0 {
+                    return Err("`--chain` must be >= 1".into());
+                }
+                Ok(Some(evolve::EvolveResume {
+                    card,
+                    chain: chain_num,
+                    at_step: step,
+                    drifted,
+                }))
+            }
+            (Some(_), None) => Err("`--evolve --resume` requires `--at-step <K>`".into()),
+            (None, Some(_)) => Err("`--at-step` requires `--resume <card>`".into()),
+            (None, None) => {
+                if drifted {
+                    return Err(
+                        "`--drifted` requires `--resume <card> --at-step <K>` under `--evolve`"
+                            .into(),
+                    );
+                }
+                if chain.is_some() {
+                    return Err(
+                        "`--chain` requires `--resume <card> --at-step <K>` under `--evolve`"
+                            .into(),
+                    );
+                }
+                Ok(None)
+            }
+        }
+    }
+
+    fn resolve_amend_only(
+        filter: BTreeSet<String>, facts_only: bool, resume_flags: bool,
+        steps: Option<evolve::StepRange>, repeat: Option<NonZeroUsize>, target: Option<Target>,
+        budget: Option<NonZeroUsize>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        if filter.is_empty() {
+            return Err("`--evolve --amend-only` names an evolution case".into());
+        }
+        if facts_only {
+            return Err(
+                "`--amend-only` runs live turns, so it cannot combine with `--facts`".into()
+            );
+        }
+        if resume_flags {
+            return Err("`--amend-only` cannot combine with `--resume`, `--at-step`, `--chain`, or `--drifted`".into());
+        }
+        if budget.is_some() {
+            return Err("`--amend-only` builds nothing, so it cannot set `--budget`".into());
+        }
+        if steps.is_some_and(|range| range.start > 0) {
+            return Err("`--amend-only --steps` must start at `00`".into());
+        }
+        Ok(Self {
+            filter,
+            facts_only: false,
+            evolve: Some(EvolveMode::AmendOnly {
+                repeat: repeat.unwrap_or(EvolveMode::DEFAULT_AMEND_REPEAT),
+                steps,
+            }),
+            again: None,
+            oracle: None,
+            target,
+            budget: None,
         })
     }
 }
@@ -882,13 +975,15 @@ mod tests {
         Build, Integrated, Landed, Rewound, SliceMetrics, Tree, budget_from, chain, empty_before,
         failure, history, schedule_from,
     };
-    use crate::card::evolution::evolution_section;
+    use crate::card::evolution::{amend_reliability_section, evolution_section};
     use crate::card::{factor, plan_shape_section, schedule_section};
     use crate::case::{Expected, carried_secret, check_tree, named_secret};
     use crate::evolve::{
-        AppliedChange, ChainRun, CountRange, CrateAction, EvolutionReport, EvolveResume,
-        OraclePartition, StepInput, StepRange, StepResult, StepToml, evolutions,
-        restore_chain_repo, seed_chain_storage, step_intent_config, step_source_config, step_tag,
+        AmendAttempt, AmendBaseline, AmendReliabilityReport, AmendStepReport, AppliedChange,
+        AttemptOutcome, BaselineOutcome, ChainRun, CountRange, CrateAction, EvolutionReport,
+        EvolveResume, OraclePartition, SealOutcome, StepInput, StepRange, StepResult, StepToml,
+        evolutions, restore_chain_repo, seed_chain_storage, step_intent_config, step_source_config,
+        step_tag,
     };
     use crate::fidelity::{
         Fidelity, HostCheck, Named, Route, Scenario, cargo_test_counts, declared_rust_tests,
@@ -902,7 +997,8 @@ mod tests {
     };
     use crate::plan::{Edge, PlanShape, type_name};
     use crate::run::{
-        Completion, Landing, ShellUse, Tokens, Writes, accepted, cap_exhaustions, completions,
+        Completion, GroupingLoad, Landing, NarrowedSource, ShellUse, Tokens, Writes, accepted,
+        candidate_rejections, cap_exhaustions, completions, grouping_load, narrowed_sources,
         surveyed, unreached,
     };
     use crate::stage::{clone_root, git, repository};
@@ -1239,9 +1335,67 @@ mod tests {
             &["--evolve", "--steps", "05..02", "express-orders-evolve"][..],
             &["--steps", "00..02", "express-orders"][..],
             &["--at-step", "2", "express-orders"][..],
+            &["--amend-only", "express-orders"][..],
+            &["--repeat", "5", "express-orders"][..],
+            &["--evolve", "--repeat", "5", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only"][..],
+            &["--evolve", "--amend-only", "--repeat", "0", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only", "--repeat", "five", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only", "--repeat"][..],
+            &["--facts", "--evolve", "--amend-only", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only", "--budget", "6", "express-orders-evolve"][..],
+            &[
+                "--evolve",
+                "--amend-only",
+                "--resume",
+                "card",
+                "--at-step",
+                "2",
+                "express-orders-evolve",
+            ][..],
+            &["--evolve", "--amend-only", "--drifted", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only", "--chain", "2", "express-orders-evolve"][..],
+            &["--evolve", "--amend-only", "--steps", "02..04", "express-orders-evolve"][..],
         ] {
             assert!(Args::parse(argv.iter().map(|arg| (*arg).to_owned())).is_err(), "{argv:?}");
         }
+
+        let amend_default = Args::parse(
+            ["--evolve", "--amend-only", "express-orders-evolve"].map(String::from).into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            amend_default.evolve,
+            Some(EvolveMode::AmendOnly {
+                repeat: NonZeroUsize::new(3).unwrap(),
+                steps: None,
+            })
+        );
+
+        let amend_custom = Args::parse(
+            [
+                "--evolve",
+                "--amend-only",
+                "--repeat",
+                "5",
+                "--steps",
+                "00..04",
+                "--target",
+                "omnia",
+                "express-orders-evolve",
+            ]
+            .map(String::from)
+            .into_iter(),
+        )
+        .unwrap();
+        assert_eq!(
+            amend_custom.evolve,
+            Some(EvolveMode::AmendOnly {
+                repeat: NonZeroUsize::new(5).unwrap(),
+                steps: Some(evolve::StepRange { start: 0, end: 4 }),
+            })
+        );
+        assert_eq!(amend_custom.target, Some(Target::Omnia));
     }
 
     // A resumed build's chain holds the slices it resumed beside the ones it
@@ -4214,5 +4368,311 @@ mod tests {
             reg_md.contains("| `C3` | pass | 1/1 steps pass own scenarios (3/3) |"),
             "{reg_md}"
         );
+    }
+
+    #[test]
+    fn amend_log_readers() {
+        let stderr = "\
+2026-11-23T00:00:01Z  INFO emery_engine::amend::narrow: narrowed source=typescript changed=1 gone=0 kept=14 dropped=142
+2026-11-23T00:00:02Z  INFO emery_engine::amend::narrow: narrowed source=documentation changed=0 gone=2 kept=3 dropped=28
+2026-11-23T00:00:03Z DEBUG emery_sdk::extract: candidate rejected findings=[\"lexicon hit\"]
+2026-11-23T00:00:04Z  INFO emery_engine::amend::change: grouping load claims=3 standing=7 settled=57
+2026-11-23T00:00:05Z DEBUG judge{question=\"grouping\"}: emery_engine::brief: candidate rejected findings=[\"unaccounted\"]
+2026-11-23T00:00:06Z DEBUG emery_engine::brief: candidate rejected findings=[\"duplicate id\"]
+";
+        assert_eq!(
+            narrowed_sources(stderr),
+            vec![
+                NarrowedSource {
+                    source: "typescript".to_owned(),
+                    changed: 1,
+                    gone: 0,
+                    kept: 14,
+                    dropped: 142,
+                },
+                NarrowedSource {
+                    source: "documentation".to_owned(),
+                    changed: 0,
+                    gone: 2,
+                    kept: 3,
+                    dropped: 28,
+                },
+            ]
+        );
+        assert_eq!(
+            grouping_load(stderr),
+            Some(GroupingLoad {
+                claims: 3,
+                standing: 7,
+                settled: 57,
+            })
+        );
+        assert_eq!(
+            candidate_rejections(stderr),
+            BTreeMap::from([
+                ("emery_engine::brief".to_owned(), 1),
+                ("emery_sdk::extract".to_owned(), 1),
+                ("grouping".to_owned(), 1),
+            ])
+        );
+
+        let zero_claims = "2026-11-23T00:00:01Z  INFO emery_engine::amend::change: grouping load claims=0 standing=0 settled=64\n";
+        assert_eq!(
+            grouping_load(zero_claims),
+            Some(GroupingLoad {
+                claims: 0,
+                standing: 0,
+                settled: 64,
+            })
+        );
+        assert_eq!(narrowed_sources(zero_claims), Vec::new());
+        assert!(candidate_rejections(zero_claims).is_empty());
+    }
+
+    fn amend_grade_fixture(added: usize, changed: usize) -> AmendGrade {
+        AmendGrade {
+            added,
+            changed,
+            retired: 0,
+            stems: if added + changed > 0 {
+                BTreeSet::from(["customers".to_owned()])
+            } else {
+                BTreeSet::new()
+            },
+            sections: BTreeSet::new(),
+            parts_added: BTreeSet::new(),
+            parts_removed: BTreeSet::new(),
+            mismatches: Vec::new(),
+        }
+    }
+
+    impl AmendAttempt {
+        fn fixture(number: usize, outcome: AttemptOutcome, secs: u64) -> Self {
+            Self {
+                number,
+                outcome,
+                wall: Duration::from_secs(secs),
+                narrowed: Vec::new(),
+                grouping_load: None,
+                rejections: BTreeMap::new(),
+                completions: vec![Completion {
+                    label: "extract-typescript-0".to_owned(),
+                    outcome: "ok".to_owned(),
+                    duration: Duration::from_secs(secs / 2),
+                    shell: ShellUse::default(),
+                    writes: Writes::default(),
+                    tokens: Tokens::default(),
+                }],
+            }
+        }
+
+        fn with_grouping(mut self, load: GroupingLoad, ran_turn: bool) -> Self {
+            if ran_turn {
+                self.completions.push(Completion {
+                    label: "grouping".to_owned(),
+                    outcome: "ok".to_owned(),
+                    duration: self.wall / 2,
+                    shell: ShellUse::default(),
+                    writes: Writes::default(),
+                    tokens: Tokens::default(),
+                });
+            }
+            self.grouping_load = Some(load);
+            self
+        }
+
+        fn with_dropped(mut self, dropped: usize) -> Self {
+            self.narrowed.push(NarrowedSource {
+                source: "typescript".to_owned(),
+                changed: 1,
+                gone: 0,
+                kept: 12,
+                dropped,
+            });
+            self
+        }
+
+        fn with_rejection(mut self, target: impl Into<String>, count: usize) -> Self {
+            self.rejections.insert(target.into(), count);
+            self
+        }
+    }
+
+    fn assert_table_width_at_most(md: &str, max_cols: usize) {
+        for line in md.lines().filter(|line| line.starts_with('|')) {
+            let cols = line.trim_matches('|').split('|').count();
+            assert!(cols <= max_cols, "table row has {cols} > {max_cols} columns: {line}");
+        }
+    }
+
+    #[test]
+    fn amend_reliability_card_clean() {
+        let evolution = express_orders_evolution();
+        let expected_s1 = evolution.steps[0].spec.amend.clone();
+        let expected_s2 = evolution.steps[1].spec.amend.clone();
+        let pass_grade = amend_grade_fixture(2, 0);
+        let mut decision_grade = amend_grade_fixture(0, 0);
+        decision_grade.sections.insert("observability".to_owned());
+        let mut miss_grade = amend_grade_fixture(2, 3);
+        miss_grade.mismatches.push("changed 3 outside 0..=0".to_owned());
+        let no_turn_load = GroupingLoad {
+            claims: 0,
+            standing: 0,
+            settled: 66,
+        };
+        let report = AmendReliabilityReport {
+            evolution,
+            target: Target::Omnia,
+            repeat: NonZeroUsize::new(2).unwrap(),
+            step_range: Some(StepRange { start: 0, end: 2 }),
+            baseline: AmendBaseline {
+                outcome: BaselineOutcome::Sealed("00000000aaaa".to_owned()),
+                completions: Vec::new(),
+                wall: Duration::from_secs(35),
+            },
+            steps: vec![
+                AmendStepReport {
+                    tag: "step-01".to_owned(),
+                    title: "Add customer loyalty tier".to_owned(),
+                    expected: expected_s1,
+                    attempts: vec![
+                        AmendAttempt::fixture(1, AttemptOutcome::Staged(pass_grade), 22)
+                            .with_grouping(
+                                GroupingLoad {
+                                    claims: 2,
+                                    standing: 6,
+                                    settled: 58,
+                                },
+                                true,
+                            )
+                            .with_dropped(140),
+                        AmendAttempt::fixture(2, AttemptOutcome::Staged(miss_grade), 26)
+                            .with_grouping(
+                                GroupingLoad {
+                                    claims: 3,
+                                    standing: 8,
+                                    settled: 56,
+                                },
+                                true,
+                            )
+                            .with_dropped(138)
+                            .with_rejection("emery_engine::brief", 1),
+                    ],
+                    outcome: SealOutcome::Sealed {
+                        revision: "11111111bbbb".to_owned(),
+                        retries: 1,
+                    },
+                },
+                AmendStepReport {
+                    tag: "step-02".to_owned(),
+                    title: "Adopt structured JSON logging".to_owned(),
+                    expected: expected_s2,
+                    attempts: vec![
+                        AmendAttempt::fixture(1, AttemptOutcome::Staged(decision_grade.clone()), 8)
+                            .with_grouping(no_turn_load, false),
+                        AmendAttempt::fixture(2, AttemptOutcome::Staged(decision_grade), 10)
+                            .with_grouping(no_turn_load, false),
+                    ],
+                    outcome: SealOutcome::Sealed {
+                        revision: "22222222cccc".to_owned(),
+                        retries: 0,
+                    },
+                },
+            ],
+        };
+
+        let mut md = String::new();
+        amend_reliability_section(&mut md, &[report]).unwrap();
+        assert_table_width_at_most(&md, 12);
+        assert!(md.contains("## Amend reliability"), "{md}");
+        assert!(md.contains("Baseline `step-00`: specify ok in 35s"), "{md}");
+        assert!(md.contains("Totals: 4 attempts across 2/2 steps · 4/4 exits ok · 3/4 grade matches · chain completed"), "{md}");
+        assert!(md.contains("| `step-01` | Add customer loyalty tier | `11111111` (retry 1) | 2 | 2/2 | 1/2 | 2..=3 | 6..=8 | 138..=140 | 1 | 24s |"), "{md}");
+        assert!(md.contains("| `step-02` | Adopt structured JSON logging | `22222222` | 2 | 2/2 | 2/2 | 0 (no turn) | 0 | — | 0 | 9s |"), "{md}");
+        assert!(
+            md.contains("grouping load: claims 2..=3, standing in play 6..=8 (settled 56..=58)"),
+            "{md}"
+        );
+        assert!(
+            md.contains("dropped claims: 138..=140 (`typescript`: changed 1, gone 0, kept 12)"),
+            "{md}"
+        );
+        assert!(md.contains("corrected rounds: 1 (`emery_engine::brief`: 1)"), "{md}");
+        assert!(
+            md.contains("attempt 2 mismatch (`step-01.amendment-2.json`): changed 3 outside 0..=0"),
+            "{md}"
+        );
+        assert!(md.contains("seal retry: sealed `11111111` on uncounted retry 1"), "{md}");
+    }
+
+    #[test]
+    fn amend_reliability_card_stopped() {
+        let evolution = express_orders_evolution();
+        let expected_s1 = evolution.steps[0].spec.amend.clone();
+        let mut failed_attempt =
+            AmendAttempt::fixture(1, AttemptOutcome::Failed { exit: Some(3) }, 30)
+                .with_dropped(120);
+        failed_attempt.completions.push(Completion {
+            label: "grouping".to_owned(),
+            outcome: "err".to_owned(),
+            duration: Duration::from_secs(15),
+            shell: ShellUse::default(),
+            writes: Writes::default(),
+            tokens: Tokens::default(),
+        });
+        let report = AmendReliabilityReport {
+            evolution,
+            target: Target::Omnia,
+            repeat: NonZeroUsize::new(1).unwrap(),
+            step_range: None,
+            baseline: AmendBaseline {
+                outcome: BaselineOutcome::Sealed("00000000aaaa".to_owned()),
+                completions: Vec::new(),
+                wall: Duration::from_secs(20),
+            },
+            steps: vec![AmendStepReport {
+                tag: "step-01".to_owned(),
+                title: "Add customer loyalty tier".to_owned(),
+                expected: expected_s1,
+                attempts: vec![failed_attempt],
+                outcome: SealOutcome::Stopped { retries: 3 },
+            }],
+        };
+
+        let mut md = String::new();
+        amend_reliability_section(&mut md, &[report]).unwrap();
+        assert_table_width_at_most(&md, 12);
+        assert!(
+            md.contains(
+                "across 1/7 steps · 0/1 exits ok · 0/1 grade matches · chain stopped at `step-01`"
+            ),
+            "{md}"
+        );
+        assert!(
+            md.contains("| `step-01` | Add customer loyalty tier | STOPPED (0/3 retries) |"),
+            "{md}"
+        );
+        assert!(
+            md.contains("attempt 1 failed (`step-01.amend-1.stderr`): exit 3 in `grouping`"),
+            "{md}"
+        );
+        assert!(md.contains("0/3 uncounted retries matched (`step-01.amend-retry-1.stderr` .. `step-01.amend-retry-3.stderr`) — chain stopped at `step-01`"), "{md}");
+
+        let stopped_base = AmendReliabilityReport {
+            evolution: express_orders_evolution(),
+            target: Target::Omnia,
+            repeat: NonZeroUsize::new(3).unwrap(),
+            step_range: None,
+            baseline: AmendBaseline {
+                outcome: BaselineOutcome::Failed { exit: Some(4) },
+                completions: Vec::new(),
+                wall: Duration::from_secs(12),
+            },
+            steps: Vec::new(),
+        };
+        let mut base_md = String::new();
+        amend_reliability_section(&mut base_md, &[stopped_base]).unwrap();
+        assert!(base_md.contains("Baseline `step-00`: specify exit 4 FAIL in 12s"), "{base_md}");
+        assert!(base_md.contains("chain stopped at `step-00`"), "{base_md}");
     }
 }

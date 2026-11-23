@@ -93,12 +93,7 @@ impl Run {
     // The label of the completion a failed run died in: the one the backend
     // or the gate ended, the siblings it aborted set aside.
     pub fn died_in(&self) -> Option<&str> {
-        self.completions
-            .iter()
-            .rev()
-            .find(|completion| !matches!(completion.outcome.as_str(), "ok" | "corrected" | "abort"))
-            .or_else(|| self.completions.last())
-            .map(|completion| completion.label.as_str())
+        Completion::died_in(&self.completions)
     }
 
     // Where the accepted requirement claims anchor against the surfaces the
@@ -532,6 +527,15 @@ impl Completion {
     pub fn answered(&self) -> bool {
         matches!(self.outcome.as_str(), "ok" | "corrected")
     }
+
+    pub fn died_in(completions: &[Self]) -> Option<&str> {
+        completions
+            .iter()
+            .rev()
+            .find(|completion| !completion.answered() && completion.outcome != "abort")
+            .or_else(|| completions.last())
+            .map(|completion| completion.label.as_str())
+    }
 }
 
 // The shell calls one completion made: how many, their summed wall time
@@ -786,15 +790,8 @@ pub fn completions(stderr: &str) -> Vec<Completion> {
     let mut open: BTreeMap<String, (Writes, BTreeMap<String, u64>)> = BTreeMap::new();
     for line in stderr.lines() {
         if let Some((head, tail)) = line.split_once(": completion outcome=") {
-            let label = head
-                .split_once("label=\"")
-                .and_then(|(_, rest)| rest.split_once('"'))
-                .map_or("", |(label, _)| label);
-            let fields: BTreeMap<&str, &str> = tail
-                .split(' ')
-                .filter_map(|pair| pair.split_once('='))
-                .map(|(key, value)| (key, value.trim_matches('"')))
-                .collect();
+            let label = quoted(head, "label=\"").unwrap_or("");
+            let fields = kv_pairs(tail);
             let count = |key: &str| {
                 fields.get(key).and_then(|value| value.parse::<u64>().ok()).unwrap_or(0)
             };
@@ -852,22 +849,18 @@ pub fn cap_exhaustions(stderr: &str) -> usize {
             && is_cap_finding(line)
         {
             pending_cap_finding = true;
-        } else if let Some((head, tail)) = line.split_once(": completion outcome=") {
-            let label = head
-                .split_once("label=\"")
-                .and_then(|(_, rest)| rest.split_once('"'))
-                .map_or("", |(label, _)| label);
-            if label == "slicing" {
-                let outcome = tail.split(' ').next().unwrap_or("").trim_matches('"');
-                if outcome == "exhausted" {
-                    if pending_cap_finding {
-                        count += 1;
-                    } else {
-                        unhandled_exhausted += 1;
-                    }
+        } else if let Some((head, tail)) = line.split_once(": completion outcome=")
+            && quoted(head, "label=\"") == Some("slicing")
+        {
+            let outcome = tail.split(' ').next().unwrap_or("").trim_matches('"');
+            if outcome == "exhausted" {
+                if pending_cap_finding {
+                    count += 1;
+                } else {
+                    unhandled_exhausted += 1;
                 }
-                pending_cap_finding = false;
             }
+            pending_cap_finding = false;
         }
     }
     if unhandled_exhausted > 0 && is_cap_finding(stderr) {
@@ -881,6 +874,104 @@ fn is_cap_finding(text: &str) -> bool {
         || text.contains("within the cap")
         || text.contains("merge the stem's")
         || text.contains("past the cap")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NarrowedSource {
+    pub source: String,
+    pub changed: usize,
+    pub gone: usize,
+    pub kept: usize,
+    pub dropped: usize,
+}
+
+impl NarrowedSource {
+    fn from_line(line: &str) -> Option<Self> {
+        let pairs = event_fields(line, "emery_engine::amend::narrow:", "narrowed")?;
+        Some(Self {
+            source: (*pairs.get("source")?).to_owned(),
+            changed: pairs.get("changed")?.parse().ok()?,
+            gone: pairs.get("gone")?.parse().ok()?,
+            kept: pairs.get("kept")?.parse().ok()?,
+            dropped: pairs.get("dropped")?.parse().ok()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GroupingLoad {
+    pub claims: usize,
+    pub standing: usize,
+    pub settled: usize,
+}
+
+impl GroupingLoad {
+    fn from_line(line: &str) -> Option<Self> {
+        let pairs = event_fields(line, "emery_engine::amend::change:", "grouping load")?;
+        Some(Self {
+            claims: pairs.get("claims")?.parse().ok()?,
+            standing: pairs.get("standing")?.parse().ok()?,
+            settled: pairs.get("settled")?.parse().ok()?,
+        })
+    }
+}
+
+pub fn narrowed_sources(stderr: &str) -> Vec<NarrowedSource> {
+    stderr.lines().filter_map(NarrowedSource::from_line).collect()
+}
+
+pub fn grouping_load(stderr: &str) -> Option<GroupingLoad> {
+    stderr.lines().find_map(GroupingLoad::from_line)
+}
+
+// Counts `candidate rejected` debug lines by `question="..."` span when
+// formatted on the line, or by module target (`emery_engine::brief`,
+// `emery_sdk::extract`, `emery_sdk::survey`) otherwise.
+pub fn candidate_rejections(stderr: &str) -> BTreeMap<String, usize> {
+    let mut counts = BTreeMap::new();
+    for key in stderr.lines().filter_map(rejection_key) {
+        *counts.entry(key).or_insert(0) += 1;
+    }
+    counts
+}
+
+fn rejection_key(line: &str) -> Option<String> {
+    let (head, rest) = line.split_once(": candidate rejected")?;
+    if !rest.is_empty() && !rest.starts_with(' ') {
+        return None;
+    }
+    if let Some(question) = quoted(head, "question=\"").filter(|q| !q.is_empty()) {
+        return Some(question.to_owned());
+    }
+    let target = head.split_whitespace().last()?;
+    (!target.is_empty()
+        && target.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | ':' | '-')))
+    .then(|| target.to_owned())
+}
+
+fn event_fields<'l>(
+    line: &'l str, target: &str, message: &str,
+) -> Option<BTreeMap<&'l str, &'l str>> {
+    let (_, rest) = line.split_once(target)?;
+    let fields = rest.trim_start().strip_prefix(message)?;
+    if !fields.is_empty() && !fields.starts_with(char::is_whitespace) {
+        return None;
+    }
+    Some(kv_pairs(fields))
+}
+
+fn quoted<'l>(text: &'l str, key: &str) -> Option<&'l str> {
+    let (_, rest) = text.split_once(key)?;
+    let (value, _) = rest.split_once('"')?;
+    Some(value)
+}
+
+fn kv_pairs(fields: &str) -> BTreeMap<&str, &str> {
+    fields
+        .split_whitespace()
+        .filter_map(|pair| pair.split_once('='))
+        .map(|(key, value)| (key, value.trim_matches('"')))
+        .collect()
 }
 
 // The `n` of the `complete{n=…}` span a backend line sits under.

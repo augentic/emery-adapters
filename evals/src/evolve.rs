@@ -12,7 +12,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::build::{Build, BuildJob};
-use crate::card::evolution::evolution_scorecard;
+use crate::card::evolution::{amend_reliability_scorecard, evolution_scorecard};
 use crate::card::{comma_joined, short};
 use crate::case::{CASES, Case, check_tree};
 use crate::fidelity::Target;
@@ -20,7 +20,10 @@ use crate::locality::{
     AmendGrade, ScopeGrade, StepComparison, StepLocality, TreeSnapshot, write_locality,
 };
 use crate::reference::{Comparison, Reference};
-use crate::run::{Completion, completions, tail};
+use crate::run::{
+    Completion, GroupingLoad, NarrowedSource, candidate_rejections, completions, grouping_load,
+    narrowed_sources, tail,
+};
 use crate::stage::{
     copy_tree, copy_tree_whole, git, repository, retarget, seed_drift, skipped_entry, toml_escaped,
 };
@@ -1092,6 +1095,146 @@ pub struct EvolutionReport {
     pub step_range: Option<StepRange>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BaselineOutcome {
+    Sealed(String),
+    Failed { exit: Option<i32> },
+}
+
+pub struct AmendBaseline {
+    pub outcome: BaselineOutcome,
+    pub wall: Duration,
+    pub completions: Vec<Completion>,
+}
+
+impl AmendBaseline {
+    pub const fn is_sealed(&self) -> bool {
+        matches!(self.outcome, BaselineOutcome::Sealed(_))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttemptOutcome {
+    Staged(AmendGrade),
+    Unstaged,
+    Failed { exit: Option<i32> },
+}
+
+pub struct AmendAttempt {
+    pub number: usize,
+    pub outcome: AttemptOutcome,
+    pub wall: Duration,
+    pub narrowed: Vec<NarrowedSource>,
+    pub grouping_load: Option<GroupingLoad>,
+    pub rejections: BTreeMap<String, usize>,
+    pub completions: Vec<Completion>,
+}
+
+impl AmendAttempt {
+    pub const fn exited_ok(&self) -> bool {
+        matches!(self.outcome, AttemptOutcome::Staged(_) | AttemptOutcome::Unstaged)
+    }
+
+    pub const fn matched(&self) -> bool {
+        matches!(&self.outcome, AttemptOutcome::Staged(grade) if grade.passed())
+    }
+
+    pub fn grouping_outcome(&self) -> Option<&str> {
+        self.completions.iter().rev().find(|c| c.label == "grouping").map(|c| c.outcome.as_str())
+    }
+
+    pub fn spent_grouping_turn(&self) -> bool {
+        self.grouping_outcome().is_some()
+    }
+
+    pub fn dropped_claims(&self) -> Option<usize> {
+        (!self.narrowed.is_empty()).then(|| self.narrowed.iter().map(|n| n.dropped).sum())
+    }
+
+    pub fn corrected_rounds(&self) -> usize {
+        self.rejections.values().sum()
+    }
+
+    pub fn died_in(&self) -> Option<&str> {
+        Completion::died_in(&self.completions)
+    }
+
+    pub fn artifact_file(&self, step_tag: &str) -> String {
+        match &self.outcome {
+            AttemptOutcome::Staged(_) => format!("{step_tag}.amendment-{}.json", self.number),
+            AttemptOutcome::Unstaged => format!("{step_tag}.amend-{}.stdout", self.number),
+            AttemptOutcome::Failed { .. } => format!("{step_tag}.amend-{}.stderr", self.number),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SealOutcome {
+    Sealed { revision: String, retries: usize },
+    Stopped { retries: usize },
+}
+
+impl SealOutcome {
+    pub const fn is_stopped(&self) -> bool {
+        matches!(self, Self::Stopped { .. })
+    }
+}
+
+pub struct AmendStepReport {
+    pub tag: String,
+    pub title: String,
+    pub expected: ExpectedAmend,
+    pub attempts: Vec<AmendAttempt>,
+    pub outcome: SealOutcome,
+}
+
+impl AmendStepReport {
+    const MAX_SEAL_RETRIES: usize = 3;
+
+    pub fn exits_ok(&self) -> usize {
+        self.attempts.iter().filter(|a| a.exited_ok()).count()
+    }
+
+    pub fn grade_matches(&self) -> usize {
+        self.attempts.iter().filter(|a| a.matched()).count()
+    }
+
+    pub fn grouping_turns(&self) -> usize {
+        self.attempts.iter().filter(|a| a.spent_grouping_turn()).count()
+    }
+
+    pub fn corrected_rounds(&self) -> usize {
+        self.attempts.iter().map(AmendAttempt::corrected_rounds).sum()
+    }
+
+    pub fn rejections_by_target(&self) -> BTreeMap<String, usize> {
+        let mut totals = BTreeMap::new();
+        for attempt in &self.attempts {
+            for (target, &count) in &attempt.rejections {
+                *totals.entry(target.clone()).or_insert(0) += count;
+            }
+        }
+        totals
+    }
+
+    pub fn mean_wall(&self) -> Duration {
+        let total: Duration = self.attempts.iter().map(|a| a.wall).sum();
+        u32::try_from(self.attempts.len())
+            .ok()
+            .and_then(|count| total.checked_div(count))
+            .unwrap_or(Duration::ZERO)
+    }
+}
+
+pub struct AmendReliabilityReport {
+    pub evolution: Evolution,
+    pub target: Target,
+    pub repeat: NonZeroUsize,
+    pub step_range: Option<StepRange>,
+    pub baseline: AmendBaseline,
+    pub steps: Vec<AmendStepReport>,
+}
+
 // Invocation parameters for `run_live`.
 pub struct LiveOptions {
     pub root: PathBuf,
@@ -1101,6 +1244,18 @@ pub struct LiveOptions {
     pub budget: Option<NonZeroUsize>,
     pub steps: Option<StepRange>,
     pub resume: Option<EvolveResume>,
+    pub started: String,
+    pub card_name: String,
+}
+
+// Invocation parameters for `run_amend_only`.
+pub struct AmendOnlyOptions {
+    pub root: PathBuf,
+    pub eval_dir: PathBuf,
+    pub filter: BTreeSet<String>,
+    pub target: Option<Target>,
+    pub repeat: NonZeroUsize,
+    pub steps: Option<StepRange>,
     pub started: String,
     pub card_name: String,
 }
@@ -1225,11 +1380,97 @@ pub fn run_live(options: LiveOptions) -> Result<(), Box<dyn std::error::Error>> 
     }
 
     let summary = evolution_scorecard(&settings, &reports, &started, &card_name);
+    write_scorecard_file(&eval_dir, &card_name, &summary)?;
+    Ok(())
+}
+
+pub fn run_amend_only(options: AmendOnlyOptions) -> Result<(), Box<dyn std::error::Error>> {
+    let AmendOnlyOptions {
+        root,
+        eval_dir,
+        filter,
+        target: target_override,
+        repeat,
+        steps: steps_flag,
+        started,
+        card_name,
+    } = options;
+    let evolutions = evolutions(&root, &filter)?;
+    if evolutions.is_empty() {
+        return Err(format!("no evolution case under `{CASES}` matches").into());
+    }
+
+    let adapters: BTreeSet<&str> = evolutions.iter().flat_map(Evolution::adapters).collect();
+    let resolved_target = target_override.unwrap_or_else(|| evolutions[0].target);
+    let settings = Settings::from_env(&root, &adapters, Some(resolved_target), None)?;
+
+    let mut reports = Vec::with_capacity(evolutions.len());
+    for evolution in evolutions {
+        let target = target_override.unwrap_or(evolution.target);
+        let max_step = evolution.steps.len();
+        let range = match steps_flag {
+            Some(r) => r.validate(max_step)?,
+            None => StepRange {
+                start: 0,
+                end: max_step,
+            },
+        };
+        if range.start > 0 {
+            return Err(format!("`--steps {range}` starts past step 00").into());
+        }
+
+        let (baseline, steps) =
+            ChainDriver::fresh(&eval_dir, &card_name, &evolution, &settings, target, 1)?
+                .run_amend_only(repeat, range)?;
+        reports.push(AmendReliabilityReport {
+            evolution,
+            target,
+            repeat,
+            step_range: steps_flag,
+            baseline,
+            steps,
+        });
+    }
+
+    let summary = amend_reliability_scorecard(&settings, &reports, repeat, &started, &card_name);
+    write_scorecard_file(&eval_dir, &card_name, &summary)?;
+    Ok(())
+}
+
+fn write_scorecard_file(eval_dir: &Path, card_name: &str, summary: &str) -> io::Result<()> {
     let out = eval_dir.join(format!("{card_name}.md"));
-    fs::write(&out, &summary)?;
+    fs::write(&out, summary)?;
     print!("{summary}");
     eprintln!("eval: evolution scorecard at {}", out.display());
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AttemptId {
+    Counted(usize),
+    Retry(usize),
+}
+
+impl AttemptId {
+    const fn number(self) -> usize {
+        match self {
+            Self::Counted(n) | Self::Retry(n) => n,
+        }
+    }
+}
+
+impl Display for AttemptId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Counted(n) => write!(f, "{n}"),
+            Self::Retry(n) => write!(f, "retry-{n}"),
+        }
+    }
+}
+
+struct StagedAmendment {
+    matched: bool,
+    document: Value,
 }
 
 // Per-chain execution state threading the staged project, cumulative source
@@ -1384,6 +1625,247 @@ impl<'a> ChainDriver<'a> {
         }
     }
 
+    fn first_rung(&self) -> io::Result<Rung> {
+        self.settings
+            .ladder
+            .first()
+            .copied()
+            .ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))
+    }
+
+    fn run_amend_only(
+        self, repeat: NonZeroUsize, range: StepRange,
+    ) -> io::Result<(AmendBaseline, Vec<AmendStepReport>)> {
+        let baseline = self.run_amend_only_baseline()?;
+        if !baseline.is_sealed() || range.end == 0 {
+            return Ok((baseline, Vec::new()));
+        }
+        let mut step_reports = Vec::with_capacity(self.evolution.steps.len());
+        for step in &self.evolution.steps {
+            if step.number > range.end {
+                break;
+            }
+            let report = self.run_amend_only_step(step, repeat)?;
+            let stopped = report.outcome.is_stopped();
+            step_reports.push(report);
+            if stopped {
+                break;
+            }
+        }
+        Ok((baseline, step_reports))
+    }
+
+    #[expect(clippy::disallowed_methods, reason = "the eval times live CLI steps on the host")]
+    fn run_amend_only_baseline(&self) -> io::Result<AmendBaseline> {
+        let tag = step_tag(0);
+        eprintln!("eval: `{}` `{tag}` specifying baseline (amend-only)", self.evolution.name);
+        let rung = self.first_rung()?;
+        let started = Instant::now();
+        let output = emery(
+            &self.chain_dir,
+            self.settings,
+            &self.log_filter,
+            rung,
+            &["specify", "--config", "emery.toml"],
+            Turns::Live,
+        )?;
+        let wall = started.elapsed();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        fs::write(self.chain_dir.join(format!("{tag}.specify.stderr")), stderr.as_bytes())?;
+        fs::write(self.chain_dir.join(format!("{tag}.specify.stdout")), stdout.as_bytes())?;
+        let specify_completions = completions(&stderr);
+
+        if !output.status.success() {
+            eprintln!(
+                "eval: `{}` `{tag}` specify failed (exit {:?}):\n{}",
+                self.evolution.name,
+                output.status.code(),
+                tail(&stderr)
+            );
+            return Ok(AmendBaseline {
+                outcome: BaselineOutcome::Failed {
+                    exit: output.status.code(),
+                },
+                wall,
+                completions: specify_completions,
+            });
+        }
+
+        let envelope: Value = serde_json::from_str(&stdout)?;
+        let revision = envelope["revision"]
+            .as_str()
+            .ok_or_else(|| io::Error::other("`specify` staged no `revision`"))?
+            .to_owned();
+        let _ =
+            read_revision_docs(&self.chain_dir, self.settings, &self.log_filter, rung, &tag, true)?;
+        self.job(&tag, &revision).apply()?;
+
+        Ok(AmendBaseline {
+            outcome: BaselineOutcome::Sealed(revision),
+            wall,
+            completions: specify_completions,
+        })
+    }
+
+    fn run_amend_only_step(
+        &self, step: &Step, repeat: NonZeroUsize,
+    ) -> io::Result<AmendStepReport> {
+        let tag = step_tag(step.number);
+        eprintln!(
+            "eval: `{}` `{tag}` (`{}`): applying input ({} amend attempt(s))",
+            self.evolution.name, step.slug, repeat
+        );
+        let applied = self.source.apply(step).map_err(io::Error::other)?;
+        let config_file = self.prepare_step_config(&tag, &applied)?;
+        let rung = self.first_rung()?;
+
+        let mut attempts = Vec::with_capacity(repeat.get());
+        let mut last_staged: Option<StagedAmendment> = None;
+        for index in 1..=repeat.get() {
+            let (attempt, staged) = self.execute_amend_attempt(
+                step,
+                &tag,
+                &config_file,
+                rung,
+                AttemptId::Counted(index),
+            )?;
+            if let Some(slot) = staged {
+                last_staged = Some(slot);
+            }
+            attempts.push(attempt);
+        }
+
+        let outcome = match last_staged {
+            Some(StagedAmendment {
+                matched: true,
+                document,
+            }) => {
+                let revision = self.seal_amendment(&tag)?;
+                write_amended_docs(&self.chain_dir, &tag, &document)?;
+                SealOutcome::Sealed { revision, retries: 0 }
+            }
+            _ => self.retry_seal_amendment(step, &tag, &config_file, rung)?,
+        };
+
+        Ok(AmendStepReport {
+            tag,
+            title: step.spec.title.clone(),
+            expected: step.spec.amend.clone(),
+            attempts,
+            outcome,
+        })
+    }
+
+    fn retry_seal_amendment(
+        &self, step: &Step, tag: &str, config_file: &str, rung: Rung,
+    ) -> io::Result<SealOutcome> {
+        let mut retries = 0;
+        for retry in 1..=AmendStepReport::MAX_SEAL_RETRIES {
+            retries += 1;
+            eprintln!(
+                "eval: `{}` `{tag}` last staged attempt missed grade; running uncounted retry \
+                 {retry}/{}",
+                self.evolution.name,
+                AmendStepReport::MAX_SEAL_RETRIES,
+            );
+            let (_, staged) =
+                self.execute_amend_attempt(step, tag, config_file, rung, AttemptId::Retry(retry))?;
+            if let Some(StagedAmendment {
+                matched: true,
+                document,
+            }) = staged
+            {
+                let revision = self.seal_amendment(tag)?;
+                write_amended_docs(&self.chain_dir, tag, &document)?;
+                return Ok(SealOutcome::Sealed { revision, retries });
+            }
+        }
+        eprintln!(
+            "eval: `{}` `{tag}` no matching amendment after {retries} uncounted retries; \
+             stopping chain",
+            self.evolution.name
+        );
+        Ok(SealOutcome::Stopped { retries })
+    }
+
+    #[expect(clippy::disallowed_methods, reason = "the eval times live CLI steps on the host")]
+    fn execute_amend_attempt(
+        &self, step: &Step, tag: &str, config_file: &str, rung: Rung, id: AttemptId,
+    ) -> io::Result<(AmendAttempt, Option<StagedAmendment>)> {
+        let started = Instant::now();
+        let output = emery(
+            &self.chain_dir,
+            self.settings,
+            &self.log_filter,
+            rung,
+            &["amend", "--config", config_file],
+            Turns::Live,
+        )?;
+        let wall = started.elapsed();
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        fs::write(self.chain_dir.join(format!("{tag}.amend-{id}.stderr")), stderr.as_bytes())?;
+        fs::write(self.chain_dir.join(format!("{tag}.amend-{id}.stdout")), stdout.as_bytes())?;
+
+        let narrowed = narrowed_sources(&stderr);
+        let grouping_load = grouping_load(&stderr);
+        let rejections = candidate_rejections(&stderr);
+        let amend_completions = completions(&stderr);
+
+        if !output.status.success() {
+            let exit = output.status.code();
+            eprintln!(
+                "eval: `{}` `{tag}` amend-{id} failed (exit {exit:?}) in {}s:\n{}",
+                self.evolution.name,
+                wall.as_secs(),
+                tail(&stderr)
+            );
+            return Ok((
+                AmendAttempt {
+                    number: id.number(),
+                    outcome: AttemptOutcome::Failed { exit },
+                    wall,
+                    narrowed,
+                    grouping_load,
+                    rejections,
+                    completions: amend_completions,
+                },
+                None,
+            ));
+        }
+
+        let amend_env: Value = serde_json::from_str(&stdout)?;
+        let (outcome, staged, status) = if amend_env["staged"].as_bool() == Some(true) {
+            let document =
+                self.read_staged_amendment(tag, &format!("{tag}.amendment-{id}.json"), rung)?;
+            let grade = AmendGrade::evaluate(&document, &step.spec.amend);
+            let matched = grade.passed();
+            let status = if matched { "grade ok" } else { "grade MISS" };
+            (AttemptOutcome::Staged(grade), Some(StagedAmendment { matched, document }), status)
+        } else {
+            (AttemptOutcome::Unstaged, None, "unstaged MISS")
+        };
+        eprintln!(
+            "eval: `{}` `{tag}` amend-{id} ok in {}s ({status})",
+            self.evolution.name,
+            wall.as_secs(),
+        );
+
+        Ok((
+            AmendAttempt {
+                number: id.number(),
+                outcome,
+                wall,
+                narrowed,
+                grouping_load,
+                rejections,
+                completions: amend_completions,
+            },
+            staged,
+        ))
+    }
+
     fn job<'j>(&'j self, tag: &'j str, revision: &'j str) -> BuildJob<'j> {
         BuildJob {
             project: &self.chain_dir,
@@ -1400,12 +1882,7 @@ impl<'a> ChainDriver<'a> {
     fn run_step_zero(&mut self) -> io::Result<StepResult> {
         let tag = step_tag(0);
         eprintln!("eval: `{}` `{tag}` specifying baseline", self.evolution.name);
-        let rung = self
-            .settings
-            .ladder
-            .first()
-            .copied()
-            .ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
+        let rung = self.first_rung()?;
 
         let started = Instant::now();
         let output = emery(
@@ -1501,12 +1978,7 @@ impl<'a> ChainDriver<'a> {
         let oracle_changes = self.oracle.apply(step).map_err(io::Error::other)?;
         let config_file = self.prepare_step_config(&tag, &applied)?;
 
-        let rung = self
-            .settings
-            .ladder
-            .first()
-            .copied()
-            .ok_or_else(|| io::Error::other("EVAL_LADDER: no rung"))?;
+        let rung = self.first_rung()?;
 
         let started = Instant::now();
         let output = emery(
@@ -1605,6 +2077,12 @@ impl<'a> ChainDriver<'a> {
     // Reads the staged `Amendment` via `emery show amendment` before `apply` clears
     // the staging slot, then seals it with `emery apply` and returns `(amendment, revision)`.
     fn capture_and_seal_amendment(&self, tag: &str, rung: Rung) -> io::Result<(Value, String)> {
+        let amendment = self.read_staged_amendment(tag, &format!("{tag}.amendment.json"), rung)?;
+        let revision = self.seal_amendment(tag)?;
+        Ok((amendment, revision))
+    }
+
+    fn read_staged_amendment(&self, tag: &str, file_name: &str, rung: Rung) -> io::Result<Value> {
         let shown = emery(
             &self.chain_dir,
             self.settings,
@@ -1622,11 +2100,11 @@ impl<'a> ChainDriver<'a> {
         }
         let shown_env: Value = serde_json::from_slice(&shown.stdout)?;
         let amendment = shown_env["document"].clone();
-        fs::write(
-            self.chain_dir.join(format!("{tag}.amendment.json")),
-            serde_json::to_string_pretty(&amendment)?,
-        )?;
+        fs::write(self.chain_dir.join(file_name), serde_json::to_string_pretty(&amendment)?)?;
+        Ok(amendment)
+    }
 
+    fn seal_amendment(&self, tag: &str) -> io::Result<String> {
         let apply_out = emery(
             &self.chain_dir,
             self.settings,
@@ -1646,11 +2124,10 @@ impl<'a> ChainDriver<'a> {
             )));
         }
         let apply_env: Value = serde_json::from_slice(&apply_out.stdout)?;
-        let revision = apply_env["revision"]
+        apply_env["revision"]
             .as_str()
-            .ok_or_else(|| io::Error::other(format!("`{tag}`: `apply` answered no `revision`")))?
-            .to_owned();
-        Ok((amendment, revision))
+            .map(str::to_owned)
+            .ok_or_else(|| io::Error::other(format!("`{tag}`: `apply` answered no `revision`")))
     }
 
     fn record_step_locality(
